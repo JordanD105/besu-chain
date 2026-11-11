@@ -9,3 +9,10 @@
 {"label":"B sign","target":"w3s","mode":"sign","concurrency":64,"requests":500,"ok":500,"errors":{},"seconds":1.413,"tps":353.8,"p50_ms":175.57,"p95_ms":221.46,"p99_ms":258.98,"max_ms":300.6}
 {"label":"B sign","target":"vault","mode":"sign","concurrency":64,"requests":500,"ok":500,"errors":{},"seconds":1.838,"tps":272,"p50_ms":228.8,"p95_ms":311.46,"p99_ms":356.55,"max_ms":391.73}
 {"label":"B sign","target":"mpc","mode":"sign","concurrency":64,"requests":500,"ok":500,"errors":{},"seconds":1.405,"tps":355.8,"p50_ms":171.09,"p95_ms":253.7,"p99_ms":279.34,"max_ms":301.4}
+{"label":"C send","target":"w3s","mode":"send","concurrency":32,"requests":500,"ok":500,"errors":{},"seconds":1.126,"tps":444.2,"p50_ms":68.6,"p95_ms":94.97,"p99_ms":125.63,"max_ms":129.82,"all_mined_after_s":1.03,"end_to_end_tps":232.2}
+{"label":"C send","target":"vault","mode":"send","concurrency":32,"requests":500,"ok":500,"errors":{},"seconds":1.287,"tps":388.5,"p50_ms":76.87,"p95_ms":114.06,"p99_ms":174.46,"max_ms":174.65,"all_mined_after_s":0.26,"end_to_end_tps":324}
+{"label":"C send","target":"mpc","mode":"send","concurrency":32,"requests":500,"ok":500,"errors":{},"seconds":0.478,"tps":1046.4,"p50_ms":29.1,"p95_ms":43.37,"p99_ms":51.79,"max_ms":56.96,"all_mined_after_s":0.27,"end_to_end_tps":668.6}
+{"label":"D cold","target":"mpc","mode":"sign","concurrency":1,"requests":24,"ok":24,"errors":{},"seconds":14.522,"tps":1.7,"p50_ms":609.86,"p95_ms":662.9,"p99_ms":694.55,"max_ms":694.55}
+{"label":"D cold","target":"mpc","mode":"sign","concurrency":4,"requests":24,"ok":24,"errors":{},"seconds":7.273,"tps":3.3,"p50_ms":1157.57,"p95_ms":1582.12,"p99_ms":1905.44,"max_ms":1905.44}
+{"label":"E sustained","target":"mpc","mode":"sign","concurrency":16,"requests":150,"ok":150,"errors":{},"seconds":46.984,"tps":3.2,"p50_ms":5318.45,"p95_ms":8177.27,"p99_ms":9797.89,"max_ms":11291.7}
+{"label":"E pool stats","avg_presign_ms":1244.7945431996693,"cold_signs":180,"failed_signs":0,"hot_signs":2376,"presigs_failed":0,"presigs_generated":2419}
