@@ -6,6 +6,7 @@
 #   ./quickstart.sh setup    aux info (once, a few minutes) + first key; prints the address
 #   ./quickstart.sh status   keys and presignature pool
 #   ./quickstart.sh newkey   create another key
+#   ./quickstart.sh admin METHOD PATH [JSON]   call the coordinator admin API
 #   ./quickstart.sh down     stop (keeps key shares)
 #   ./quickstart.sh destroy  stop and DELETE all key shares and secrets
 set -Eeuo pipefail
@@ -110,11 +111,12 @@ case "${1:-}" in
   setup) setup ;;
   status) status ;;
   newkey) load_env; coord POST /admin/keys; echo ;;
+  admin) load_env; shift; coord "$@"; echo ;;
   logs) dc logs -f --tail 50 ;;
   down) dc down ;;
   destroy)
     read -rp "Delete ALL key shares and secrets? Funds on MPC addresses become unrecoverable. Type 'destroy': " a
     [ "$a" = destroy ] || exit 1
     dc down -v; rm -f .env cluster.json; log "destroyed" ;;
-  *) sed -n '2,12p' "$0"; exit 1 ;;
+  *) sed -n '2,13p' "$0"; exit 1 ;;
 esac

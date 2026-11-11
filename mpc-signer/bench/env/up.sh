@@ -5,6 +5,8 @@
 set -Eeuo pipefail
 cd "$(dirname "$0")"
 BENCH="$(cd .. && pwd)"
+. "$BENCH/lib.sh"
+bench_deps
 log() { printf '[bench-env] %s\n' "$*"; }
 
 mkdir -p .secrets web3signer-keys
@@ -35,14 +37,20 @@ log "besu up"
 
 # ---------------------------------------------------------------- Vault
 vexec() { docker compose exec -T -e VAULT_TOKEN="${VT:-}" vault vault "$@"; }
-for _ in $(seq 1 30); do vexec status -format=json >/dev/null 2>&1 && break; [ $? -eq 2 ] && break; sleep 1; done
-if ! vexec status -format=json 2>/dev/null | grep -q '"initialized": true'; then
+# `vault status` exits 2 when sealed, so never let its exit code decide
+vstatus() { vexec status -format=json 2>/dev/null || true; }
+for _ in $(seq 1 30); do vstatus | grep -q '"initialized"' && break; sleep 1; done
+if ! vstatus | grep -q '"initialized": true'; then
   log "initialising vault (bench: 1 unseal key)"
-  vexec operator init -key-shares=1 -key-threshold=1 -format=json > .secrets/vault-init.json
+  # write atomically: losing this file means losing the unseal key
+  vexec operator init -key-shares=1 -key-threshold=1 -format=json > .secrets/vault-init.json.tmp
+  mv .secrets/vault-init.json.tmp .secrets/vault-init.json
+  rm -f .secrets/signer-token
 fi
-UNSEAL=$(python3 -c 'import json;print(json.load(open(".secrets/vault-init.json"))["unseal_keys_b64"][0])')
-VT=$(python3 -c 'import json;print(json.load(open(".secrets/vault-init.json"))["root_token"])')
-vexec status -format=json 2>/dev/null | grep -q '"sealed": false' || vexec operator unseal "$UNSEAL" >/dev/null
+jfield() { tr -d '\n ' < "$1" | grep -o "\"$2\":[^,}]*" | head -n1 | sed -E 's/^"[^"]+":\[?"?([^"]*)"?.*/\1/'; }
+UNSEAL=$(jfield .secrets/vault-init.json unseal_keys_b64)
+VT=$(jfield .secrets/vault-init.json root_token)
+vstatus | grep -q '"sealed": false' || vexec operator unseal "$UNSEAL" >/dev/null
 log "vault unsealed"
 
 vexec secrets list -format=json | grep -q '"web3signer/"' || vexec secrets enable -path=web3signer -version=2 kv >/dev/null
@@ -50,14 +58,14 @@ vexec policy write web3signer /vault/policies/web3signer.hcl >/dev/null
 
 # bench sender keys (old stack): one for Web3Signer, one for the proxy's "sendFromVault" path
 if [ ! -f .secrets/keys.json ]; then
-  (cd "$BENCH" && node -e '
+  (cd "$BENCH" && nodejs -e '
     const {Wallet}=require("ethers");
     const a=Wallet.createRandom(), b=Wallet.createRandom();
     console.log(JSON.stringify({web3signer:{address:a.address,key:a.privateKey.slice(2)},vault:{address:b.address,key:b.privateKey.slice(2)}}));
   ') > .secrets/keys.json
 fi
-W3S_KEY=$(python3 -c 'import json;print(json.load(open(".secrets/keys.json"))["web3signer"]["key"])')
-VAULT_KEY=$(python3 -c 'import json;print(json.load(open(".secrets/keys.json"))["vault"]["key"])')
+W3S_KEY=$(cd "$BENCH" && nodejs -e 'console.log(require("./env/.secrets/keys.json").web3signer.key)')
+VAULT_KEY=$(cd "$BENCH" && nodejs -e 'console.log(require("./env/.secrets/keys.json").vault.key)')
 printf '%s' "$W3S_KEY" | docker compose exec -T -e VAULT_TOKEN="$VT" vault sh -c 'read -r K; vault kv put web3signer/accounts/bench-w3s privateKey="$K" >/dev/null'
 printf '%s' "$VAULT_KEY" | docker compose exec -T -e VAULT_TOKEN="$VT" vault sh -c 'read -r K; vault kv put web3signer/accounts/bench-vault privateKey="$K" >/dev/null'
 

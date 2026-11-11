@@ -134,9 +134,29 @@ Still to do before production:
 
 ## Benchmark
 
+Everything runs in Docker:
+- **Old stack** (`bench/env`): Besu (single-node QBFT), Vault and Web3Signer.
+- **New stack** (`quickstart/`): the MPC cluster.
+
+You only need Docker, bash and curl. The load generator uses your Node.js if it is installed, and
+otherwise runs in the `node:22` image.
+
 ```bash
-cd bench && npm install && cd ..
-REQUESTS=500 SEND_REQUESTS=500 bench/run-bench.sh   # starts Besu + Vault + Web3Signer + MPC cluster
+bench/run-bench.sh                          # init + start everything, run phases A–E, write bench/results/
 ```
+
+To change the defaults, prefix the command with any of these variables:
+
+| Variable | Effect |
+|---|---|
+| `REQUESTS` | requests per signing run (default 500) |
+| `CONCURRENCIES` | client concurrency levels to test (default "1 16 64") |
+| `SEND_REQUESTS` | requests in the end-to-end run (default 500) |
+| `MPC_BIGINT=bigint-rug` | build the MPC image with the faster GMP backend (applies on first init) |
+| `MPC_RUNTIME=native` | run the MPC cluster as host processes instead (needs `cargo build --release`) |
+| `BENCH_NODE_DOCKER=1` | run the load generator in Docker even if Node.js is installed |
+
+Proxy settings (`HTTPS_PROXY`, `NO_PROXY`) and `NODE_EXTRA_CA_CERTS` are passed into the Node
+container.
 
 See [`bench/RESULTS.md`](bench/RESULTS.md) for the latest results and how to read them.

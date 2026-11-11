@@ -6,14 +6,17 @@ const name = { w3s: "OLD Web3Signer (key from Vault)", vault: "OLD proxy: Vault 
 const out = [];
 const m = rows.find((r) => r.label === "machine");
 out.push(`# Signer throughput: Vault + Web3Signer vs MPC (CGGMP24)\n`);
-if (m) out.push(`Host: ${m.cpus} vCPU (${m.cpu}), ${m.mem_gb} GB. MPC binary: \`${m.mpc_bin}\`. All components on one host.\n`);
+if (m) {
+    const how = m.mpc_runtime ? `MPC cluster: ${m.mpc_runtime}${m.mpc_bigint ? ` (${m.mpc_bigint})` : ""}` : `MPC binary: \`${m.mpc_bin}\``;
+    out.push(`Host: ${m.cpus} vCPU (${m.cpu}), ${m.mem_gb} GB. ${how}. All components on one host.\n`);
+}
 
 const a = rows.find((r) => r.label === "A presign capacity");
 if (a) {
     out.push(`## A. Presignature generation capacity\n`);
     out.push(`| presignatures | seconds | presignatures/s | avg session (ms) | node CPU-s per presig per party |`);
     out.push(`|---:|---:|---:|---:|---:|`);
-    out.push(`| ${a.presigs} | ${a.seconds} | **${a.presigs_per_s}** | ${a.avg_session_ms} | ${a.node_cpu_s_per_presig_per_party} |\n`);
+    out.push(`| ${a.presigs} | ${a.seconds} | **${a.presigs_per_s}** | ${a.avg_session_ms ?? "-"} | ${a.node_cpu_s_per_presig_per_party ?? "n/a"} |\n`);
 }
 
 const table = (label, title, extra = false) => {
