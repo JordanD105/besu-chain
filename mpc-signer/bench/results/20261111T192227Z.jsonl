@@ -1,0 +1,11 @@
+{"label":"machine","cpus":4,"cpu":"Intel(R) Xeon(R) Processor @ 2.10GHz","mem_gb":16,"mpc_bin":"/home/user/besu-chain/mpc-signer/target-rug/release","requests":500}
+{"label":"A presign capacity","presigs":1950,"seconds":585.5,"presigs_per_s":3.33,"node_cpu_s_per_presig_per_party":0.574,"avg_session_ms":1186}
+{"label":"B sign","target":"w3s","mode":"sign","concurrency":1,"requests":500,"ok":500,"errors":{},"seconds":2.475,"tps":202,"p50_ms":4.63,"p95_ms":6.73,"p99_ms":8.77,"max_ms":9.61}
+{"label":"B sign","target":"vault","mode":"sign","concurrency":1,"requests":500,"ok":500,"errors":{},"seconds":2.402,"tps":208.1,"p50_ms":4.42,"p95_ms":7.18,"p99_ms":8.29,"max_ms":15.66}
+{"label":"B sign","target":"mpc","mode":"sign","concurrency":1,"requests":500,"ok":500,"errors":{},"seconds":2.201,"tps":227.1,"p50_ms":4.14,"p95_ms":5.87,"p99_ms":6.4,"max_ms":8.85}
+{"label":"B sign","target":"w3s","mode":"sign","concurrency":16,"requests":500,"ok":500,"errors":{},"seconds":1.522,"tps":328.5,"p50_ms":46.36,"p95_ms":67.54,"p99_ms":76.28,"max_ms":95.56}
+{"label":"B sign","target":"vault","mode":"sign","concurrency":16,"requests":500,"ok":500,"errors":{},"seconds":1.767,"tps":282.9,"p50_ms":55.45,"p95_ms":81.31,"p99_ms":91.62,"max_ms":105.35}
+{"label":"B sign","target":"mpc","mode":"sign","concurrency":16,"requests":500,"ok":500,"errors":{},"seconds":1.637,"tps":305.4,"p50_ms":48.67,"p95_ms":75.75,"p99_ms":84.19,"max_ms":91.79}
+{"label":"B sign","target":"w3s","mode":"sign","concurrency":64,"requests":500,"ok":500,"errors":{},"seconds":1.413,"tps":353.8,"p50_ms":175.57,"p95_ms":221.46,"p99_ms":258.98,"max_ms":300.6}
+{"label":"B sign","target":"vault","mode":"sign","concurrency":64,"requests":500,"ok":500,"errors":{},"seconds":1.838,"tps":272,"p50_ms":228.8,"p95_ms":311.46,"p99_ms":356.55,"max_ms":391.73}
+{"label":"B sign","target":"mpc","mode":"sign","concurrency":64,"requests":500,"ok":500,"errors":{},"seconds":1.405,"tps":355.8,"p50_ms":171.09,"p95_ms":253.7,"p99_ms":279.34,"max_ms":301.4}
