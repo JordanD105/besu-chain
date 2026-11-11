@@ -1,0 +1,85 @@
+# Quick start: a full 2-of-3 MPC signer cluster on ONE Docker host (development / evaluation).
+# Use ./quickstart.sh, which generates .env and cluster.json before starting this file.
+#
+# In production each node runs on a different host under a different admin
+# (see ../deploy/docker-compose.node.yml).
+
+x-node: &node
+  image: ${MPC_IMAGE:-mpc-signer:local}
+  command: ["mpc-node", "run"]
+  restart: unless-stopped
+  networks: [mpc]
+
+x-node-env: &node-env
+  MPC_CLUSTER: /config/cluster.json
+  MPC_LISTEN: 0.0.0.0:7000
+  MPC_COMPUTE_THREADS: ${MPC_COMPUTE_THREADS:-2}
+  MPC_NODE_TOKEN: ${MPC_NODE_TOKEN:?run ./quickstart.sh init first}
+  RUST_LOG: ${RUST_LOG:-info}
+
+services:
+  node0:
+    <<: *node
+    build:
+      context: ..
+      args:
+        BIGINT: ${MPC_BIGINT:-bigint-num}
+    environment:
+      <<: *node-env
+      MPC_NODE_ID: "0"
+      MPC_NODE_PASSPHRASE: ${MPC_NODE0_PASSPHRASE:?}
+    volumes:
+      - node0-data:/data
+      - ./cluster.json:/config/cluster.json:ro
+
+  node1:
+    <<: *node
+    environment:
+      <<: *node-env
+      MPC_NODE_ID: "1"
+      MPC_NODE_PASSPHRASE: ${MPC_NODE1_PASSPHRASE:?}
+    volumes:
+      - node1-data:/data
+      - ./cluster.json:/config/cluster.json:ro
+
+  node2:
+    <<: *node
+    environment:
+      <<: *node-env
+      MPC_NODE_ID: "2"
+      MPC_NODE_PASSPHRASE: ${MPC_NODE2_PASSPHRASE:?}
+    volumes:
+      - node2-data:/data
+      - ./cluster.json:/config/cluster.json:ro
+
+  coordinator:
+    image: ${MPC_IMAGE:-mpc-signer:local}
+    command: ["mpc-coordinator"]
+    restart: unless-stopped
+    depends_on: [node0, node1, node2]
+    environment:
+      MPC_CLUSTER: /config/cluster.json
+      MPC_LISTEN: 0.0.0.0:9100
+      MPC_RELAY_URL: ws://coordinator:9100/relay
+      MPC_BESU_RPC: ${MPC_BESU_RPC:-http://host.docker.internal:8545}
+      MPC_POOL_TARGET: ${MPC_POOL_TARGET:-200}
+      MPC_REFILL_CONCURRENCY: ${MPC_REFILL_CONCURRENCY:-4}
+      MPC_NODE_TOKEN: ${MPC_NODE_TOKEN:?}
+      MPC_ADMIN_TOKEN: ${MPC_ADMIN_TOKEN:?}
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - ./cluster.json:/config/cluster.json:ro
+    ports:
+      - "${MPC_PUBLISH:-127.0.0.1:9100}:9100"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [mpc]
+
+volumes:
+  node0-data:
+  node1-data:
+  node2-data:
+
+networks:
+  mpc:
+    driver: bridge

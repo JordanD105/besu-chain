@@ -7,3 +7,7 @@
 /bench/env/.secrets/
 /bench/env/web3signer-keys/
 /bench/env/besu-net/
+
+# quick start secrets and generated cluster config
+/quickstart/.env
+/quickstart/cluster.json

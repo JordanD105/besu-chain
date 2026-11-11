@@ -58,17 +58,43 @@ deploy/                     Dockerfile-based deployment, one node per host
 bench/                      throughput benchmark vs Vault + Web3Signer
 ```
 
-## Quick start (single host, for development)
+## Quick start (Docker)
+
+You need Docker with Compose v2 and a Besu node with JSON-RPC enabled. By default the
+coordinator reaches Besu at `http://host.docker.internal:8545`, which means Besu runs on the
+same host. Set `MPC_BESU_RPC` before `init` to use a different address.
 
 ```bash
-cargo build --release                                       # or: --no-default-features --features bigint-rug
-scripts/local-cluster.sh init                               # node identities, cluster.json, tokens
-BESU_RPC=http://127.0.0.1:8545 scripts/local-cluster.sh start
-scripts/local-cluster.sh setup                              # aux info (~2-3 min, once) + first key
+cd mpc-signer/quickstart
+./quickstart.sh init     # build image, generate secrets (.env), node identities, cluster.json
+./quickstart.sh up       # start node0, node1, node2 and the coordinator
+./quickstart.sh setup    # aux info (once, a few minutes) + first key: prints the MPC address
+./quickstart.sh status   # keys and presignature pool
 ```
 
-Create more keys with `scripts/local-cluster.sh admin POST /admin/keys`, and check the pool with
-`curl localhost:9100/admin/pool`.
+What `init` creates:
+- **`.env`** (mode 600): node passphrases, the node token and the admin token. Never commit it.
+- **`cluster.json`**: node public keys and the signing policy (`chain_id`, value limit, gas limit, allowlist).
+- **One Docker volume per node** (`node0-data` …): that node's sealed key share.
+
+Other commands:
+- `./quickstart.sh newkey` creates another key.
+- `./quickstart.sh logs` follows the logs.
+- `./quickstart.sh down` stops the cluster and keeps the shares.
+- `./quickstart.sh destroy` deletes all shares. Any funds held by MPC addresses are then lost.
+
+Options, set as environment variables before `init`:
+- `MPC_BIGINT=bigint-rug` uses GMP: presigning is several times faster, but it adds an LGPL dependency.
+- `CHAIN_ID=…` sets the chain id in the signing policy.
+
+Options in `.env`:
+- `MPC_PUBLISH=0.0.0.0:9100` exposes the coordinator beyond localhost.
+- `MPC_POOL_TARGET`, `MPC_REFILL_CONCURRENCY` and `MPC_COMPUTE_THREADS` tune the presignature pool.
+
+All three nodes run on one host here, which is fine for evaluation but gives no threshold
+protection. For production, see [Production deployment](#production-deployment).
+
+Without Docker: `cargo build --release && scripts/local-cluster.sh init && scripts/local-cluster.sh start && scripts/local-cluster.sh setup`.
 
 Use it like Web3Signer:
 
