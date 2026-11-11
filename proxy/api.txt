@@ -1,0 +1,37 @@
+POST /nft/mint
+{
+  "to": "0xRecipient",
+  "amount": "3000",
+  "name": "Badge 1",
+  "image": "https://example/badge.png"
+}
+
+{
+  "to": "0xRecipient",
+  "name": "Badge 1",
+  "description": "First badge",
+  "image": "https://example/badge.png",
+  "attributes": [{ "trait_type": "level", "value": "gold" }],
+  "properties": { "series": "2026" }
+}
+
+
+POST /nft/transfer
+{
+    "from": "0xB4BD95fee77755E6Eecbd0d2E85893Fb066e095f",
+    "to": "0xCF8a11F9524c2786651C70db963f8d9652204e49",
+    "tokenId": "1"
+}
+
+
+POST /nft/deploy
+{ "name": "Proxy NFT", "symbol": "PNFT" }
+curl -s http://192.168.68.130:30000/nft/deploy -H "Content-Type: application/json" --data "{\"name\":\"Proxy NFT\",\"symbol\":\"PNFT\"}"
+
+GET /nft/1
+
+GET /nft/1/metadata
+
+GET /nft/contract
+
+GET /nft/owner/0xB4BD95fee77755E6Eecbd0d2E85893Fb066e095f

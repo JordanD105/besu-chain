@@ -1,0 +1,36 @@
+type: "hashicorp"
+keyType: "SECP256K1"
+tlsEnabled: "false"
+serverHost: "vault"
+serverPort: "8200"
+keyPath: "/v1/web3signer/data/accounts/sender-001"
+keyName: "privateKey"
+authMethod: "TOKEN"
+token: "hvs.CAESIJwX4iYpzecvYs4IuCa_I9zuwl98l8AH3hZ6H8_fBgTDGh4KHGh2cy5kSFZuZlp0ZXBWbTlYMEhqNnNDUnlTNU0"
+timeout: "10000"
+
+---
+
+type: "hashicorp"
+keyType: "SECP256K1"
+tlsEnabled: "false"
+serverHost: "vault"
+serverPort: "8200"
+keyPath: "/v1/web3signer/data/accounts/sender-002"
+keyName: "privateKey"
+authMethod: "TOKEN"
+token: "hvs.CAESIJwX4iYpzecvYs4IuCa_I9zuwl98l8AH3hZ6H8_fBgTDGh4KHGh2cy5kSFZuZlp0ZXBWbTlYMEhqNnNDUnlTNU0"
+timeout: "10000"
+
+---
+
+type: "hashicorp"
+keyType: "SECP256K1"
+tlsEnabled: "false"
+serverHost: "vault"
+serverPort: "8200"
+keyPath: "/v1/web3signer/data/accounts/sender-003"
+keyName: "privateKey"
+authMethod: "TOKEN"
+token: "hvs.CAESIJwX4iYpzecvYs4IuCa_I9zuwl98l8AH3hZ6H8_fBgTDGh4KHGh2cy5kSFZuZlp0ZXBWbTlYMEhqNnNDUnlTNU0"
+timeout: "10000"

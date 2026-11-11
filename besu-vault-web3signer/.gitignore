@@ -1,0 +1,4 @@
+.env
+.secrets/
+web3signer/keys/sender.yaml
+

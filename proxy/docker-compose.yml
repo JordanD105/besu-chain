@@ -1,0 +1,31 @@
+services:
+  redis:
+    image: redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-36379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  proxy:
+    image: localhost/besu-proxy/besu-proxy
+    restart: unless-stopped
+    ports:
+      - "${PORT:-30000}:30000"
+    env_file:
+      - .env
+    environment:
+      LISTEN_HOST: 0.0.0.0
+      REDIS_IP: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis-data:

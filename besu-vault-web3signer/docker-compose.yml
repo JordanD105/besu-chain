@@ -1,0 +1,51 @@
+services:
+  vault:
+    image: hashicorp/vault
+    container_name: besu-vault
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    command: vault server -config=/vault/config/vault.hcl
+    environment:
+      VAULT_ADDR: http://${HOST_IP:-127.0.0.1}:${VAULT_PORT:-8200}
+      VAULT_API_ADDR: http://${HOST_IP:-127.0.0.1}:${VAULT_PORT:-8200}
+    ports:
+      - "8200:8200"
+    volumes:
+      - vault-data:/vault/file
+      - ./vault/config:/vault/config:ro
+      - ./vault/policies:/vault/policies:ro
+    networks:
+      - signing
+
+  web3signer:
+    image: consensys/web3signer
+    container_name: besu-web3signer
+    restart: unless-stopped
+    depends_on:
+      - vault
+    command:
+      - --key-store-path=/opt/web3signer/keys
+      - --http-listen-host=0.0.0.0
+      - --http-listen-port=9000
+      - --http-host-allowlist=*
+      - eth1
+      - --chain-id=${BESU_CHAIN_ID:-1337}
+      - --downstream-http-host=${BESU_RPC_HOST:-${HOST_IP:-host.docker.internal}}
+      - --downstream-http-port=${BESU_RPC_PORT:-8545}
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./web3signer/keys:/opt/web3signer/keys:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - signing
+
+volumes:
+  vault-data:
+
+networks:
+  signing:
+    driver: bridge
+

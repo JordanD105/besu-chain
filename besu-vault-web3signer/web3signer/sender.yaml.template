@@ -1,0 +1,11 @@
+type: "hashicorp"
+keyType: "SECP256K1"
+tlsEnabled: "false"
+serverHost: "vault"
+serverPort: "8200"
+keyPath: "/v1/web3signer/data/accounts/sender"
+keyName: "privateKey"
+authMethod: "TOKEN"
+token: "__VAULT_TOKEN__"
+timeout: "10000"
+

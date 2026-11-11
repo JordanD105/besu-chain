@@ -1,0 +1,14 @@
+{
+  "name": "chainlens",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Besu explorer with correct account balances and NFT pages",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ethers": "^6.17.0",
+    "express": "^5.2.1"
+  }
+}

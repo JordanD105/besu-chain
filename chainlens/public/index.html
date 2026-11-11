@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Chainlens</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <header class="top">
+        <a class="brand" href="#/">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+                <path fill="#2b2b2b" d="M16 2 28 9v14L16 30 4 23V9z"/>
+                <path fill="#fff" d="M16 7 23 11.2V19L16 23.2 9 19v-7.8z"/>
+            </svg>
+            <span>Chainlens</span>
+        </a>
+        <form id="search" class="search">
+            <input id="search-input" type="search" data-i18n-placeholder="search.placeholder" placeholder="Search by address, token, transaction hash, or block number" autocomplete="off">
+        </form>
+        <select id="lang" class="lang" data-i18n-aria="lang.label" aria-label="Language">
+            <option value="en">EN</option>
+            <option value="zh">中文</option>
+        </select>
+        <button id="theme" class="theme" type="button" aria-label="Switch to light theme"></button>
+    </header>
+    <div class="shell">
+        <aside class="side">
+            <nav id="nav">
+                <a href="#/" data-nav="dashboard"><span class="ico">⌂</span> <span data-i18n="nav.dashboard">Dashboard</span></a>
+                <a href="#/accounts" data-nav="accounts"><span class="ico">▤</span> <span data-i18n="nav.accounts">Accounts</span></a>
+                <a href="#/nfts" data-nav="nfts"><span class="ico">◆</span> <span data-i18n="nav.nfts">NFTs</span></a>
+                <button type="button" id="chain-toggle" class="group"><span class="ico">⛓</span> <span data-i18n="nav.blockchain">Blockchain</span></button>
+                <div id="chain-links">
+                    <a href="#/contracts" data-nav="contracts"><span data-i18n="nav.contracts">Contracts</span></a>
+                    <a href="#/transactions" data-nav="transactions"><span data-i18n="nav.transactions">Transactions</span></a>
+                    <a href="#/blocks" data-nav="blocks"><span data-i18n="nav.blocks">Blocks</span></a>
+                    <a href="#/network" data-nav="network"><span data-i18n="nav.network">Network</span></a>
+                    <a href="#/api" data-nav="api"><span data-i18n="nav.api">API</span></a>
+                </div>
+            </nav>
+            <div class="status-row" id="status-badge" tabindex="0" aria-describedby="status-pop">
+                <span id="status-dot"></span>
+                <span id="status-text" data-i18n="status.title">Status</span>
+                <div class="status-pop" id="status-pop" role="tooltip">
+                    <div class="status-pct" id="status-pct">0%</div>
+                    <div class="status-track"><span id="status-bar"></span></div>
+                    <div class="status-label" data-i18n="status.latest">Latest Block</div>
+                    <div class="status-value" id="status-head">0</div>
+                    <div class="status-label" data-i18n="status.indexed">Latest Indexed Block</div>
+                    <div class="status-value" id="status-indexed">0</div>
+                </div>
+            </div>
+        </aside>
+        <main id="view"></main>
+    </div>
+    <script src="/i18n.js"></script>
+    <script src="/app.js"></script>
+</body>
+</html>
