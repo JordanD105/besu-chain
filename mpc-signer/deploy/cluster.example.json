@@ -1,0 +1,15 @@
+{
+  "threshold": 2,
+  "parties": [
+    { "id": 0, "url": "http://10.0.1.10:7000", "sign_pk": "<node0 sign_pk>", "kx_pk": "<node0 kx_pk>" },
+    { "id": 1, "url": "http://10.0.2.10:7000", "sign_pk": "<node1 sign_pk>", "kx_pk": "<node1 kx_pk>" },
+    { "id": 2, "url": "http://10.0.3.10:7000", "sign_pk": "<node2 sign_pk>", "kx_pk": "<node2 kx_pk>" }
+  ],
+  "policy": {
+    "chain_id": 1337,
+    "max_value_wei": "1000000000000000000000",
+    "max_gas": 30000000,
+    "allowed_to": [],
+    "deny_contract_creation": false
+  }
+}

@@ -1,0 +1,29 @@
+# ONE MPC node. Run this file on three different hosts (different admins), with MPC_NODE_ID 0, 1, 2.
+#
+#   1. docker compose -f docker-compose.node.yml run --rm mpc-node mpc-node init   -> prints public keys
+#   2. put all three public keys + URLs into cluster.json (see cluster.example.json), copy to every host
+#   3. docker compose -f docker-compose.node.yml up -d
+#
+# Secrets come from the environment / an env file outside the repo:
+#   MPC_NODE_PASSPHRASE  unlocks this node's sealed share files (different on every node)
+#   MPC_NODE_TOKEN       shared with the coordinator
+services:
+  mpc-node:
+    image: ${MPC_IMAGE:-mpc-signer:latest}
+    command: ["mpc-node", "run"]
+    restart: unless-stopped
+    environment:
+      MPC_NODE_ID: ${MPC_NODE_ID:?set 0, 1 or 2}
+      MPC_CLUSTER: /config/cluster.json
+      MPC_LISTEN: 0.0.0.0:7000
+      MPC_COMPUTE_THREADS: ${MPC_COMPUTE_THREADS:-4}
+      MPC_NODE_PASSPHRASE: ${MPC_NODE_PASSPHRASE:?}
+      MPC_NODE_TOKEN: ${MPC_NODE_TOKEN:?}
+    volumes:
+      - mpc-data:/data
+      - ./cluster.json:/config/cluster.json:ro
+    ports:
+      # expose only to the coordinator network (firewall it)
+      - "7000:7000"
+volumes:
+  mpc-data:

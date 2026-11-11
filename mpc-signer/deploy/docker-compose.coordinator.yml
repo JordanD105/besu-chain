@@ -1,0 +1,21 @@
+# Coordinator: stateless, holds no key material; run 1..N replicas behind a load balancer.
+# Clients (e.g. ../proxy) use it exactly like Web3Signer: point WEB3SIGNER_IP/PORT at it.
+services:
+  mpc-coordinator:
+    image: ${MPC_IMAGE:-mpc-signer:latest}
+    command: ["mpc-coordinator"]
+    restart: unless-stopped
+    environment:
+      MPC_CLUSTER: /config/cluster.json
+      MPC_LISTEN: 0.0.0.0:9100
+      # how the NODES reach this coordinator's relay
+      MPC_RELAY_URL: ${MPC_RELAY_URL:?e.g. ws://10.0.0.5:9100/relay}
+      MPC_BESU_RPC: ${MPC_BESU_RPC:-http://besu:8545}
+      MPC_POOL_TARGET: ${MPC_POOL_TARGET:-500}
+      MPC_REFILL_CONCURRENCY: ${MPC_REFILL_CONCURRENCY:-8}
+      MPC_NODE_TOKEN: ${MPC_NODE_TOKEN:?}
+      MPC_ADMIN_TOKEN: ${MPC_ADMIN_TOKEN:?}
+    volumes:
+      - ./cluster.json:/config/cluster.json:ro
+    ports:
+      - "9100:9100"

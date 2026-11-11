@@ -1,0 +1,7 @@
+{
+  "name": "signer-bench",
+  "private": true,
+  "description": "Throughput benchmark: Vault + Web3Signer vs MPC (CGGMP24) signer",
+  "scripts": { "bench": "node bench.js" },
+  "dependencies": { "ethers": "^6.13.4" }
+}

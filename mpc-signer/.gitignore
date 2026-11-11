@@ -1,0 +1,9 @@
+/target/
+/target-rug/
+# local cluster: key shares, identities, tokens, logs
+/deploy/local/
+# benchmark environment secrets and generated files
+/bench/node_modules/
+/bench/env/.secrets/
+/bench/env/web3signer-keys/
+/bench/env/besu-net/

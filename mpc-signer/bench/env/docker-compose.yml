@@ -1,0 +1,65 @@
+# Benchmark environment: one Besu QBFT node + the OLD signing stack (Vault + Web3Signer),
+# configured like besu-vault-web3signer/. The NEW MPC signer runs next to it
+# (scripts/local-cluster.sh) and talks to the same Besu node.
+services:
+  besu:
+    image: hyperledger/besu:${BESU_VERSION:-latest}
+    container_name: bench-besu
+    command:
+      - --genesis-file=/net/genesis.json
+      - --node-private-key-file=/net/key
+      - --data-path=/opt/besu/data
+      - --min-gas-price=0
+      - --host-allowlist=*
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-api=ETH,NET,WEB3,TXPOOL,QBFT
+      - --rpc-http-max-active-connections=2000
+      - --tx-pool-max-future-by-sender=100000
+      - --tx-pool-layer-max-capacity=100000000
+      - --tx-pool-max-prioritized=100000
+    volumes:
+      - ./besu-net/genesis.json:/net/genesis.json:ro
+      - ./besu-net/node.key:/net/key:ro
+    ports:
+      - "8545:8545"
+    networks: [bench]
+
+  vault:
+    image: hashicorp/vault:${VAULT_VERSION:-1.17}
+    container_name: bench-vault
+    cap_add: [IPC_LOCK]
+    command: vault server -config=/vault/config/vault.hcl
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_API_ADDR: http://127.0.0.1:8200
+    volumes:
+      # same configuration and policy as besu-vault-web3signer/
+      - ../../../besu-vault-web3signer/vault/config:/vault/config:ro
+      - ../../../besu-vault-web3signer/vault/policies:/vault/policies:ro
+    ports:
+      - "8200:8200"
+    networks: [bench]
+
+  web3signer:
+    image: consensys/web3signer:${WEB3SIGNER_VERSION:-latest}
+    container_name: bench-web3signer
+    profiles: [signer]
+    command:
+      - --key-store-path=/opt/web3signer/keys
+      - --http-listen-host=0.0.0.0
+      - --http-listen-port=9000
+      - --http-host-allowlist=*
+      - eth1
+      - --chain-id=1337
+      - --downstream-http-host=besu
+      - --downstream-http-port=8545
+    volumes:
+      - ./web3signer-keys:/opt/web3signer/keys:ro
+    ports:
+      - "9000:9000"
+    networks: [bench]
+
+networks:
+  bench:
+    driver: bridge
