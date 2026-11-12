@@ -29,7 +29,10 @@ const W3S = process.env.W3S_RPC || "http://127.0.0.1:9000";
 const MPC = process.env.MPC_RPC || "http://127.0.0.1:9100";
 const VAULT = process.env.VAULT_ADDR || "http://127.0.0.1:8200";
 const ENV_DIR = path.join(__dirname, "env");
-const CHAIN_ID = 1337;
+// Vault target: KV v2 path of the key (proxy-style per-transaction read) and a token that can read it.
+// Defaults are the bench stack's; OLD_STACK=existing sets them for your own Vault.
+const VAULT_KEY_PATH = (process.env.VAULT_KEY_PATH || "web3signer/data/accounts/bench-vault").replace(/^\/?(v1\/)?/, "");
+let CHAIN_ID = process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : null;
 const TO = "0x000000000000000000000000000000000000dEaD";
 
 async function rpc(url, method, params = []) {
@@ -43,34 +46,37 @@ async function rpc(url, method, params = []) {
     return j.result;
 }
 
-function secrets() {
-    return JSON.parse(fs.readFileSync(path.join(ENV_DIR, ".secrets/keys.json"), "utf8"));
+async function readVaultKey(token) {
+    const r = await fetch(`${VAULT}/v1/${VAULT_KEY_PATH}`, { headers: { "X-Vault-Token": token } });
+    if (!r.ok) throw new Error(`vault read ${VAULT_KEY_PATH}: HTTP ${r.status}`);
+    const body = await r.json();
+    const k = body.data.data.privateKey;
+    return k.startsWith("0x") ? k : "0x" + k;
 }
 
 async function setup() {
+    if (CHAIN_ID === null) CHAIN_ID = Number(await rpc(BESU, "eth_chainId"));
     if (TARGET === "w3s") {
-        const [from] = await rpc(W3S, "eth_accounts");
+        const from = process.env.W3S_FROM || (await rpc(W3S, "eth_accounts"))[0];
+        if (!from) throw new Error("Web3Signer has no accounts");
         return { from: getAddress(from) };
     }
     if (TARGET === "mpc") {
-        const [from] = await rpc(MPC, "eth_accounts");
+        const from = process.env.MPC_FROM || (await rpc(MPC, "eth_accounts"))[0];
+        if (!from) throw new Error("MPC coordinator has no keys");
         return { from: getAddress(from) };
     }
     if (TARGET === "vault") {
-        const token = fs.readFileSync(path.join(ENV_DIR, ".secrets/signer-token"), "utf8").trim();
-        return { from: getAddress(secrets().vault.address), token };
+        const token = process.env.VAULT_TOKEN || fs.readFileSync(path.join(ENV_DIR, ".secrets/signer-token"), "utf8").trim();
+        const from = new Wallet(await readVaultKey(token)).address;
+        return { from, token };
     }
     throw new Error(`unknown target ${TARGET}`);
 }
 
 // Same as proxy/stress-latest.js readPrivateKey()+vaultWallet(): one Vault read per transaction.
 async function vaultSign(ctx, tx) {
-    const r = await fetch(`${VAULT}/v1/web3signer/data/accounts/bench-vault`, {
-        headers: { "X-Vault-Token": ctx.token },
-    });
-    if (!r.ok) throw new Error(`vault read ${r.status}`);
-    const body = await r.json();
-    const wallet = new Wallet("0x" + body.data.data.privateKey);
+    const wallet = new Wallet(await readVaultKey(ctx.token));
     return wallet.signTransaction({ ...tx, chainId: CHAIN_ID, type: 0 });
 }
 

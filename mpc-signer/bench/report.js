@@ -8,7 +8,8 @@ const m = rows.find((r) => r.label === "machine");
 out.push(`# Signer throughput: Vault + Web3Signer vs MPC (CGGMP24)\n`);
 if (m) {
     const how = m.mpc_runtime ? `MPC cluster: ${m.mpc_runtime}${m.mpc_bigint ? ` (${m.mpc_bigint})` : ""}` : `MPC binary: \`${m.mpc_bin}\``;
-    out.push(`Host: ${m.cpus} vCPU (${m.cpu}), ${m.mem_gb} GB. ${how}. All components on one host.\n`);
+    const old = m.old_stack === "existing" ? " Old stack: your existing Besu + Vault + Web3Signer." : "";
+    out.push(`Host: ${m.cpus} vCPU (${m.cpu}), ${m.mem_gb} GB. ${how}.${old} Load generated from this host.\n`);
 }
 
 const a = rows.find((r) => r.label === "A presign capacity");

@@ -145,6 +145,28 @@ otherwise runs in the `node:22` image.
 bench/run-bench.sh                          # init + start everything, run phases A–E, write bench/results/
 ```
 
+**Against your already-deployed Besu + Vault + Web3Signer** (nothing is deployed for the old
+stack; only the MPC cluster is started):
+
+```bash
+cp bench/existing.env.example bench/existing.env    # optional: edit URLs / token / key path
+OLD_STACK=existing bench/run-bench.sh
+```
+
+The defaults match `../besu-test-network` and `../besu-vault-web3signer` running on the same host:
+
+| Setting | Default |
+|---|---|
+| Besu | `http://127.0.0.1:8545` |
+| Web3Signer | `http://127.0.0.1:9000` |
+| Vault | `http://127.0.0.1:8200` |
+| Vault token | read from `../besu-vault-web3signer/.secrets/web3signer-token` |
+| Vault key path | the first `keyPath` in `../besu-vault-web3signer/web3signer/keys/*.yaml` |
+
+- The MPC coordinator forwards to the same Besu node.
+- Signing phases only sign; nothing reaches the chain.
+- Phase C submits real zero-value transactions from your accounts, so it runs only with `BENCH_SEND=1`.
+
 To change the defaults, prefix the command with any of these variables:
 
 | Variable | Effect |

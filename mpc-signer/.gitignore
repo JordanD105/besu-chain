@@ -11,3 +11,4 @@
 # quick start secrets and generated cluster config
 /quickstart/.env
 /quickstart/cluster.json
+/bench/existing.env
