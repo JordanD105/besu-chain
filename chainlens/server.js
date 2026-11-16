@@ -932,6 +932,16 @@ function buyMemo(tx) {
     return /^https?:\/\/\S+$/.test(image) ? `${base} - ${image}` : base;
 }
 
+// Who received the ETH of a buy(): the collection's minter (= its deployer), which buy() pays.
+function buyPayee(tx) {
+    if (tx.status !== "success" || !tx.to || !tx.decoded || tx.decoded.name !== "buy" || BigInt(tx.value || 0) === 0n) {
+        return null;
+    }
+
+    const contract = db.contracts.get(tx.to.toLowerCase());
+    return contract && contract.creator ? contract.creator : null;
+}
+
 function publicTx(tx) {
     return {
         hash: tx.hash,
@@ -945,6 +955,7 @@ function publicTx(tx) {
         type: tx.type,
         functionName: tx.functionName,
         memo: tx.memo || buyMemo(tx),
+        payTo: buyPayee(tx),
         status: tx.status,
         contractAddress: tx.contractAddress,
         decoded: tx.decoded,
