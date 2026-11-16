@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1300" viewBox="0 0 1600 1300" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1600" height="1300" fill="#f8fafc"/>
+<text x="40" y="50" font-size="30" fill="#0f172a" font-weight="700">besu-chain: deployment across 3 sites</text>
+<text x="40" y="80" font-size="15.5" fill="#475569">① Center (primary) · ② Subsidiary 1 (DR / secondary) · ③ Subsidiary 2 (tie-breaker): any ONE whole site can fail; chain, signing and Redis failover keep working</text>
+<g filter="url(#sh)"><rect x="40" y="100" width="230" height="52" rx="10" fill="#fff" stroke="#94a3b8" stroke-width="1.5"/></g>
+<text x="56" y="122" font-size="14" fill="#0f172a" font-weight="700">Clients</text>
+<text x="56" y="141" font-size="12" fill="#475569">apps · partners · browsers</text>
+<line x1="270" y1="126" x2="316" y2="126" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<g filter="url(#sh)"><rect x="320" y="100" width="1240" height="52" rx="10" fill="#fff" stroke="#64748b" stroke-width="1.5"/></g>
+<text x="336" y="122" font-size="14" fill="#0f172a" font-weight="700">DNS / GSLB (global load balancing, health-checked)</text>
+<text x="336" y="141" font-size="12" fill="#475569">normal: all traffic → ① Center gateway · on Center outage: automatic failover → ② Subsidiary 1 gateway (low DNS TTL, e.g. 30 s)</text>
+<rect x="40" y="172" width="560" height="828" rx="16" fill="#ffffff" stroke="#1e3a8a" stroke-width="2"/>
+<rect x="40" y="172" width="560" height="44" rx="16" fill="#dbeafe"/>
+<rect x="40" y="200" width="560" height="16" fill="#dbeafe"/>
+<text x="56" y="200" font-size="17" fill="#1e3a8a" font-weight="700">① CENTER (HQ)</text>
+<text x="584" y="200" font-size="13" fill="#1e3a8a" text-anchor="end">primary · active</text>
+<rect x="620" y="172" width="470" height="828" rx="16" fill="#ffffff" stroke="#065f46" stroke-width="2"/>
+<rect x="620" y="172" width="470" height="44" rx="16" fill="#d1fae5"/>
+<rect x="620" y="200" width="470" height="16" fill="#d1fae5"/>
+<text x="636" y="200" font-size="17" fill="#065f46" font-weight="700">② SUBSIDIARY 1</text>
+<text x="1074" y="200" font-size="13" fill="#065f46" text-anchor="end">DR / secondary · warm standby</text>
+<rect x="1110" y="172" width="450" height="828" rx="16" fill="#ffffff" stroke="#7c2d12" stroke-width="2"/>
+<rect x="1110" y="172" width="450" height="44" rx="16" fill="#ffedd5"/>
+<rect x="1110" y="200" width="450" height="16" fill="#ffedd5"/>
+<text x="1126" y="200" font-size="17" fill="#7c2d12" font-weight="700">③ SUBSIDIARY 2</text>
+<text x="1544" y="200" font-size="13" fill="#7c2d12" text-anchor="end">tie-breaker · no public entry</text>
+<rect x="48" y="224" width="544" height="74" rx="10" fill="#f1f5f9"/>
+<text x="584" y="240" font-size="10.5" font-weight="700" fill="#475569" text-anchor="end" letter-spacing="1">EDGE</text>
+<rect x="628" y="224" width="454" height="74" rx="10" fill="#f1f5f9"/>
+<text x="1074" y="240" font-size="10.5" font-weight="700" fill="#475569" text-anchor="end" letter-spacing="1">EDGE</text>
+<rect x="1118" y="224" width="434" height="74" rx="10" fill="#f1f5f9"/>
+<text x="1544" y="240" font-size="10.5" font-weight="700" fill="#475569" text-anchor="end" letter-spacing="1">EDGE</text>
+<rect x="48" y="306" width="544" height="182" rx="10" fill="#eff6ff"/>
+<text x="584" y="322" font-size="10.5" font-weight="700" fill="#1d4ed8" text-anchor="end" letter-spacing="1">APP</text>
+<rect x="628" y="306" width="454" height="182" rx="10" fill="#eff6ff"/>
+<text x="1074" y="322" font-size="10.5" font-weight="700" fill="#1d4ed8" text-anchor="end" letter-spacing="1">APP</text>
+<rect x="1118" y="306" width="434" height="182" rx="10" fill="#eff6ff"/>
+<text x="1544" y="322" font-size="10.5" font-weight="700" fill="#1d4ed8" text-anchor="end" letter-spacing="1">APP</text>
+<rect x="48" y="496" width="544" height="170" rx="10" fill="#ecfdf5"/>
+<text x="584" y="512" font-size="10.5" font-weight="700" fill="#047857" text-anchor="end" letter-spacing="1">SIGNING</text>
+<rect x="628" y="496" width="454" height="170" rx="10" fill="#ecfdf5"/>
+<text x="1074" y="512" font-size="10.5" font-weight="700" fill="#047857" text-anchor="end" letter-spacing="1">SIGNING</text>
+<rect x="1118" y="496" width="434" height="170" rx="10" fill="#ecfdf5"/>
+<text x="1544" y="512" font-size="10.5" font-weight="700" fill="#047857" text-anchor="end" letter-spacing="1">SIGNING</text>
+<rect x="48" y="674" width="544" height="196" rx="10" fill="#faf5ff"/>
+<text x="584" y="690" font-size="10.5" font-weight="700" fill="#6d28d9" text-anchor="end" letter-spacing="1">CHAIN</text>
+<rect x="628" y="674" width="454" height="196" rx="10" fill="#faf5ff"/>
+<text x="1074" y="690" font-size="10.5" font-weight="700" fill="#6d28d9" text-anchor="end" letter-spacing="1">CHAIN</text>
+<rect x="1118" y="674" width="434" height="196" rx="10" fill="#faf5ff"/>
+<text x="1544" y="690" font-size="10.5" font-weight="700" fill="#6d28d9" text-anchor="end" letter-spacing="1">CHAIN</text>
+<rect x="48" y="878" width="544" height="114" rx="10" fill="#fffbeb"/>
+<text x="584" y="894" font-size="10.5" font-weight="700" fill="#92400e" text-anchor="end" letter-spacing="1">OPS</text>
+<rect x="628" y="878" width="454" height="114" rx="10" fill="#fffbeb"/>
+<text x="1074" y="894" font-size="10.5" font-weight="700" fill="#92400e" text-anchor="end" letter-spacing="1">OPS</text>
+<rect x="1118" y="878" width="434" height="114" rx="10" fill="#fffbeb"/>
+<text x="1544" y="894" font-size="10.5" font-weight="700" fill="#92400e" text-anchor="end" letter-spacing="1">OPS</text>
+<line x1="300" y1="152" x2="300" y2="232" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="860" y1="152" x2="860" y2="232" stroke="#334155" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a)"/>
+<g filter="url(#sh)"><rect x="56" y="232" width="470" height="58" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/></g>
+<text x="68" y="253" font-size="14" fill="#0f172a" font-weight="700">API gateway / L7 LB (HA pair) · ACTIVE</text>
+<text x="68" y="271" font-size="12" fill="#334155">TLS 1.3 · client auth · rate limits · WAF</text>
+<g filter="url(#sh)"><rect x="636" y="232" width="400" height="58" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/></g>
+<text x="648" y="253" font-size="14" fill="#0f172a" font-weight="700">API gateway (HA pair) · STANDBY</text>
+<text x="648" y="271" font-size="12" fill="#334155">same config; receives traffic only on failover</text>
+<text x="1126" y="262" font-size="13" fill="#7c2d12" font-weight="700">no public entry point</text>
+<text x="1126" y="282" font-size="12" fill="#64748b">(internal services only)</text>
+<g filter="url(#sh)"><rect x="56" y="326" width="220" height="154" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/></g>
+<text x="68" y="347" font-size="14" fill="#1e3a8a" font-weight="700">proxy × N · active</text>
+<text x="68" y="365" font-size="12" fill="#334155">stateless, autoscaled</text>
+<text x="68" y="383" font-size="12" fill="#334155">Redis sender lock +</text>
+<text x="68" y="401" font-size="12" fill="#334155">nonce INCR</text>
+<text x="68" y="419" font-size="12" fill="#334155">→ coordinator (local)</text>
+<g filter="url(#sh)"><rect x="286" y="326" width="150" height="154" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/></g>
+<text x="298" y="347" font-size="14" fill="#1e3a8a" font-weight="700">Redis primary</text>
+<text x="298" y="365" font-size="12" fill="#334155">AOF, AUTH+TLS</text>
+<text x="298" y="383" font-size="12" fill="#334155">nonces, locks,</text>
+<text x="298" y="401" font-size="12" fill="#334155">pending, NFT data</text>
+<text x="298" y="419" font-size="12" fill="#1d4ed8">+ Sentinel #1</text>
+<g filter="url(#sh)"><rect x="446" y="326" width="140" height="154" rx="10" fill="#ffffff" stroke="#0891b2" stroke-width="1.5"/></g>
+<text x="458" y="347" font-size="14" fill="#155e75" font-weight="700">chainlens × 2</text>
+<text x="458" y="365" font-size="12" fill="#334155">explorer, read-</text>
+<text x="458" y="383" font-size="12" fill="#334155">only; own read</text>
+<text x="458" y="401" font-size="12" fill="#334155">RPC node</text>
+<text x="458" y="419" font-size="11.5" fill="#64748b">auth via gateway</text>
+<g filter="url(#sh)"><rect x="636" y="326" width="180" height="154" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/></g>
+<text x="648" y="347" font-size="14" fill="#1e3a8a" font-weight="700">proxy × N · standby</text>
+<text x="648" y="365" font-size="12" fill="#334155">scaled down (0–1)</text>
+<text x="648" y="383" font-size="12" fill="#334155">scale up on failover</text>
+<text x="648" y="401" font-size="12" fill="#334155">nonces resync from</text>
+<text x="648" y="419" font-size="12" fill="#334155">chain on promotion</text>
+<g filter="url(#sh)"><rect x="826" y="326" width="140" height="154" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/></g>
+<text x="838" y="347" font-size="14" fill="#1e3a8a" font-weight="700">Redis replica</text>
+<text x="838" y="365" font-size="12" fill="#334155">async replica</text>
+<text x="838" y="383" font-size="12" fill="#334155">of Center</text>
+<text x="838" y="401" font-size="12" fill="#334155">promoted by</text>
+<text x="838" y="419" font-size="12" fill="#1d4ed8">Sentinel #2</text>
+<g filter="url(#sh)"><rect x="976" y="326" width="100" height="154" rx="10" fill="#ffffff" stroke="#0891b2" stroke-width="1.5"/></g>
+<text x="988" y="347" font-size="14" fill="#155e75" font-weight="700">chainlens</text>
+<text x="988" y="365" font-size="12" fill="#334155">× 1</text>
+<text x="988" y="383" font-size="12" fill="#334155">standby</text>
+<g filter="url(#sh)"><rect x="1126" y="326" width="200" height="96" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/></g>
+<text x="1138" y="347" font-size="14" fill="#1e3a8a" font-weight="700">Redis Sentinel #3</text>
+<text x="1138" y="365" font-size="12" fill="#334155">no data, votes only</text>
+<text x="1138" y="383" font-size="12" fill="#334155">2 of 3 sentinels agree</text>
+<text x="1138" y="401" font-size="12" fill="#334155">before any failover</text>
+<path d="M 361 480 L 361 492 L 896 492 L 896 484" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#b)"/>
+<text x="640" y="506" font-size="11.5" fill="#1d4ed8">Redis replication :6379</text>
+<g filter="url(#sh)"><rect x="56" y="512" width="230" height="140" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/></g>
+<text x="68" y="533" font-size="14" fill="#064e3b" font-weight="700">mpc-coordinator × 2</text>
+<text x="68" y="551" font-size="12" fill="#334155">active · internal LB</text>
+<text x="68" y="569" font-size="12" fill="#334155">no keys · presig pool</text>
+<text x="68" y="587" font-size="12" fill="#334155">relay :9100 (WebSocket)</text>
+<text x="68" y="605" font-size="11.5" fill="#64748b">hot sign = local node 0</text>
+<text x="68" y="623" font-size="11.5" fill="#64748b">+ 1 remote node (1 WAN RTT)</text>
+<g filter="url(#sh)"><rect x="296" y="512" width="290" height="140" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/></g>
+<text x="308" y="533" font-size="14" fill="#064e3b" font-weight="700">mpc-node 0 · share x₀</text>
+<text x="308" y="551" font-size="12" fill="#334155">operated by Center team</text>
+<text x="308" y="569" font-size="12" fill="#334155">sealed share; passphrase from</text>
+<text x="308" y="587" font-size="12" fill="#334155">Center secret store / TPM</text>
+<text x="308" y="605" font-size="12" fill="#334155">policy: chain id, limits, allowlist</text>
+<text x="308" y="623" font-size="11.5" fill="#92400e">backup → Center team only</text>
+<g filter="url(#sh)"><rect x="636" y="512" width="170" height="140" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/></g>
+<text x="648" y="533" font-size="14" fill="#064e3b" font-weight="700">mpc-coordinator</text>
+<text x="648" y="551" font-size="12" fill="#334155">× 1 · standby</text>
+<text x="648" y="569" font-size="12" fill="#334155">takes over with</text>
+<text x="648" y="587" font-size="12" fill="#334155">nodes 1 + 2 if</text>
+<text x="648" y="605" font-size="12" fill="#334155">Center is down</text>
+<g filter="url(#sh)"><rect x="816" y="512" width="260" height="140" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/></g>
+<text x="828" y="533" font-size="14" fill="#064e3b" font-weight="700">mpc-node 1 · share x₁</text>
+<text x="828" y="551" font-size="12" fill="#334155">operated by Subsidiary 1 team</text>
+<text x="828" y="569" font-size="12" fill="#334155">sealed share; S1 secret store</text>
+<text x="828" y="587" font-size="12" fill="#334155">policy: same rules</text>
+<text x="828" y="605" font-size="11.5" fill="#92400e">backup → S1 team only</text>
+<g filter="url(#sh)"><rect x="1126" y="512" width="420" height="140" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/></g>
+<text x="1138" y="533" font-size="14" fill="#064e3b" font-weight="700">mpc-node 2 · share x₂</text>
+<text x="1138" y="551" font-size="12" fill="#334155">operated by Subsidiary 2 team</text>
+<text x="1138" y="569" font-size="12" fill="#334155">sealed share; passphrase from S2 secret store / TPM</text>
+<text x="1138" y="587" font-size="12" fill="#334155">policy: same rules, enforced independently</text>
+<text x="1138" y="605" font-size="11.5" fill="#92400e">backup → S2 team only</text>
+<text x="1138" y="623" font-size="11.5" fill="#047857">any 2 of 3 nodes sign → one site can be down</text>
+<line x1="286" y1="582" x2="292" y2="582" stroke="#059669" stroke-width="2" marker-end="url(#g)"/>
+<path d="M 171 652 L 171 662 L 1336 662 L 1336 656" stroke="#059669" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#g)"/>
+<path d="M 946 662 L 946 656" stroke="#059669" stroke-width="2" fill="none" marker-end="url(#g)"/>
+<text x="186" y="677" font-size="11.5" fill="#047857">mTLS over VPN · node API :7000 · relay :9100</text>
+<g filter="url(#sh)"><rect x="56" y="690" width="280" height="110" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/></g>
+<text x="68" y="711" font-size="14" fill="#4c1d95" font-weight="700">QBFT validators (2 at this site)</text>
+<rect x="68" y="722" width="112" height="40" rx="8" fill="#7c3aed"/>
+<text x="124" y="747" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">validator 1</text>
+<rect x="192" y="722" width="112" height="40" rx="8" fill="#7c3aed"/>
+<text x="248" y="747" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">validator 2</text>
+<text x="68" y="786" font-size="12" fill="#334155">p2p only · keys from Center secret store</text>
+<g filter="url(#sh)"><rect x="346" y="690" width="240" height="110" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/></g>
+<text x="358" y="711" font-size="14" fill="#4c1d95" font-weight="700">RPC node (local) + read RPC</text>
+<text x="358" y="729" font-size="12" fill="#334155">proxy / coordinator use local</text>
+<text x="358" y="747" font-size="12" fill="#334155">RPC, fail over to remote</text>
+<text x="358" y="765" font-size="12" fill="#334155">read-only RPC for chainlens</text>
+<text x="358" y="783" font-size="11.5" fill="#64748b">ETH, NET, WEB3, TXPOOL only</text>
+<g filter="url(#sh)"><rect x="636" y="690" width="280" height="110" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/></g>
+<text x="648" y="711" font-size="14" fill="#4c1d95" font-weight="700">QBFT validators (2 at this site)</text>
+<rect x="648" y="722" width="112" height="40" rx="8" fill="#7c3aed"/>
+<text x="704" y="747" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">validator 3</text>
+<rect x="772" y="722" width="112" height="40" rx="8" fill="#7c3aed"/>
+<text x="828" y="747" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">validator 4</text>
+<text x="648" y="786" font-size="12" fill="#334155">p2p only · keys from S1 secret store</text>
+<g filter="url(#sh)"><rect x="926" y="690" width="150" height="110" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/></g>
+<text x="938" y="711" font-size="14" fill="#4c1d95" font-weight="700">RPC node</text>
+<text x="938" y="729" font-size="12" fill="#334155">local, for S1</text>
+<text x="938" y="747" font-size="12" fill="#334155">services on</text>
+<text x="938" y="765" font-size="12" fill="#334155">failover</text>
+<g filter="url(#sh)"><rect x="1126" y="690" width="280" height="110" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/></g>
+<text x="1138" y="711" font-size="14" fill="#4c1d95" font-weight="700">QBFT validators (2 at this site)</text>
+<rect x="1138" y="722" width="112" height="40" rx="8" fill="#7c3aed"/>
+<text x="1194" y="747" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">validator 5</text>
+<rect x="1262" y="722" width="112" height="40" rx="8" fill="#7c3aed"/>
+<text x="1318" y="747" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">validator 6</text>
+<text x="1138" y="786" font-size="12" fill="#334155">p2p only · keys from S2 secret store</text>
+<g filter="url(#sh)"><rect x="1416" y="690" width="130" height="110" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/></g>
+<text x="1428" y="711" font-size="14" fill="#4c1d95" font-weight="700">RPC node</text>
+<text x="1428" y="729" font-size="12" fill="#334155">local, for</text>
+<text x="1428" y="747" font-size="12" fill="#334155">S2 internal</text>
+<text x="1428" y="765" font-size="12" fill="#334155">tooling</text>
+<path d="M 196 800 L 196 818 L 1266 818 L 1266 800" stroke="#7c3aed" stroke-width="2" fill="none" marker-start="url(#p)" marker-end="url(#p)"/>
+<path d="M 776 800 L 776 818" stroke="#7c3aed" stroke-width="2" fill="none" marker-start="url(#p)"/>
+<text x="212" y="836" font-size="12" fill="#5b21b6" font-weight="600">Besu p2p :30303 mesh · 6 validators, quorum 4</text>
+<text x="212" y="854" font-size="11.5" fill="#5b21b6">→ any one site (2 validators) can be lost</text>
+<g filter="url(#sh)"><rect x="56" y="886" width="530" height="100" rx="10" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/></g>
+<text x="68" y="907" font-size="14" fill="#92400e" font-weight="700">Monitoring (primary) + bastion + secret store C</text>
+<text x="68" y="925" font-size="12" fill="#334155">Prometheus → Alertmanager → on-call · Grafana · Loki · Tempo</text>
+<text x="68" y="943" font-size="12" fill="#334155">scrapes / receives from all 3 sites over VPN</text>
+<text x="68" y="961" font-size="12" fill="#334155">bastion + MFA (Center admins) · backups: Besu snapshots, MPC share x₀</text>
+<g filter="url(#sh)"><rect x="636" y="886" width="440" height="100" rx="10" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/></g>
+<text x="648" y="907" font-size="14" fill="#92400e" font-weight="700">Monitoring replica + bastion + secret store S1</text>
+<text x="648" y="925" font-size="12" fill="#334155">Prometheus / Loki copy for DR (remote write)</text>
+<text x="648" y="943" font-size="12" fill="#334155">bastion + MFA (S1 admins)</text>
+<text x="648" y="961" font-size="12" fill="#334155">backups: Besu snapshots, MPC share x₁</text>
+<g filter="url(#sh)"><rect x="1126" y="886" width="420" height="100" rx="10" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/></g>
+<text x="1138" y="907" font-size="14" fill="#92400e" font-weight="700">Agents + bastion + secret store S2</text>
+<text x="1138" y="925" font-size="12" fill="#334155">Alloy + exporters → Center (and S1 copy)</text>
+<text x="1138" y="943" font-size="12" fill="#334155">bastion + MFA (S2 admins)</text>
+<text x="1138" y="961" font-size="12" fill="#334155">backups: Besu snapshots, MPC share x₂</text>
+<rect x="40" y="1020" width="740" height="260" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="60" y="1048" font-size="15" fill="#0f172a" font-weight="700">Inter-site links (site-to-site VPN / private WAN; mTLS on top)</text>
+<text x="60" y="1076" font-size="12" fill="#475569" font-weight="700">Flow</text>
+<text x="200" y="1076" font-size="12" fill="#475569" font-weight="700">Port</text>
+<text x="360" y="1076" font-size="12" fill="#475569" font-weight="700">Between</text>
+<line x1="60" y1="1085" x2="760" y2="1085" stroke="#e2e8f0"/>
+<text x="60" y="1104" font-size="12.5" fill="#0f172a" font-weight="600">Besu p2p</text>
+<text x="200" y="1104" font-size="12.5" fill="#334155">TCP/UDP 30303</text>
+<text x="360" y="1104" font-size="12.5" fill="#334155">all validators + RPC nodes, all sites (mesh)</text>
+<line x1="60" y1="1113" x2="760" y2="1113" stroke="#e2e8f0"/>
+<text x="60" y="1132" font-size="12.5" fill="#0f172a" font-weight="600">MPC node API</text>
+<text x="200" y="1132" font-size="12.5" fill="#334155">TCP 7000</text>
+<text x="360" y="1132" font-size="12.5" fill="#334155">coordinators (C, S1) → nodes 0, 1, 2</text>
+<line x1="60" y1="1141" x2="760" y2="1141" stroke="#e2e8f0"/>
+<text x="60" y="1160" font-size="12.5" fill="#0f172a" font-weight="600">MPC relay</text>
+<text x="200" y="1160" font-size="12.5" fill="#334155">TCP 9100 (WSS)</text>
+<text x="360" y="1160" font-size="12.5" fill="#334155">nodes 0, 1, 2 → active coordinator</text>
+<line x1="60" y1="1169" x2="760" y2="1169" stroke="#e2e8f0"/>
+<text x="60" y="1188" font-size="12.5" fill="#0f172a" font-weight="600">Redis</text>
+<text x="200" y="1188" font-size="12.5" fill="#334155">TCP 6379 / 26379</text>
+<text x="360" y="1188" font-size="12.5" fill="#334155">replication C → S1 · Sentinels on all 3 sites</text>
+<line x1="60" y1="1197" x2="760" y2="1197" stroke="#e2e8f0"/>
+<text x="60" y="1216" font-size="12.5" fill="#0f172a" font-weight="600">Observability</text>
+<text x="200" y="1216" font-size="12.5" fill="#334155">9090 / 3100 / 4317</text>
+<text x="360" y="1216" font-size="12.5" fill="#334155">agents at S1, S2 → Center (+ S1 replica)</text>
+<line x1="60" y1="1225" x2="760" y2="1225" stroke="#e2e8f0"/>
+<text x="60" y="1244" font-size="12.5" fill="#0f172a" font-weight="600">Admin</text>
+<text x="200" y="1244" font-size="12.5" fill="#334155">SSH via bastion</text>
+<text x="360" y="1244" font-size="12.5" fill="#334155">each site only by its own team (no shared admin)</text>
+<text x="60" y="1266" font-size="11" fill="#64748b">WAN latency: QBFT blockperiodseconds ≥ 2 and requesttimeoutseconds ≥ 4 × inter-site RTT; permission all 6 validators + RPC nodes</text>
+<rect x="800" y="1020" width="760" height="260" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="820" y="1048" font-size="15" fill="#0f172a" font-weight="700">What happens when a whole site is down</text>
+<text x="820" y="1080" font-size="13" fill="#b91c1c" font-weight="700">① Center down</text>
+<text x="990" y="1080" font-size="12.5" fill="#334155">GSLB → S1 gateway; Sentinels #2 + #3 promote S1 Redis;</text>
+<text x="990" y="1098" font-size="12.5" fill="#334155">S1 coordinator signs with nodes 1 + 2; chain: 4 of 6 validators = quorum</text>
+<text x="820" y="1134" font-size="13" fill="#b45309" font-weight="700">② Subsidiary 1 down</text>
+<text x="990" y="1134" font-size="12.5" fill="#334155">no user impact: Center signs with nodes 0 + 2;</text>
+<text x="990" y="1152" font-size="12.5" fill="#334155">chain 4 of 6 · DR capacity lost until S1 returns</text>
+<text x="820" y="1188" font-size="13" fill="#b45309" font-weight="700">③ Subsidiary 2 down</text>
+<text x="990" y="1188" font-size="12.5" fill="#334155">no user impact: Center signs with nodes 0 + 1;</text>
+<text x="990" y="1206" font-size="12.5" fill="#334155">chain 4 of 6 · Redis keeps quorum (Sentinel #1 + #2)</text>
+<text x="820" y="1242" font-size="13" fill="#475569" font-weight="700">Two sites down</text>
+<text x="990" y="1242" font-size="12.5" fill="#334155">by design: signing stops (1 of 3 shares) and chain halts</text>
+<text x="990" y="1260" font-size="12.5" fill="#334155">(2 of 6 &lt; quorum). No single site can sign or produce blocks alone.</text>
+</svg>
