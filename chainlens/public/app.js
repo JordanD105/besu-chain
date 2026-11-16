@@ -557,11 +557,6 @@ function memoNodes(memo) {
     return nodes;
 }
 
-// NFT buy(): show who received the payment (the collection's minter)
-function payToNodes(tx) {
-    return tx.payTo ? [el("div", { class: "memo-payto" }, ["→ ", addr(tx.payTo)])] : [];
-}
-
 function txColumns() {
     return [
         { label: "col.hash", sort: (tx) => tx.hash, cell: (tx) => ident(tx.hash, "#/transactions/" + tx.hash) },
@@ -572,7 +567,7 @@ function txColumns() {
         { label: "col.value", sort: (tx) => BigInt(tx.valueWei || 0), search: (tx) => tx.value + " ETH", cell: (tx) => tx.value + " ETH" },
         { label: "col.memo", sort: (tx) => tx.memo || "", search: (tx) => tx.memo || "", cell: (tx) => {
             const memo = tx.type === "transfer" || tx.functionName === "buy" ? (tx.memo || "") : "";
-            return el("span", { class: "memo-cell" }, memo ? memoNodes(memo).concat(payToNodes(tx)) : "—");
+            return el("span", { class: "memo-cell" }, memo ? memoNodes(memo) : "—");
         } },
         { label: "col.time", sort: (tx) => tx.timestamp || 0, search: (tx) => stamp(tx.timestamp), cell: (tx) => stamp(tx.timestamp) }
     ];
@@ -1553,8 +1548,8 @@ async function showTx(hash) {
                 ]),
                 el("div", { style: "margin-top:8px" }, [t("tx.from") + " ", addr(tx.from), "  " + t("tx.to") + " ", to]),
                 el("div", { style: "margin-top:8px" }, t("tx.status") + " " + (tx.status === "success" ? t("tx.ok") : t("tx.fail"))),
-                tx.type === "transfer" || tx.functionName === "buy"
-                    ? el("div", { class: "memo", style: "margin-top:8px" }, [t("tx.memo") + " ", ...(tx.memo ? memoNodes(tx.memo).concat(payToNodes(tx)) : ["—"])])
+                tx.type === "transfer"
+                    ? el("div", { class: "memo", style: "margin-top:8px" }, [t("tx.memo") + " ", ...(tx.memo ? memoNodes(tx.memo) : ["—"])])
                     : null
             ]),
             el("aside", { class: "side-stat" }, [el("div", {}, t("tx.value")), el("b", {}, tx.value + " ETH")])
