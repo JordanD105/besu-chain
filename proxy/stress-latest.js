@@ -85,7 +85,9 @@ async function cache(fn, fallback = null) {
 // Live state (authoritative while the process runs; one proxy replica, see withSenderLock).
 const memNonce = new Map();      // sender -> next nonce to use
 const memPending = new Map();    // sender -> Map(nonce -> wei string) not yet mined
-const memNft = { contract: null, nextId: null };
+// NFT collections: the default collection (NFT_CONTRACT / nft:contract / first deployed),
+// every collection deployed by SENDER01, and the next token id per collection.
+const memNft = { contract: null, nextId: new Map(), collections: null };
 
 // =======================
 // JSON RPC Client
@@ -731,8 +733,8 @@ function parseTokenId(value) {
     return null;
 }
 
-function nftMetaKey(tokenId) {
-    return `nft:meta:${tokenId}`;
+function nftMetaKey(contract, tokenId) {
+    return `nft:meta:${contract.toLowerCase()}:${tokenId}`;
 }
 
 function metadataUrl(req, tokenId) {
@@ -820,18 +822,33 @@ async function rememberNftContract(contract) {
     await cache(() => redis.set("nft:contract", memNft.contract));
 }
 
-// Without Redis, find the collection on chain: SENDER01 deployed it, so it lives at one of
-// SENDER01's CREATE addresses (keccak(rlp(sender, nonce))). Newest first; the first address
-// with code whose minter() is SENDER01 is the collection.
-async function discoverNftContract() {
+// Every collection SENDER01 deployed lives at one of its CREATE addresses
+// (keccak(rlp(sender, nonce))). Scan them (oldest first) and keep those with code whose
+// minter() is SENDER01. Used when neither memory nor Redis knows the collections.
+let discovery = null;
+
+// Scan once per process (it is only needed on a cold start without Redis); collections
+// deployed later are added to memory directly.
+function discoverCollections() {
+    if (!discovery) {
+        discovery = scanCollections().catch((error) => {
+            discovery = null;
+            throw error;
+        });
+    }
+
+    return discovery;
+}
+
+async function scanCollections() {
     const sender = ethers.getAddress(CONFIG.SENDER01);
     const latest = parseInt(await rpc(CONFIG.BESU_RPC, "eth_getTransactionCount", [sender, "latest"]), 16);
+    const found = [];
 
-    for (let nonce = latest - 1; nonce >= 0; nonce -= 1) {
+    for (let nonce = 0; nonce < latest; nonce += 1) {
         const candidate = ethers.getCreateAddress({ from: sender, nonce });
-        const code = await rpc(CONFIG.BESU_RPC, "eth_getCode", [candidate, "latest"]);
 
-        if (!code || code === "0x") {
+        if (!await hasCode(candidate)) {
             continue;
         }
 
@@ -839,15 +856,96 @@ async function discoverNftContract() {
             const minter = (await callNft(candidate, "minter", []))[0];
 
             if (minter.toLowerCase() === sender.toLowerCase()) {
-                console.log(`NFT contract recovered from chain: ${candidate} (deploy nonce ${nonce})`);
-                return candidate;
+                found.push(candidate);
             }
         } catch (error) {
             // not an NftCollection; keep looking
         }
     }
 
-    return null;
+    if (found.length > 0) {
+        console.log(`NFT collections recovered from chain: ${found.join(", ")}`);
+    }
+
+    return found;
+}
+
+async function discoverNftContract() {
+    const found = await discoverCollections();
+    return found.length > 0 ? found[0] : null;
+}
+
+async function collectionInfo(contract) {
+    const info = { name: null, symbol: null };
+
+    try {
+        info.name = (await callNft(contract, "name", []))[0];
+        info.symbol = (await callNft(contract, "symbol", []))[0];
+    } catch (error) {
+        // name/symbol are optional for display
+    }
+
+    return info;
+}
+
+// All known collections: memory -> Redis hash nft:collections -> chain discovery.
+async function knownCollections() {
+    if (!memNft.collections) {
+        const stored = await cache(() => redis.hgetall("nft:collections"), null);
+        const collections = new Map();
+
+        if (stored && Object.keys(stored).length > 0) {
+            for (const [address, json] of Object.entries(stored)) {
+                if (isAddress(address) && await hasCode(address)) {
+                    collections.set(ethers.getAddress(address), JSON.parse(json));
+                }
+            }
+        } else {
+            for (const address of await discoverCollections()) {
+                collections.set(address, await collectionInfo(address));
+            }
+        }
+
+        memNft.collections = collections;
+    }
+
+    const def = await nftContractAddress();
+
+    if (def && !memNft.collections.has(def)) {
+        memNft.collections.set(def, await collectionInfo(def));
+    }
+
+    // best effort: persist anything Redis is missing (e.g. deployed while Redis was down)
+    for (const [address, info] of memNft.collections) {
+        await cache(() => redis.hsetnx("nft:collections", address, JSON.stringify(info)));
+    }
+
+    return memNft.collections;
+}
+
+async function rememberCollection(contract, info) {
+    const address = ethers.getAddress(contract);
+    (await knownCollections()).set(address, info);
+    await cache(() => redis.hset("nft:collections", address, JSON.stringify(info)));
+}
+
+// Collection for a request: the given address, or the default collection.
+async function resolveCollection(input) {
+    if (input === undefined || input === null || input === "") {
+        return requireNftContract();
+    }
+
+    if (typeof input !== "string" || !isAddress(input)) {
+        throw httpError(400, "invalid contract address");
+    }
+
+    const address = ethers.getAddress(input);
+
+    if (!await hasCode(address)) {
+        throw httpError(404, `no contract at ${address} on this chain`);
+    }
+
+    return address;
 }
 
 async function requireNftContract() {
@@ -897,15 +995,17 @@ async function allocateTokenId(contract) {
         throw httpError(500, "token id is too large");
     }
 
-    if (memNft.nextId === null) {
-        const stored = await cache(() => redis.get("nft:nextId"));
-        memNft.nextId = Math.max(memNft.nextId || 0, Number(stored || 0));
+    const key = `nft:nextId:${contract.toLowerCase()}`;
+
+    if (!memNft.nextId.has(contract)) {
+        const stored = Number(await cache(() => redis.get(key)) || 0);
+        memNft.nextId.set(contract, Math.max(memNft.nextId.get(contract) || 0, stored));
     }
 
     // read-modify-write without an await in between: atomic within this process
-    const tokenId = Math.max(memNft.nextId, Number(minted)) + 1;
-    memNft.nextId = tokenId;
-    await cache(() => redis.set("nft:nextId", tokenId));
+    const tokenId = Math.max(memNft.nextId.get(contract), Number(minted)) + 1;
+    memNft.nextId.set(contract, tokenId);
+    await cache(() => redis.set(key, tokenId));
     return String(tokenId);
 }
 
@@ -1084,19 +1184,22 @@ async function readOwner(contract, tokenId) {
 
 // Proxy-side record of a mint ({metadata, tokenURI, to, amount, txHash}). Redis is a cache:
 // if it has no record, rebuild {metadata, tokenURI} from the on-chain data: URI.
-async function readStoredNft(tokenId) {
-    const raw = await cache(() => redis.get(nftMetaKey(tokenId)));
+async function readStoredNft(contract, tokenId) {
+    let raw = await cache(() => redis.get(nftMetaKey(contract, tokenId)));
+
+    if (!raw && contract === await nftContractAddress()) {
+        // records written before multi-collection support (default collection only)
+        raw = await cache(() => redis.get(`nft:meta:${tokenId}`));
+    }
 
     if (raw) {
         return JSON.parse(raw);
     }
 
-    return nftFromChain(tokenId);
+    return nftFromChain(contract, tokenId);
 }
 
-async function nftFromChain(tokenId) {
-    const contract = await nftContractAddress();
-
+async function nftFromChain(contract, tokenId) {
     if (!contract) {
         return null;
     }
@@ -1235,16 +1338,6 @@ function buildMetadata(body) {
 }
 
 async function deployCollection(name, symbol) {
-    const existing = await nftContractAddress();
-
-    if (existing) {
-        return {
-            success: true,
-            contract: existing,
-            alreadyDeployed: true
-        };
-    }
-
     if (!await signerOwns(CONFIG.SENDER01)) {
         throw new Error("sender01 is not managed by Web3Signer");
     }
@@ -1267,11 +1360,18 @@ async function deployCollection(name, symbol) {
         throw new Error("deployment produced no code");
     }
 
-    await rememberNftContract(contract);
+    const existingDefault = await nftContractAddress();
+
+    if (!existingDefault) {
+        await rememberNftContract(contract);
+    }
+
+    await rememberCollection(contract, { name, symbol });
 
     return {
         success: true,
         contract,
+        default: !existingDefault,
         txHash: sent.txHash,
         name,
         symbol,
@@ -1299,7 +1399,7 @@ async function mintNft(req) {
 
     const metadata = buildMetadata(body);
     const tokenURI = onChainTokenUri(metadata);
-    const contract = await requireNftContract();
+    const contract = await resolveCollection(body.contract);
 
     if (!await signerOwns(CONFIG.SENDER01)) {
         throw new Error("sender01 is not managed by Web3Signer");
@@ -1349,7 +1449,7 @@ async function mintNft(req) {
     }
 
     const tokenId = await allocateTokenId(contract);
-    const key = nftMetaKey(tokenId);
+    const key = nftMetaKey(contract, tokenId);
     const record = {
         metadata,
         tokenURI,
@@ -1420,7 +1520,7 @@ async function transferNft(body) {
         throw httpError(400, "invalid address");
     }
 
-    const contract = await requireNftContract();
+    const contract = await resolveCollection(body.contract);
     const from = ethers.getAddress(body.from);
     const to = ethers.getAddress(body.to);
     const owner = await readOwner(contract, tokenId);
@@ -1458,11 +1558,12 @@ async function transferNft(body) {
     };
 }
 
-async function listOwnedNfts(address) {
-    const contract = await requireNftContract();
-    const owner = ethers.getAddress(address);
+async function ownedInCollection(contract, owner) {
     const minted = Number(await highestMintedTokenId(contract));
-    const stored = Math.max(memNft.nextId || 0, Number(await cache(() => redis.get("nft:nextId")) || 0));
+    const stored = Math.max(
+        memNft.nextId.get(contract) || 0,
+        Number(await cache(() => redis.get(`nft:nextId:${contract.toLowerCase()}`)) || 0)
+    );
     const latest = Math.max(minted, stored);
     const tokenIds = [];
     const batchSize = 20;
@@ -1483,11 +1584,34 @@ async function listOwnedNfts(address) {
         });
     }
 
+    return tokenIds;
+}
+
+// ?contract=0x... -> that collection only; otherwise every known collection. The top-level
+// contract/tokenIds fields keep the single-collection response shape (default collection).
+async function listOwnedNfts(address, contractParam) {
+    const owner = ethers.getAddress(address);
+
+    if (contractParam) {
+        const contract = await resolveCollection(contractParam);
+        return { success: true, contract, owner, tokenIds: await ownedInCollection(contract, owner) };
+    }
+
+    const def = await requireNftContract();
+    const collections = [];
+
+    for (const contract of (await knownCollections()).keys()) {
+        collections.push({ contract, tokenIds: await ownedInCollection(contract, owner) });
+    }
+
+    const defaultRow = collections.find((row) => row.contract === def);
+
     return {
         success: true,
-        contract,
+        contract: def,
         owner,
-        tokenIds
+        tokenIds: defaultRow ? defaultRow.tokenIds : [],
+        collections
     };
 }
 
@@ -1567,6 +1691,26 @@ app.get("/nft/contract", async (req, res) => {
     }
 });
 
+app.get("/nft/collections", async (req, res) => {
+    try {
+        const def = await nftContractAddress();
+        const collections = [...(await knownCollections()).entries()].map(([contract, info]) => ({
+            contract,
+            name: info.name,
+            symbol: info.symbol,
+            default: contract === def
+        }));
+
+        res.json({ success: true, minter: ethers.getAddress(CONFIG.SENDER01), collections });
+    } catch (error) {
+        console.error(error);
+
+        res.status(error.statusCode || 500).json({
+            error: error.message
+        });
+    }
+});
+
 app.get("/nft/owner/:address", async (req, res) => {
     try {
         if (!isAddress(req.params.address)) {
@@ -1575,7 +1719,7 @@ app.get("/nft/owner/:address", async (req, res) => {
             });
         }
 
-        res.json(await listOwnedNfts(req.params.address));
+        res.json(await listOwnedNfts(req.params.address, req.query.contract));
     } catch (error) {
         console.error(error);
 
@@ -1595,7 +1739,8 @@ app.get("/nft/:tokenId/metadata", async (req, res) => {
             });
         }
 
-        const stored = await readStoredNft(tokenId);
+        const contract = await resolveCollection(req.query.contract);
+        const stored = await readStoredNft(contract, tokenId);
 
         if (!stored) {
             return res.status(404).json({
@@ -1623,8 +1768,8 @@ app.get("/nft/:tokenId", async (req, res) => {
             });
         }
 
-        const contract = await requireNftContract();
-        const stored = await readStoredNft(tokenId);
+        const contract = await resolveCollection(req.query.contract);
+        const stored = await readStoredNft(contract, tokenId);
         const owner = await readOwner(contract, tokenId);
 
         if (!owner) {

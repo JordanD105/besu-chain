@@ -231,13 +231,22 @@ working. Redis commands fail fast (no queueing), and the log shows
 |---|---|
 | `nonce:<sender>` | next nonce = max(cached counter, `eth_getTransactionCount(pending)`), so a stale or missing value is harmless |
 | `pending-value:<sender>` | kept in memory; entries are dropped once their nonce is mined |
-| `nft:contract` | `NFT_CONTRACT` env → memory → Redis → **found on chain** (SENDER01's deployment addresses whose `minter()` is SENDER01) |
-| `nft:nextId` | max(memory/Redis, highest token id minted on chain) + 1 |
-| `nft:meta:<tokenId>` | metadata decoded from the token's on-chain `tokenURI` (`data:application/json;base64,…`) |
+| `nft:contract` (default collection) | `NFT_CONTRACT` env → memory → Redis → **found on chain** (SENDER01's deployment addresses whose `minter()` is SENDER01) |
+| `nft:collections` (all collections) | memory → Redis → found on chain the same way |
+| `nft:nextId:<contract>` | per collection: max(memory/Redis, highest token id minted on chain) + 1 |
+| `nft:meta:<contract>:<tokenId>` | metadata decoded from the token's on-chain `tokenURI` (`data:application/json;base64,…`) |
 
 Tested: Redis stopped during load; Redis replaced by an empty instance plus a proxy restart; and a
 stale snapshot with a nonce rolled back. In all three, transfers, account creation and NFT mint
 and metadata kept working, and every transaction was mined with no nonce gaps.
 
 Still one proxy replica: the per-sender lock is in process memory.
+
+## Several NFT collections
+
+`POST /nft/deploy` deploys a **new** collection every time. The first one is the default, and
+`GET /nft/collections` lists them all. Pass `"contract": "0x…"` in `/nft/mint` and `/nft/transfer`,
+or `?contract=0x…` on `GET /nft/:id`, `/nft/:id/metadata` and `/nft/owner/:address`. Without it,
+the default collection is used, so requests written for a single collection still work. Token ids
+start at 1 in each collection. Examples are in `proxy/api.txt`.
 
