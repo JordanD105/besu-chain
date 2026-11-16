@@ -41,6 +41,7 @@ const db = {
     head: 0,
     indexed: -1,
     chainId: null,
+    genesis: null,
     blocks: [],
     txs: [],
     txByHash: new Map(),
@@ -777,12 +778,52 @@ async function refreshNetwork() {
     }
 }
 
+// The index lives in memory and only fetches blocks after db.indexed. If the chain is reset
+// (e.g. besu-test-network remove.sh + run.sh) or replaced, those block numbers belong to a
+// different chain, so start over instead of showing the old chain's data.
+function resetIndex(reason) {
+    console.log(`chain changed (${reason}): re-indexing from block 0`);
+    Object.assign(db, {
+        ready: false,
+        head: 0,
+        indexed: -1,
+        chainId: null,
+        genesis: null,
+        blocks: [],
+        txs: [],
+        txByHash: new Map(),
+        accounts: new Map(),
+        contracts: new Map(),
+        nfts: new Map()
+    });
+}
+
+async function detectChainChange(head) {
+    const genesis = (await rpc("eth_getBlockByNumber", ["0x0", false]))?.hash || null;
+
+    if (db.genesis && genesis !== db.genesis) {
+        resetIndex("different genesis block");
+    } else if (db.indexed > head) {
+        resetIndex(`chain head ${head} is below indexed block ${db.indexed}`);
+    } else if (db.indexed >= 0 && db.blocks[db.indexed]) {
+        const block = await rpc("eth_getBlockByNumber", ["0x" + db.indexed.toString(16), false]);
+
+        if (!block || block.hash !== db.blocks[db.indexed].hash) {
+            resetIndex(`block ${db.indexed} hash changed`);
+        }
+    }
+
+    db.genesis = genesis;
+}
+
 async function syncOnce() {
+    const head = parseInt(await rpc("eth_blockNumber", []), 16);
+    await detectChainChange(head);
+
     if (db.chainId === null) {
         db.chainId = parseInt(await rpc("eth_chainId", []), 16);
     }
 
-    const head = parseInt(await rpc("eth_blockNumber", []), 16);
     db.head = head;
 
     for (let start = db.indexed + 1; start <= head; start += 20) {
