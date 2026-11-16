@@ -763,6 +763,11 @@ function nftDeployData(name, symbol) {
     ]));
 }
 
+async function hasCode(address) {
+    const code = await rpc(CONFIG.BESU_RPC, "eth_getCode", [address, "latest"]);
+    return Boolean(code) && code !== "0x";
+}
+
 async function nftContractAddress() {
     const configured = (process.env.NFT_CONTRACT || "").trim();
 
@@ -771,7 +776,17 @@ async function nftContractAddress() {
             throw httpError(500, "NFT_CONTRACT is not a valid address");
         }
 
-        return ethers.getAddress(configured);
+        const address = ethers.getAddress(configured);
+
+        // e.g. the chain was reset: the configured address belongs to the old chain
+        if (memNft.contract !== address && !await hasCode(address)) {
+            throw httpError(500, `NFT_CONTRACT ${address} has no contract on this chain `
+                + "(was the chain reset?). Remove NFT_CONTRACT from .env to let the proxy "
+                + "find or deploy the collection, or set it to the current address.");
+        }
+
+        memNft.contract = address;
+        return address;
     }
 
     if (memNft.contract) {
@@ -781,8 +796,14 @@ async function nftContractAddress() {
     const stored = await cache(() => redis.get("nft:contract"));
 
     if (stored && isAddress(stored)) {
-        memNft.contract = ethers.getAddress(stored);
-        return memNft.contract;
+        if (await hasCode(stored)) {
+            memNft.contract = ethers.getAddress(stored);
+            return memNft.contract;
+        }
+
+        // stale cache from an old chain: forget it and look on the current chain
+        console.warn(`cached nft:contract ${stored} has no code on this chain; ignoring it`);
+        await cache(() => redis.del("nft:contract"));
     }
 
     const found = await discoverNftContract();

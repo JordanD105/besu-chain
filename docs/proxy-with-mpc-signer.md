@@ -217,6 +217,7 @@ The proxy calls `eth_accounts` on `WEB3SIGNER_IP:WEB3SIGNER_PORT` (now the coord
 |---|---|---|
 | `policy: value above limit` | the amount is above `max_value_wei` in `quickstart/cluster.json` (default 1000 ETH per transaction) | raise it, then `./quickstart.sh down && ./quickstart.sh up` |
 | `/createaccount` returns a `txHash`, but chainlens shows 0 transactions and the receipt is `null` | **nonce gap**: an earlier failed request used up a nonce (for example nonce 0), so later transactions wait in Besu's pool. Fixed in the proxy: a failed send now clears the cached nonce. | update the proxy, then fill the gap once: `eth_sendTransaction` on the coordinator from the sender to itself, `value 0x0`, `nonce` = the missing one. Then `docker exec <redis> redis-cli DEL nonce:<sender lowercase>`. |
+| `/nft/deploy` says `alreadyDeployed` but chainlens shows no contract; `/nft/mint` says `NFT contract is not a collection` | `NFT_CONTRACT` in `proxy/.env` points to a contract from **before the chain was reset**. The proxy now reports this clearly. | delete the `NFT_CONTRACT` line, run `docker compose up -d --build`, then call `/nft/deploy` again (the proxy finds the collection on chain by itself) |
 | chainlens stuck with `Missing batch response` | old chainlens image (batch over Besu's 1024 limit) | `git pull`, then `docker compose up -d --build` in `chainlens/` |
 
 ## Redis is optional (no replica needed)
