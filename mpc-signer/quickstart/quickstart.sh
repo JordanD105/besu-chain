@@ -30,7 +30,13 @@ coord() { # METHOD PATH [BODY]
 }
 
 init() {
-  if [ -f cluster.json ]; then log "already initialised (cluster.json exists)"; return; fi
+  if [ -f cluster.json ]; then
+    log "already initialised (cluster.json exists): keeping the existing cluster and key shares"
+    log "  chain id in policy: $(grep -o '"chain_id": *[0-9]*' cluster.json | grep -o '[0-9]*$')"
+    log "  continue with:  ./quickstart.sh up && ./quickstart.sh setup"
+    log "  start over:     ./quickstart.sh destroy   (deletes all key shares), then init again"
+    return
+  fi
   if [ ! -f .env ]; then
     umask 077
     cat > .env <<EOF

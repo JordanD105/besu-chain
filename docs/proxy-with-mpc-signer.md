@@ -39,6 +39,10 @@ MPC_BIGINT=bigint-rug CHAIN_ID=1337 ./quickstart.sh init
 | `MPC_BIGINT=bigint-rug` | GMP backend, faster presigning. It adds an LGPL dependency; leave it out to use the pure-Rust default. |
 | `CHAIN_ID` | Must equal the `chainId` in Besu's genesis (1337 in `besu-test-network`). |
 
+If `init` says **already initialised**, a cluster from an earlier run exists. Either:
+- keep it: check `grep chain_id cluster.json` shows your chain id, then run `up` and `setup`. To switch to the faster backend, set `MPC_BIGINT=bigint-rug` in `.env` and run `docker compose build node0` first.
+- or run `./quickstart.sh destroy` to delete it and its key shares, then `init` again.
+
 `setup` runs aux-info generation once (a few minutes), then creates the first key and prints it:
 
 ```json
