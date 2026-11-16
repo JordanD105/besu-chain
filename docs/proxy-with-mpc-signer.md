@@ -177,15 +177,15 @@ curl -s localhost:30000/nft/deploy -H 'content-type: application/json' --data '{
 ```
 
 Mint. Every NFT is minted to `SENDER01` and nothing is paid. `amount` is the NFT's **price**,
-stored in its on-chain metadata:
+stored on chain in the collection:
 
 ```bash
 curl -s localhost:30000/nft/mint -H 'content-type: application/json' \
   --data '{"name":"Badge 1","image":"https://example/badge.png","amount":"0.5"}'
 ```
 
-Sell it to the user. There is no `amount` and no `SENDER01` parameter, and `from` defaults to
-the current owner. The receiver (`to`) pays the mint price to `SENDER01`, then the NFT moves:
+Sell it to the user. This is **one** `buy` transaction signed by the buyer, carrying exactly the
+price. The NFT moves and the ETH goes to `SENDER01` atomically; if anything fails, nothing moves:
 
 ```bash
 curl -s localhost:30000/nft/transfer -H 'content-type: application/json' \

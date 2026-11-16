@@ -155,6 +155,22 @@ async function nextNonce(address) {
     return nonce;
 }
 
+// Besu can briefly answer eth_getBalance with null (e.g. while importing a busy block);
+// retry a few times instead of failing the request with "Cannot convert null to a BigInt".
+async function getBalanceWei(address) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const result = await rpc(CONFIG.BESU_RPC, "eth_getBalance", [address, "latest"]);
+
+        if (result !== null && result !== undefined) {
+            return BigInt(result);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+    }
+
+    throw new Error(`Besu returned no balance for ${address}`);
+}
+
 // =======================
 // Address validation
 // =======================
@@ -311,11 +327,7 @@ function transferGas(bytes) {
 async function assertCanPay(address, amount) {
     const value = ethToWei(amount);
     const cost = value;
-    const balance = BigInt(await rpc(
-        CONFIG.BESU_RPC,
-        "eth_getBalance",
-        [address, "latest"]
-    ));
+    const balance = await getBalanceWei(address);
     const reserved = await reservedWei(address);
 
     if (balance < reserved + cost) {
@@ -761,6 +773,34 @@ async function hasCode(address) {
     return Boolean(code) && code !== "0x";
 }
 
+// Only NftCollection version 2 (price at mint + atomic buy) is supported. Older collections on
+// the chain are ignored by listing/discovery and rejected when selected.
+const COLLECTION_VERSION = 2n;
+const versionCache = new Map();
+
+async function isSupportedCollection(address) {
+    const key = address.toLowerCase();
+
+    if (!versionCache.has(key)) {
+        let ok = false;
+
+        try {
+            ok = (await callNft(address, "version", []))[0] === COLLECTION_VERSION;
+        } catch (error) {
+            ok = false;
+        }
+
+        versionCache.set(key, ok);
+    }
+
+    return versionCache.get(key);
+}
+
+function oldCollectionError(address) {
+    return httpError(400, `collection ${address} is an old version without buy(); `
+        + "old collections are no longer supported, deploy a new collection with /nft/deploy");
+}
+
 async function nftContractAddress() {
     const configured = (process.env.NFT_CONTRACT || "").trim();
 
@@ -778,6 +818,10 @@ async function nftContractAddress() {
                 + "find or deploy the collection, or set it to the current address.");
         }
 
+        if (!await isSupportedCollection(address)) {
+            throw oldCollectionError(address);
+        }
+
         memNft.contract = address;
         return address;
     }
@@ -789,13 +833,13 @@ async function nftContractAddress() {
     const stored = await cache(() => redis.get("nft:contract"));
 
     if (stored && isAddress(stored)) {
-        if (await hasCode(stored)) {
+        if (await hasCode(stored) && await isSupportedCollection(stored)) {
             memNft.contract = ethers.getAddress(stored);
             return memNft.contract;
         }
 
         // stale cache from an old chain: forget it and look on the current chain
-        console.warn(`cached nft:contract ${stored} has no code on this chain; ignoring it`);
+        console.warn(`cached nft:contract ${stored} is missing or an old version; ignoring it`);
         await cache(() => redis.del("nft:contract"));
     }
 
@@ -846,7 +890,7 @@ async function scanCollections() {
         try {
             const minter = (await callNft(candidate, "minter", []))[0];
 
-            if (minter.toLowerCase() === sender.toLowerCase()) {
+            if (minter.toLowerCase() === sender.toLowerCase() && await isSupportedCollection(candidate)) {
                 found.push(candidate);
             }
         } catch (error) {
@@ -887,7 +931,7 @@ async function knownCollections() {
 
         if (stored && Object.keys(stored).length > 0) {
             for (const [address, json] of Object.entries(stored)) {
-                if (isAddress(address) && await hasCode(address)) {
+                if (isAddress(address) && await hasCode(address) && await isSupportedCollection(address)) {
                     collections.set(ethers.getAddress(address), JSON.parse(json));
                 }
             }
@@ -952,6 +996,10 @@ async function resolveCollection(input) {
 
         if (!await hasCode(address)) {
             throw httpError(404, `no contract at ${address} on this chain`);
+        }
+
+        if (!await isSupportedCollection(address)) {
+            throw oldCollectionError(address);
         }
 
         return address;
@@ -1081,11 +1129,7 @@ async function assertMintFits(from, to, data) {
 
 async function assertCanPayGas(address, gas, valueWei = 0n) {
     const cost = valueWei + gas * 0n;
-    const balance = BigInt(await rpc(
-        CONFIG.BESU_RPC,
-        "eth_getBalance",
-        [address, "latest"]
-    ));
+    const balance = await getBalanceWei(address);
     const reserved = await reservedWei(address);
 
     if (balance < reserved + cost) {
@@ -1421,8 +1465,8 @@ async function deployCollection(name, symbol) {
 }
 
 // Mint: every NFT is minted to SENDER01 (the collection's minter); nothing is paid.
-// "amount" is the NFT's price: it is written into the on-chain metadata (metadata.price), and
-// every /nft/transfer charges it to the receiver (paid to SENDER01).
+// "amount" is the NFT's price, stored on chain in the collection (priceOf); /nft/transfer sells
+// the token with buy(), where the buyer pays exactly that price to SENDER01 in one transaction.
 async function mintNft(req) {
     const body = req.body || {};
 
@@ -1446,10 +1490,8 @@ async function mintNft(req) {
         throw httpError(400, "invalid amount");
     }
 
-    ethToWei(price); // validates precision (max 18 decimals)
-
+    const priceWei = ethToWei(price);
     const metadata = buildMetadata(body);
-    metadata.price = price;
     const tokenURI = onChainTokenUri(metadata);
     const contract = await resolveCollection(collectionParam(body));
 
@@ -1484,7 +1526,7 @@ async function mintNft(req) {
 
     await cache(() => redis.set(key, JSON.stringify(record)));
 
-    const data = nftInterface.encodeFunctionData("mint", [sender, tokenId, tokenURI]);
+    const data = nftInterface.encodeFunctionData("mint", [sender, tokenId, tokenURI, priceWei]);
     let sent;
 
     try {
@@ -1510,48 +1552,11 @@ async function mintNft(req) {
     };
 }
 
-function failMemo(prefix, error) {
-    const reason = String((error && error.message) || "unknown error")
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim() || "unknown error";
-
-    return clipUtf8(`${prefix}: ${reason}`, MEMO_LIMIT);
-}
-
-// Price of a token = the "amount" given at mint: from the proxy's record, or from the token's
-// on-chain metadata (so it survives without Redis). Tokens minted without a price are free.
-async function tokenPrice(contract, tokenId) {
-    const stored = await readStoredNft(contract, tokenId);
-    const price = stored && ((stored.metadata && stored.metadata.price) || stored.price);
-    const image = stored && stored.metadata && stored.metadata.image;
-
-    return {
-        price: typeof price === "string" && /^\d+(\.\d+)?$/.test(price) ? price : "0",
-        image: typeof image === "string" ? image.trim() : ""
-    };
-}
-
-// Payment memo: "NFT transfer: <collection> #<id> - <image URL>". Explorers (chainlens) show
-// the image for this format. The URL is left out if it is not http(s) (e.g. a data: URI) or
-// would make the memo longer than explorers decode.
-function transferMemo(label, tokenId, image) {
-    const base = `NFT transfer: ${label} #${tokenId}`;
-
-    if (/^https?:\/\/\S+$/.test(image)) {
-        const full = `${base} - ${image}`;
-
-        if (memoBytes(full).length <= MINT_MEMO_LIMIT) {
-            return full;
-        }
-    }
-
-    return base;
-}
-
-// Transfer an NFT to `to`. `from` is optional (default: the current owner). The receiver
-// `to` pays the token's mint price in ETH to SENDER01 first; if the NFT transfer then fails,
-// the payment is refunded. No payment when the price is 0 or the receiver is SENDER01.
+// Sell / transfer an NFT to `to` with the collection's buy(): ONE transaction signed by the
+// buyer, carrying exactly the token's price (set at mint). The NFT moves to the buyer and the
+// ETH goes to SENDER01 atomically; if anything fails the whole sale reverts and no ETH moves.
+// `from` is optional (default: current owner). If the owner is not SENDER01 (a resale), the
+// owner first approves the collection for this token.
 async function transferNft(body) {
     const tokenId = parseTokenId(body.tokenId);
 
@@ -1582,64 +1587,55 @@ async function transferNft(body) {
         throw httpError(400, "token is already owned by to");
     }
 
-    const { price: amount, image } = await tokenPrice(contract, tokenId);
+    const priceWei = (await callNft(contract, "priceOf", [tokenId]))[0];
+    const price = ethers.formatEther(priceWei).replace(/\.0$/, "");
 
     if (body.amount !== undefined && body.amount !== null && body.amount !== "" &&
-        ethToWei(String(body.amount).trim()) !== ethToWei(amount)) {
-        throw httpError(400, `"amount" is not a parameter: the price of this token is ${amount} `
+        ethToWei(String(body.amount).trim()) !== priceWei) {
+        throw httpError(400, `"amount" is not a parameter: the price of this token is ${price} `
             + "(set at mint)");
     }
 
-    const ownedBySigner = await signerOwns(from);
+    const buyerOwned = await signerOwns(to);
 
-    if (!ownedBySigner && !await readPrivateKey(accountName(from))) {
-        throw httpError(400, "sender not managed by the signer");
+    if (!buyerOwned) {
+        throw httpError(400, "to address (buyer) is not managed by the signer");
     }
 
-    // payment: receiver -> SENDER01
-    const value = ethToWei(amount);
-    const needsPayment = value > 0n && to !== sender;
-    const ownedByPayer = needsPayment ? await signerOwns(to) : false;
-    const info = (await knownCollections()).get(contract) || {};
-    const label = info.symbol || info.name || contract;
-    const memo = transferMemo(label, tokenId, image);
+    // resale: the current owner must allow the collection to sell this token
+    let approveTxHash = null;
 
-    if (needsPayment) {
-        if (!ownedByPayer && !await readPrivateKey(accountName(to))) {
-            throw httpError(400, "to address (payer) is not managed by the signer");
-        }
+    if (from !== sender) {
+        const approved = (await callNft(contract, "getApproved", [tokenId]))[0];
+        const operator = (await callNft(contract, "isApprovedForAll", [from, contract]))[0];
 
-        const balance = BigInt(await rpc(CONFIG.BESU_RPC, "eth_getBalance", [to, "latest"]));
-        const reserved = await reservedWei(to);
-        const available = balance > reserved ? balance - reserved : 0n;
+        if (approved.toLowerCase() !== contract.toLowerCase() && !operator) {
+            if (!await signerOwns(from)) {
+                throw httpError(400, "owner is not managed by the signer");
+            }
 
-        if (available < value) {
-            throw httpError(400, `insufficient balance: the price of this token is ${amount} ETH`);
+            const approveData = nftInterface.encodeFunctionData("approve", [contract, tokenId]);
+            const approval = await withSenderLock(from, () => sendData(from, contract, approveData, true));
+            const receipt = await waitForReceipt(approval.txHash);
+
+            if (!receipt || BigInt(receipt.status) !== 1n) {
+                throw new Error("approval for the sale failed");
+            }
+
+            approveTxHash = approval.txHash;
         }
     }
 
-    const data = nftInterface.encodeFunctionData(
-        "safeTransferFrom(address,address,uint256)",
-        [from, to, tokenId]
-    );
-    let payment = null;
+    // the sale: buyer signs buy(tokenId) with value = price (gas estimation rejects a sale
+    // that would revert, e.g. insufficient balance, before anything is sent)
+    const buyData = nftInterface.encodeFunctionData("buy", [tokenId]);
     let sent;
 
     try {
-        if (needsPayment) {
-            payment = await withSenderLock(to, () => pay(to, sender, amount, ownedByPayer, memo));
-        }
-
-        sent = await withSenderLock(from, () => sendData(from, contract, data, ownedBySigner));
+        sent = await withSenderLock(to, () => sendData(to, contract, buyData, true, priceWei));
     } catch (error) {
-        if (payment) {
-            try {
-                await withSenderLock(sender, () =>
-                    pay(sender, to, amount, true, failMemo("NFT transfer failed, refund", error))
-                );
-            } catch (refundError) {
-                error.message = `${error.message}; refund failed: ${refundError.message}`;
-            }
+        if (/insufficient/i.test(error.message)) {
+            throw httpError(400, `insufficient balance: the price of this token is ${price} ETH`);
         }
 
         throw error;
@@ -1652,11 +1648,8 @@ async function transferNft(body) {
         to,
         tokenId,
         contract,
-        price: amount,
-        paid: needsPayment ? amount : "0",
-        payer: needsPayment ? to : null,
-        paymentTxHash: payment ? payment.txHash : null,
-        memo: needsPayment ? memo : "",
+        price,
+        approveTxHash,
         nonce: sent.nonce
     };
 }

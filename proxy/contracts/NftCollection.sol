@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @notice ERC-721 collection. Only the deployer (the proxy minter) can mint.
+/// @notice ERC-721 collection (version 2). Only the deployer (the proxy minter) can mint.
+/// Every token has a price set at mint. `buy` sells a token in ONE atomic transaction: the
+/// buyer sends exactly the price, receives the token, and the ETH goes to the minter. If any
+/// step fails the whole sale reverts and no ETH moves.
 contract NftCollection {
+    /// @notice Contract version; the proxy only uses collections with version 2.
+    uint256 public constant version = 2;
+
     bytes4 private constant ERC721_RECEIVED = 0x150b7a02;
 
     string public name;
@@ -15,9 +21,13 @@ contract NftCollection {
     mapping(uint256 => address) private tokenApprovals;
     mapping(address => mapping(address => bool)) private operatorApprovals;
 
+    /// @notice Sale price of each token in wei, set at mint.
+    mapping(uint256 => uint256) public priceOf;
+
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
     event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+    event Sold(uint256 indexed tokenId, address indexed seller, address indexed buyer, uint256 price);
 
     constructor(string memory name_, string memory symbol_) {
         name = name_;
@@ -85,8 +95,8 @@ contract NftCollection {
         require(checkOnERC721Received(msg.sender, from, to, tokenId, data), "non receiver");
     }
 
-    /// @notice Mint `tokenId` to `to`, store the metadata URI, and pay `msg.value` to `to`.
-    function mint(address to, uint256 tokenId, string memory uri) public payable {
+    /// @notice Mint `tokenId` to `to` with its metadata URI and sale price (wei).
+    function mint(address to, uint256 tokenId, string memory uri, uint256 price) public {
         require(msg.sender == minter, "not minter");
         require(to != address(0), "mint to zero");
         require(owners[tokenId] == address(0), "already minted");
@@ -94,14 +104,35 @@ contract NftCollection {
         balances[to] += 1;
         owners[tokenId] = to;
         tokenUris[tokenId] = uri;
+        priceOf[tokenId] = price;
 
         emit Transfer(address(0), to, tokenId);
         require(checkOnERC721Received(msg.sender, address(0), to, tokenId, ""), "non receiver");
+    }
+
+    /// @notice Buy `tokenId` for exactly its price. The token moves to the caller and the ETH
+    /// goes to the minter, in one transaction. Tokens held by the minter are always for sale;
+    /// any other owner must first approve this contract for the token (or for all tokens).
+    function buy(uint256 tokenId) external payable {
+        address seller = ownerOf(tokenId);
+        require(msg.sender != seller, "already owner");
+        require(msg.value == priceOf[tokenId], "wrong price");
+        require(
+            seller == minter
+                || tokenApprovals[tokenId] == address(this)
+                || operatorApprovals[seller][address(this)],
+            "not for sale"
+        );
+
+        transfer(seller, msg.sender, tokenId);
+        require(checkOnERC721Received(msg.sender, seller, msg.sender, tokenId, ""), "non receiver");
 
         if (msg.value > 0) {
-            (bool ok, ) = to.call{value: msg.value}("");
-            require(ok, "eth transfer failed");
+            (bool ok, ) = minter.call{value: msg.value}("");
+            require(ok, "payment failed");
         }
+
+        emit Sold(tokenId, seller, msg.sender, msg.value);
     }
 
     function isApprovedOrOwner(address spender, uint256 tokenId) private view returns (bool) {

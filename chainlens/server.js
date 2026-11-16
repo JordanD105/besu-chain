@@ -17,6 +17,9 @@ const erc721Iface = new ethers.Interface([
     "function supportsInterface(bytes4 interfaceId) view returns (bool)",
     "function balanceOf(address account) view returns (uint256)",
     "function mint(address to, uint256 tokenId, string uri) payable",
+    "function mint(address to, uint256 tokenId, string uri, uint256 price)",
+    "function buy(uint256 tokenId) payable",
+    "function priceOf(uint256 tokenId) view returns (uint256)",
     "function transferFrom(address from, address to, uint256 tokenId)",
     "function safeTransferFrom(address from, address to, uint256 tokenId)",
     "function safeTransferFrom(address from, address to, uint256 tokenId, bytes data)",
@@ -452,11 +455,14 @@ function ingest(tx, receipt, block) {
         const toArg = row.decoded.args.find((arg) => arg.name === "to");
         const idArg = row.decoded.args.find((arg) => arg.name === "tokenId");
 
+        const priceArg = row.decoded.args.find((arg) => arg.name === "price");
+
         if (toArg && idArg) {
             const nft = db.nfts.get(row.to.toLowerCase() + ":" + idArg.value);
 
             if (nft) {
-                nft.amountWei = mintPaymentWei(row.from, toArg.value);
+                // version-2 collections store the sale price in mint(); older ones were paid
+                nft.amountWei = priceArg ? BigInt(priceArg.value) : mintPaymentWei(row.from, toArg.value);
             }
         }
     }
@@ -909,6 +915,23 @@ function contractLabel(address) {
     return row.name || null;
 }
 
+// A successful buy(tokenId) on an NFT collection: describe it like a payment memo so the
+// explorer can show the NFT image ("NFT buy: <collection> #<id> - <image URL>").
+function buyMemo(tx) {
+    if (tx.status !== "success" || !tx.to || !tx.decoded || tx.decoded.name !== "buy") {
+        return "";
+    }
+
+    const idArg = tx.decoded.args.find((arg) => arg.name === "tokenId");
+    const nft = idArg ? db.nfts.get(tx.to.toLowerCase() + ":" + idArg.value) : null;
+    const contract = db.contracts.get(tx.to.toLowerCase());
+    const label = (contract && (contract.symbol || contract.name)) || tx.to;
+    const base = `NFT buy: ${label} #${idArg ? idArg.value : "?"}`;
+    const image = nft && nft.metadata && typeof nft.metadata.image === "string" ? nft.metadata.image : "";
+
+    return /^https?:\/\/\S+$/.test(image) ? `${base} - ${image}` : base;
+}
+
 function publicTx(tx) {
     return {
         hash: tx.hash,
@@ -921,7 +944,7 @@ function publicTx(tx) {
         valueWei: BigInt(tx.value).toString(),
         type: tx.type,
         functionName: tx.functionName,
-        memo: tx.memo,
+        memo: tx.memo || buyMemo(tx),
         status: tx.status,
         contractAddress: tx.contractAddress,
         decoded: tx.decoded,

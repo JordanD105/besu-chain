@@ -530,7 +530,7 @@ function memoUrl(url) {
 
 function memoNodes(memo) {
     // NFT payment memos end in the NFT's image URL: show the image, full memo as tooltip
-    const mint = memo.match(/^(?:New NFT Token mint|NFT transfer): [\s\S]* - (https?:\/\/\S+)$/);
+    const mint = memo.match(/^(?:New NFT Token mint|NFT transfer|NFT buy): [\s\S]* - (https?:\/\/\S+)$/);
 
     if (mint && isImageUrl(mint[1])) {
         return [addressTip(memoImage(mint[1]), [{ value: memo, copy: false }])];
@@ -566,7 +566,7 @@ function txColumns() {
         { label: "col.to", sort: (tx) => tx.toLabel || tx.to || tx.contractAddress || "", search: (tx) => [tx.to, tx.toLabel, tx.contractAddress].filter(Boolean).join(" "), cell: (tx) => txTo(tx) },
         { label: "col.value", sort: (tx) => BigInt(tx.valueWei || 0), search: (tx) => tx.value + " ETH", cell: (tx) => tx.value + " ETH" },
         { label: "col.memo", sort: (tx) => tx.memo || "", search: (tx) => tx.memo || "", cell: (tx) => {
-            const memo = tx.type === "transfer" ? (tx.memo || "") : "";
+            const memo = tx.type === "transfer" || tx.functionName === "buy" ? (tx.memo || "") : "";
             return el("span", { class: "memo-cell" }, memo ? memoNodes(memo) : "—");
         } },
         { label: "col.time", sort: (tx) => tx.timestamp || 0, search: (tx) => stamp(tx.timestamp), cell: (tx) => stamp(tx.timestamp) }

@@ -54,8 +54,11 @@ POST /nft/deploy
 GET /nft/collections
 -> { "collections": [ { "contract": "0x...", "name": "Avatar-ID", "symbol": "AVA", "default": true }, ... ] }
 
-# Mint: always to SENDER01, nothing is paid. "amount" = the NFT's PRICE (optional, default 0).
-# The price is stored in the token's on-chain metadata ("price"), so it survives without Redis.
+# Collections are NftCollection VERSION 2 (contracts/NftCollection.sol): price stored on chain at
+# mint, atomic buy(). Older collections are ignored and rejected: deploy new ones.
+
+# Mint: always to SENDER01, nothing is paid. "amount" = the NFT's PRICE in ETH (optional, default 0),
+# stored in the collection (priceOf).
 POST /nft/mint
 {
   "collection": "DRG",
@@ -68,14 +71,13 @@ POST /nft/mint
 }
 -> { "success": true, "tokenId": "1", "contract": "0x...", "owner": "<SENDER01>", "price": "3", ... }
 
-# Transfer: no amount, no SENDER01 parameter. "from" is optional (default: current owner).
-# The receiver "to" pays the token's mint price to SENDER01, then the NFT moves
-# (payment refunded if the NFT transfer fails). Price 0 = free.
+# Transfer = sale with the collection's buy(): ONE transaction signed by the buyer "to", value = price.
+# The NFT moves to the buyer and the ETH goes to SENDER01 atomically (all or nothing).
+# No amount, no SENDER01 parameter; "from" is optional (default: current owner).
+# Resale (owner is not SENDER01): the owner first approves the collection (approveTxHash).
 POST /nft/transfer
 { "collection": "DRG", "to": "0xBuyer", "tokenId": "1" }
--> { "success": true, "from": "<owner>", "price": "3", "paid": "3", "payer": "0xBuyer", "paymentTxHash": "0x...",
-     "memo": "NFT transfer: DRG #1 - https://example/dragon.svg", ... }
-# The payment memo ends with the NFT image URL (http/https only); chainlens shows the image.
+-> { "success": true, "txHash": "<buy tx>", "from": "<owner>", "to": "0xBuyer", "price": "3", "approveTxHash": null, ... }
 
 GET /nft/1?collection=DRG
 GET /nft/1/metadata?collection=Dragons
