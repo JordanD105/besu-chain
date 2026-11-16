@@ -529,7 +529,8 @@ function memoUrl(url) {
 }
 
 function memoNodes(memo) {
-    const mint = memo.match(/^New NFT Token mint: [\s\S]* - (https?:\/\/\S+)$/);
+    // NFT payment memos end in the NFT's image URL: show the image, full memo as tooltip
+    const mint = memo.match(/^(?:New NFT Token mint|NFT transfer): [\s\S]* - (https?:\/\/\S+)$/);
 
     if (mint && isImageUrl(mint[1])) {
         return [addressTip(memoImage(mint[1]), [{ value: memo, copy: false }])];

@@ -73,7 +73,9 @@ POST /nft/mint
 # (payment refunded if the NFT transfer fails). Price 0 = free.
 POST /nft/transfer
 { "collection": "DRG", "to": "0xBuyer", "tokenId": "1" }
--> { "success": true, "from": "<owner>", "price": "3", "paid": "3", "payer": "0xBuyer", "paymentTxHash": "0x...", ... }
+-> { "success": true, "from": "<owner>", "price": "3", "paid": "3", "payer": "0xBuyer", "paymentTxHash": "0x...",
+     "memo": "NFT transfer: DRG #1 - https://example/dragon.svg", ... }
+# The payment memo ends with the NFT image URL (http/https only); chainlens shows the image.
 
 GET /nft/1?collection=DRG
 GET /nft/1/metadata?collection=Dragons

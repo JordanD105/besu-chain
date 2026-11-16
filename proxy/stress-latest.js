@@ -1524,7 +1524,29 @@ function failMemo(prefix, error) {
 async function tokenPrice(contract, tokenId) {
     const stored = await readStoredNft(contract, tokenId);
     const price = stored && ((stored.metadata && stored.metadata.price) || stored.price);
-    return typeof price === "string" && /^\d+(\.\d+)?$/.test(price) ? price : "0";
+    const image = stored && stored.metadata && stored.metadata.image;
+
+    return {
+        price: typeof price === "string" && /^\d+(\.\d+)?$/.test(price) ? price : "0",
+        image: typeof image === "string" ? image.trim() : ""
+    };
+}
+
+// Payment memo: "NFT transfer: <collection> #<id> - <image URL>". Explorers (chainlens) show
+// the image for this format. The URL is left out if it is not http(s) (e.g. a data: URI) or
+// would make the memo longer than explorers decode.
+function transferMemo(label, tokenId, image) {
+    const base = `NFT transfer: ${label} #${tokenId}`;
+
+    if (/^https?:\/\/\S+$/.test(image)) {
+        const full = `${base} - ${image}`;
+
+        if (memoBytes(full).length <= MINT_MEMO_LIMIT) {
+            return full;
+        }
+    }
+
+    return base;
 }
 
 // Transfer an NFT to `to`. `from` is optional (default: the current owner). The receiver
@@ -1560,7 +1582,7 @@ async function transferNft(body) {
         throw httpError(400, "token is already owned by to");
     }
 
-    const amount = await tokenPrice(contract, tokenId);
+    const { price: amount, image } = await tokenPrice(contract, tokenId);
 
     if (body.amount !== undefined && body.amount !== null && body.amount !== "" &&
         ethToWei(String(body.amount).trim()) !== ethToWei(amount)) {
@@ -1580,7 +1602,7 @@ async function transferNft(body) {
     const ownedByPayer = needsPayment ? await signerOwns(to) : false;
     const info = (await knownCollections()).get(contract) || {};
     const label = info.symbol || info.name || contract;
-    const memo = `NFT transfer: ${label} #${tokenId}`;
+    const memo = transferMemo(label, tokenId, image);
 
     if (needsPayment) {
         if (!ownedByPayer && !await readPrivateKey(accountName(to))) {
