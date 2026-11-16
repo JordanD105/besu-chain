@@ -40,7 +40,52 @@ const CONFIG = {
     }
 };
 
-const redis = new Redis(CONFIG.REDIS);
+// Redis is an optional cache. The chain is the source of truth for everything the proxy
+// keeps (nonces, pending value, NFT contract, token ids, NFT metadata), and in-process memory
+// holds the live state. If Redis is down, empty, or restored from an old snapshot, requests keep
+// working: commands fail fast (no offline queue) and the proxy falls back to memory + chain.
+const redis = new Redis({
+    ...CONFIG.REDIS,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 0,
+    connectTimeout: 2000,
+    commandTimeout: 1000,
+    retryStrategy: (times) => Math.min(times * 500, 5000)
+});
+let redisDown = false;
+
+redis.on("error", (error) => {
+    if (!redisDown) {
+        console.warn(`redis unavailable (${error.message}); continuing with memory + chain`);
+    }
+    redisDown = true;
+});
+
+redis.on("ready", () => {
+    if (redisDown) {
+        console.log("redis available again");
+    }
+    redisDown = false;
+});
+
+// Run a Redis command; on any failure return `fallback` instead of failing the request.
+async function cache(fn, fallback = null) {
+    if (redis.status !== "ready") {
+        return fallback;
+    }
+
+    try {
+        return await fn();
+    } catch (error) {
+        console.warn(`redis command failed (${error.message}); using memory + chain`);
+        return fallback;
+    }
+}
+
+// Live state (authoritative while the process runs; one proxy replica, see withSenderLock).
+const memNonce = new Map();      // sender -> next nonce to use
+const memPending = new Map();    // sender -> Map(nonce -> wei string) not yet mined
+const memNft = { contract: null, nextId: null };
 
 // =======================
 // JSON RPC Client
@@ -78,26 +123,34 @@ async function rpc(url, method, params = []) {
 // used, every later transaction from the sender waits behind the gap and nothing is mined.
 // Safe because every send runs under withSenderLock for its sender.
 async function resetNonce(address) {
-    await redis.del(`nonce:${address.toLowerCase()}`);
+    const sender = address.toLowerCase();
+    memNonce.delete(sender);
+    await cache(() => redis.del(`nonce:${sender}`));
 }
 
+// Next nonce = max(cached counter, chain pending count). The chain value makes a missing,
+// empty or stale (old snapshot) Redis harmless; the cached counter covers transactions the node
+// has not reported as pending yet. Runs under withSenderLock for the sender.
 async function nextNonce(address) {
-    const key = `nonce:${address.toLowerCase()}`;
-    const exists = await redis.exists(key);
+    const sender = address.toLowerCase();
+    const key = `nonce:${sender}`;
+    const chainPending = parseInt(await rpc(
+        CONFIG.BESU_RPC,
+        "eth_getTransactionCount",
+        [address, "pending"]
+    ), 16);
 
-    if (!exists) {
-        const nonceHex = await rpc(
-            CONFIG.BESU_RPC,
-            "eth_getTransactionCount",
-            [address, "pending"]
-        );
+    let cached = memNonce.get(sender);
 
-        const nonce = parseInt(nonceHex, 16);
-        await redis.set(key, nonce);
+    if (cached === undefined) {
+        const stored = await cache(() => redis.get(key));
+        cached = stored === null ? 0 : Number(stored);
     }
 
-    const nonce = await redis.incr(key);
-    return nonce - 1;
+    const nonce = Math.max(cached, chainPending);
+    memNonce.set(sender, nonce + 1);
+    await cache(() => redis.set(key, nonce + 1));
+    return nonce;
 }
 
 // =======================
@@ -156,18 +209,31 @@ function pendingValueKey(address) {
     return `pending-value:${address.toLowerCase()}`;
 }
 
+async function pendingFor(sender) {
+    let pending = memPending.get(sender);
+
+    if (!pending) {
+        const stored = await cache(() => redis.hgetall(pendingValueKey(sender)), {});
+        pending = new Map(Object.entries(stored || {}));
+        memPending.set(sender, pending);
+    }
+
+    return pending;
+}
+
 async function reservedWei(address) {
+    const sender = address.toLowerCase();
     const nonceHex = await rpc(
         CONFIG.BESU_RPC,
         "eth_getTransactionCount",
         [address, "latest"]
     );
     const chainNonce = parseInt(nonceHex, 16);
-    const pending = await redis.hgetall(pendingValueKey(address));
+    const pending = await pendingFor(sender);
     const stale = [];
     let reserved = 0n;
 
-    for (const [nonce, value] of Object.entries(pending)) {
+    for (const [nonce, value] of pending) {
         if (Number(nonce) < chainNonce) {
             stale.push(nonce);
         } else {
@@ -176,7 +242,8 @@ async function reservedWei(address) {
     }
 
     if (stale.length > 0) {
-        await redis.hdel(pendingValueKey(address), ...stale);
+        stale.forEach((nonce) => pending.delete(nonce));
+        await cache(() => redis.hdel(pendingValueKey(sender), ...stale));
     }
 
     return reserved;
@@ -270,11 +337,9 @@ async function rememberPending(address, nonce, amount) {
 }
 
 async function rememberPendingWei(address, nonce, wei) {
-    await redis.hset(
-        pendingValueKey(address),
-        String(nonce),
-        wei.toString()
-    );
+    const sender = address.toLowerCase();
+    (await pendingFor(sender)).set(String(nonce), wei.toString());
+    await cache(() => redis.hset(pendingValueKey(sender), String(nonce), wei.toString()));
 }
 
 async function pay(sender, recipient, amount, ownedBySigner, memo = "") {
@@ -633,14 +698,6 @@ app.get("/transfer/:txHash", async (req, res) => {
 
 const nftInterface = new ethers.Interface(nftArtifact.abi);
 const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
-const NEXT_TOKEN_SCRIPT = `
-local current = tonumber(redis.call("GET", KEYS[1]) or "0")
-local minted = tonumber(ARGV[1])
-if current < minted then
-    redis.call("SET", KEYS[1], ARGV[1])
-end
-return redis.call("INCR", KEYS[1])
-`;
 const NFT_META_LIMIT = 512 * 1024;
 const ON_CHAIN_META_LIMIT = 48 * 1024;
 
@@ -717,17 +774,59 @@ async function nftContractAddress() {
         return ethers.getAddress(configured);
     }
 
-    const stored = await redis.get("nft:contract");
-
-    if (!stored) {
-        return null;
+    if (memNft.contract) {
+        return memNft.contract;
     }
 
-    if (!isAddress(stored)) {
-        throw httpError(500, "stored NFT contract is not a valid address");
+    const stored = await cache(() => redis.get("nft:contract"));
+
+    if (stored && isAddress(stored)) {
+        memNft.contract = ethers.getAddress(stored);
+        return memNft.contract;
     }
 
-    return ethers.getAddress(stored);
+    const found = await discoverNftContract();
+
+    if (found) {
+        await rememberNftContract(found);
+    }
+
+    return found;
+}
+
+async function rememberNftContract(contract) {
+    memNft.contract = ethers.getAddress(contract);
+    await cache(() => redis.set("nft:contract", memNft.contract));
+}
+
+// Without Redis, find the collection on chain: SENDER01 deployed it, so it lives at one of
+// SENDER01's CREATE addresses (keccak(rlp(sender, nonce))). Newest first; the first address
+// with code whose minter() is SENDER01 is the collection.
+async function discoverNftContract() {
+    const sender = ethers.getAddress(CONFIG.SENDER01);
+    const latest = parseInt(await rpc(CONFIG.BESU_RPC, "eth_getTransactionCount", [sender, "latest"]), 16);
+
+    for (let nonce = latest - 1; nonce >= 0; nonce -= 1) {
+        const candidate = ethers.getCreateAddress({ from: sender, nonce });
+        const code = await rpc(CONFIG.BESU_RPC, "eth_getCode", [candidate, "latest"]);
+
+        if (!code || code === "0x") {
+            continue;
+        }
+
+        try {
+            const minter = (await callNft(candidate, "minter", []))[0];
+
+            if (minter.toLowerCase() === sender.toLowerCase()) {
+                console.log(`NFT contract recovered from chain: ${candidate} (deploy nonce ${nonce})`);
+                return candidate;
+            }
+        } catch (error) {
+            // not an NftCollection; keep looking
+        }
+    }
+
+    return null;
 }
 
 async function requireNftContract() {
@@ -777,7 +876,15 @@ async function allocateTokenId(contract) {
         throw httpError(500, "token id is too large");
     }
 
-    const tokenId = await redis.eval(NEXT_TOKEN_SCRIPT, 1, "nft:nextId", minted.toString());
+    if (memNft.nextId === null) {
+        const stored = await cache(() => redis.get("nft:nextId"));
+        memNft.nextId = Math.max(memNft.nextId || 0, Number(stored || 0));
+    }
+
+    // read-modify-write without an await in between: atomic within this process
+    const tokenId = Math.max(memNft.nextId, Number(minted)) + 1;
+    memNft.nextId = tokenId;
+    await cache(() => redis.set("nft:nextId", tokenId));
     return String(tokenId);
 }
 
@@ -954,14 +1061,45 @@ async function readOwner(contract, tokenId) {
     }
 }
 
+// Proxy-side record of a mint ({metadata, tokenURI, to, amount, txHash}). Redis is a cache:
+// if it has no record, rebuild {metadata, tokenURI} from the on-chain data: URI.
 async function readStoredNft(tokenId) {
-    const raw = await redis.get(nftMetaKey(tokenId));
+    const raw = await cache(() => redis.get(nftMetaKey(tokenId)));
 
-    if (!raw) {
+    if (raw) {
+        return JSON.parse(raw);
+    }
+
+    return nftFromChain(tokenId);
+}
+
+async function nftFromChain(tokenId) {
+    const contract = await nftContractAddress();
+
+    if (!contract) {
         return null;
     }
 
-    return JSON.parse(raw);
+    let tokenURI;
+
+    try {
+        tokenURI = (await callNft(contract, "tokenURI", [tokenId]))[0];
+    } catch (error) {
+        return null;
+    }
+
+    const prefix = "data:application/json;base64,";
+    let metadata = null;
+
+    if (tokenURI.startsWith(prefix)) {
+        try {
+            metadata = JSON.parse(Buffer.from(tokenURI.slice(prefix.length), "base64").toString("utf8"));
+        } catch (error) {
+            metadata = null;
+        }
+    }
+
+    return { metadata, tokenURI, fromChain: true };
 }
 
 function collectionField(value, label, max) {
@@ -1108,7 +1246,7 @@ async function deployCollection(name, symbol) {
         throw new Error("deployment produced no code");
     }
 
-    await redis.set("nft:contract", contract);
+    await rememberNftContract(contract);
 
     return {
         success: true,
@@ -1198,7 +1336,7 @@ async function mintNft(req) {
         amount
     };
 
-    await redis.set(key, JSON.stringify(record));
+    await cache(() => redis.set(key, JSON.stringify(record)));
 
     let sent;
     let payment = null;
@@ -1218,7 +1356,7 @@ async function mintNft(req) {
             sendData(CONFIG.SENDER01, contract, data, true)
         );
     } catch (error) {
-        await redis.del(key);
+        await cache(() => redis.del(key));
 
         if (payment) {
             try {
@@ -1234,7 +1372,7 @@ async function mintNft(req) {
     }
 
     record.txHash = sent.txHash;
-    await redis.set(key, JSON.stringify(record));
+    await cache(() => redis.set(key, JSON.stringify(record)));
 
     return {
         success: true,
@@ -1303,7 +1441,7 @@ async function listOwnedNfts(address) {
     const contract = await requireNftContract();
     const owner = ethers.getAddress(address);
     const minted = Number(await highestMintedTokenId(contract));
-    const stored = Number(await redis.get("nft:nextId") || 0);
+    const stored = Math.max(memNft.nextId || 0, Number(await cache(() => redis.get("nft:nextId")) || 0));
     const latest = Math.max(minted, stored);
     const tokenIds = [];
     const batchSize = 20;

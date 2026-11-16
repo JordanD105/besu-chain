@@ -219,3 +219,25 @@ The proxy calls `eth_accounts` on `WEB3SIGNER_IP:WEB3SIGNER_PORT` (now the coord
 | `policy: value above limit` | the amount is above `max_value_wei` in `quickstart/cluster.json` (default 1000 ETH per transaction) | raise it, then `./quickstart.sh down && ./quickstart.sh up` |
 | `/createaccount` returns a `txHash`, but chainlens shows 0 transactions and the receipt is `null` | **nonce gap**: an earlier failed request used up a nonce (for example nonce 0), so later transactions wait in Besu's pool. Fixed in the proxy: a failed send now clears the cached nonce. | update the proxy, then fill the gap once: `eth_sendTransaction` on the coordinator from the sender to itself, `value 0x0`, `nonce` = the missing one. Then `docker exec <redis> redis-cli DEL nonce:<sender lowercase>`. |
 | chainlens stuck with `Missing batch response` | old chainlens image (batch over Besu's 1024 limit) | `git pull`, then `docker compose up -d --build` in `chainlens/` |
+
+## Redis is optional (no replica needed)
+
+The proxy treats Redis as a cache. The chain is the source of truth, and in-process memory holds
+the live state. If Redis is down, empty, or restored from an old snapshot, every endpoint keeps
+working. Redis commands fail fast (no queueing), and the log shows
+`redis unavailable (...); continuing with memory + chain`.
+
+| Redis key | Without Redis |
+|---|---|
+| `nonce:<sender>` | next nonce = max(cached counter, `eth_getTransactionCount(pending)`), so a stale or missing value is harmless |
+| `pending-value:<sender>` | kept in memory; entries are dropped once their nonce is mined |
+| `nft:contract` | `NFT_CONTRACT` env → memory → Redis → **found on chain** (SENDER01's deployment addresses whose `minter()` is SENDER01) |
+| `nft:nextId` | max(memory/Redis, highest token id minted on chain) + 1 |
+| `nft:meta:<tokenId>` | metadata decoded from the token's on-chain `tokenURI` (`data:application/json;base64,…`) |
+
+Tested: Redis stopped during load; Redis replaced by an empty instance plus a proxy restart; and a
+stale snapshot with a nonce rolled back. In all three, transfers, account creation and NFT mint
+and metadata kept working, and every transaction was mined with no nonce gaps.
+
+Still one proxy replica: the per-sender lock is in process memory.
+
