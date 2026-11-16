@@ -13,6 +13,8 @@ services:
       retries: 10
 
   proxy:
+    # docker compose up -d --build   builds this image from ./Dockerfile and starts it
+    build: .
     image: localhost/besu-proxy/besu-proxy
     restart: unless-stopped
     ports:
@@ -23,9 +25,12 @@ services:
       LISTEN_HOST: 0.0.0.0
       REDIS_IP: redis
       REDIS_PORT: 6379
+    # Redis is an optional cache (the proxy falls back to memory + chain), so do not block
+    # the proxy on Redis health.
     depends_on:
       redis:
-        condition: service_healthy
+        condition: service_started
+        required: false
 
 volumes:
   redis-data:

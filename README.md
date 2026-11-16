@@ -104,7 +104,7 @@ cd mpc-signer/quickstart && ./quickstart.sh init && ./quickstart.sh up && ./quic
 #    ... or the current one: see besu-vault-web3signer/README.md
 
 # 3. Proxy API (set BESU_IP, WEB3SIGNER_IP/PORT, REDIS_* in proxy/.env)
-cd proxy && docker compose up -d
+cd proxy && docker compose up -d --build
 
 # Benchmark old vs new signer against your running stack
 cd mpc-signer && OLD_STACK=existing bench/run-bench.sh

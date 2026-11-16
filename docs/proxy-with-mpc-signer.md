@@ -151,8 +151,7 @@ Build and start the proxy and Redis:
 
 ```bash
 cd proxy
-docker build -t localhost/besu-proxy/besu-proxy .
-docker compose up -d
+docker compose up -d --build
 ```
 
 ## Step 5: Verify

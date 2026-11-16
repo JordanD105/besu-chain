@@ -1,0 +1,10 @@
+# keep secrets and local artifacts out of the build context
+.env
+node_modules
+npm-debug.log
+Dockerfile
+docker-compose.yml
+.dockerignore
+contracts
+scripts
+api.txt
