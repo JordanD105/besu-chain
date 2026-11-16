@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#059669"/>
+    </marker>
+    <marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+    </marker>
+    <filter id="sh" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1080" fill="#f8fafc"/>
+
+  <!-- title -->
+  <text x="40" y="52" font-size="30" font-weight="700" fill="#0f172a">mpc-signer architecture</text>
+  <text x="40" y="82" font-size="16" fill="#475569">Non-exportable 2-of-3 threshold ECDSA (CGGMP24 / LFDT Lockness) for Hyperledger Besu: the private key never exists anywhere</text>
+  <g transform="translate(1180,34)">
+    <rect width="380" height="52" rx="10" fill="#fff1f2" stroke="#fda4af"/>
+    <text x="16" y="22" font-size="13" font-weight="700" fill="#9f1239">Replaces</text>
+    <text x="16" y="41" font-size="13" fill="#9f1239"><tspan text-decoration="line-through">Vault KV key</tspan> + <tspan text-decoration="line-through">Web3Signer (key in memory)</tspan></text>
+  </g>
+
+  <!-- ================= row 1 ================= -->
+  <!-- clients -->
+  <g filter="url(#sh)">
+    <rect x="40" y="130" width="300" height="180" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  </g>
+  <text x="60" y="162" font-size="18" font-weight="700" fill="#0f172a">Clients</text>
+  <text x="60" y="190" font-size="14" fill="#334155">• proxy (stress-latest.js)</text>
+  <text x="60" y="212" font-size="14" fill="#334155">• dApps / scripts / ethers</text>
+  <text x="60" y="234" font-size="14" fill="#334155">• anything that used Web3Signer</text>
+  <text x="60" y="270" font-size="12.5" fill="#64748b">Switch = change the signer URL</text>
+  <text x="60" y="290" font-size="12.5" fill="#64748b">(WEB3SIGNER_IP / PORT → :9100)</text>
+
+  <!-- coordinator -->
+  <g filter="url(#sh)">
+    <rect x="440" y="120" width="720" height="250" rx="16" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  </g>
+  <text x="464" y="152" font-size="20" font-weight="700" fill="#1e3a8a">mpc-coordinator</text>
+  <text x="640" y="152" font-size="14" fill="#1d4ed8">stateless · holds NO key material · run 1..N replicas</text>
+
+  <g font-size="13.5">
+    <rect x="464" y="170" width="215" height="84" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+    <text x="478" y="194" font-weight="700" fill="#1e3a8a">JSON-RPC API :9100</text>
+    <text x="478" y="215" fill="#334155">eth_accounts</text>
+    <text x="478" y="234" fill="#334155">eth_sign/sendTransaction</text>
+    <text x="478" y="250" font-size="11.5" fill="#64748b">other methods → proxied to Besu</text>
+
+    <rect x="693" y="170" width="215" height="84" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+    <text x="707" y="194" font-weight="700" fill="#1e3a8a">Presignature pool</text>
+    <text x="707" y="215" fill="#334155">per key, refilled in background</text>
+    <text x="707" y="234" fill="#334155">pairs rotate {0,1} {1,2} {0,2}</text>
+    <text x="707" y="250" font-size="11.5" fill="#64748b">public data only (Γ, commitments)</text>
+
+    <rect x="922" y="170" width="215" height="84" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+    <text x="936" y="194" font-weight="700" fill="#1e3a8a">Combine &amp; finish</text>
+    <text x="936" y="215" fill="#334155">verify partials, low-s</text>
+    <text x="936" y="234" fill="#334155">recovery id v, EIP-155 RLP</text>
+    <text x="936" y="250" font-size="11.5" fill="#64748b">verify sig vs public key</text>
+
+    <rect x="464" y="268" width="330" height="84" rx="10" fill="#ffffff" stroke="#a78bfa"/>
+    <text x="478" y="292" font-weight="700" fill="#5b21b6">WebSocket relay  /relay/{session}</text>
+    <text x="478" y="313" fill="#334155">routes MPC messages between nodes</text>
+    <text x="478" y="332" fill="#334155">cannot read p2p bodies, cannot forge</text>
+
+    <rect x="808" y="268" width="329" height="84" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+    <text x="822" y="292" font-weight="700" fill="#1e3a8a">Admin API (token)</text>
+    <text x="822" y="313" fill="#334155">/admin/aux · /admin/keys (DKG)</text>
+    <text x="822" y="332" fill="#334155">/admin/pool (status, target, clear)</text>
+  </g>
+
+  <!-- besu -->
+  <g filter="url(#sh)">
+    <rect x="1260" y="130" width="300" height="180" rx="14" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+  </g>
+  <text x="1280" y="162" font-size="18" font-weight="700" fill="#4c1d95">Hyperledger Besu</text>
+  <text x="1280" y="190" font-size="14" fill="#334155">QBFT network (rpcnode :8545)</text>
+  <text x="1280" y="212" font-size="14" fill="#334155">receives a normal signed tx:</text>
+  <text x="1280" y="234" font-size="14" fill="#334155">eth_sendRawTransaction</text>
+  <text x="1280" y="270" font-size="12.5" fill="#64748b">Sees an ordinary address;</text>
+  <text x="1280" y="290" font-size="12.5" fill="#64748b">no change to the chain needed</text>
+
+  <!-- row-1 arrows -->
+  <line x1="340" y1="215" x2="436" y2="215" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="350" y="204" font-size="12" fill="#334155">JSON-RPC</text>
+  <line x1="1160" y1="215" x2="1256" y2="215" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrP)"/>
+  <text x="1168" y="204" font-size="12" fill="#5b21b6">raw tx</text>
+
+  <!-- ================= row 2: nodes ================= -->
+  <!-- coordinator -> nodes (node API) -->
+  <g stroke="#334155" stroke-width="2" fill="none">
+    <path d="M 1000 370 L 1000 400 L 280 400 L 280 446" marker-end="url(#arr)"/>
+    <path d="M 1000 400 L 750 400 L 750 446" marker-end="url(#arr)"/>
+    <path d="M 1000 400 L 1220 400 L 1220 446" marker-end="url(#arr)"/>
+  </g>
+  <rect x="1012" y="378" width="236" height="20" rx="4" fill="#f8fafc"/>
+  <text x="1016" y="393" font-size="12.5" fill="#334155">node API (bearer token; mTLS planned)</text>
+
+  <!-- nodes -> relay (dashed, E2E protected) -->
+  <g stroke="#7c3aed" stroke-width="2" stroke-dasharray="7 5" fill="none">
+    <path d="M 200 446 L 200 420 L 520 420 L 520 352" marker-end="url(#arrP)" marker-start="url(#arrP)"/>
+    <path d="M 640 446 L 640 352" marker-end="url(#arrP)" marker-start="url(#arrP)"/>
+    <path d="M 1140 446 L 1140 426 L 760 426 L 760 352" marker-end="url(#arrP)" marker-start="url(#arrP)"/>
+  </g>
+  <rect x="40" y="322" width="300" height="56" rx="8" fill="#f5f3ff" stroke="#c4b5fd"/>
+  <line x1="54" y1="341" x2="94" y2="341" stroke="#7c3aed" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="104" y="345" font-size="12.5" font-weight="700" fill="#5b21b6">MPC protocol messages (via relay)</text>
+  <text x="54" y="367" font-size="11.5" fill="#5b21b6">E2E: Ed25519-signed · p2p X25519 + ChaCha20</text>
+
+  <!-- node template x3 -->
+  <g font-size="13.5">
+    <!-- node 0 -->
+    <g filter="url(#sh)"><rect x="60" y="450" width="430" height="270" rx="16" fill="#ecfdf5" stroke="#059669" stroke-width="2"/></g>
+    <text x="84" y="482" font-size="19" font-weight="700" fill="#064e3b">mpc-node 0</text>
+    <text x="220" y="482" font-size="13" fill="#047857">host A · admin team A</text>
+    <rect x="84" y="496" width="382" height="46" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="98" y="516" font-weight="700" fill="#92400e">🔑 key share x₀ (one share, never the key)</text>
+    <text x="98" y="534" font-size="12" fill="#92400e">sealed on disk: Argon2id + XChaCha20-Poly1305</text>
+    <text x="84" y="566" fill="#334155">• aux info: Paillier key, ring-Pedersen params</text>
+    <text x="84" y="588" fill="#334155">• presignatures: in memory only, single-use</text>
+    <text x="84" y="610" fill="#334155">• policy: chain id · max value · max gas · allowlist</text>
+    <text x="84" y="632" fill="#334155">• rebuilds + keccak-hashes the full tx itself</text>
+    <text x="84" y="654" fill="#334155">• CGGMP24 compute runtime (keygen, presign)</text>
+    <text x="84" y="700" font-size="12" fill="#047857">API :7000 · /v1/presign /v1/partial /v1/sign /v1/keygen</text>
+
+    <!-- node 1 -->
+    <g filter="url(#sh)"><rect x="530" y="450" width="430" height="270" rx="16" fill="#ecfdf5" stroke="#059669" stroke-width="2"/></g>
+    <text x="554" y="482" font-size="19" font-weight="700" fill="#064e3b">mpc-node 1</text>
+    <text x="690" y="482" font-size="13" fill="#047857">host B · admin team B</text>
+    <rect x="554" y="496" width="382" height="46" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="568" y="516" font-weight="700" fill="#92400e">🔑 key share x₁ (one share, never the key)</text>
+    <text x="568" y="534" font-size="12" fill="#92400e">sealed on disk: Argon2id + XChaCha20-Poly1305</text>
+    <text x="554" y="566" fill="#334155">• aux info: Paillier key, ring-Pedersen params</text>
+    <text x="554" y="588" fill="#334155">• presignatures: in memory only, single-use</text>
+    <text x="554" y="610" fill="#334155">• policy: chain id · max value · max gas · allowlist</text>
+    <text x="554" y="632" fill="#334155">• rebuilds + keccak-hashes the full tx itself</text>
+    <text x="554" y="654" fill="#334155">• CGGMP24 compute runtime (keygen, presign)</text>
+    <text x="554" y="700" font-size="12" fill="#047857">API :7000 · /v1/presign /v1/partial /v1/sign /v1/keygen</text>
+
+    <!-- node 2 -->
+    <g filter="url(#sh)"><rect x="1000" y="450" width="430" height="270" rx="16" fill="#ecfdf5" stroke="#059669" stroke-width="2"/></g>
+    <text x="1024" y="482" font-size="19" font-weight="700" fill="#064e3b">mpc-node 2</text>
+    <text x="1160" y="482" font-size="13" fill="#047857">host C · admin team C</text>
+    <rect x="1024" y="496" width="382" height="46" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="1038" y="516" font-weight="700" fill="#92400e">🔑 key share x₂ (one share, never the key)</text>
+    <text x="1038" y="534" font-size="12" fill="#92400e">sealed on disk: Argon2id + XChaCha20-Poly1305</text>
+    <text x="1024" y="566" fill="#334155">• aux info: Paillier key, ring-Pedersen params</text>
+    <text x="1024" y="588" fill="#334155">• presignatures: in memory only, single-use</text>
+    <text x="1024" y="610" fill="#334155">• policy: chain id · max value · max gas · allowlist</text>
+    <text x="1024" y="632" fill="#334155">• rebuilds + keccak-hashes the full tx itself</text>
+    <text x="1024" y="654" fill="#334155">• CGGMP24 compute runtime (keygen, presign)</text>
+    <text x="1024" y="700" font-size="12" fill="#047857">API :7000 · /v1/presign /v1/partial /v1/sign /v1/keygen</text>
+  </g>
+
+  <!-- threshold badge -->
+  <g transform="translate(1462,560)">
+    <rect x="-6" y="-34" width="104" height="88" rx="12" fill="#064e3b"/>
+    <text x="46" y="2" font-size="22" font-weight="800" fill="#ffffff" text-anchor="middle">2-of-3</text>
+    <text x="46" y="22" font-size="11" fill="#a7f3d0" text-anchor="middle">any 2 sign</text>
+    <text x="46" y="38" font-size="11" fill="#a7f3d0" text-anchor="middle">1 can be down</text>
+  </g>
+
+  <!-- ================= row 3: flows ================= -->
+  <g font-size="13.5">
+    <g filter="url(#sh)"><rect x="40" y="760" width="500" height="280" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/></g>
+    <text x="60" y="792" font-size="17" font-weight="700" fill="#1e3a8a">Hot path: presignature ready (~1 round)</text>
+    <text x="60" y="822" fill="#334155">1. client → eth_sendTransaction(from = MPC address)</text>
+    <text x="60" y="846" fill="#334155">2. coordinator: policy pre-check, pop presignature P</text>
+    <text x="60" y="870" fill="#334155">3. 2 nodes in parallel: check policy, delete P, return</text>
+    <text x="80" y="890" fill="#334155">partial σᵢ = k̃ᵢ·m + r·χ̃ᵢ  (m = keccak(tx RLP))</text>
+    <text x="60" y="914" fill="#334155">4. coordinator: combine σ₀+σ₁ → (r, s), verify</text>
+    <text x="60" y="938" fill="#334155">5. low-s, recovery id v, encode EIP-155 raw tx</text>
+    <text x="60" y="962" fill="#334155">6. eth_sendRawTransaction → Besu → tx hash</text>
+    <text x="60" y="1000" font-size="12.5" fill="#64748b">Measured: same TPS / latency as Web3Signer</text>
+    <text x="60" y="1018" font-size="12.5" fill="#64748b">(see bench/RESULTS.md)</text>
+
+    <g filter="url(#sh)"><rect x="560" y="760" width="480" height="280" rx="14" fill="#ffffff" stroke="#059669" stroke-width="1.5"/></g>
+    <text x="580" y="792" font-size="17" font-weight="700" fill="#064e3b">Background &amp; cold path</text>
+    <text x="580" y="822" font-weight="700" fill="#334155">Setup (once)</text>
+    <text x="580" y="844" fill="#334155">aux info gen (safe primes, ZK proofs) → DKG per key</text>
+    <text x="580" y="874" font-weight="700" fill="#334155">Pool refill (continuous)</text>
+    <text x="580" y="896" fill="#334155">2 nodes run CGGMP24 presigning via the relay</text>
+    <text x="580" y="918" fill="#334155">≈0.6 CPU-s per node per presignature</text>
+    <text x="580" y="948" font-weight="700" fill="#334155">Cold path (pool empty)</text>
+    <text x="580" y="970" fill="#334155">full interactive 3+1-round signing, ≈0.6 s</text>
+    <text x="580" y="1006" font-size="12.5" fill="#64748b">Sustained TPS = presignature rate → size node CPU;</text>
+    <text x="580" y="1024" font-size="12.5" fill="#64748b">the pool absorbs bursts (MPC_POOL_TARGET)</text>
+
+    <g filter="url(#sh)"><rect x="1060" y="760" width="500" height="280" rx="14" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/></g>
+    <text x="1080" y="792" font-size="17" font-weight="700" fill="#92400e">Security properties</text>
+    <text x="1080" y="822" fill="#334155">✔ key created by DKG; never assembled, never exported</text>
+    <text x="1080" y="846" fill="#334155">✔ 1 stolen node / disk / admin: cannot sign, no key</text>
+    <text x="1080" y="870" fill="#334155">✔ every node enforces policy on the full transaction</text>
+    <text x="1080" y="894" fill="#334155">✔ coordinator + relay hold no secrets (E2E crypto)</text>
+    <text x="1080" y="918" fill="#334155">✔ presignatures single-use, memory-only</text>
+    <text x="1080" y="942" fill="#334155">✔ no HD + presign, no raw-hash signing (0.7 fixes)</text>
+    <text x="1080" y="966" fill="#334155">✔ key import/export (spof) disabled</text>
+    <text x="1080" y="1006" font-size="12.5" fill="#64748b">Production: one node per host, different admins;</text>
+    <text x="1080" y="1024" font-size="12.5" fill="#64748b">deploy/docker-compose.node.yml · quickstart/ for dev</text>
+  </g>
+</svg>

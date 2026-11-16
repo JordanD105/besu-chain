@@ -11,16 +11,9 @@ It speaks the same JSON-RPC as Web3Signer (`eth_accounts`, `eth_signTransaction`
 `eth_sendTransaction`; everything else is proxied to Besu). Existing clients such as `../proxy`
 switch to it by changing the signer URL.
 
-```
- client / proxy ──JSON-RPC──► mpc-coordinator  (stateless, no key material)
-                               │  • presignature pool  • policy pre-check  • Besu forwarding
-                               │  • WebSocket relay (routes only; cannot read or forge)
-            ┌──────────────────┼──────────────────┐   node API (bearer token)
-            ▼                  ▼                  ▼
-        mpc-node 0         mpc-node 1         mpc-node 2      one share each, sealed on disk
-        policy ✓           policy ✓           policy ✓        each node checks every tx itself
-            └──── MPC messages: Ed25519-signed, p2p ChaCha20-Poly1305 (X25519) ────┘
-```
+![mpc-signer architecture](docs/architecture.png)
+
+<sub>Source: [`docs/architecture.svg`](docs/architecture.svg)</sub>
 
 ## How signing works
 
