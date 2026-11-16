@@ -54,17 +54,23 @@ POST /nft/deploy
 GET /nft/collections
 -> { "collections": [ { "contract": "0x...", "name": "Avatar-ID", "symbol": "AVA", "default": true }, ... ] }
 
+# Mint: always to SENDER01, no payment ("to" and "amount" are rejected).
 POST /nft/mint
 {
   "collection": "DRG",
-  "to": "0xRecipient",
   "name": "Dragon",
+  "description": "Dragon",
   "image": "https://example/dragon.svg",
-  "amount": 8
+  "attributes": [{ "trait_type": "level", "value": "gold" }],
+  "properties": { "series": "2026" }
 }
+-> { "success": true, "tokenId": "1", "contract": "0x...", "owner": "<SENDER01>", ... }
 
+# Transfer: moves the NFT from -> to. If amount > 0, the RECEIVER "to" first pays
+# amount ETH to SENDER01 (refunded if the NFT transfer fails). amount is optional (0 = free).
 POST /nft/transfer
-{ "collection": "Dragons", "from": "0x...", "to": "0x...", "tokenId": "1" }
+{ "collection": "DRG", "from": "<SENDER01>", "to": "0xBuyer", "tokenId": "1", "amount": 3 }
+-> { "success": true, "amount": "3", "payer": "0xBuyer", "paymentTxHash": "0x...", "memo": "NFT transfer: DRG #1", ... }
 
 GET /nft/1?collection=DRG
 GET /nft/1/metadata?collection=Dragons

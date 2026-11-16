@@ -274,15 +274,6 @@ function clipUtf8(text, limit) {
     return ethers.toUtf8String(bytes.slice(0, size));
 }
 
-function mintFailMemo(error) {
-    const reason = String((error && error.message) || "unknown error")
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim() || "unknown error";
-
-    return clipUtf8(`NFT mint failed: ${reason}`, MINT_MEMO_LIMIT);
-}
-
 function decodeMemo(input) {
     if (!input || input === "0x") {
         return "";
@@ -1429,21 +1420,27 @@ async function deployCollection(name, symbol) {
     };
 }
 
+// Mint: every NFT is minted to SENDER01 (the collection's minter); no ETH payment.
+// Selling/handing out an NFT is a /nft/transfer from SENDER01, where the receiver pays.
 async function mintNft(req) {
     const body = req.body || {};
 
-    if (!body.to || body.name === undefined || body.image === undefined || body.amount === undefined || body.amount === null || body.amount === "") {
+    if (body.name === undefined || body.image === undefined) {
         throw httpError(400, "missing parameters");
     }
 
-    const amount = String(body.amount).trim();
+    const sender = ethers.getAddress(CONFIG.SENDER01);
 
-    if (!/^\d+(\.\d+)?$/.test(amount)) {
-        throw httpError(400, "invalid amount");
+    if (body.to !== undefined && body.to !== null && body.to !== "" &&
+        !(isAddress(body.to) && ethers.getAddress(body.to) === sender)) {
+        throw httpError(400, "\"to\" is not supported: NFTs are minted to SENDER01; "
+            + "use /nft/transfer to give or sell one");
     }
 
-    if (!isAddress(body.to)) {
-        throw httpError(400, "invalid address");
+    if (body.amount !== undefined && body.amount !== null && body.amount !== "" &&
+        !/^0+(\.0+)?$/.test(String(body.amount).trim())) {
+        throw httpError(400, "\"amount\" is not supported on mint (no payment); "
+            + "set amount on /nft/transfer instead");
     }
 
     const metadata = buildMetadata(body);
@@ -1451,7 +1448,7 @@ async function mintNft(req) {
     const contract = await resolveCollection(collectionParam(body));
 
     if (!await signerOwns(CONFIG.SENDER01)) {
-        throw new Error("sender01 is not managed by Web3Signer");
+        throw new Error("sender01 is not managed by the signer");
     }
 
     let minter;
@@ -1466,35 +1463,8 @@ async function mintNft(req) {
         throw error;
     }
 
-    if (minter.toLowerCase() !== CONFIG.SENDER01.toLowerCase()) {
+    if (minter.toLowerCase() !== sender.toLowerCase()) {
         throw httpError(400, "NFT minter is not sender01");
-    }
-
-    const to = ethers.getAddress(body.to);
-    const value = ethToWei(amount);
-    const ownedByBuyer = await signerOwns(to);
-    const memo = value > 0n ? `New NFT Token mint: ${metadata.name} - ${metadata.image}` : "";
-
-    if (memoBytes(memo).length > MINT_MEMO_LIMIT) {
-        throw httpError(400, "mint memo is too long");
-    }
-
-    if (value > 0n) {
-        if (!ownedByBuyer && !await readPrivateKey(accountName(to))) {
-            throw httpError(400, "to address is not managed by Web3Signer or Vault");
-        }
-
-        const balance = BigInt(await rpc(
-            CONFIG.BESU_RPC,
-            "eth_getBalance",
-            [to, "latest"]
-        ));
-        const reserved = await reservedWei(to);
-        const available = balance > reserved ? balance - reserved : 0n;
-
-        if (available < value) {
-            throw httpError(400, "insufficient balance");
-        }
     }
 
     const tokenId = await allocateTokenId(contract);
@@ -1502,42 +1472,19 @@ async function mintNft(req) {
     const record = {
         metadata,
         tokenURI,
-        to,
-        amount
+        to: sender
     };
 
     await cache(() => redis.set(key, JSON.stringify(record)));
 
+    const data = nftInterface.encodeFunctionData("mint", [sender, tokenId, tokenURI]);
     let sent;
-    let payment = null;
-
-    const data = nftInterface.encodeFunctionData("mint", [to, tokenId, tokenURI]);
 
     try {
-        await assertMintFits(CONFIG.SENDER01, contract, data);
-
-        if (value > 0n) {
-            payment = await withSenderLock(to, () =>
-                pay(to, CONFIG.SENDER01, amount, ownedByBuyer, memo)
-            );
-        }
-
-        sent = await withSenderLock(CONFIG.SENDER01, () =>
-            sendData(CONFIG.SENDER01, contract, data, true)
-        );
+        await assertMintFits(sender, contract, data);
+        sent = await withSenderLock(sender, () => sendData(sender, contract, data, true));
     } catch (error) {
         await cache(() => redis.del(key));
-
-        if (payment) {
-            try {
-                await withSenderLock(CONFIG.SENDER01, () =>
-                    pay(CONFIG.SENDER01, to, amount, true, mintFailMemo(error))
-                );
-            } catch (refundError) {
-                error.message = `${error.message}; refund failed: ${refundError.message}`;
-            }
-        }
-
         throw error;
     }
 
@@ -1548,16 +1495,24 @@ async function mintNft(req) {
         success: true,
         tokenId,
         contract,
-        to,
-        amount,
-        memo,
-        paymentTxHash: payment ? payment.txHash : null,
+        owner: sender,
         tokenURI,
         txHash: sent.txHash,
         nonce: sent.nonce
     };
 }
 
+function failMemo(prefix, error) {
+    const reason = String((error && error.message) || "unknown error")
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim() || "unknown error";
+
+    return clipUtf8(`${prefix}: ${reason}`, MEMO_LIMIT);
+}
+
+// Transfer an NFT from `from` to `to`. With amount > 0 the receiver `to` first pays `amount`
+// ETH to SENDER01; if the NFT transfer then fails, the payment is refunded to `to`.
 async function transferNft(body) {
     const tokenId = parseTokenId(body.tokenId);
 
@@ -1569,9 +1524,18 @@ async function transferNft(body) {
         throw httpError(400, "invalid address");
     }
 
+    const amount = body.amount === undefined || body.amount === null || body.amount === ""
+        ? "0"
+        : String(body.amount).trim();
+
+    if (!/^\d+(\.\d+)?$/.test(amount)) {
+        throw httpError(400, "invalid amount");
+    }
+
     const contract = await resolveCollection(collectionParam(body));
     const from = ethers.getAddress(body.from);
     const to = ethers.getAddress(body.to);
+    const sender = ethers.getAddress(CONFIG.SENDER01);
     const owner = await readOwner(contract, tokenId);
 
     if (!owner) {
@@ -1585,16 +1549,57 @@ async function transferNft(body) {
     const ownedBySigner = await signerOwns(from);
 
     if (!ownedBySigner && !await readPrivateKey(accountName(from))) {
-        throw httpError(400, "sender not managed by Web3Signer or Vault");
+        throw httpError(400, "sender not managed by the signer");
+    }
+
+    // payment: receiver -> SENDER01 (skipped when the receiver is SENDER01 itself)
+    const value = ethToWei(amount);
+    const needsPayment = value > 0n && to !== sender;
+    const ownedByPayer = needsPayment ? await signerOwns(to) : false;
+    const info = (await knownCollections()).get(contract) || {};
+    const label = info.symbol || info.name || contract;
+    const memo = `NFT transfer: ${label} #${tokenId}`;
+
+    if (needsPayment) {
+        if (!ownedByPayer && !await readPrivateKey(accountName(to))) {
+            throw httpError(400, "to address (payer) is not managed by the signer");
+        }
+
+        const balance = BigInt(await rpc(CONFIG.BESU_RPC, "eth_getBalance", [to, "latest"]));
+        const reserved = await reservedWei(to);
+        const available = balance > reserved ? balance - reserved : 0n;
+
+        if (available < value) {
+            throw httpError(400, "insufficient balance");
+        }
     }
 
     const data = nftInterface.encodeFunctionData(
         "safeTransferFrom(address,address,uint256)",
         [from, to, tokenId]
     );
-    const sent = await withSenderLock(from, () =>
-        sendData(from, contract, data, ownedBySigner)
-    );
+    let payment = null;
+    let sent;
+
+    try {
+        if (needsPayment) {
+            payment = await withSenderLock(to, () => pay(to, sender, amount, ownedByPayer, memo));
+        }
+
+        sent = await withSenderLock(from, () => sendData(from, contract, data, ownedBySigner));
+    } catch (error) {
+        if (payment) {
+            try {
+                await withSenderLock(sender, () =>
+                    pay(sender, to, amount, true, failMemo("NFT transfer failed, refund", error))
+                );
+            } catch (refundError) {
+                error.message = `${error.message}; refund failed: ${refundError.message}`;
+            }
+        }
+
+        throw error;
+    }
 
     return {
         success: true,
@@ -1603,6 +1608,10 @@ async function transferNft(body) {
         to,
         tokenId,
         contract,
+        amount: needsPayment ? amount : "0",
+        payer: needsPayment ? to : null,
+        paymentTxHash: payment ? payment.txHash : null,
+        memo: needsPayment ? memo : "",
         nonce: sent.nonce
     };
 }
