@@ -929,23 +929,63 @@ async function rememberCollection(contract, info) {
     await cache(() => redis.hset("nft:collections", address, JSON.stringify(info)));
 }
 
-// Collection for a request: the given address, or the default collection.
+function sameLabel(a, b) {
+    return typeof a === "string" && typeof b === "string" && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+// Collections whose name or symbol equals `label` (case-insensitive).
+async function collectionsByLabel(label) {
+    const matches = [];
+
+    for (const [contract, info] of await knownCollections()) {
+        if (sameLabel(info.name, label) || sameLabel(info.symbol, label)) {
+            matches.push(contract);
+        }
+    }
+
+    return matches;
+}
+
+// Collection for a request: an address, a collection name or symbol, or (empty) the default.
 async function resolveCollection(input) {
     if (input === undefined || input === null || input === "") {
         return requireNftContract();
     }
 
-    if (typeof input !== "string" || !isAddress(input)) {
-        throw httpError(400, "invalid contract address");
+    if (typeof input !== "string") {
+        throw httpError(400, "collection must be a name, symbol or address");
     }
 
-    const address = ethers.getAddress(input);
+    if (isAddress(input)) {
+        const address = ethers.getAddress(input);
 
-    if (!await hasCode(address)) {
-        throw httpError(404, `no contract at ${address} on this chain`);
+        if (!await hasCode(address)) {
+            throw httpError(404, `no contract at ${address} on this chain`);
+        }
+
+        return address;
     }
 
-    return address;
+    const matches = await collectionsByLabel(input);
+
+    if (matches.length === 0) {
+        throw httpError(404, `no NFT collection named "${input.trim()}" (see GET /nft/collections)`);
+    }
+
+    if (matches.length > 1) {
+        throw httpError(409, `"${input.trim()}" matches several collections: ${matches.join(", ")}; use the address`);
+    }
+
+    return matches[0];
+}
+
+// body.collection / ?collection= (preferred) or the older body.contract / ?contract=
+function collectionParam(source) {
+    if (!source) {
+        return undefined;
+    }
+
+    return source.collection !== undefined && source.collection !== "" ? source.collection : source.contract;
 }
 
 async function requireNftContract() {
@@ -1338,6 +1378,15 @@ function buildMetadata(body) {
 }
 
 async function deployCollection(name, symbol) {
+    // names and symbols select collections, so each must identify exactly one
+    for (const label of new Set([name, symbol])) {
+        const taken = await collectionsByLabel(label);
+
+        if (taken.length > 0) {
+            throw httpError(409, `"${label}" is already used by collection ${taken[0]}; choose another name/symbol`);
+        }
+    }
+
     if (!await signerOwns(CONFIG.SENDER01)) {
         throw new Error("sender01 is not managed by Web3Signer");
     }
@@ -1399,7 +1448,7 @@ async function mintNft(req) {
 
     const metadata = buildMetadata(body);
     const tokenURI = onChainTokenUri(metadata);
-    const contract = await resolveCollection(body.contract);
+    const contract = await resolveCollection(collectionParam(body));
 
     if (!await signerOwns(CONFIG.SENDER01)) {
         throw new Error("sender01 is not managed by Web3Signer");
@@ -1520,7 +1569,7 @@ async function transferNft(body) {
         throw httpError(400, "invalid address");
     }
 
-    const contract = await resolveCollection(body.contract);
+    const contract = await resolveCollection(collectionParam(body));
     const from = ethers.getAddress(body.from);
     const to = ethers.getAddress(body.to);
     const owner = await readOwner(contract, tokenId);
@@ -1719,7 +1768,7 @@ app.get("/nft/owner/:address", async (req, res) => {
             });
         }
 
-        res.json(await listOwnedNfts(req.params.address, req.query.contract));
+        res.json(await listOwnedNfts(req.params.address, collectionParam(req.query)));
     } catch (error) {
         console.error(error);
 
@@ -1739,7 +1788,7 @@ app.get("/nft/:tokenId/metadata", async (req, res) => {
             });
         }
 
-        const contract = await resolveCollection(req.query.contract);
+        const contract = await resolveCollection(collectionParam(req.query));
         const stored = await readStoredNft(contract, tokenId);
 
         if (!stored) {
@@ -1768,7 +1817,7 @@ app.get("/nft/:tokenId", async (req, res) => {
             });
         }
 
-        const contract = await resolveCollection(req.query.contract);
+        const contract = await resolveCollection(collectionParam(req.query));
         const stored = await readStoredNft(contract, tokenId);
         const owner = await readOwner(contract, tokenId);
 

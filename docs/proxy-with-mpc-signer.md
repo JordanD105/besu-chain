@@ -245,8 +245,11 @@ Still one proxy replica: the per-sender lock is in process memory.
 ## Several NFT collections
 
 `POST /nft/deploy` deploys a **new** collection every time. The first one is the default, and
-`GET /nft/collections` lists them all. Pass `"contract": "0x…"` in `/nft/mint` and `/nft/transfer`,
-or `?contract=0x…` on `GET /nft/:id`, `/nft/:id/metadata` and `/nft/owner/:address`. Without it,
-the default collection is used, so requests written for a single collection still work. Token ids
-start at 1 in each collection. Examples are in `proxy/api.txt`.
+`GET /nft/collections` lists them all. Names and symbols must be unique across collections; a
+duplicate is rejected with 409.
 
+Choose a collection with `"collection"` in the `/nft/mint` and `/nft/transfer` body, or with
+`?collection=` on `GET /nft/:id`, `/nft/:id/metadata` and `/nft/owner/:address`. The value can be
+the collection's **name**, its **symbol** (both case-insensitive) or its **address**. Without it,
+the default collection is used, so single-collection requests still work. `contract` is accepted
+as an alias. Token ids start at 1 in each collection. Examples are in `proxy/api.txt`.

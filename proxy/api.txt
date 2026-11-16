@@ -41,7 +41,11 @@ GET /nft/owner/0xB4BD95fee77755E6Eecbd0d2E85893Fb066e095f
 # ---------------------------------------------------------------
 # POST /nft/deploy always deploys a NEW collection (minter = SENDER01).
 # The first collection is the default (also NFT_CONTRACT if set).
-# Every NFT endpoint takes an optional collection address; without it the default is used.
+# Names and symbols must be unique across collections (409 otherwise).
+#
+# Choose the collection with "collection" (body) or ?collection= (query):
+# its NAME, its SYMBOL (case-insensitive) or its ADDRESS. Omit it to use the default.
+# ("contract" / ?contract= is still accepted and works the same way.)
 
 POST /nft/deploy
 { "name": "Dragons", "symbol": "DRG" }
@@ -52,7 +56,7 @@ GET /nft/collections
 
 POST /nft/mint
 {
-  "contract": "0xDragonsCollection",
+  "collection": "DRG",
   "to": "0xRecipient",
   "name": "Dragon",
   "image": "https://example/dragon.svg",
@@ -60,11 +64,11 @@ POST /nft/mint
 }
 
 POST /nft/transfer
-{ "contract": "0xDragonsCollection", "from": "0x...", "to": "0x...", "tokenId": "1" }
+{ "collection": "Dragons", "from": "0x...", "to": "0x...", "tokenId": "1" }
 
-GET /nft/1?contract=0xDragonsCollection
-GET /nft/1/metadata?contract=0xDragonsCollection
-GET /nft/owner/0xOwner                         (all collections, plus default-collection fields)
-GET /nft/owner/0xOwner?contract=0xDragons      (one collection)
+GET /nft/1?collection=DRG
+GET /nft/1/metadata?collection=Dragons
+GET /nft/owner/0xOwner                       (all collections, plus default-collection fields)
+GET /nft/owner/0xOwner?collection=DRG        (one collection)
 
 # Token ids start at 1 in each collection.
