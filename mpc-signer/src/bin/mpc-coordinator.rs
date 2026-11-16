@@ -62,6 +62,11 @@ struct Cli {
     /// Concurrent presign sessions (cluster wide).
     #[arg(long, env = "MPC_REFILL_CONCURRENCY", default_value_t = 4)]
     refill_concurrency: usize,
+    /// Comma-separated addresses that keep a presignature pool (hot senders). Empty = every key.
+    /// Keys not listed are signed with the full interactive protocol (cold path), so creating
+    /// many user keys does not multiply background presigning work.
+    #[arg(long, env = "MPC_POOL_KEYS", default_value = "")]
+    pool_keys: String,
     /// When the pool is empty, run the full interactive (3+1 round) protocol instead of failing.
     #[arg(long, env = "MPC_COLD_FALLBACK", default_value_t = true, action = clap::ArgAction::Set)]
     cold_fallback: bool,
@@ -91,6 +96,8 @@ struct Stats {
 
 struct Coord {
     cli: Cli,
+    /// lowercase addresses with a presignature pool; None = all keys
+    pool_keys: Option<std::collections::HashSet<String>>,
     cluster: Arc<ClusterConfig>,
     http: reqwest::Client,
     keys: Mutex<HashMap<String, KeyInfo>>, // address (lowercase) -> key
@@ -117,7 +124,14 @@ async fn main() -> Result<()> {
         .tcp_nodelay(true)
         .timeout(Duration::from_secs(900))
         .build()?;
+    let pool_keys: std::collections::HashSet<String> = cli
+        .pool_keys
+        .split(',')
+        .map(|a| a.trim().to_lowercase())
+        .filter(|a| !a.is_empty())
+        .collect();
     let coord = Arc::new(Coord {
+        pool_keys: if pool_keys.is_empty() { None } else { Some(pool_keys) },
         chain_id: cluster.policy.chain_id,
         pool_target: AtomicUsize::new(cli.pool_target),
         refill: Arc::new(Semaphore::new(cli.refill_concurrency.max(1))),
@@ -213,6 +227,10 @@ impl Coord {
         Ok(r.json().await?)
     }
 
+    fn pooled(&self, address: &str) -> bool {
+        self.pool_keys.as_ref().map(|k| k.contains(address)).unwrap_or(true)
+    }
+
     fn mark_down(&self, id: u16) {
         self.node_down_until.lock().insert(id, Instant::now() + Duration::from_secs(5));
     }
@@ -294,6 +312,9 @@ async fn refill_loop(c: Arc<Coord>) {
             let mut pools = c.pools.lock();
             // round-robin one job per key per pass, so many keys share capacity fairly
             for (key, p) in pools.iter_mut() {
+                if !c.pooled(key) {
+                    continue;
+                }
                 if p.ready.len() + p.inflight < target && c.refill.available_permits() > wanted.len() {
                     p.inflight += 1;
                     wanted.push(key.clone());
@@ -701,7 +722,7 @@ async fn admin_pool(State(c): State<Arc<Coord>>) -> Json<Value> {
         .pools
         .lock()
         .iter()
-        .map(|(k, p)| (k.clone(), json!({"ready": p.ready.len(), "inflight": p.inflight})))
+        .map(|(k, p)| (k.clone(), json!({"ready": p.ready.len(), "inflight": p.inflight, "pooled": c.pooled(k)})))
         .collect();
     let s = &c.stats;
     let gen = s.presigs_generated.load(Relaxed);

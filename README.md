@@ -79,6 +79,10 @@ Details: [`mpc-signer/README.md`](mpc-signer/README.md) (quick start, production
 security notes) and [`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md) (throughput vs
 Vault + Web3Signer).
 
+## Guides
+
+- [Run the proxy with the MPC signer (no Vault, no Web3Signer)](docs/proxy-with-mpc-signer.md): step-by-step from a fresh start
+
 ## Development / test environment
 
 Everything runs on one host with Docker Compose. Both signers are available side by side for

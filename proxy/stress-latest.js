@@ -28,6 +28,11 @@ const CONFIG = {
     VAULT_ACCOUNT_PREFIX: process.env.VAULT_ACCOUNT_PREFIX || "accounts",
     VAULT_TOKEN: (process.env.VAULT_TOKEN || "").trim(),
     SENDER01: process.env.SENDER01 || "0xFE3B557E8Fb62b89F4916B721be55cEb828dBd73",
+    // MPC signer: when MPC_ADMIN_URL is set, /createaccount creates the account as an MPC key
+    // (distributed key generation; no private key exists anywhere) instead of storing a
+    // private key in Vault. Point WEB3SIGNER_IP/PORT at the same coordinator for signing.
+    MPC_ADMIN_URL: (process.env.MPC_ADMIN_URL || "").trim().replace(/\/$/, ""),
+    MPC_ADMIN_TOKEN: (process.env.MPC_ADMIN_TOKEN || "").trim(),
     NFT_BASE_URL: (process.env.NFT_BASE_URL || "").trim().replace(/\/$/, ""),
     REDIS: {
         host: process.env.REDIS_IP || process.env.IP || BESU_IP,
@@ -410,17 +415,47 @@ async function sendFromSigner(from, to, amount, nonce, data = "0x", gas = 21000n
     );
 }
 
-async function createAccount(amount) {
-    if (!await signerOwns(CONFIG.SENDER01)) {
-        throw new Error("sender01 is not managed by Web3Signer");
+// Create a new account as an MPC key: the three MPC nodes run distributed key generation and
+// each keeps one share. Returns the checksummed address.
+async function createMpcAccount() {
+    if (!CONFIG.MPC_ADMIN_TOKEN) {
+        throw new Error("MPC_ADMIN_TOKEN is not configured");
     }
 
-    const wallet = ethers.Wallet.createRandom();
-    const address = wallet.address;
+    const response = await fetch(`${CONFIG.MPC_ADMIN_URL}/admin/keys`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${CONFIG.MPC_ADMIN_TOKEN}` },
+        signal: AbortSignal.timeout(120000)
+    });
+
+    if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`mpc key generation failed (${response.status}): ${detail.slice(0, 300)}`);
+    }
+
+    const key = await response.json();
+    return ethers.getAddress(key.address);
+}
+
+async function createAccount(amount) {
+    if (!await signerOwns(CONFIG.SENDER01)) {
+        throw new Error("sender01 is not managed by the signer");
+    }
+
+    const useMpc = Boolean(CONFIG.MPC_ADMIN_URL);
+    const wallet = useMpc ? null : ethers.Wallet.createRandom();
+
+    if (useMpc) {
+        await assertCanPay(CONFIG.SENDER01, amount);
+    }
+
+    const address = useMpc ? await createMpcAccount() : wallet.address;
 
     const payment = await withSenderLock(CONFIG.SENDER01, async () => {
         await assertCanPay(CONFIG.SENDER01, amount);
-        await storePrivateKey(accountName(address), wallet.privateKey.slice(2));
+        if (!useMpc) {
+            await storePrivateKey(accountName(address), wallet.privateKey.slice(2));
+        }
         return pay(CONFIG.SENDER01, address, amount, true);
     });
 

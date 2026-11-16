@@ -96,8 +96,10 @@ curl -s localhost:9100 -H 'content-type: application/json' --data \
  '{"jsonrpc":"2.0","id":1,"method":"eth_sendTransaction","params":[{"from":"0x<mpc address>","to":"0x…","gas":"0x5208","gasPrice":"0x0","value":"0x1"}]}'
 ```
 
-For `../proxy`: set `WEB3SIGNER_IP` / `WEB3SIGNER_PORT` to the coordinator (port 9100) and use
-the MPC address as `SENDER01`. The proxy's `sendFromVault` path (per-user keys read from Vault)
+For `../proxy`: follow [docs/proxy-with-mpc-signer.md](../docs/proxy-with-mpc-signer.md).
+In short: set `WEB3SIGNER_IP` / `WEB3SIGNER_PORT` to the coordinator (port 9100), use the MPC address
+as `SENDER01`, set `MPC_ADMIN_URL` / `MPC_ADMIN_TOKEN` so `/createaccount` creates MPC keys, and
+set `MPC_POOL_KEYS` on the coordinator to the hot sender(s). The proxy's `sendFromVault` path (per-user keys read from Vault)
 is what this project replaces. Each user account should become an MPC key (`POST /admin/keys`)
 rather than a Vault secret.
 

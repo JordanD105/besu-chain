@@ -64,6 +64,8 @@ services:
       MPC_BESU_RPC: ${MPC_BESU_RPC:-http://host.docker.internal:8545}
       MPC_POOL_TARGET: ${MPC_POOL_TARGET:-200}
       MPC_REFILL_CONCURRENCY: ${MPC_REFILL_CONCURRENCY:-4}
+      # hot senders that keep a presignature pool (comma-separated); empty = all keys
+      MPC_POOL_KEYS: ${MPC_POOL_KEYS:-}
       MPC_NODE_TOKEN: ${MPC_NODE_TOKEN:?}
       MPC_ADMIN_TOKEN: ${MPC_ADMIN_TOKEN:?}
       RUST_LOG: ${RUST_LOG:-info}
