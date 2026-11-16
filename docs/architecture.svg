@@ -9,7 +9,7 @@
   <rect width="1600" height="1040" fill="#f8fafc"/>
 
   <text x="40" y="52" font-size="30" font-weight="700" fill="#0f172a">besu-chain: system architecture</text>
-  <text x="40" y="82" font-size="16" fill="#475569">Private Hyperledger Besu QBFT network, application proxy, explorers, monitoring, and two signing options (current Vault + Web3Signer, new non-exportable MPC signer)</text>
+  <text x="40" y="82" font-size="16" fill="#475569">Private Hyperledger Besu QBFT network, application proxy, explorer, monitoring, and two signing options (current Vault + Web3Signer, new non-exportable MPC signer)</text>
 
   <!-- ============ users ============ -->
   <g filter="url(#sh)"><rect x="40" y="120" width="230" height="150" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/></g>
@@ -87,7 +87,7 @@
   <text x="610" y="408" font-size="12" fill="#334155">(WEB3SIGNER_IP/PORT)</text>
 
   <!-- ============ besu network ============ -->
-  <rect x="820" y="120" width="740" height="420" rx="18" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+  <rect x="820" y="120" width="740" height="320" rx="18" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
   <text x="842" y="152" font-size="19" font-weight="700" fill="#4c1d95">besu-test-network/</text>
   <text x="1036" y="152" font-size="13.5" fill="#6d28d9">Docker Compose · chain id 1337 · QBFT · 1 s blocks · zero gas price</text>
 
@@ -109,26 +109,21 @@
   <line x1="1092" y1="227" x2="1116" y2="227" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)" marker-start="url(#aP)"/>
   <text x="1094" y="219" font-size="11" fill="#6d28d9">p2p</text>
 
-  <g filter="url(#sh)"><rect x="842" y="300" width="340" height="220" rx="12" fill="#ffffff" stroke="#a78bfa" stroke-width="1.5"/></g>
-  <text x="862" y="328" font-size="15" font-weight="700" fill="#4c1d95">Chainlens block explorer</text>
-  <text x="862" y="350" font-size="13" fill="#334155">nginx :8081 → web + api</text>
-  <text x="862" y="372" font-size="13" fill="#334155">ingestion (indexes rpcnode)</text>
-  <text x="862" y="394" font-size="13" fill="#334155">MongoDB · Redis</text>
-  <rect x="862" y="410" width="300" height="94" rx="9" fill="#f5f3ff" stroke="#ddd6fe"/>
-  <text x="876" y="432" font-size="13.5" font-weight="700" fill="#4c1d95">chainlens/ (repo folder)</text>
-  <text x="876" y="452" font-size="12.5" fill="#334155">lightweight explorer · Express :30100</text>
-  <text x="876" y="472" font-size="12.5" fill="#334155">blocks, txs, accounts, contracts, NFTs</text>
-  <text x="876" y="492" font-size="12" fill="#64748b">reads Besu RPC directly</text>
+  <g filter="url(#sh)"><rect x="1120" y="298" width="420" height="124" rx="12" fill="#ffffff" stroke="#a78bfa" stroke-width="1.5"/></g>
+  <text x="1140" y="324" font-size="15" font-weight="700" fill="#4c1d95">Observability</text>
+  <text x="1140" y="346" font-size="13" fill="#334155">Prometheus :9090 (Besu metrics :9545) · Grafana :3000</text>
+  <text x="1140" y="368" font-size="13" fill="#334155">Loki :3100 ← Alloy :12345 (logs)</text>
+  <text x="1140" y="390" font-size="13" fill="#334155">Tempo ← OpenTelemetry Java agent (traces)</text>
+  <text x="1140" y="410" font-size="12" fill="#64748b">metrics, logs and traces from every Besu node</text>
 
-  <g filter="url(#sh)"><rect x="1200" y="300" width="340" height="220" rx="12" fill="#ffffff" stroke="#a78bfa" stroke-width="1.5"/></g>
-  <text x="1220" y="328" font-size="15" font-weight="700" fill="#4c1d95">Observability</text>
-  <text x="1220" y="352" font-size="13" fill="#334155">Prometheus :9090 (Besu metrics :9545)</text>
-  <text x="1220" y="374" font-size="13" fill="#334155">Grafana :3000 (Besu + Loki dashboards)</text>
-  <text x="1220" y="396" font-size="13" fill="#334155">Loki :3100 ← Alloy :12345 (logs)</text>
-  <text x="1220" y="418" font-size="13" fill="#334155">Tempo ← OpenTelemetry Java agent</text>
-  <text x="1220" y="440" font-size="13" fill="#334155">      (traces from every Besu node)</text>
-  <text x="1220" y="480" font-size="12" fill="#64748b">Paladin (members 1–3) config present;</text>
-  <text x="1220" y="498" font-size="12" fill="#64748b">services not enabled in compose</text>
+  <!-- chainlens (repo root app) -->
+  <g filter="url(#sh)"><rect x="820" y="460" width="740" height="100" rx="14" fill="#ecfeff" stroke="#0891b2" stroke-width="2"/></g>
+  <text x="842" y="490" font-size="17" font-weight="700" fill="#155e75">chainlens/</text>
+  <text x="940" y="490" font-size="13.5" fill="#0e7490">block explorer &amp; dashboard (repo root) · Node.js / Express · :30100</text>
+  <text x="842" y="516" font-size="13" fill="#334155">blocks · transactions · accounts · contracts · NFTs (status, dashboard and detail APIs + web UI)</text>
+  <text x="842" y="540" font-size="12" fill="#64748b">polls rpcnode JSON-RPC every 4 s and indexes in memory (no database)</text>
+  <line x1="967" y1="460" x2="967" y2="288" stroke="#0891b2" stroke-width="2" marker-end="url(#a)"/>
+  <text x="975" y="360" font-size="12" fill="#0e7490">JSON-RPC</text>
 
   <!-- proxy -> besu (reads) -->
   <path d="M 750 160 L 838 200" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#a)"/>
@@ -161,13 +156,13 @@
       <text x="780" y="64">5. coordinator combines (r, s), adds v, encodes EIP-155 raw transaction</text>
       <text x="780" y="88">6. eth_sendRawTransaction → rpcnode → validators (QBFT, ~1 s block)</text>
       <text x="780" y="112">7. proxy stores pending value in Redis, returns tx hash</text>
-      <text x="780" y="136">8. explorers index the block; Grafana / Tempo show metrics, logs, traces</text>
+      <text x="780" y="136">8. chainlens/ shows the block and tx; Grafana / Tempo show metrics, logs, traces</text>
     </g>
     <g font-size="12.5">
       <line x1="20" y1="172" x2="56" y2="172" stroke="#e11d48" stroke-width="2"/><text x="64" y="176" fill="#334155">current path (exportable key)</text>
       <line x1="300" y1="172" x2="336" y2="172" stroke="#059669" stroke-width="2"/><text x="344" y="176" fill="#334155">MPC path (non-exportable)</text>
       <line x1="560" y1="172" x2="596" y2="172" stroke="#7c3aed" stroke-width="2"/><text x="604" y="176" fill="#334155">to Besu</text>
-      <text x="700" y="176" fill="#64748b">Browsers open Chainlens :8081, chainlens/ :30100 and Grafana :3000 directly.</text>
+      <text x="700" y="176" fill="#64748b">Browsers open chainlens/ :30100 and Grafana :3000.</text>
     </g>
   </g>
 </svg>
