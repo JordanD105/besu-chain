@@ -68,7 +68,7 @@ diagram but are **not done yet**:
 | [`besu-test-network/`](besu-test-network) | Besu QBFT network: 4 validators + `rpcnode`, chain id 1337, 1 s blocks, zero gas price, node permissioning. Observability: Prometheus, Grafana, Loki + Alloy, Tempo + OpenTelemetry Java agent. The Chainlens services bundled in this compose file are not used. | 8545/8546 rpcnode, 21001–21004 validators, 9090, 3000, 3100 |
 | [`proxy/`](proxy) | Application API: `POST /createaccount`, `/transfer`, `/nft/deploy`, `/nft/mint`, `/nft/transfer`, plus read endpoints. Redis holds nonces, pending value and NFT metadata. | 30000 API, 36379 Redis |
 | [`chainlens/`](chainlens) | The block explorer in use: Node.js/Express web UI for blocks, transactions, accounts, contracts and NFTs. Polls RPC every 4 s and keeps its index in memory. Runs with Docker (`docker compose up -d --build`, set `BESU_RPC` in `.env`). | 30100 |
-| [`mpc-signer/`](mpc-signer) | Non-exportable 2-of-3 signer (CGGMP24 / LFDT Lockness), Web3Signer-compatible. Production deploy files are in `mpc-signer/deploy/`, one node per host. | 9100 coordinator, 7000 nodes |
+| [`mpc-signer/`](mpc-signer) | Non-exportable 2-of-3 signer (CGGMP24 / LFDT Lockness), Web3Signer-compatible. Production: [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) with per-role packages in `mpc-signer/deploy/`. | 9100 coordinator, 7000 nodes |
 | [`besu-vault-web3signer/`](besu-vault-web3signer) | Current signer, to be retired: Vault KV keeps exportable private keys, and Web3Signer loads them into memory. | 8200 Vault, 9000 Web3Signer |
 
 MPC signer internals:
@@ -82,6 +82,7 @@ Vault + Web3Signer).
 ## Guides
 
 - [Run the proxy with the MPC signer (no Vault, no Web3Signer)](docs/proxy-with-mpc-signer.md): step-by-step from a fresh start
+- [Deploy the MPC signer in production](mpc-signer/docs/production.md): three node hosts and teams, coordinators, key ceremony, backups and operations
 
 ## Development / test environment
 

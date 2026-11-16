@@ -1,0 +1,27 @@
+# ONE MPC node. Run on its own host, operated by its own team (node 0, 1 and 2 on 3 hosts).
+# Steps: see mpc-signer/docs/production.md
+#   ./init.sh            create .env (passphrase, id) and the node identity -> prints node<ID>.json
+#   (copy cluster.json from the operator here)
+#   docker compose up -d
+services:
+  mpc-node:
+    image: ${MPC_IMAGE:?set MPC_IMAGE (e.g. registry.example.com/mpc-signer:1.0.0)}
+    command: ["mpc-node", "run"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MPC_CLUSTER: /config/cluster.json
+      MPC_LISTEN: 0.0.0.0:7000
+    volumes:
+      - mpc-data:/data
+      - ./cluster.json:/config/cluster.json:ro
+    ports:
+      # bind ONLY to the private/VPN address; the coordinator(s) are the only clients
+      - "${MPC_BIND_IP:?set MPC_BIND_IP to this host's private/VPN IP}:${MPC_PORT:-7000}:7000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
+volumes:
+  mpc-data:

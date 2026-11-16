@@ -105,14 +105,19 @@ rather than a Vault secret.
 
 ## Production deployment
 
-- Build the image (`docker build -t mpc-signer .`) and run `deploy/docker-compose.node.yml` on
-  **three different hosts with different administrators**, ideally in different sites. If one
-  person or one machine can reach two nodes, the threshold protects nothing.
-- Run `mpc-node init` on each host, then assemble `cluster.json` from the three printed public
-  keys (see `deploy/cluster.example.json`) and copy it to every host and to the coordinator.
-- Run 1..N coordinators (`deploy/docker-compose.coordinator.yml`). They hold no secrets.
-- Back up each node's `/data` (sealed shares) separately, under that node's own team.
-- Size node CPU from benchmark phase A: `cores per node ≈ target_TPS × (CPU-s per presig per party) × 2/3`.
+Follow **[docs/production.md](docs/production.md)**, a step-by-step guide that was dry-run end
+to end. It uses the per-role packages in `deploy/`:
+
+| Path | Used by | Contents |
+|---|---|---|
+| `deploy/node/` | each node team | `docker-compose.yml`, `.env.example`, `init.sh`, `backup.sh`, `restore.sh` |
+| `deploy/coordinator/` | coordinator host(s) | `docker-compose.yml`, `.env.example` |
+| `deploy/make-cluster.sh` | operator | builds `cluster.json` from the three nodes' public keys |
+| `deploy/ceremony.sh` | operator | aux info + first key (`SENDER01`) |
+| `deploy/firewall-example.sh` | every host | ufw rules per role |
+
+Three nodes on **three hosts at three sites, run by three different teams**, over a private
+encrypted network. If one person or machine can reach two nodes, the threshold protects nothing.
 
 Still to do before production:
 

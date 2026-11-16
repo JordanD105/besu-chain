@@ -12,3 +12,11 @@
 /quickstart/.env
 /quickstart/cluster.json
 /bench/existing.env
+
+# production deploy: per-host secrets and generated files
+/deploy/node/.env
+/deploy/node/cluster.json
+/deploy/node/node*.json
+/deploy/coordinator/.env
+/deploy/coordinator/cluster.json
+/deploy/cluster.json

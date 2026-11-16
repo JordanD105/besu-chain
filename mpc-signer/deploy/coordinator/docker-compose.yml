@@ -1,0 +1,21 @@
+# MPC coordinator: stateless, holds NO key material. Run 1..N (each with its own MPC_RELAY_URL).
+# Clients (the proxy) use it like Web3Signer on port 9100. Steps: mpc-signer/docs/production.md
+services:
+  mpc-coordinator:
+    image: ${MPC_IMAGE:?set MPC_IMAGE}
+    command: ["mpc-coordinator"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MPC_CLUSTER: /config/cluster.json
+      MPC_LISTEN: 0.0.0.0:9100
+    volumes:
+      - ./cluster.json:/config/cluster.json:ro
+    ports:
+      # private/VPN address only: reached by the proxy (JSON-RPC + admin) and by the nodes (relay)
+      - "${MPC_BIND_IP:?set MPC_BIND_IP}:${MPC_PORT:-9100}:9100"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
