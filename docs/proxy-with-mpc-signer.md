@@ -211,3 +211,11 @@ The proxy calls `eth_accounts` on `WEB3SIGNER_IP:WEB3SIGNER_PORT` (now the coord
 | Backups | each node's Docker volume (`node0-data`, `node1-data`, `node2-data`) **and** its passphrase in `quickstart/.env`. Keep them separate per node. |
 | A node is down | signing continues with the other 2. `/createaccount` needs **all 3** (key generation), so new accounts fail until it returns. |
 | Production | put the 3 nodes on 3 hosts run by different admins (`mpc-signer/deploy/`), see the README "Production architecture" and the hardening list: the proxy's in-process sender lock limits it to one replica today |
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `policy: value above limit` | the amount is above `max_value_wei` in `quickstart/cluster.json` (default 1000 ETH per transaction) | raise it, then `./quickstart.sh down && ./quickstart.sh up` |
+| `/createaccount` returns a `txHash`, but chainlens shows 0 transactions and the receipt is `null` | **nonce gap**: an earlier failed request used up a nonce (for example nonce 0), so later transactions wait in Besu's pool. Fixed in the proxy: a failed send now clears the cached nonce. | update the proxy, then fill the gap once: `eth_sendTransaction` on the coordinator from the sender to itself, `value 0x0`, `nonce` = the missing one. Then `docker exec <redis> redis-cli DEL nonce:<sender lowercase>`. |
+| chainlens stuck with `Missing batch response` | old chainlens image (batch over Besu's 1024 limit) | `git pull`, then `docker compose up -d --build` in `chainlens/` |

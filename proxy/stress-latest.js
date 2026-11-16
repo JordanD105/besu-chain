@@ -73,6 +73,14 @@ async function rpc(url, method, params = []) {
 // Redis nonce
 // =======================
 
+// Forget the cached nonce so the next nextNonce() re-reads eth_getTransactionCount(pending).
+// Called when signing/submitting fails after a nonce was taken: otherwise that nonce is never
+// used, every later transaction from the sender waits behind the gap and nothing is mined.
+// Safe because every send runs under withSenderLock for its sender.
+async function resetNonce(address) {
+    await redis.del(`nonce:${address.toLowerCase()}`);
+}
+
 async function nextNonce(address) {
     const key = `nonce:${address.toLowerCase()}`;
     const exists = await redis.exists(key);
@@ -277,9 +285,16 @@ async function pay(sender, recipient, amount, ownedBySigner, memo = "") {
     await assertCanPay(sender, amount);
 
     const nonce = await nextNonce(sender);
-    const txHash = ownedBySigner
-        ? await sendFromSigner(sender, recipient, amount, nonce, data, gas)
-        : await sendFromVault(sender, recipient, amount, nonce, data, gas);
+    let txHash;
+
+    try {
+        txHash = ownedBySigner
+            ? await sendFromSigner(sender, recipient, amount, nonce, data, gas)
+            : await sendFromVault(sender, recipient, amount, nonce, data, gas);
+    } catch (error) {
+        await resetNonce(sender);
+        throw error;
+    }
 
     await rememberPending(sender, nonce, amount);
 
@@ -869,9 +884,16 @@ async function sendData(from, to, data, ownedBySigner, valueWei = 0n) {
     const gas = withGasBuffer(await estimateGas(estimateTx));
     const cost = await assertCanPayGas(from, gas, valueWei);
     const nonce = await nextNonce(from);
-    const txHash = ownedBySigner
-        ? await sendDataFromSigner(from, to, data, nonce, gas, valueHex)
-        : await sendDataFromVault(from, to, data, nonce, gas, valueHex);
+    let txHash;
+
+    try {
+        txHash = ownedBySigner
+            ? await sendDataFromSigner(from, to, data, nonce, gas, valueHex)
+            : await sendDataFromVault(from, to, data, nonce, gas, valueHex);
+    } catch (error) {
+        await resetNonce(from);
+        throw error;
+    }
 
     await rememberPendingWei(from, nonce, cost);
 
