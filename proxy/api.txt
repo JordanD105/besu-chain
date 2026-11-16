@@ -54,7 +54,8 @@ POST /nft/deploy
 GET /nft/collections
 -> { "collections": [ { "contract": "0x...", "name": "Avatar-ID", "symbol": "AVA", "default": true }, ... ] }
 
-# Mint: always to SENDER01, no payment ("to" and "amount" are rejected).
+# Mint: always to SENDER01, nothing is paid. "amount" = the NFT's PRICE (optional, default 0).
+# The price is stored in the token's on-chain metadata ("price"), so it survives without Redis.
 POST /nft/mint
 {
   "collection": "DRG",
@@ -62,15 +63,17 @@ POST /nft/mint
   "description": "Dragon",
   "image": "https://example/dragon.svg",
   "attributes": [{ "trait_type": "level", "value": "gold" }],
-  "properties": { "series": "2026" }
+  "properties": { "series": "2026" },
+  "amount": 3
 }
--> { "success": true, "tokenId": "1", "contract": "0x...", "owner": "<SENDER01>", ... }
+-> { "success": true, "tokenId": "1", "contract": "0x...", "owner": "<SENDER01>", "price": "3", ... }
 
-# Transfer: moves the NFT from -> to. If amount > 0, the RECEIVER "to" first pays
-# amount ETH to SENDER01 (refunded if the NFT transfer fails). amount is optional (0 = free).
+# Transfer: no amount, no SENDER01 parameter. "from" is optional (default: current owner).
+# The receiver "to" pays the token's mint price to SENDER01, then the NFT moves
+# (payment refunded if the NFT transfer fails). Price 0 = free.
 POST /nft/transfer
-{ "collection": "DRG", "from": "<SENDER01>", "to": "0xBuyer", "tokenId": "1", "amount": 3 }
--> { "success": true, "amount": "3", "payer": "0xBuyer", "paymentTxHash": "0x...", "memo": "NFT transfer: DRG #1", ... }
+{ "collection": "DRG", "to": "0xBuyer", "tokenId": "1" }
+-> { "success": true, "from": "<owner>", "price": "3", "paid": "3", "payer": "0xBuyer", "paymentTxHash": "0x...", ... }
 
 GET /nft/1?collection=DRG
 GET /nft/1/metadata?collection=Dragons

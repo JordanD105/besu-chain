@@ -176,18 +176,20 @@ Deploy an NFT collection. The minter is the MPC sender:
 curl -s localhost:30000/nft/deploy -H 'content-type: application/json' --data '{"name":"MPC NFT","symbol":"MNFT"}'
 ```
 
-Mint. Every NFT is minted to `SENDER01`; there is no `to` and no payment:
+Mint. Every NFT is minted to `SENDER01` and nothing is paid. `amount` is the NFT's **price**,
+stored in its on-chain metadata:
 
 ```bash
 curl -s localhost:30000/nft/mint -H 'content-type: application/json' \
-  --data '{"name":"Badge 1","image":"https://example/badge.png"}'
+  --data '{"name":"Badge 1","image":"https://example/badge.png","amount":"0.5"}'
 ```
 
-Sell it to the user. The receiver (`to`) pays `amount` ETH to `SENDER01`, then the NFT moves:
+Sell it to the user. There is no `amount` and no `SENDER01` parameter, and `from` defaults to
+the current owner. The receiver (`to`) pays the mint price to `SENDER01`, then the NFT moves:
 
 ```bash
 curl -s localhost:30000/nft/transfer -H 'content-type: application/json' \
-  --data '{"from":"0x3a55…111d","to":"0x1293…717d","tokenId":"1","amount":"0.5"}'
+  --data '{"to":"0x1293…717d","tokenId":"1"}'
 ```
 
 Signer side:
