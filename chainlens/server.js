@@ -197,7 +197,21 @@ async function rpc(method, params) {
     return body.result;
 }
 
+// Besu rejects JSON-RPC batches larger than --rpc-http-max-batch-size (default 1024), so busy
+// block ranges (many receipts) are sent in chunks.
+const RPC_BATCH_SIZE = Math.max(1, Number(process.env.RPC_BATCH_SIZE) || 200);
+
 async function rpcBatch(calls) {
+    const results = [];
+
+    for (let i = 0; i < calls.length; i += RPC_BATCH_SIZE) {
+        results.push(...await rpcBatchChunk(calls.slice(i, i + RPC_BATCH_SIZE)));
+    }
+
+    return results;
+}
+
+async function rpcBatchChunk(calls) {
     if (calls.length === 0) {
         return [];
     }

@@ -1,0 +1,19 @@
+# chainlens block explorer.
+#   cp .env.example .env    # set BESU_RPC
+#   docker compose up -d --build
+#   open http://localhost:30100
+services:
+  chainlens:
+    build: .
+    image: localhost/besu-chainlens/chainlens
+    restart: unless-stopped
+    ports:
+      - "${PORT:-30100}:30100"
+    env_file:
+      - .env
+    environment:
+      LISTEN_HOST: 0.0.0.0
+      PORT: 30100
+    extra_hosts:
+      # lets BESU_RPC=http://host.docker.internal:8545 reach a Besu node on this host
+      - "host.docker.internal:host-gateway"
