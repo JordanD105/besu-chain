@@ -8,7 +8,7 @@
   </defs>
   <rect width="1600" height="1040" fill="#f8fafc"/>
 
-  <text x="40" y="52" font-size="30" font-weight="700" fill="#0f172a">besu-chain: system architecture</text>
+  <text x="40" y="52" font-size="30" font-weight="700" fill="#0f172a">besu-chain: development / test environment</text>
   <text x="40" y="82" font-size="16" fill="#475569">Private Hyperledger Besu QBFT network, application proxy, explorer, monitoring, and two signing options (current Vault + Web3Signer, new non-exportable MPC signer)</text>
 
   <!-- ============ users ============ -->
