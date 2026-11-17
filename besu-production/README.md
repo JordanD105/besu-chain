@@ -26,7 +26,7 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 
 | Path | Used by | Purpose |
 |---|---|---|
-| `node/` | every Besu host | `docker-compose.yml` (`docker-compose.host.yml` for several nodes per host), `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh` |
+| `node/` | every Besu host | `docker-compose.yml` (`docker-compose.host.yml` for several nodes per host), `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh`, `reset-chain.sh` |
 | `operator/make-network.sh` | operator, once | genesis (QBFT validator set), `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS` |
 | `operator/add-node.sh` | operator, later | add a node to a **running** network (genesis untouched) |
 | `operator/qbft.sh` | on a validator host | validator set, add/remove votes, peers, health |
@@ -197,6 +197,7 @@ chain halts (quorum 3). Keep at most `f` validators per host (1 with 4 validator
 | **Add a validator** | same as an RPC node, then on **more than half** of the current validators run `operator/qbft.sh propose 0x<new address> true`. Once `qbft.sh validators` lists it, run `qbft.sh discard 0x<address>` on those validators. |
 | **Remove a validator** | `qbft.sh propose 0x<address> false` on more than half of the validators, then `discard`. Then remove its enode from the network files with care, and redistribute. |
 | **Replace a lost validator key** | start a new node (new key), vote it in, then vote the old address out |
+| **New genesis (reset the chain)** | Besu refuses to start with *"Supplied genesis block does not match chain data stored in /data"*. Either put the original network files back, or, to really start a new chain, run `./reset-chain.sh` on **every** node (validators first). It deletes the chain data but keeps the node key, so the enodes stay valid. **Don't delete the volume**: that deletes the key too. |
 | **Monitoring** | `monitoring/prometheus.yml` and Grafana dashboard 10273. Alert on: no new block for 3 × the block period; peer count below expected; a validator missing; node down; disk above 80 %. |
 | **Backups** | validator keys: `backup-key.sh` (once, encrypted, per team). Chain data can be re-synced from peers; optionally snapshot an RPC node's volume to speed up adding nodes. |
 
