@@ -1,0 +1,48 @@
+# Besu node with HOST networking. Use it when SEVERAL Besu nodes share one host (e.g. rpc1 + val1 + val2).
+# Enable it in .env:   COMPOSE_FILE=docker-compose.host.yml
+#
+# Why: with Docker's bridge network, a connection from one container to ANOTHER node on the SAME host
+# (via the host's IP) arrives with the Docker gateway address (172.x) as its source. The receiving
+# node then doesn't find it in permissions_config.toml (enode = key + IP + port) and drops it, so
+# co-located nodes never peer. With host networking, Besu listens directly on the host's IP and
+# connections keep their real source IP.
+#
+# Each node on the host needs its OWN directory (own compose project and data volume) and its OWN
+# P2P_PORT, RPC_PORT, WS_PORT and METRICS_PORT in .env. The listen addresses come from .env:
+#   p2p + metrics -> BIND_IP     JSON-RPC/WS -> RPC_BIND_IP (validators 127.0.0.1, RPC nodes private IP)
+services:
+  besu:
+    image: ${BESU_IMAGE:?set BESU_IMAGE, e.g. hyperledger/besu:26.11.0}
+    restart: unless-stopped
+    network_mode: host
+    command: ["--config-file=/config/${BESU_ROLE:?validator or rpc}.toml"]
+    # BESU_* variables in .env (e.g. BESU_RPC_HTTP_API, BESU_HOST_ALLOWLIST) override the role's .toml
+    env_file: .env
+    environment:
+      BESU_P2P_HOST: ${P2P_HOST:?set P2P_HOST}
+      BESU_P2P_INTERFACE: ${BIND_IP:?set BIND_IP}
+      BESU_P2P_PORT: ${P2P_PORT:-30303}
+      BESU_RPC_HTTP_HOST: ${RPC_BIND_IP:-127.0.0.1}
+      BESU_RPC_HTTP_PORT: ${RPC_PORT:-8545}
+      BESU_RPC_WS_HOST: ${RPC_BIND_IP:-127.0.0.1}
+      BESU_RPC_WS_PORT: ${WS_PORT:-8546}
+      BESU_METRICS_HOST: ${BIND_IP}
+      BESU_METRICS_PORT: ${METRICS_PORT:-9545}
+      JAVA_OPTS: ${JAVA_OPTS:--Xmx4g}
+    volumes:
+      - besu-data:/data
+      - ./${BESU_ROLE}.toml:/config/${BESU_ROLE}.toml:ro
+      - ./network/genesis.json:/config/genesis.json:ro
+      - ./network/static-nodes.json:/config/static-nodes.json:ro
+      - ./network/permissions_config.toml:/config/permissions_config.toml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/${RPC_BIND_IP:-127.0.0.1}/${RPC_PORT:-8545}'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging:
+      driver: json-file
+      options: { max-size: "100m", max-file: "5" }
+volumes:
+  besu-data:

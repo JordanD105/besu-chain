@@ -26,7 +26,7 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 
 | Path | Used by | Purpose |
 |---|---|---|
-| `node/` | every Besu host | `docker-compose.yml`, `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh` |
+| `node/` | every Besu host | `docker-compose.yml` (`docker-compose.host.yml` for several nodes per host), `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh` |
 | `operator/make-network.sh` | operator, once | genesis (QBFT validator set), `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS` |
 | `operator/add-node.sh` | operator, later | add a node to a **running** network (genesis untouched) |
 | `operator/qbft.sh` | on a validator host | validator set, add/remove votes, peers, health |
@@ -170,6 +170,23 @@ Then point the applications at the RPC nodes:
 - chainlens: `BESU_RPC` → the explorer node.
 
 Add the nodes to Prometheus (`monitoring/prometheus.yml`).
+
+## Several nodes on one host
+
+You can run more than one node on a host, for example `rpc1`, `val1` and `val2`:
+
+- **One directory per node**, e.g. `/opt/besu-val1`, `/opt/besu-val2`, `/opt/besu-rpc1`. The
+  directory name becomes the compose project and the data volume, so the keys stay separate.
+- **Host networking:** `COMPOSE_FILE=docker-compose.host.yml` in each `.env`. With Docker's bridge
+  network, a node connecting to another node on the same host arrives with the Docker gateway
+  address (172.x) as its source, isn't found in `permissions_config.toml`, and is dropped.
+- **Different ports per node:** `P2P_PORT`, `RPC_PORT`, `WS_PORT`, `METRICS_PORT`. Same `P2P_HOST`
+  and `BIND_IP` (the host's private IP).
+- Validator RPC stays on `127.0.0.1`, on its own port: `RPC=http://127.0.0.1:8645 operator/qbft.sh health`.
+- Firewall: `P2P_PORTS="30303 30304 30305" METRICS_PORTS="9545 9546 9547" ./firewall-example.sh`.
+
+**Fault tolerance:** a host with 2 of 4 validators takes 2 validators down when it fails, so the
+chain halts (quorum 3). Keep at most `f` validators per host (1 with 4 validators, 2 with 7).
 
 ## Operations
 
