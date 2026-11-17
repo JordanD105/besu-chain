@@ -1625,9 +1625,11 @@ async function showNetwork() {
         { label: "col.name", sort: (row) => row.name || "", cell: (row) => row.name || "" },
         { label: "col.address", sort: (row) => row.address || "", cell: (row) => row.address || "" }
     ], data.peers, { key: "peers" });
+    const noAdmin = data.adminApi === false;
+    const noAdminNote = () => el("div", { class: "empty" }, t("net.noAdmin"));
     show(el("div", {}, [
         el("div", { class: "detail" }, [
-            el("section", { class: "card" }, [
+            noAdmin ? el("section", { class: "card" }, [el("h2", {}, t("net.node")), noAdminNote()]) : el("section", { class: "card" }, [
                 el("h2", {}, t("net.node")),
                 el("div", { class: "kv" }, [
                     el("span", {}, t("net.name")), data.name || "—",
@@ -1638,7 +1640,7 @@ async function showNetwork() {
             ]),
             el("aside", { class: "side-stat" }, [el("div", {}, t("net.count")), el("b", {}, String(data.peerCount))])
         ]),
-        el("section", { class: "card stack" }, [el("h2", {}, t("net.peers")), table])
+        el("section", { class: "card stack" }, [el("h2", {}, t("net.peers")), noAdmin ? noAdminNote() : table])
     ]));
 }
 

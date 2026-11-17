@@ -791,7 +791,14 @@ async function refreshNetwork() {
         db.node = await rpc("admin_nodeInfo", []);
         db.peers = await rpc("admin_peers", []);
         db.peerCount = db.peers.length;
+        db.adminApi = true;
     } catch (error) {
+        // Production RPC nodes don't enable the ADMIN API (BESU_RPC_HTTP_API=ETH,NET,WEB3[,TXPOOL]):
+        // only the peer count is available then.
+        db.adminApi = false;
+        db.node = null;
+        db.peers = [];
+
         try {
             db.peerCount = parseInt(await rpc("net_peerCount", []), 16);
         } catch (inner) {
@@ -1307,6 +1314,7 @@ app.get("/api/network", (req, res) => {
         id: node.id || "",
         address: node.listenAddr || (node.ports && node.ports.listener) || "",
         peerCount: db.peerCount,
+        adminApi: db.adminApi !== false,
         peers: (db.peers || []).map((peer) => ({
             id: peer.id,
             name: peer.name,
