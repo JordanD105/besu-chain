@@ -132,7 +132,7 @@ sha256sum cluster.json
 | `CHAIN_ID` | Besu genesis `chainId` |
 | `MAX_VALUE_WEI` | largest value per transaction (default 1000 ETH) |
 | `MAX_GAS` | largest gas limit per transaction |
-| `ALLOWED_TO` | optional comma-separated destination allowlist |
+| `ALLOWED_TO` | optional destination allowlist, e.g. `ALLOWED_TO="0xabc…,0xdef…"`. **Leave empty for the proxy**: a non-empty list refuses every other destination and all contract creation, for every key, so `/createaccount` funding, `/transfer` to new addresses and `/nft/deploy` would fail. Invalid addresses are rejected. |
 
 **Distribute:** copy `cluster.json` to all 3 nodes (next to their `docker-compose.yml`) and to
 every coordinator. It is public, but its integrity matters, so **each team compares the
