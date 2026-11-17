@@ -5,7 +5,8 @@ A private Hyperledger Besu (QBFT) blockchain with:
 - **`proxy/`**: an application API for accounts, ETH transfers and NFT collections;
 - **`mpc-signer/`**: **non-exportable transaction signing**, a 2-of-3 MPC signer where the private
   key never exists anywhere. It replaces Vault + Web3Signer.
-- **`chainlens/`**: a block explorer, plus monitoring.
+- **`chainlens/`**: a block explorer;
+- **`monitoring/`**: Prometheus + Grafana dashboards and alerts for production Besu and the MPC signer.
 
 The same components run in two setups:
 
@@ -36,6 +37,7 @@ The same components run in two setups:
 | [`mpc-signer/`](mpc-signer) | **2-of-3 threshold ECDSA signer** (CGGMP24 / LFDT Lockness), Web3Signer-compatible JSON-RPC. Quick start, production packages, benchmark. | 9100 coordinator, 7000 nodes |
 | [`proxy/`](proxy) | **Application API** (Node.js/Express): accounts, transfers, NFT collections. Redis is an optional cache: correctness comes from memory + the chain. | 30000 API, 36379 Redis |
 | [`chainlens/`](chainlens) | **Block explorer** (Node.js/Express): blocks, transactions, accounts, contracts, NFTs. NFT sales show the image. Polls RPC every 4 s, indexes in memory, re-indexes after a chain reset. | 30100 |
+| [`monitoring/`](monitoring) | **Production monitoring**: Prometheus + Grafana on one host. Dashboards for Besu (quorum, block age, peers, sync, RPC, JVM), the MPC signer (nodes vs threshold, hot/cold signing, latency, pool, policy refusals) and hosts; alert rules. | 3000 Grafana, 9090 Prometheus (localhost), 9101 node-exporter |
 | [`besu-vault-web3signer/`](besu-vault-web3signer) | **Previous signer, being retired**: Vault KV keeps exportable private keys and Web3Signer loads them into memory. Kept for comparison benchmarks. | 8200 Vault, 9000 Web3Signer |
 
 ## What happens on a request
@@ -88,7 +90,7 @@ The MPC signer comes first: its first key, `SENDER01`, is funded in the Besu gen
 | 5 | **NFT collections.** `POST /nft/deploy` for each collection (unique name and symbol). | [`proxy/api.txt`](proxy/api.txt) | version-2 collections, minter = `SENDER01` |
 | 6 | **Explorer.** `chainlens/.env`: `BESU_RPC` = the read-only explorer RPC node; then `docker compose up -d --build`. | [`chainlens/`](chainlens) | explorer on :30100 (private) |
 | 7 | **API gateway** in front of the proxy and chainlens (TLS, auth, rate limits). | your gateway | the only public entry |
-| 8 | **Monitoring and backups.** Prometheus targets (`besu-production/monitoring/prometheus.yml`), alerts, per-team MPC share backups (`deploy/node/backup.sh`), validator key backups (`backup-key.sh`), restore drill. | both production guides | |
+| 8 | **Monitoring and backups.** `monitoring/`: `setup.sh`, list the Besu nodes, coordinators and hosts in `prometheus/targets/`, `docker compose up -d`. Then per-team MPC share backups (`deploy/node/backup.sh`), validator key backups (`backup-key.sh`), restore drill. | [`monitoring/README.md`](monitoring/README.md), both production guides | Grafana dashboards + alerts |
 
 ### What keeps running when something fails
 
@@ -114,7 +116,8 @@ The MPC signer comes first: its first key, `SENDER01`, is funded in the Besu gen
   - `cggmp24 0.7.0-alpha.3` is an alpha release, and its audit covers an earlier version.
 - **Besu:** no TLS on JSON-RPC (private network or an internal TLS proxy); the node allowlist is
   a file, so changing it means restarting the nodes.
-- **Gateway and centralized monitoring** are not included in this repository; bring your own.
+- **API gateway** and **alert delivery** (Alertmanager or Grafana contact points for mail/Slack)
+  are not included in this repository; bring your own.
 
 ---
 
@@ -186,6 +189,7 @@ collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).
 | [`besu-production/README.md`](besu-production/README.md) | Production Besu: hosts, network files, start, validator add/remove, operations |
 | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) | Production MPC signer: 3 teams, tokens, key ceremony, backups and restore, operations |
 | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) | Running the proxy on the MPC signer, Redis-optional design, troubleshooting |
+| [`monitoring/README.md`](monitoring/README.md) | Production monitoring: metrics endpoints, targets, dashboards, alerts, firewall |
 | [`mpc-signer/README.md`](mpc-signer/README.md) | MPC signer design, Docker quick start, security notes ([diagram](mpc-signer/docs/architecture.png)) |
 | [`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md) | Throughput: MPC vs Vault + Web3Signer, sizing |
 | [`proxy/api.txt`](proxy/api.txt) | Proxy API examples |

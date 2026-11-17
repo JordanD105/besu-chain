@@ -1,0 +1,54 @@
+# Monitoring for production: Prometheus + Grafana for besu-production and mpc-signer.
+# Steps: monitoring/README.md
+#   cp .env.example .env          (set GRAFANA_ADMIN_PASSWORD, BIND_IP)
+#   edit prometheus/targets/*.yml (your node IPs)
+#   docker compose up -d          -> Grafana on http://<BIND_IP>:3000
+services:
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.10.0}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+      # POST /-/reload after editing prometheus.yml or rules/ (target files reload by themselves)
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - ./prometheus/targets:/etc/prometheus/targets:ro
+      - ./secrets:/etc/prometheus/secrets:ro
+      - prometheus-data:/prometheus
+    ports:
+      # Prometheus has no login: keep it on localhost (Grafana reaches it on the compose network).
+      - "${PROMETHEUS_BIND:-127.0.0.1:9090}:9090"
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.3}
+    restart: unless-stopped
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/besu-production.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${BIND_IP:?set BIND_IP in .env}:${GRAFANA_PORT:-3000}:3000"
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+
+volumes:
+  prometheus-data:
+  grafana-data:

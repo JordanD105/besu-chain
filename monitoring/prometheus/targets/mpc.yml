@@ -1,0 +1,4 @@
+# MPC coordinator(s): "<host>:<port>" of each coordinator's JSON-RPC listener (default 9100).
+# Not the MPC nodes: the coordinator reports their health (mpc_node_up).
+- targets: ["192.168.68.135:9100"]
+  labels: { name: coordinator-a }

@@ -1,0 +1,20 @@
+# Host metrics (CPU, memory, disk, network) for ONE host. Run once per host, next to its Besu
+# node(s) / MPC node / coordinator:
+#   BIND_IP=<this host's private IP> docker compose up -d
+# then add "<BIND_IP>:9101" to monitoring/prometheus/targets/hosts.yml.
+# Allow port 9101 only from the monitoring host (firewall).
+services:
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.9.1}
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=${BIND_IP:?set BIND_IP to this host's private IP}:${NODE_EXPORTER_PORT:-9101}
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+)($|/)
+    volumes:
+      - /:/host:ro
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "2" }

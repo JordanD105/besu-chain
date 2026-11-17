@@ -1,0 +1,48 @@
+groups:
+  - name: mpc-signer
+    rules:
+      - alert: MpcCoordinatorDown
+        expr: up{job="mpc-coordinator"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "MPC coordinator {{ $labels.instance }} is not answering (or MPC_METRICS_TOKEN does not match)"
+
+      - alert: MpcNodeDown
+        expr: mpc_node_up == 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "MPC node {{ $labels.node }} is unreachable from coordinator {{ $labels.instance }} (signing needs the threshold, e.g. 2 of 3)"
+
+      - alert: MpcBelowThreshold
+        expr: sum by (instance) (mpc_node_up) < on(instance) mpc_threshold
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Fewer MPC nodes reachable than the threshold: NO signatures possible"
+
+      - alert: MpcPoolEmpty
+        expr: mpc_pool_ready == 0 and on(instance) mpc_pool_target > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "No presignature ready for {{ $labels.address }}: signing falls back to the slow cold path"
+
+      - alert: MpcPresignFailing
+        expr: increase(mpc_presigs_failed_total[10m]) > 5
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} presign sessions failed in 10 minutes on {{ $labels.instance }}"
+
+      - alert: MpcSignErrors
+        expr: (increase(mpc_sign_failures_total[5m]) - increase(mpc_policy_refusals_total[5m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Signing requests failed on {{ $labels.instance }} (not policy refusals)"
+
+      - alert: MpcPolicyRefusals
+        expr: increase(mpc_policy_refusals_total[10m]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} transaction(s) refused by the signing policy on {{ $labels.instance }} (value, gas, chain id or destination)"

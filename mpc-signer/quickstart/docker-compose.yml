@@ -68,6 +68,8 @@ services:
       MPC_POOL_KEYS: ${MPC_POOL_KEYS:-}
       MPC_NODE_TOKEN: ${MPC_NODE_TOKEN:?}
       MPC_ADMIN_TOKEN: ${MPC_ADMIN_TOKEN:?}
+      # bearer token for GET /metrics (Prometheus); empty = open
+      MPC_METRICS_TOKEN: ${MPC_METRICS_TOKEN:-}
       RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - ./cluster.json:/config/cluster.json:ro

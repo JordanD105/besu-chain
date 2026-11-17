@@ -70,6 +70,50 @@ struct Cli {
     /// When the pool is empty, run the full interactive (3+1 round) protocol instead of failing.
     #[arg(long, env = "MPC_COLD_FALLBACK", default_value_t = true, action = clap::ArgAction::Set)]
     cold_fallback: bool,
+    /// Bearer token Prometheus must send to GET /metrics. Empty = /metrics is open (it holds no
+    /// secrets: counters, pool sizes, node reachability, hot-sender addresses).
+    #[arg(long, env = "MPC_METRICS_TOKEN", default_value = "", hide_env_values = true)]
+    metrics_token: String,
+}
+
+/// Latency histogram in Prometheus format (cumulative buckets, seconds).
+const BUCKETS_MS: [u64; 12] = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000];
+
+#[derive(Default)]
+struct Histogram {
+    buckets: [AtomicU64; 12],
+    count: AtomicU64,
+    sum_ms: AtomicU64,
+}
+
+impl Histogram {
+    fn observe(&self, d: Duration) {
+        let ms = d.as_millis() as u64;
+        for (i, b) in BUCKETS_MS.iter().enumerate() {
+            if ms <= *b {
+                self.buckets[i].fetch_add(1, Relaxed);
+            }
+        }
+        self.count.fetch_add(1, Relaxed);
+        self.sum_ms.fetch_add(ms, Relaxed);
+    }
+
+    fn render(&self, out: &mut String, name: &str, labels: &str) {
+        for (i, b) in BUCKETS_MS.iter().enumerate() {
+            out.push_str(&format!("{name}_bucket{{{labels},le=\"{}\"}} {}\n", *b as f64 / 1000.0, self.buckets[i].load(Relaxed)));
+        }
+        let n = self.count.load(Relaxed);
+        out.push_str(&format!("{name}_bucket{{{labels},le=\"+Inf\"}} {n}\n"));
+        out.push_str(&format!("{name}_sum{{{labels}}} {}\n", self.sum_ms.load(Relaxed) as f64 / 1000.0));
+        out.push_str(&format!("{name}_count{{{labels}}} {n}\n"));
+    }
+}
+
+/// Last health probe of one node (GET <node url>/health, every 10 s).
+#[derive(Clone, Copy)]
+struct NodeHealth {
+    up: bool,
+    seconds: f64,
 }
 
 struct PoolEntry {
@@ -92,6 +136,9 @@ struct Stats {
     presigs_generated: AtomicU64,
     presigs_failed: AtomicU64,
     presig_ms_total: AtomicU64,
+    policy_refusals: AtomicU64,
+    sign_hot: Histogram,
+    sign_cold: Histogram,
 }
 
 struct Coord {
@@ -109,6 +156,8 @@ struct Coord {
     relay: Mutex<HashMap<String, RelaySession>>,
     stats: Stats,
     chain_id: u64,
+    node_health: Mutex<HashMap<u16, NodeHealth>>,
+    started: Instant,
 }
 
 #[tokio::main]
@@ -144,6 +193,8 @@ async fn main() -> Result<()> {
         node_down_until: Mutex::new(HashMap::new()),
         relay: Mutex::new(HashMap::new()),
         stats: Stats::default(),
+        node_health: Mutex::new(HashMap::new()),
+        started: Instant::now(),
     });
 
     let app = Router::new()
@@ -156,6 +207,7 @@ async fn main() -> Result<()> {
         .route("/admin/pool", get(admin_pool))
         .route("/admin/pool/target", post(admin_pool_target))
         .route("/admin/pool/clear", post(admin_pool_clear))
+        .route("/metrics", get(metrics))
         .with_state(coord.clone());
 
     // load keys once the HTTP server (and so the relay) is up
@@ -177,6 +229,7 @@ async fn main() -> Result<()> {
         });
     }
     tokio::spawn(refill_loop(coord.clone()));
+    tokio::spawn(health_loop(coord.clone()));
 
     let listener = tokio::net::TcpListener::bind(cli.listen).await?;
     tracing::info!(listen = %cli.listen, "coordinator listening");
@@ -530,9 +583,14 @@ async fn handle_rpc(c: &Arc<Coord>, req: Value) -> Value {
                 let t: RpcTx = serde_json::from_value(params.get(0).cloned().ok_or_else(|| anyhow!("missing tx"))?)?;
                 let key = c.key(&t.from)?;
                 let tx = build_intent(c, &t).await?;
-                let signed = sign_tx(c, &key, &tx).await.inspect_err(|_| {
+                let t0 = Instant::now();
+                let signed = sign_tx(c, &key, &tx).await.inspect_err(|e| {
                     c.stats.failed_signs.fetch_add(1, Relaxed);
+                    if format!("{e:#}").contains("policy:") {
+                        c.stats.policy_refusals.fetch_add(1, Relaxed);
+                    }
                 })?;
+                if signed.hot { &c.stats.sign_hot } else { &c.stats.sign_cold }.observe(t0.elapsed());
                 tracing::debug!(hot = signed.hot, "signed");
                 let raw = format!("0x{}", hex::encode(&signed.raw));
                 if method == "eth_signTransaction" {
@@ -738,6 +796,94 @@ async fn admin_pool(State(c): State<Arc<Coord>>) -> Json<Value> {
             "avg_presign_ms": if gen > 0 { s.presig_ms_total.load(Relaxed) as f64 / gen as f64 } else { 0.0 },
         }
     }))
+}
+
+/// Probe every node's /health so a node that is down shows up in monitoring before a
+/// signature needs it. Prometheus only has to reach the coordinator, not the node hosts.
+async fn health_loop(c: Arc<Coord>) {
+    let probe = reqwest::Client::builder().timeout(Duration::from_secs(5)).build().expect("http client");
+    loop {
+        for p in &c.cluster.parties {
+            let url = format!("{}/health", p.url.trim_end_matches('/'));
+            let t0 = Instant::now();
+            let up = matches!(probe.get(&url).send().await, Ok(r) if r.status().is_success());
+            c.node_health.lock().insert(p.id, NodeHealth { up, seconds: t0.elapsed().as_secs_f64() });
+        }
+        tokio::time::sleep(Duration::from_secs(10)).await;
+    }
+}
+
+/// Prometheus text exposition (version 0.0.4).
+async fn metrics(State(c): State<Arc<Coord>>, h: HeaderMap) -> Response {
+    if !c.cli.metrics_token.is_empty() {
+        let ok = h
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .map(|t| t.len() == c.cli.metrics_token.len() && t.bytes().zip(c.cli.metrics_token.bytes()).all(|(a, b)| a == b))
+            .unwrap_or(false);
+        if !ok {
+            return (StatusCode::UNAUTHORIZED, "metrics token required").into_response();
+        }
+    }
+    let s = &c.stats;
+    let mut o = String::with_capacity(4096);
+    let mut metric = |name: &str, kind: &str, help: &str, rows: Vec<(String, f64)>| {
+        o.push_str(&format!("# HELP {name} {help}\n# TYPE {name} {kind}\n"));
+        for (labels, v) in rows {
+            if labels.is_empty() {
+                o.push_str(&format!("{name} {v}\n"));
+            } else {
+                o.push_str(&format!("{name}{{{labels}}} {v}\n"));
+            }
+        }
+    };
+    metric("mpc_up", "gauge", "Coordinator is running.", vec![(String::new(), 1.0)]);
+    metric("mpc_uptime_seconds", "gauge", "Seconds since the coordinator started.", vec![(String::new(), c.started.elapsed().as_secs_f64())]);
+    metric("mpc_threshold", "gauge", "Nodes needed per signature.", vec![(String::new(), c.cluster.threshold as f64)]);
+    metric("mpc_nodes", "gauge", "Nodes in cluster.json.", vec![(String::new(), c.cluster.parties.len() as f64)]);
+    let health = c.node_health.lock().clone();
+    let mut ids: Vec<u16> = c.cluster.parties.iter().map(|p| p.id).collect();
+    ids.sort();
+    metric(
+        "mpc_node_up",
+        "gauge",
+        "Last /health probe of the node succeeded (1) or failed (0).",
+        ids.iter().filter_map(|id| health.get(id).map(|h| (format!("node=\"{id}\""), if h.up { 1.0 } else { 0.0 }))).collect(),
+    );
+    metric(
+        "mpc_node_probe_seconds",
+        "gauge",
+        "Duration of the last /health probe of the node.",
+        ids.iter().filter_map(|id| health.get(id).map(|h| (format!("node=\"{id}\""), h.seconds))).collect(),
+    );
+    metric("mpc_keys", "gauge", "Keys known to the coordinator.", vec![(String::new(), c.keys.lock().len() as f64)]);
+    metric("mpc_pool_target", "gauge", "Presignatures kept ready per hot key.", vec![(String::new(), c.pool_target.load(Relaxed) as f64)]);
+    let pools: Vec<(String, usize, usize)> = c
+        .pools
+        .lock()
+        .iter()
+        .filter(|(k, _)| c.pooled(k))
+        .map(|(k, p)| (k.clone(), p.ready.len(), p.inflight))
+        .collect();
+    metric("mpc_pool_ready", "gauge", "Presignatures ready for the key.", pools.iter().map(|(k, r, _)| (format!("address=\"{k}\""), *r as f64)).collect());
+    metric("mpc_pool_inflight", "gauge", "Presign sessions running for the key.", pools.iter().map(|(k, _, i)| (format!("address=\"{k}\""), *i as f64)).collect());
+    metric("mpc_relay_sessions", "gauge", "Open relay sessions (presign, keygen, cold sign).", vec![(String::new(), c.relay.lock().len() as f64)]);
+    metric(
+        "mpc_signs_total",
+        "counter",
+        "Signatures produced, by path (hot = from a presignature, cold = full protocol).",
+        vec![("path=\"hot\"".into(), s.hot_signs.load(Relaxed) as f64), ("path=\"cold\"".into(), s.cold_signs.load(Relaxed) as f64)],
+    );
+    metric("mpc_sign_failures_total", "counter", "Signing requests that failed (policy refusals included).", vec![(String::new(), s.failed_signs.load(Relaxed) as f64)]);
+    metric("mpc_policy_refusals_total", "counter", "Signing requests refused by the node policy.", vec![(String::new(), s.policy_refusals.load(Relaxed) as f64)]);
+    metric("mpc_presigs_generated_total", "counter", "Presignatures generated.", vec![(String::new(), s.presigs_generated.load(Relaxed) as f64)]);
+    metric("mpc_presigs_failed_total", "counter", "Presign sessions that failed.", vec![(String::new(), s.presigs_failed.load(Relaxed) as f64)]);
+    metric("mpc_presign_seconds_total", "counter", "Total time spent generating presignatures.", vec![(String::new(), s.presig_ms_total.load(Relaxed) as f64 / 1000.0)]);
+    o.push_str("# HELP mpc_sign_duration_seconds Signing latency (excludes nonce/gas lookups and sending).\n# TYPE mpc_sign_duration_seconds histogram\n");
+    s.sign_hot.render(&mut o, "mpc_sign_duration_seconds", "path=\"hot\"");
+    s.sign_cold.render(&mut o, "mpc_sign_duration_seconds", "path=\"cold\"");
+    ([(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4")], o).into_response()
 }
 
 #[derive(Deserialize)]

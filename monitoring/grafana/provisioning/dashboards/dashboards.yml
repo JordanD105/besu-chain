@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: production
+    folder: Production
+    type: file
+    # edits in the UI are not saved to these files: export the JSON and replace the file instead
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

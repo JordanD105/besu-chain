@@ -1,0 +1,43 @@
+# Prometheus for besu-production + mpc-signer. Targets live in targets/*.yml and are re-read
+# automatically when you edit them; after editing THIS file or rules/, reload:
+#   curl -X POST http://127.0.0.1:9090/-/reload
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# Alerts are visible in Prometheus (Alerts page) and Grafana. To send them (mail, Slack, ...),
+# run an Alertmanager and uncomment:
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # Besu validators + RPC nodes: http://<BIND_IP>:<METRICS_PORT>/metrics of each node
+  - job_name: besu
+    metrics_path: /metrics
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/besu.yml]
+
+  # MPC coordinator(s): http://<coordinator>:9100/metrics. The coordinator also reports whether
+  # each MPC node answers (mpc_node_up), so Prometheus never needs access to the node hosts.
+  - job_name: mpc-coordinator
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      # the coordinator's MPC_METRICS_TOKEN (see README); empty file if no token is set
+      credentials_file: /etc/prometheus/secrets/mpc-metrics-token
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/mpc.yml]
+
+  # Host CPU / memory / disk (node-exporter on every host, see node-exporter/)
+  - job_name: hosts
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/hosts.yml]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

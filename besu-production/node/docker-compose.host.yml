@@ -15,6 +15,19 @@ services:
     image: ${BESU_IMAGE:?set BESU_IMAGE, e.g. hyperledger/besu:26.11.0}
     restart: unless-stopped
     network_mode: host
+    # Besu checks the Host header of JSON-RPC AND metrics requests against BESU_HOST_ALLOWLIST.
+    # Add this node's BIND_IP to it (unless it is * / all) so Prometheus can scrape
+    # http://<BIND_IP>:<METRICS_PORT>/metrics. Validator RPC stays unreachable from the network: it
+    # listens/is published on 127.0.0.1 only. Then run the image's normal entrypoint.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        a="$${BESU_HOST_ALLOWLIST:-localhost,127.0.0.1}"
+        case ",$$a," in *,"*",*|*,all,*) ;; *) a="$$a,$$METRICS_ALLOW_HOST" ;; esac
+        export BESU_HOST_ALLOWLIST="$$a"
+        exec /opt/besu/bin/besu-entry.sh "$$@"
+      - besu
     command: ["--config-file=/config/${BESU_ROLE:?validator or rpc}.toml"]
     # BESU_* variables in .env (e.g. BESU_RPC_HTTP_API, BESU_HOST_ALLOWLIST) override the role's .toml
     env_file: .env
@@ -28,6 +41,8 @@ services:
       BESU_RPC_WS_PORT: ${WS_PORT:-8546}
       BESU_METRICS_HOST: ${BIND_IP}
       BESU_METRICS_PORT: ${METRICS_PORT:-9545}
+      # used by the entrypoint above
+      METRICS_ALLOW_HOST: ${BIND_IP}
       JAVA_OPTS: ${JAVA_OPTS:--Xmx4g}
     volumes:
       - besu-data:/data

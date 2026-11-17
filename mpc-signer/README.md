@@ -82,6 +82,9 @@ Options, set as environment variables before `init`:
 
 Options in `.env`:
 - `MPC_PUBLISH=0.0.0.0:9100` exposes the coordinator beyond localhost.
+- `MPC_METRICS_TOKEN` protects the coordinator's Prometheus endpoint `GET /metrics` (signatures
+  hot/cold, latency, failures, policy refusals, pool per hot key, presign rate, and whether each
+  node answers). Dashboards and alerts: [`../monitoring/`](../monitoring).
 - `MPC_POOL_TARGET`, `MPC_REFILL_CONCURRENCY` and `MPC_COMPUTE_THREADS` tune the presignature pool.
 
 All three nodes run on one host here, which is fine for evaluation but gives no threshold

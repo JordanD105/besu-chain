@@ -30,7 +30,7 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 | `operator/make-network.sh` | operator, once | genesis (QBFT validator set), `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS` |
 | `operator/add-node.sh` | operator, later | add a node to a **running** network (genesis untouched) |
 | `operator/qbft.sh` | on a validator host | validator set, add/remove votes, peers, health |
-| `monitoring/prometheus.yml` | monitoring | scrape config + suggested alerts |
+| [`../monitoring/`](../monitoring) | monitoring host | Prometheus + Grafana, dashboards and alerts for these nodes and the MPC signer |
 | `firewall-example.sh` | every host | ufw rules per role |
 
 ## Production vs. test network
@@ -169,7 +169,7 @@ Then point the applications at the RPC nodes:
 - MPC coordinator: `MPC_BESU_RPC`;
 - chainlens: `BESU_RPC` → the explorer node.
 
-Add the nodes to Prometheus (`monitoring/prometheus.yml`).
+Add the nodes to monitoring: one line per node in `../monitoring/prometheus/targets/besu.yml` (see [`../monitoring/README.md`](../monitoring/README.md)).
 
 ## Several nodes on one host
 
@@ -198,7 +198,7 @@ chain halts (quorum 3). Keep at most `f` validators per host (1 with 4 validator
 | **Remove a validator** | `qbft.sh propose 0x<address> false` on more than half of the validators, then `discard`. Then remove its enode from the network files with care, and redistribute. |
 | **Replace a lost validator key** | start a new node (new key), vote it in, then vote the old address out |
 | **New genesis (reset the chain)** | Besu refuses to start with *"Supplied genesis block does not match chain data stored in /data"*. Either put the original network files back, or, to really start a new chain, run `./reset-chain.sh` on **every** node (validators first). It deletes the chain data but keeps the node key, so the enodes stay valid. **Don't delete the volume**: that deletes the key too. |
-| **Monitoring** | `monitoring/prometheus.yml` and Grafana dashboard 10273. Alert on: no new block for 3 × the block period; peer count below expected; a validator missing; node down; disk above 80 %. |
+| **Monitoring** | [`../monitoring/`](../monitoring): Prometheus + Grafana with a Besu production dashboard and alerts (quorum lost, no new blocks, node down, peers missing, out of sync, tx pool, heap, disk). Metrics are served on `BIND_IP:METRICS_PORT`; the compose files add `BIND_IP` to the host allowlist so Prometheus is not refused with 403. |
 | **Backups** | validator keys: `backup-key.sh` (once, encrypted, per team). Chain data can be re-synced from peers; optionally snapshot an RPC node's volume to speed up adding nodes. |
 
 ## What it does not do (yet)

@@ -249,7 +249,7 @@ holds an identity.
 |---|---|
 | **Upgrade** | new image tag in `.env`, then `docker compose up -d`. **One node at a time:** signing continues on the other two. Then the coordinators. Run `/admin/pool/clear` after each node restart. |
 | **A node is down** | signing continues with 2 of 3, slower while the pool refills. `/createaccount` **fails** until all 3 are up, because key generation needs all three. Alert on it. |
-| **Monitoring** | `GET /admin/pool`: `ready` for the hot key, `hot_signs`, `cold_signs`, `failed_signs`. Alert on `ready` near 0, on `failed_signs` increasing, and on any node unreachable. Also watch container logs. |
+| **Monitoring** | Set `MPC_METRICS_TOKEN` on each coordinator and add it to [`../../monitoring/`](../../monitoring) (`prometheus/targets/mpc.yml`). The coordinator serves Prometheus metrics on `GET /metrics` (signatures hot/cold, latency, failures, policy refusals, pool per hot key, presign rate) and probes every MPC node, so `mpc_node_up` shows a node down before a signature needs it. The MPC signer dashboard and alerts (below threshold, node down, pool empty, policy refusals) come with it. `GET /admin/pool` still gives the same numbers as JSON. |
 | **Change the policy** | edit `cluster.json`, compare `sha256sum` across all teams, copy it everywhere, restart the nodes one by one, then the coordinators |
 | **Rotate `MPC_NODE_TOKEN`** | set the new value on all nodes and coordinators, then restart them |
 | **Rotate `MPC_ADMIN_TOKEN`** | update the coordinators, the proxy and the operator, then restart |

@@ -1,0 +1,61 @@
+groups:
+  - name: besu
+    rules:
+      - alert: BesuNodeDown
+        expr: up{job="besu"} == 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Besu {{ $labels.node }} ({{ $labels.role }}) is not answering on {{ $labels.instance }}"
+
+      - alert: BesuValidatorQuorumLost
+        # QBFT needs ceil(2n/3) validators online (4 validators -> 3)
+        expr: count(up{job="besu",role="validator"} == 1) < ceil(2 * count(up{job="besu",role="validator"}) / 3)
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Fewer validators online than the QBFT quorum: the chain cannot produce blocks"
+
+      - alert: BesuNoNewBlocks
+        # age of the newest block at scrape time, on the most up-to-date node
+        expr: min(timestamp(besu_blockchain_chain_head_timestamp{job="besu"}) - besu_blockchain_chain_head_timestamp{job="besu"}) > 3 * max(besu_bft_block_period_seconds{job="besu"}) + 5
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "No new block for {{ $value | humanizeDuration }}"
+
+      - alert: BesuPeersMissing
+        # every node should be connected to all the other nodes that are up (a node that is down
+        # is reported by BesuNodeDown, not as a missing peer on every other node)
+        expr: ethereum_peer_count{job="besu"} < on() group_left() (count(up{job="besu"} == 1) - 1)
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.node }} has {{ $value }} peers, fewer than the other nodes"
+
+      - alert: BesuNotInSync
+        expr: besu_synchronizer_in_sync{job="besu"} == 0 or (ethereum_best_known_block_number{job="besu"} - ethereum_blockchain_height{job="besu"}) > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.node }} is behind the chain head"
+
+      - alert: BesuTxPoolGrowing
+        expr: sum by (node) (besu_transaction_pool_number_of_transactions{job="besu"}) > 1000
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.node }} has {{ $value }} pending transactions"
+
+      - alert: BesuUnpermittedPeers
+        expr: increase(besu_permissioning_node_local_check_count_unpermitted_total{job="besu"}[10m]) > 0
+        labels: { severity: info }
+        annotations:
+          summary: "{{ $labels.node }} refused connections from nodes not in permissions_config.toml"
+
+      - alert: BesuHeapHigh
+        expr: sum by (node) (jvm_memory_used_bytes{job="besu",area="heap"}) / sum by (node) (jvm_memory_max_bytes{job="besu",area="heap"}) > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.node }} uses {{ $value | humanizePercentage }} of its Java heap (raise JAVA_OPTS -Xmx)"
