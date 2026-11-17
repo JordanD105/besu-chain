@@ -1,0 +1,35 @@
+# Besu QBFT VALIDATOR (production). Host-specific values (p2p host/port, bind IPs) come from
+# BESU_* environment variables set by docker-compose.yml from .env.
+genesis-file="/config/genesis.json"
+data-path="/data"
+node-private-key-file="/data/key"
+logging="INFO"
+min-gas-price=0
+sync-mode="FULL"
+
+# p2p: only the other validators and the RPC nodes (static peers + node allowlist)
+p2p-enabled=true
+discovery-enabled=false
+# advertise exactly BESU_P2P_HOST/BESU_P2P_PORT (no Docker/UPnP address rewriting)
+nat-method="NONE"
+# a small permissioned network never reaches Besu's default of 5 peers; without this the node
+# waits forever for "initial sync" and validators never start producing blocks
+sync-min-peers=1
+static-nodes-file="/config/static-nodes.json"
+permissions-nodes-config-file-enabled=true
+permissions-nodes-config-file="/config/permissions_config.toml"
+max-peers=25
+
+# JSON-RPC: operator only, published on 127.0.0.1 of the host (QBFT voting, peers, health)
+rpc-http-enabled=true
+rpc-http-host="0.0.0.0"
+rpc-http-port=8545
+rpc-http-api=["ETH","NET","QBFT","ADMIN","TXPOOL"]
+host-allowlist=["localhost","127.0.0.1"]
+rpc-ws-enabled=false
+graphql-http-enabled=false
+
+# metrics for Prometheus (published on the private IP only)
+metrics-enabled=true
+metrics-host="0.0.0.0"
+metrics-port=9545

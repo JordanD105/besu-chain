@@ -1,0 +1,41 @@
+# ONE Besu node (validator or RPC) on its own host. Steps: besu-production/README.md
+#   cp .env.example .env && edit      ./init.sh        (copy the operator's network files to ./network/)
+#   docker compose up -d
+services:
+  besu:
+    image: ${BESU_IMAGE:?set BESU_IMAGE, e.g. hyperledger/besu:26.11.0}
+    restart: unless-stopped
+    command: ["--config-file=/config/${BESU_ROLE:?validator or rpc}.toml"]
+    # BESU_* variables in .env (e.g. BESU_RPC_HTTP_API, BESU_HOST_ALLOWLIST) override the role's .toml
+    env_file: .env
+    environment:
+      # advertised p2p address = this host's private/VPN IP (must match the operator's enode list)
+      BESU_P2P_HOST: ${P2P_HOST:?set P2P_HOST}
+      BESU_P2P_PORT: ${P2P_PORT:-30303}
+      JAVA_OPTS: ${JAVA_OPTS:--Xmx4g}
+    volumes:
+      - besu-data:/data
+      - ./${BESU_ROLE}.toml:/config/${BESU_ROLE}.toml:ro
+      - ./network/genesis.json:/config/genesis.json:ro
+      - ./network/static-nodes.json:/config/static-nodes.json:ro
+      - ./network/permissions_config.toml:/config/permissions_config.toml:ro
+    ports:
+      # p2p: to the other Besu nodes only (firewall)
+      - "${BIND_IP:?set BIND_IP}:${P2P_PORT:-30303}:${P2P_PORT:-30303}/tcp"
+      - "${BIND_IP}:${P2P_PORT:-30303}:${P2P_PORT:-30303}/udp"
+      # JSON-RPC: validators -> 127.0.0.1 (operator via SSH); RPC nodes -> private IP (apps)
+      - "${RPC_BIND_IP:-127.0.0.1}:${RPC_PORT:-8545}:8545"
+      - "${RPC_BIND_IP:-127.0.0.1}:${WS_PORT:-8546}:8546"
+      # metrics: to Prometheus only (firewall)
+      - "${BIND_IP}:${METRICS_PORT:-9545}:9545"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/8545'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging:
+      driver: json-file
+      options: { max-size: "100m", max-file: "5" }
+volumes:
+  besu-data:

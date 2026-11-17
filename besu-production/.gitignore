@@ -1,0 +1,4 @@
+node/.env
+node/network/
+node/*.json
+node/*.key

@@ -65,6 +65,7 @@ diagram but are **not done yet**:
 
 | Folder | Role in production | Ports (test setup) |
 |---|---|---|
+| [`besu-production/`](besu-production) | Production Besu QBFT network: per-host packages for validators and RPC nodes, keys generated on each host, network files with checksums, static peers + node allowlist, validator add/remove by vote. | 30303 p2p, 8545 RPC nodes, 9545 metrics |
 | [`besu-test-network/`](besu-test-network) | Besu QBFT network: 4 validators + `rpcnode`, chain id 1337, 1 s blocks, zero gas price, node permissioning. Observability: Prometheus, Grafana, Loki + Alloy, Tempo + OpenTelemetry Java agent. The Chainlens services bundled in this compose file are not used. | 8545/8546 rpcnode, 21001–21004 validators, 9090, 3000, 3100 |
 | [`proxy/`](proxy) | Application API: `POST /createaccount`, `/transfer`, `/nft/deploy`, `/nft/mint`, `/nft/transfer`, plus read endpoints. Redis holds nonces, pending value and NFT metadata. | 30000 API, 36379 Redis |
 | [`chainlens/`](chainlens) | The block explorer in use: Node.js/Express web UI for blocks, transactions, accounts, contracts and NFTs. Polls RPC every 4 s and keeps its index in memory. Runs with Docker (`docker compose up -d --build`, set `BESU_RPC` in `.env`). | 30100 |
@@ -83,6 +84,7 @@ Vault + Web3Signer).
 
 - [Run the proxy with the MPC signer (no Vault, no Web3Signer)](docs/proxy-with-mpc-signer.md): step-by-step from a fresh start
 - [Deploy the MPC signer in production](mpc-signer/docs/production.md): three node hosts and teams, coordinators, key ceremony, backups and operations
+- [Deploy Besu in production](besu-production/README.md): validators and RPC nodes on separate hosts, permissioned QBFT network, adding validators, operations
 
 ## Development / test environment
 

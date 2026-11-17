@@ -1,0 +1,42 @@
+# Besu RPC node (production): non-validating, full sync. Serves the proxy, the MPC coordinator and
+# the explorer. Never exposed to the internet; published on the private IP only.
+genesis-file="/config/genesis.json"
+data-path="/data"
+node-private-key-file="/data/key"
+logging="INFO"
+min-gas-price=0
+sync-mode="FULL"
+
+p2p-enabled=true
+discovery-enabled=false
+# advertise exactly BESU_P2P_HOST/BESU_P2P_PORT (no Docker/UPnP address rewriting)
+nat-method="NONE"
+# a small permissioned network never reaches Besu's default of 5 peers; without this the node
+# waits forever for "initial sync" and validators never start producing blocks
+sync-min-peers=1
+static-nodes-file="/config/static-nodes.json"
+permissions-nodes-config-file-enabled=true
+permissions-nodes-config-file="/config/permissions_config.toml"
+max-peers=25
+
+# JSON-RPC for applications. Never ADMIN / DEBUG / TRACE / PERM / QBFT here.
+# Explorer-only node: set BESU_RPC_HTTP_API=ETH,NET,WEB3 in .env. Clients' Host names: BESU_HOST_ALLOWLIST.
+rpc-http-enabled=true
+rpc-http-api=["ETH","NET","WEB3","TXPOOL"]
+rpc-ws-api=["ETH","NET","WEB3","TXPOOL"]
+host-allowlist=["localhost","127.0.0.1"]
+rpc-http-host="0.0.0.0"
+rpc-http-port=8545
+rpc-http-max-active-connections=1000
+rpc-ws-enabled=true
+rpc-ws-host="0.0.0.0"
+rpc-ws-port=8546
+graphql-http-enabled=false
+
+# transaction pool sized for bursts from one sender (the proxy's hot sender)
+tx-pool-max-future-by-sender=2000
+tx-pool-enable-balance-check=true
+
+metrics-enabled=true
+metrics-host="0.0.0.0"
+metrics-port=9545
