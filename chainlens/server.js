@@ -185,6 +185,22 @@ function classify(tx) {
     };
 }
 
+// A non-JSON reply (e.g. Besu's "403 Host not authorized" when BESU_HOST_ALLOWLIST doesn't contain the
+// host name in BESU_RPC) is reported as such instead of a JSON parse error.
+async function readRpcResponse(response) {
+    const text = await response.text();
+
+    if (!response.ok) {
+        throw new Error(`Besu ${BESU} replied HTTP ${response.status}: ${text.trim().slice(0, 200)}`);
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch {
+        throw new Error(`Besu ${BESU} replied non-JSON: ${text.trim().slice(0, 200)}`);
+    }
+}
+
 async function rpc(method, params) {
     const response = await fetch(BESU, {
         method: "POST",
@@ -192,7 +208,7 @@ async function rpc(method, params) {
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
         signal: AbortSignal.timeout(30000)
     });
-    const body = await response.json();
+    const body = await readRpcResponse(response);
 
     if (body.error) {
         throw new Error(body.error.message || "RPC error");
@@ -232,7 +248,7 @@ async function rpcBatchChunk(calls) {
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(30000)
     });
-    const body = await response.json();
+    const body = await readRpcResponse(response);
     const list = Array.isArray(body) ? body : [body];
     const byId = new Map(list.map((item) => [item.id, item]));
 
@@ -884,11 +900,22 @@ async function syncOnce() {
 async function loop() {
     if (!db.syncing) {
         db.syncing = true;
+        const previousError = db.error;
 
         try {
             await syncOnce();
+
+            if (previousError) {
+                console.log("Besu sync OK again");
+            }
         } catch (error) {
-            db.error = error.message;
+            const message = error.cause ? `${error.message} (${error.cause.code || error.cause.message})` : error.message;
+
+            if (message !== previousError) {
+                console.error(`Besu sync failed: ${message}`);
+            }
+
+            db.error = message;
         }
 
         db.syncing = false;
