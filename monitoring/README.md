@@ -37,7 +37,7 @@ Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations]
 | Alert | Severity | Fires when |
 |---|---|---|
 | `BesuValidatorQuorumLost` | critical | fewer validators up than ceil(2n/3): the chain cannot make blocks |
-| `BesuNoNewBlocks` | critical | the newest block is older than 3 × the block period + 5 s for 1 min |
+| `BesuNoNewBlocks` | critical | the newest block is older than 3 × the block period + 5 s for 1 min. If it keeps firing after `BesuValidatorQuorumLost` has cleared, restart all validators together (see *Chain halted…* in `besu-production/README.md`) |
 | `BesuNodeDown` | warning | a Besu node's metrics don't answer for 1 min |
 | `BesuPeersMissing` | warning | a node has fewer peers than (nodes up − 1) for 5 min |
 | `BesuNotInSync` | warning | a node is syncing or > 10 blocks behind for 5 min |
