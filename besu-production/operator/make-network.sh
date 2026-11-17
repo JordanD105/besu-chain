@@ -5,7 +5,8 @@
 # Options (env):
 #   BLOCK_PERIOD=2          seconds per block (1 on one LAN, >= 2 across sites)
 #   REQUEST_TIMEOUT=4       QBFT round timeout seconds (>= 4 x inter-site RTT, and > BLOCK_PERIOD)
-#   GAS_LIMIT=0x1fffffffffffff
+#   GAS_LIMIT=0x1c9c380        block gas limit (default 30,000,000). With gas price 0 this is the only cap on
+#                              work per block: keep it modest (MPC policy MAX_GAS defaults to the same 30M)
 #   ALLOC="0xSENDER01=1000000000000000000000000,0xOther=..."   prefunded accounts (wei)
 set -Eeuo pipefail
 out="${1:?output dir}"; shift
@@ -13,7 +14,7 @@ out="${1:?output dir}"; shift
 CHAIN_ID="${CHAIN_ID:?set CHAIN_ID}"
 BESU_IMAGE="${BESU_IMAGE:-hyperledger/besu:26.11.0}"
 BLOCK_PERIOD="${BLOCK_PERIOD:-2}"; REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-4}"
-GAS_LIMIT="${GAS_LIMIT:-0x1fffffffffffff}"
+GAS_LIMIT="${GAS_LIMIT:-0x1c9c380}"
 mkdir -p "$out"; out="$(cd "$out" && pwd)"
 field() { sed -E "s/.*\"$2\": *\"([^\"]*)\".*/\1/" "$1"; }
 validators=(); enodes=()

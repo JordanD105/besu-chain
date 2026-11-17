@@ -128,6 +128,11 @@ This produces:
 - `permissions_config.toml`, the node allowlist;
 - `SHA256SUMS`.
 
+The block gas limit defaults to **30,000,000** (`GAS_LIMIT=0x1c9c380`). With gas price 0, it is the
+only cap on the work in one block, so keep it modest. To change it on a running chain, set
+`BESU_TARGET_GAS_LIMIT` in every validator's `.env` and restart them one at a time; Besu moves the
+limit toward it gradually.
+
 `ALLOC` should contain only the accounts you really want funded, for example the MPC `SENDER01`
 (see `../mpc-signer/docs/production.md`). **Keep the network files.** `genesis.json` must never
 change once the chain is running.
