@@ -12,7 +12,8 @@ umask 077
 if [ ! -f .env ]; then
   pw=$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | cut -c1-24)
   sed "s|^GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=$pw|" .env.example > .env
-  echo "created .env - Grafana login: admin / $pw   (set BIND_IP in .env before starting)"
+  echo "created .env - Grafana login: admin / $pw"
+  echo "set BIND_IP in .env to one of this host's IPs: $(hostname -I 2>/dev/null)"
 else
   echo ".env exists, left unchanged"
 fi
