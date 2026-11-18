@@ -19,7 +19,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Hosts",
+      "title": "Alerts",
       "id": 2,
       "collapsed": false,
       "gridPos": {
@@ -31,9 +31,315 @@
       "panels": []
     },
     {
+      "type": "stat",
+      "title": "Critical firing",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Critical alerts firing now (all components). Details in the table and on Prometheus's Alerts page.",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\",severity=\"critical\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings firing",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\",severity=\"warning\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Firing alerts",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Every alert firing now, critical first. 'Firing for' counts from when the condition started (including the rule's wait time). Full text: Prometheus -> Alerts.",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 16,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (alertname, severity, subject) (label_replace(label_replace(label_replace(label_replace(label_replace((ALERTS{alertstate=\"firing\",severity=\"critical\"} * 3 or ALERTS{alertstate=\"firing\",severity=\"warning\"} * 2 or ALERTS{alertstate=\"firing\"}), \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "max by (alertname, severity, subject) ((time() - label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS_FOR_STATE, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\")) and on(alertname, severity, subject) label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS{alertstate=\"firing\"}, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "severity": "Severity",
+              "alertname": "Alert",
+              "subject": "Node / sender / host",
+              "Value #A": "rank",
+              "Value #B": "Firing for"
+            },
+            "indexByName": {
+              "severity": 0,
+              "alertname": 1,
+              "subject": 2,
+              "Value #B": 3,
+              "Value #A": 4
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "rank",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rank"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Firing for"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "CRITICAL",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warning": {
+                        "text": "WARNING",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "info": {
+                        "text": "INFO",
+                        "color": "blue",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Hosts",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
       "type": "table",
       "title": "Hosts",
-      "id": 3,
+      "id": 7,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -41,7 +347,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 8,
         "w": 24,
         "h": 7
       },
@@ -270,7 +576,7 @@
     {
       "type": "timeseries",
       "title": "CPU used",
-      "id": 4,
+      "id": 8,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -278,7 +584,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 8,
+        "y": 15,
         "w": 12,
         "h": 8
       },
@@ -328,7 +634,7 @@
     {
       "type": "timeseries",
       "title": "Memory used",
-      "id": 5,
+      "id": 9,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -336,7 +642,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 15,
         "w": 12,
         "h": 8
       },
@@ -386,7 +692,7 @@
     {
       "type": "timeseries",
       "title": "Disk used",
-      "id": 6,
+      "id": 10,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -394,7 +700,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 23,
         "w": 12,
         "h": 8
       },
@@ -444,7 +750,7 @@
     {
       "type": "timeseries",
       "title": "Disk I/O time",
-      "id": 7,
+      "id": 11,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -452,7 +758,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 16,
+        "y": 23,
         "w": 12,
         "h": 8
       },
@@ -502,7 +808,7 @@
     {
       "type": "timeseries",
       "title": "Network in",
-      "id": 8,
+      "id": 12,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -510,7 +816,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 31,
         "w": 12,
         "h": 8
       },
@@ -560,7 +866,7 @@
     {
       "type": "timeseries",
       "title": "Network out",
-      "id": 9,
+      "id": 13,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -568,7 +874,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 24,
+        "y": 31,
         "w": 12,
         "h": 8
       },
@@ -649,6 +955,49 @@
     ]
   },
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Critical alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "expr": "ALERTS{alertstate=\"firing\",severity=\"critical\"}",
+        "step": "15s",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "CRITICAL {{node}}{{sender}}{{host}}",
+        "tagKeys": "severity",
+        "useValueForTime": false
+      },
+      {
+        "name": "Warnings",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "expr": "ALERTS{alertstate=\"firing\",severity!=\"critical\"}",
+        "step": "15s",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{severity}} {{node}}{{sender}}{{host}}",
+        "tagKeys": "severity",
+        "useValueForTime": false
+      }
+    ]
   }
 }

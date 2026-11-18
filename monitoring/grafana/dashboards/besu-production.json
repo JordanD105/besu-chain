@@ -19,7 +19,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Network",
+      "title": "Alerts",
       "id": 2,
       "collapsed": false,
       "gridPos": {
@@ -32,8 +32,314 @@
     },
     {
       "type": "stat",
-      "title": "Chain height",
+      "title": "Critical firing",
       "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Critical alerts firing now (all components). Details in the table and on Prometheus's Alerts page.",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\",severity=\"critical\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings firing",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\",severity=\"warning\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Firing alerts",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Every alert firing now, critical first. 'Firing for' counts from when the condition started (including the rule's wait time). Full text: Prometheus -> Alerts.",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 16,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (alertname, severity, subject) (label_replace(label_replace(label_replace(label_replace(label_replace((ALERTS{alertstate=\"firing\",severity=\"critical\"} * 3 or ALERTS{alertstate=\"firing\",severity=\"warning\"} * 2 or ALERTS{alertstate=\"firing\"}), \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "max by (alertname, severity, subject) ((time() - label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS_FOR_STATE, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\")) and on(alertname, severity, subject) label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS{alertstate=\"firing\"}, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "severity": "Severity",
+              "alertname": "Alert",
+              "subject": "Node / sender / host",
+              "Value #A": "rank",
+              "Value #B": "Firing for"
+            },
+            "indexByName": {
+              "severity": 0,
+              "alertname": 1,
+              "subject": 2,
+              "Value #B": 3,
+              "Value #A": 4
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "rank",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rank"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Firing for"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "CRITICAL",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warning": {
+                        "text": "WARNING",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "info": {
+                        "text": "INFO",
+                        "color": "blue",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Network",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Chain height",
+      "id": 7,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -41,7 +347,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -94,7 +400,7 @@
     {
       "type": "stat",
       "title": "Seconds since last block",
-      "id": 4,
+      "id": 8,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -102,7 +408,7 @@
       "description": "Red when no block for 3 x the block period: fewer than the quorum of validators is online.",
       "gridPos": {
         "x": 4,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -163,7 +469,7 @@
     {
       "type": "stat",
       "title": "Validators up",
-      "id": 5,
+      "id": 9,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -171,7 +477,7 @@
       "description": "QBFT needs ceil(2n/3) validators online to produce blocks (4 validators: 3).",
       "gridPos": {
         "x": 8,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -228,7 +534,7 @@
     {
       "type": "stat",
       "title": "Validators expected",
-      "id": 6,
+      "id": 10,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -236,7 +542,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -289,7 +595,7 @@
     {
       "type": "stat",
       "title": "Nodes up",
-      "id": 7,
+      "id": 11,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -297,7 +603,7 @@
       "description": "",
       "gridPos": {
         "x": 16,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -350,7 +656,7 @@
     {
       "type": "stat",
       "title": "Block period",
-      "id": 8,
+      "id": 12,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -358,7 +664,7 @@
       "description": "",
       "gridPos": {
         "x": 20,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -410,7 +716,7 @@
     {
       "type": "table",
       "title": "Nodes",
-      "id": 9,
+      "id": 13,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -418,7 +724,7 @@
       "description": "One row per Besu node. Peers should be (number of nodes - 1).",
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 12,
         "w": 24,
         "h": 7
       },
@@ -658,11 +964,11 @@
     {
       "type": "row",
       "title": "Blocks and transactions",
-      "id": 10,
+      "id": 14,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 19,
         "w": 24,
         "h": 1
       },
@@ -671,7 +977,7 @@
     {
       "type": "timeseries",
       "title": "Block height",
-      "id": 11,
+      "id": 15,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -679,7 +985,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 20,
         "w": 12,
         "h": 8
       },
@@ -728,7 +1034,7 @@
     {
       "type": "timeseries",
       "title": "Seconds since last block",
-      "id": 12,
+      "id": 16,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -736,7 +1042,7 @@
       "description": "Age of the node's newest block when it was scraped. Stays below about 1 block period when healthy.",
       "gridPos": {
         "x": 12,
-        "y": 13,
+        "y": 20,
         "w": 12,
         "h": 8
       },
@@ -786,7 +1092,7 @@
     {
       "type": "timeseries",
       "title": "Transactions per second (in blocks)",
-      "id": 13,
+      "id": 17,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -794,7 +1100,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 28,
         "w": 12,
         "h": 8
       },
@@ -844,7 +1150,7 @@
     {
       "type": "timeseries",
       "title": "Gas used per block",
-      "id": 14,
+      "id": 18,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -852,7 +1158,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 21,
+        "y": 28,
         "w": 12,
         "h": 8
       },
@@ -911,7 +1217,7 @@
     {
       "type": "timeseries",
       "title": "Transaction pool",
-      "id": 15,
+      "id": 19,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -919,7 +1225,7 @@
       "description": "Pending transactions. Steady growth means blocks are not keeping up or nonces have gaps.",
       "gridPos": {
         "x": 0,
-        "y": 29,
+        "y": 36,
         "w": 12,
         "h": 8
       },
@@ -969,7 +1275,7 @@
     {
       "type": "timeseries",
       "title": "Blocks behind",
-      "id": 16,
+      "id": 20,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -977,7 +1283,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 29,
+        "y": 36,
         "w": 12,
         "h": 8
       },
@@ -1027,11 +1333,11 @@
     {
       "type": "row",
       "title": "Transaction volume",
-      "id": 17,
+      "id": 21,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 44,
         "w": 24,
         "h": 1
       },
@@ -1040,7 +1346,7 @@
     {
       "type": "stat",
       "title": "Transactions in selected range",
-      "id": 18,
+      "id": 22,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1048,7 +1354,7 @@
       "description": "Transactions mined during the time range selected at the top of the dashboard.",
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 45,
         "w": 6,
         "h": 4
       },
@@ -1101,7 +1407,7 @@
     {
       "type": "stat",
       "title": "Last 1 hour",
-      "id": 19,
+      "id": 23,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1109,7 +1415,7 @@
       "description": "",
       "gridPos": {
         "x": 6,
-        "y": 38,
+        "y": 45,
         "w": 6,
         "h": 4
       },
@@ -1162,7 +1468,7 @@
     {
       "type": "stat",
       "title": "Last 24 hours",
-      "id": 20,
+      "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1170,7 +1476,7 @@
       "description": "Needs 24 h of Prometheus history; less is counted until then.",
       "gridPos": {
         "x": 12,
-        "y": 38,
+        "y": 45,
         "w": 6,
         "h": 4
       },
@@ -1223,7 +1529,7 @@
     {
       "type": "stat",
       "title": "Average tx/s in range",
-      "id": 21,
+      "id": 25,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1231,7 +1537,7 @@
       "description": "",
       "gridPos": {
         "x": 18,
-        "y": 38,
+        "y": 45,
         "w": 6,
         "h": 4
       },
@@ -1284,7 +1590,7 @@
     {
       "type": "timeseries",
       "title": "Transactions per interval",
-      "id": 22,
+      "id": 26,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1292,7 +1598,7 @@
       "description": "Transactions mined per bar. The bar width follows the zoom: 1 minute at most, wider for long ranges (the 'Interval' shown when hovering the panel's info).",
       "gridPos": {
         "x": 0,
-        "y": 42,
+        "y": 49,
         "w": 12,
         "h": 8
       },
@@ -1344,7 +1650,7 @@
     {
       "type": "timeseries",
       "title": "Cumulative transactions in range",
-      "id": 23,
+      "id": 27,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1352,7 +1658,7 @@
       "description": "Running total from the start of the selected range.",
       "gridPos": {
         "x": 12,
-        "y": 42,
+        "y": 49,
         "w": 12,
         "h": 8
       },
@@ -1418,11 +1724,11 @@
     {
       "type": "row",
       "title": "Peers and RPC",
-      "id": 24,
+      "id": 28,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 50,
+        "y": 57,
         "w": 24,
         "h": 1
       },
@@ -1431,7 +1737,7 @@
     {
       "type": "timeseries",
       "title": "Peers",
-      "id": 25,
+      "id": 29,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1439,7 +1745,7 @@
       "description": "Expected: number of nodes - 1.",
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 58,
         "w": 12,
         "h": 8
       },
@@ -1489,7 +1795,7 @@
     {
       "type": "timeseries",
       "title": "Refused connections (node allowlist)",
-      "id": 26,
+      "id": 30,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1497,7 +1803,7 @@
       "description": "Connection attempts from nodes not in permissions_config.toml.",
       "gridPos": {
         "x": 12,
-        "y": 51,
+        "y": 58,
         "w": 12,
         "h": 8
       },
@@ -1547,7 +1853,7 @@
     {
       "type": "timeseries",
       "title": "JSON-RPC requests per second",
-      "id": 27,
+      "id": 31,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1555,7 +1861,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 59,
+        "y": 66,
         "w": 12,
         "h": 8
       },
@@ -1605,7 +1911,7 @@
     {
       "type": "timeseries",
       "title": "JSON-RPC latency p95 (slowest method)",
-      "id": 28,
+      "id": 32,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1613,7 +1919,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 59,
+        "y": 66,
         "w": 12,
         "h": 8
       },
@@ -1663,7 +1969,7 @@
     {
       "type": "timeseries",
       "title": "P2P traffic in",
-      "id": 29,
+      "id": 33,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1671,7 +1977,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 67,
+        "y": 74,
         "w": 12,
         "h": 8
       },
@@ -1721,7 +2027,7 @@
     {
       "type": "timeseries",
       "title": "P2P traffic out",
-      "id": 30,
+      "id": 34,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1729,7 +2035,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 67,
+        "y": 74,
         "w": 12,
         "h": 8
       },
@@ -1779,11 +2085,11 @@
     {
       "type": "row",
       "title": "JVM and process",
-      "id": 31,
+      "id": 35,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 75,
+        "y": 82,
         "w": 24,
         "h": 1
       },
@@ -1792,7 +2098,7 @@
     {
       "type": "timeseries",
       "title": "CPU (cores)",
-      "id": 32,
+      "id": 36,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1800,7 +2106,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 76,
+        "y": 83,
         "w": 12,
         "h": 8
       },
@@ -1850,7 +2156,7 @@
     {
       "type": "timeseries",
       "title": "JVM heap used",
-      "id": 33,
+      "id": 37,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1858,7 +2164,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 76,
+        "y": 83,
         "w": 12,
         "h": 8
       },
@@ -1917,7 +2223,7 @@
     {
       "type": "timeseries",
       "title": "GC time (share of wall time)",
-      "id": 34,
+      "id": 38,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1925,7 +2231,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 84,
+        "y": 91,
         "w": 12,
         "h": 8
       },
@@ -1975,7 +2281,7 @@
     {
       "type": "timeseries",
       "title": "Resident memory",
-      "id": 35,
+      "id": 39,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1983,7 +2289,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 84,
+        "y": 91,
         "w": 12,
         "h": 8
       },
@@ -2033,11 +2339,11 @@
     {
       "type": "row",
       "title": "Proxy senders",
-      "id": 36,
+      "id": 40,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 92,
+        "y": 99,
         "w": 24,
         "h": 1
       },
@@ -2046,7 +2352,7 @@
     {
       "type": "table",
       "title": "Senders (proxy)",
-      "id": 37,
+      "id": 41,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2054,7 +2360,7 @@
       "description": "Per sender of the proxy. Mined = STALLED: transactions are ready in the RPC node's pool but blocks do not include them (restart one validator). Nonce gap: a missing nonce blocks later transactions; the proxy repairs it once the chain moved on for 30 s / 10 blocks.",
       "gridPos": {
         "x": 0,
-        "y": 93,
+        "y": 100,
         "w": 24,
         "h": 6
       },
@@ -2300,7 +2606,7 @@
     {
       "type": "timeseries",
       "title": "Transactions in flight (proxy)",
-      "id": 38,
+      "id": 42,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2308,7 +2614,7 @@
       "description": "Sent by the proxy, not confirmed yet. Should fall back to ~0 after a burst.",
       "gridPos": {
         "x": 0,
-        "y": 99,
+        "y": 106,
         "w": 12,
         "h": 8
       },
@@ -2358,7 +2664,7 @@
     {
       "type": "timeseries",
       "title": "Not mined / gap (seconds)",
-      "id": 39,
+      "id": 43,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2366,7 +2672,7 @@
       "description": "How long ready transactions have waited with nothing confirmed, and how long a nonce gap has existed.",
       "gridPos": {
         "x": 12,
-        "y": 99,
+        "y": 106,
         "w": 12,
         "h": 8
       },
@@ -2456,6 +2762,49 @@
     ]
   },
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Critical alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "expr": "ALERTS{alertstate=\"firing\",severity=\"critical\"}",
+        "step": "15s",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "CRITICAL {{node}}{{sender}}{{host}}",
+        "tagKeys": "severity",
+        "useValueForTime": false
+      },
+      {
+        "name": "Warnings",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "expr": "ALERTS{alertstate=\"firing\",severity!=\"critical\"}",
+        "step": "15s",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{severity}} {{node}}{{sender}}{{host}}",
+        "tagKeys": "severity",
+        "useValueForTime": false
+      }
+    ]
   }
 }

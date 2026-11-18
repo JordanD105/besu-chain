@@ -19,7 +19,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Cluster",
+      "title": "Alerts",
       "id": 2,
       "collapsed": false,
       "gridPos": {
@@ -32,8 +32,314 @@
     },
     {
       "type": "stat",
-      "title": "Coordinator",
+      "title": "Critical firing",
       "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Critical alerts firing now (all components). Details in the table and on Prometheus's Alerts page.",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\",severity=\"critical\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings firing",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\",severity=\"warning\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Firing alerts",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Every alert firing now, critical first. 'Firing for' counts from when the condition started (including the rule's wait time). Full text: Prometheus -> Alerts.",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 16,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (alertname, severity, subject) (label_replace(label_replace(label_replace(label_replace(label_replace((ALERTS{alertstate=\"firing\",severity=\"critical\"} * 3 or ALERTS{alertstate=\"firing\",severity=\"warning\"} * 2 or ALERTS{alertstate=\"firing\"}), \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "max by (alertname, severity, subject) ((time() - label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS_FOR_STATE, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\")) and on(alertname, severity, subject) label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS{alertstate=\"firing\"}, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "severity": "Severity",
+              "alertname": "Alert",
+              "subject": "Node / sender / host",
+              "Value #A": "rank",
+              "Value #B": "Firing for"
+            },
+            "indexByName": {
+              "severity": 0,
+              "alertname": 1,
+              "subject": 2,
+              "Value #B": 3,
+              "Value #A": 4
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "rank",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rank"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Firing for"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "CRITICAL",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warning": {
+                        "text": "WARNING",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "info": {
+                        "text": "INFO",
+                        "color": "blue",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Cluster",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Coordinator",
+      "id": 7,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -41,7 +347,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -111,7 +417,7 @@
     {
       "type": "stat",
       "title": "MPC nodes up",
-      "id": 4,
+      "id": 8,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -119,7 +425,7 @@
       "description": "Signing needs the threshold (2 of 3). Red below the threshold: no signature possible.",
       "gridPos": {
         "x": 4,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -180,7 +486,7 @@
     {
       "type": "stat",
       "title": "Threshold",
-      "id": 5,
+      "id": 9,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -188,7 +494,7 @@
       "description": "",
       "gridPos": {
         "x": 8,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -241,7 +547,7 @@
     {
       "type": "stat",
       "title": "Keys",
-      "id": 6,
+      "id": 10,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -249,7 +555,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -302,7 +608,7 @@
     {
       "type": "stat",
       "title": "Presignatures ready",
-      "id": 7,
+      "id": 11,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -310,7 +616,7 @@
       "description": "Hot-path presignatures across the hot keys (MPC_POOL_KEYS).",
       "gridPos": {
         "x": 16,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -371,7 +677,7 @@
     {
       "type": "stat",
       "title": "Signatures / s",
-      "id": 8,
+      "id": 12,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -379,7 +685,7 @@
       "description": "",
       "gridPos": {
         "x": 20,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 4
       },
@@ -432,7 +738,7 @@
     {
       "type": "table",
       "title": "MPC nodes",
-      "id": 9,
+      "id": 13,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -440,7 +746,7 @@
       "description": "Reachability of each MPC node from each coordinator (GET /health every 10 s).",
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 12,
         "w": 24,
         "h": 6
       },
@@ -572,11 +878,11 @@
     {
       "type": "row",
       "title": "Signing",
-      "id": 10,
+      "id": 14,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 11,
+        "y": 18,
         "w": 24,
         "h": 1
       },
@@ -585,7 +891,7 @@
     {
       "type": "timeseries",
       "title": "Signatures per second",
-      "id": 11,
+      "id": 15,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -593,7 +899,7 @@
       "description": "hot = from a presignature (fast). cold = full interactive protocol: normal for user keys outside MPC_POOL_KEYS; for a hot sender it means the pool ran empty.",
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 19,
         "w": 12,
         "h": 8
       },
@@ -643,7 +949,7 @@
     {
       "type": "timeseries",
       "title": "Signing latency",
-      "id": 12,
+      "id": 16,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -651,7 +957,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 12,
+        "y": 19,
         "w": 12,
         "h": 8
       },
@@ -710,7 +1016,7 @@
     {
       "type": "timeseries",
       "title": "Failures",
-      "id": 13,
+      "id": 17,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -718,7 +1024,7 @@
       "description": "Policy refusals: chain id, value, gas or destination outside cluster.json policy.",
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 27,
         "w": 12,
         "h": 8
       },
@@ -786,7 +1092,7 @@
     {
       "type": "timeseries",
       "title": "Open relay sessions",
-      "id": 14,
+      "id": 18,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -794,7 +1100,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 20,
+        "y": 27,
         "w": 12,
         "h": 8
       },
@@ -844,11 +1150,11 @@
     {
       "type": "row",
       "title": "Presignature pool",
-      "id": 15,
+      "id": 19,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 28,
+        "y": 35,
         "w": 24,
         "h": 1
       },
@@ -857,7 +1163,7 @@
     {
       "type": "timeseries",
       "title": "Pool per hot key",
-      "id": 16,
+      "id": 20,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -865,7 +1171,7 @@
       "description": "Ready presignatures. A pool that stays low while signing means signing faster than presigning.",
       "gridPos": {
         "x": 0,
-        "y": 29,
+        "y": 36,
         "w": 12,
         "h": 8
       },
@@ -924,7 +1230,7 @@
     {
       "type": "timeseries",
       "title": "Presignatures generated per second",
-      "id": 17,
+      "id": 21,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -932,7 +1238,7 @@
       "description": "This is the sustained hot-path capacity: signatures/s above it drain the pool.",
       "gridPos": {
         "x": 12,
-        "y": 29,
+        "y": 36,
         "w": 12,
         "h": 8
       },
@@ -982,7 +1288,7 @@
     {
       "type": "timeseries",
       "title": "Average presign duration",
-      "id": 18,
+      "id": 22,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -990,7 +1296,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 44,
         "w": 12,
         "h": 8
       },
@@ -1040,7 +1346,7 @@
     {
       "type": "timeseries",
       "title": "Presign sessions running",
-      "id": 19,
+      "id": 23,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1048,7 +1354,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 37,
+        "y": 44,
         "w": 12,
         "h": 8
       },
@@ -1098,7 +1404,7 @@
     {
       "type": "timeseries",
       "title": "MPC node reachability",
-      "id": 20,
+      "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1106,7 +1412,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 45,
+        "y": 52,
         "w": 24,
         "h": 6
       },
@@ -1187,6 +1493,49 @@
     ]
   },
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Critical alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "expr": "ALERTS{alertstate=\"firing\",severity=\"critical\"}",
+        "step": "15s",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "CRITICAL {{node}}{{sender}}{{host}}",
+        "tagKeys": "severity",
+        "useValueForTime": false
+      },
+      {
+        "name": "Warnings",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "expr": "ALERTS{alertstate=\"firing\",severity!=\"critical\"}",
+        "step": "15s",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{severity}} {{node}}{{sender}}{{host}}",
+        "tagKeys": "severity",
+        "useValueForTime": false
+      }
+    ]
   }
 }
