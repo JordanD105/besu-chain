@@ -20,6 +20,12 @@ permissions-nodes-config-file-enabled=true
 permissions-nodes-config-file="/config/permissions_config.toml"
 max-peers=25
 
+# Transaction pool: a busy sender (e.g. the proxy's SENDER01) can have hundreds of transactions in
+# flight, and they can reach a validator over p2p out of nonce order. With Besu's default (200 per
+# sender) the validator drops the rest, the missing nonce is never resent, and that sender's
+# transactions stop being mined. Same value as the RPC nodes (rpc.toml).
+tx-pool-max-future-by-sender=2000
+
 # JSON-RPC: operator only, published on 127.0.0.1 of the host (QBFT voting, peers, health)
 rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
