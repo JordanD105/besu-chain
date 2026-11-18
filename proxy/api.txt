@@ -90,3 +90,6 @@ GET /nft/owner/0xOwner?collection=DRG        (one collection)
 # Sender state (nonces, value in flight, corrections by the periodic chain check)
 # ---------------------------------------------------------------
 GET /status/senders
+
+# Same values in Prometheus format (monitoring/: job "proxy"). Optional: METRICS_TOKEN -> Bearer
+GET /metrics

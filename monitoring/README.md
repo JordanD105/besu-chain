@@ -7,6 +7,7 @@ The production counterpart of the Prometheus/Grafana bundled in `../besu-test-ne
 |---|---|---|
 | Every Besu validator and RPC node | `http://<BIND_IP>:<METRICS_PORT>/metrics` (9545…) | `besu-production/node` |
 | Every MPC coordinator | `http://<coordinator>:9100/metrics` (bearer token) | `mpc-signer` coordinator |
+| The proxy | `http://<proxy>:30000/metrics` | `proxy` (per sender: in flight, nonce gaps, stalls, repairs) |
 | MPC nodes | *not scraped*: each coordinator probes its nodes every 10 s and reports `mpc_node_up` | |
 | Host CPU / memory / disk / network | `http://<host>:9101/metrics` | `node-exporter/` (one per host) |
 
@@ -28,7 +29,7 @@ Dashboards (folder **Production**):
 
 | Dashboard | Shows |
 |---|---|
-| **Besu production (QBFT)** | chain height, seconds since last block, validators up vs expected, a table per node (up, height, peers, in sync, last block age, tx pool), block time, tx/s, gas, tx pool, peers, refused connections, JSON-RPC rate/latency, P2P traffic, CPU, JVM heap, GC |
+| **Besu production (QBFT)** | chain height, seconds since last block, validators up vs expected, a table per node (up, height, peers, in sync, last block age, tx pool), block time, tx/s, gas, tx pool, peers, refused connections, JSON-RPC rate/latency, P2P traffic, CPU, JVM heap, GC; **Proxy senders**: per sender mined OK / STALLED, in flight, nonce gap, repairs, fillers |
 | **MPC signer** | coordinator up, MPC nodes up vs threshold, keys, presignatures ready, signatures/s (hot/cold), signing latency p50/p95, failures and policy refusals, pool per hot key vs target, presign rate and duration |
 | **Hosts** | CPU, memory, fullest disk, disk I/O, network per host |
 
@@ -50,6 +51,10 @@ Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations]
 | `MpcPoolEmpty` | warning | no presignature ready for a hot key for 2 min (signing falls back to the slow path) |
 | `MpcSignErrors` / `MpcPresignFailing` | warning | signing or presign sessions failing |
 | `MpcPolicyRefusals` | warning | a transaction was refused by the policy (value, gas, chain id, destination) |
+| `ProxySenderStalled` | critical | a sender's transactions are ready in the RPC node's pool but blocks keep coming without them: the validators don't have them. Restart **one** validator; check `tx-pool-max-future-by-sender=2000` on the validators |
+| `ProxyNonceGap` | warning | a missing nonce has blocked a sender for > 2 min (the proxy normally repairs it after 30 s / 10 blocks) |
+| `ProxyNonceRepaired` | info | the proxy repaired a gap (lost transactions or filler transactions): see its log |
+| `ProxySenderCheckFailing` / `ProxyDown` | warning / critical | the proxy can't read Besu for its check / doesn't answer |
 | `HostDown` / `HostDiskFull` / `HostMemoryHigh` | warning | node-exporter down; a disk > 80 %; memory > 90 % |
 
 Dry run (4 validators + RPC node, 3 MPC nodes + coordinator, all targets up): one validator and
@@ -116,13 +121,14 @@ published there).
 
 ### 4. List your targets
 
-Edit the three files in `prometheus/targets/`. The examples match the network
+Edit the four files in `prometheus/targets/`. The examples match the network
 `192.168.68.132` (val1, val2, rpc1), `.133` (val3), `.134` (val4):
 
 | File | One entry per | Labels |
 |---|---|---|
 | `besu.yml` | Besu node: `"<BIND_IP>:<METRICS_PORT>"` | `node` = its `NODE_NAME`, `role` = `validator` or `rpc` |
 | `mpc.yml` | coordinator: `"<host>:9100"` | `name` |
+| `proxy.yml` | the proxy: `"<host>:30000"` | `name` |
 | `hosts.yml` | host with node-exporter: `"<host>:9101"` | `host` |
 
 The `role` label matters: the quorum alert counts `role: validator`. Prometheus re-reads these files

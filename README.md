@@ -178,7 +178,8 @@ Results are in [`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md).
 | `POST /nft/transfer` | `{collection?, to, tokenId, from?}` | sale: the buyer signs one atomic `buy` (pays the price to `SENDER01`, receives the NFT) |
 | `GET /nft/:tokenId`, `/nft/:tokenId/metadata` | `?collection=` | token, owner, metadata (read from the chain if Redis has nothing) |
 | `GET /nft/owner/:address` | `?collection=` | tokens owned, per collection |
-| `GET /status/senders` | | per sender: next nonce vs. Besu, value in flight, corrections made by the background chain check |
+| `GET /status/senders` | | per sender: next nonce vs. Besu, value in flight, nonce gaps and stalls, corrections made by the background chain check |
+| `GET /metrics` | | the same in Prometheus format (scraped by `monitoring/`) |
 
 `collection` accepts a collection's name, symbol or address; without it the default (first)
 collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).

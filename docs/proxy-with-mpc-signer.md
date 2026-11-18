@@ -222,35 +222,57 @@ per sender** (a per-sender lock). To keep that lock short, it holds only **one s
   chain would;
 - Redis writes are not waited for, and the signer's key list is cached for 10 s.
 
-A **background check** (every `SENDER_CHECK_MS`, default 2 s) reads Besu for every sender used in
-the last 5 minutes and corrects the in-memory state on its own:
+A **background check** (every `SENDER_CHECK_MS`, default 2 s) reads Besu for `SENDER01` (always,
+from start-up), for every sender used in the last 5 minutes, and for every sender with transactions
+recorded in Redis. It corrects the state on its own:
 
 | Situation | What the check does |
 |---|---|
 | a transaction was mined | its value stops being reserved (it is now in the lower balance) |
 | someone deposited ETH to the sender | spendable within one check interval |
 | Besu's pending nonce is **ahead** of the proxy's (another client sent from this key) | continue from Besu's value. Log: `chain nonce N is ahead of ours` |
-| Besu's pending nonce is **behind** (the RPC node lost transactions, e.g. it restarted) | wait: usually other nodes still have them, and they are mined as soon as blocks are produced. Only if the chain keeps producing blocks (`SENDER_STUCK_MS`, default 30 s, **and** `SENDER_STUCK_BLOCKS`, default 10) without confirming them, continue from Besu's value, so the next transaction fills the gap. Log: `nonces A..B were sent but no Besu node mined them … they were lost`. Those transactions are never mined: their callers got a `txHash` that stays unknown. Nothing is repaired while the chain is halted. |
+| **nonce gap with transactions waiting above it** (seen in Besu's pool, so also found **after a proxy restart**, with no request needed) | once the chain kept producing blocks (`SENDER_STUCK_MS`, default 30 s, **and** `SENDER_STUCK_BLOCKS`, default 10) without confirming anything, send a **filler** at each missing nonce: 0 ETH from the sender to itself. The waiting transactions are then mined. Log: `nonce N missing for … sent 1 filler transaction(s)` |
+| **nonce gap with nothing above it** (sent, then lost by every node, e.g. the RPC node restarted before they spread) | same wait, then continue from Besu's pending nonce, so the next request reuses it. Those transactions are never mined: their callers got a `txHash` that stays unknown. Log: `nonces A..B were sent but no Besu node mined them … they were lost` |
+| **stall**: transactions are **ready** in the RPC node's pool (pending > confirmed) but blocks keep coming without them | the **validators** don't have them (e.g. dropped above their `tx-pool-max-future-by-sender`), which the proxy can't fix. Reported after the same wait: log `… are ready in Besu's pool … but none was mined … the validators do not have them`, `/status/senders` `stalled: true`, alert `ProxySenderStalled`. **Fix:** restart **one** validator: on reconnect it fetches the RPC node's pool again. Prevention: `tx-pool-max-future-by-sender=2000` on the validators (`besu-production/node/validator.toml`). |
 
-Nothing needs manual action. To see the state and the corrections made:
+Nothing is repaired while the chain is halted: every rule waits for new blocks.
+
+Fillers and the pool check need the **TXPOOL** API on the RPC node the proxy uses (`BESU_IP`).
+The production RPC nodes have it. Without it, gaps are still repaired while the proxy runs, but
+not after a restart, and the log says so once.
+
+To see the state and the corrections made:
 
 ```bash
 curl -s http://<proxy>:30000/status/senders
 ```
 
-`nextNonce`, `chainPendingNonce` and `confirmedNonce` per sender, `inFlightTransactions`,
-`gapSeconds` (Besu's pending nonce behind the proxy's), `nonceRepairs` and
-`nonceAdoptedFromChain` (corrections made so far), `lastCheckError`.
+Per sender: `nextNonce`, `chainPendingNonce`, `confirmedNonce`, `inFlightTransactions`,
+`gapSeconds` and `waitingAboveGap` (a missing nonce and what waits behind it), `stalled` and
+`stallSeconds`, and the counters `nonceRepairs`, `fillerTransactions`, `nonceAdoptedFromChain`,
+`stalls`, plus `lastCheckError`.
+
+The same values are on **`GET /metrics`** (Prometheus format; optional bearer token
+`METRICS_TOKEN`). `monitoring/` scrapes it (`prometheus/targets/proxy.yml`), shows a *Proxy
+senders* row on the Besu dashboard, and alerts with `ProxySenderStalled`, `ProxyNonceGap`,
+`ProxyNonceRepaired`, `ProxySenderCheckFailing` and `ProxyDown`.
 
 Optional settings in `proxy/.env`: `SENDER_CHECK_MS` (2000), `SENDER_STUCK_MS` (30000),
-`SENDER_STUCK_BLOCKS` (10), `SENDER_IDLE_MS` (300000: stop checking a sender idle this long).
+`SENDER_STUCK_BLOCKS` (10), `SENDER_IDLE_MS` (300000: stop checking a sender idle this long;
+`SENDER01` is always checked), `METRICS_TOKEN`.
 
-Tested on 4 validators + RPC node + MPC cluster: a policy refusal in a series (no gap); two
-payments racing for the same balance (the second refused while the first was in flight); a deposit
-(spendable within 2 s); another client sending from the key (adopted, no failed request); the
-chain halted while rpc1 restarted (no repair; the transactions were mined when the chain resumed);
-transactions really lost (repaired after 11 blocks, the next transfers filled the gap, no gap left);
-Redis stopped. 400 transfers from one sender at concurrency 100: no errors, duplicate nonces or gaps.
+Tested on 4 validators + RPC node + MPC cluster:
+- a gap left while the proxy was down (3 transactions waiting above a missing nonce): the restarted
+  proxy, with no request, sent 1 filler after 12 blocks and all were mined;
+- the validators refusing the proxy's transactions while the RPC node accepted them (the stall
+  seen in production): reported after 10 blocks, alert `ProxySenderStalled` fired, cleared once the
+  validators restarted and fetched the RPC node's pool;
+- the chain halted while rpc1 restarted (no repair, no stall reported; mined on resume);
+- transactions really lost (reset after 11 blocks, reused by the next transfers);
+- another client sending from the key (adopted, no failed request);
+- a policy refusal in a series, two payments racing for the same balance, a deposit, Redis stopped;
+- 200–400 transfers from one sender at concurrency 100: no errors, duplicate nonces, gaps or false
+  stalls.
 
 ## Operating it
 

@@ -33,6 +33,12 @@ scrape_configs:
     file_sd_configs:
       - files: [/etc/prometheus/targets/mpc.yml]
 
+  # Proxy: nonce gaps, repairs and "ready but not mined" stalls per sender (GET /metrics)
+  - job_name: proxy
+    metrics_path: /metrics
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/proxy.yml]
+
   # Host CPU / memory / disk (node-exporter on every host, see node-exporter/)
   - job_name: hosts
     file_sd_configs:

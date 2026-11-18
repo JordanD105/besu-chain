@@ -1,0 +1,36 @@
+groups:
+  - name: proxy
+    rules:
+      - alert: ProxyDown
+        expr: up{job="proxy"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "The proxy ({{ $labels.instance }}) is not answering"
+
+      - alert: ProxySenderStalled
+        # transactions are ready in the RPC node's pool but blocks keep coming without them
+        expr: proxy_sender_stalled == 1
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.sender }}: transactions ready in Besu's pool are not being mined. The validators do not have them: restart ONE validator (it fetches the pool again); check tx-pool-max-future-by-sender=2000 on the validators"
+
+      - alert: ProxyNonceGap
+        # a gap the proxy has not repaired (repair needs the chain to move; fillers need the signer)
+        expr: proxy_sender_gap_seconds > 120
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.sender }}: a nonce has been missing for {{ $value }}s; later transactions wait. See the proxy log"
+
+      - alert: ProxyNonceRepaired
+        expr: increase(proxy_sender_nonce_repairs_total[15m]) > 0
+        labels: { severity: info }
+        annotations:
+          summary: "{{ $labels.sender }}: the proxy repaired a nonce gap (lost transactions or filler transactions). See the proxy log"
+
+      - alert: ProxySenderCheckFailing
+        expr: proxy_sender_check_error == 1
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.sender }}: the proxy cannot read Besu for its background check"
