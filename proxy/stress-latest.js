@@ -127,39 +127,39 @@ async function rpc(url, method, params = []) {
 async function resetNonce(address) {
     const sender = address.toLowerCase();
     memNonce.delete(sender);
-    await cache(() => redis.del(`nonce:${sender}`));
+    void cache(() => redis.del(`nonce:${sender}`));
 }
 
-// Next nonce = max(cached counter, chain pending count). The chain value makes a missing,
-// empty or stale (old snapshot) Redis harmless; the cached counter covers transactions the node
-// has not reported as pending yet. Runs under withSenderLock for the sender.
+// Next nonce. The chain is read only when the process has no nonce for the sender yet (start,
+// after an error, after a repair): then max(cached counter, chain pending count), so a missing,
+// empty or stale Redis is harmless. Afterwards the nonce is counted in memory, which is correct
+// because this process is the only one sending for the sender (withSenderLock); the periodic chain
+// check (checkSenders) corrects it if the chain ever disagrees. Runs under withSenderLock.
 async function nextNonce(address) {
     const sender = address.toLowerCase();
     const key = `nonce:${sender}`;
-    const chainPending = parseInt(await rpc(
-        CONFIG.BESU_RPC,
-        "eth_getTransactionCount",
-        [address, "pending"]
-    ), 16);
+    let nonce = memNonce.get(sender);
 
-    let cached = memNonce.get(sender);
-
-    if (cached === undefined) {
+    if (nonce === undefined) {
+        const chainPending = parseInt(await rpc(
+            CONFIG.BESU_RPC,
+            "eth_getTransactionCount",
+            [address, "pending"]
+        ), 16);
         const stored = await cache(() => redis.get(key));
-        cached = stored === null ? 0 : Number(stored);
+        nonce = Math.max(stored === null ? 0 : Number(stored), chainPending);
     }
 
-    const nonce = Math.max(cached, chainPending);
     memNonce.set(sender, nonce + 1);
-    await cache(() => redis.set(key, nonce + 1));
+    void cache(() => redis.set(key, nonce + 1));
     return nonce;
 }
 
 // Besu can briefly answer eth_getBalance with null (e.g. while importing a busy block);
 // retry a few times instead of failing the request with "Cannot convert null to a BigInt".
-async function getBalanceWei(address) {
+async function getBalanceWei(address, block = "latest") {
     for (let attempt = 0; attempt < 5; attempt += 1) {
-        const result = await rpc(CONFIG.BESU_RPC, "eth_getBalance", [address, "latest"]);
+        const result = await rpc(CONFIG.BESU_RPC, "eth_getBalance", [address, block]);
 
         if (result !== null && result !== undefined) {
             return BigInt(result);
@@ -183,15 +183,22 @@ function isAddress(address) {
 // Check Web3Signer account
 // =======================
 
-async function signerOwns(address) {
-    const accounts = await rpc(
-        CONFIG.WEB3SIGNER_RPC,
-        "eth_accounts"
-    );
+// The signer's key list, cached: it only grows when /createaccount adds a key. A sender that is
+// not in the cached list triggers a fresh read, so a new key is found immediately.
+const SIGNER_ACCOUNTS_TTL_MS = 10000;
+let signerAccounts = { set: new Set(), at: 0 };
 
-    return accounts.some(
-        (item) => item.toLowerCase() === address.toLowerCase()
-    );
+async function signerOwns(address) {
+    const key = address.toLowerCase();
+    const fresh = Date.now() - signerAccounts.at < SIGNER_ACCOUNTS_TTL_MS;
+
+    if (fresh && signerAccounts.set.has(key)) {
+        return true;
+    }
+
+    const accounts = await rpc(CONFIG.WEB3SIGNER_RPC, "eth_accounts");
+    signerAccounts = { set: new Set(accounts.map((item) => item.toLowerCase())), at: Date.now() };
+    return signerAccounts.set.has(key);
 }
 
 // =======================
@@ -239,33 +246,217 @@ async function pendingFor(sender) {
     return pending;
 }
 
-async function reservedWei(address) {
+// =======================
+// Sender state: balance snapshot + periodic chain check
+// =======================
+//
+// The balance check uses a snapshot of the chain (balance and confirmed nonce read AT THE SAME
+// BLOCK) minus the value of this sender's transactions that are not confirmed yet (memPending).
+// Mined transactions are still in memPending until a newer snapshot shows them confirmed, and are
+// then counted once: in the lower balance. So the check is never more generous than the chain.
+// checkSenders() refreshes the snapshots in the background and reconciles the in-memory nonce
+// with the chain; requests only read the chain when a sender has no recent snapshot.
+const SENDER_CHECK_MS = Number(process.env.SENDER_CHECK_MS) || 2000;
+const SENDER_STUCK_MS = Number(process.env.SENDER_STUCK_MS) || 30000;
+const SENDER_IDLE_MS = Number(process.env.SENDER_IDLE_MS) || 300000;
+const SNAPSHOT_MAX_AGE_MS = Math.max(3 * SENDER_CHECK_MS, 5000);
+
+const senders = new Map(); // sender (lowercase) -> state, see senderState()
+
+function senderState(address) {
     const sender = address.toLowerCase();
-    const nonceHex = await rpc(
-        CONFIG.BESU_RPC,
-        "eth_getTransactionCount",
-        [address, "latest"]
-    );
-    const chainNonce = parseInt(nonceHex, 16);
+    let state = senders.get(sender);
+
+    if (!state) {
+        state = {
+            address,
+            snapshot: null,      // { block, balance, confirmed, at }
+            chainPending: null,  // last eth_getTransactionCount(pending) seen by the check
+            progressAt: Date.now(),
+            lastUsed: Date.now(),
+            repairs: 0,
+            adopted: 0,
+            repairNext: false,
+            lastError: null
+        };
+        senders.set(sender, state);
+    }
+
+    return state;
+}
+
+// Balance, confirmed nonce and pending nonce of one sender, the first two at the same block.
+async function readChainAccount(address) {
+    const block = await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []);
+    const [balance, confirmed, pending] = await Promise.all([
+        getBalanceWei(address, block),
+        rpc(CONFIG.BESU_RPC, "eth_getTransactionCount", [address, block]),
+        rpc(CONFIG.BESU_RPC, "eth_getTransactionCount", [address, "pending"])
+    ]);
+
+    return {
+        block: parseInt(block, 16),
+        balance,
+        confirmed: parseInt(confirmed, 16),
+        pending: parseInt(pending, 16)
+    };
+}
+
+async function applySnapshot(state, chain) {
+    const sender = state.address.toLowerCase();
+    const previous = state.snapshot;
+
+    if (previous && chain.block < previous.block) {
+        return; // an older answer than the one we already have
+    }
+
+    if (!previous || chain.confirmed > previous.confirmed) {
+        state.progressAt = Date.now();
+    }
+
+    state.snapshot = { block: chain.block, balance: chain.balance, confirmed: chain.confirmed, at: Date.now() };
+    state.chainPending = chain.pending;
+
+    // drop the value of transactions the snapshot shows as mined (counted in its balance)
     const pending = await pendingFor(sender);
-    const stale = [];
+    const mined = [...pending.keys()].filter((nonce) => Number(nonce) < chain.confirmed);
+
+    if (mined.length > 0) {
+        mined.forEach((nonce) => pending.delete(nonce));
+        void cache(() => redis.hdel(pendingValueKey(sender), ...mined));
+    }
+}
+
+async function refreshSender(state) {
+    await applySnapshot(state, await readChainAccount(state.address));
+}
+
+// What the sender can still spend: snapshot balance minus everything sent but not confirmed in
+// that snapshot. Reads the chain only when the snapshot is missing or old.
+async function availableWei(address) {
+    const sender = address.toLowerCase();
+    const state = senderState(address);
+    state.lastUsed = Date.now();
+
+    if (!state.snapshot || Date.now() - state.snapshot.at > SNAPSHOT_MAX_AGE_MS) {
+        await refreshSender(state);
+    }
+
+    const pending = await pendingFor(sender);
     let reserved = 0n;
 
     for (const [nonce, value] of pending) {
-        if (Number(nonce) < chainNonce) {
-            stale.push(nonce);
-        } else {
+        if (Number(nonce) >= state.snapshot.confirmed) {
             reserved += BigInt(value);
         }
     }
 
-    if (stale.length > 0) {
-        stale.forEach((nonce) => pending.delete(nonce));
-        await cache(() => redis.hdel(pendingValueKey(sender), ...stale));
+    return state.snapshot.balance - reserved;
+}
+
+// After a successful send. Following a nonce repair, the next nonce is read from the chain once
+// more: the reused nonce may have filled a gap, letting later transactions still in Besu's pool
+// become valid, so the chain's pending count is the correct next nonce.
+function afterSend(sender) {
+    const state = senders.get(sender.toLowerCase());
+
+    if (state && state.repairNext) {
+        state.repairNext = false;
+        memNonce.delete(sender.toLowerCase());
+    }
+}
+
+// Background check of every sender used recently (or with transactions not yet confirmed):
+// - refresh the balance snapshot (deposits appear within SENDER_CHECK_MS);
+// - chain pending nonce AHEAD of ours: someone else sent from this key -> adopt the chain value;
+// - chain pending nonce BEHIND ours and no transaction confirmed for SENDER_STUCK_MS:
+//   transactions were lost from Besu's pool (e.g. RPC node restart) -> continue from the chain
+//   value, so the next transaction fills the gap and nothing stays blocked behind it.
+// Nonce changes run under the sender's lock, after reading the chain again.
+let checkingSenders = false;
+let checkErrorLogged = false;
+
+async function checkSenders() {
+    if (checkingSenders) {
+        return;
     }
 
-    return reserved;
+    checkingSenders = true;
+
+    try {
+        for (const [sender, state] of senders) {
+            const pending = memPending.get(sender);
+            const busy = pending && pending.size > 0;
+
+            if (!busy && Date.now() - state.lastUsed > SENDER_IDLE_MS) {
+                senders.delete(sender);
+                withSenderLock(sender, async () => memNonce.delete(sender)).catch(() => {});
+                continue;
+            }
+
+            try {
+                await refreshSender(state);
+                state.lastError = null;
+            } catch (error) {
+                state.lastError = error.message;
+                continue;
+            }
+
+            const ours = memNonce.get(sender);
+
+            if (ours === undefined || state.chainPending === ours) {
+                continue;
+            }
+
+            if (state.chainPending > ours) {
+                await withSenderLock(sender, async () => {
+                    const chain = await readChainAccount(state.address);
+                    await applySnapshot(state, chain);
+                    const current = memNonce.get(sender);
+
+                    if (current !== undefined && chain.pending > current) {
+                        memNonce.set(sender, chain.pending);
+                        void cache(() => redis.set(`nonce:${sender}`, chain.pending));
+                        state.adopted += 1;
+                        console.warn(`sender ${state.address}: chain nonce ${chain.pending} is ahead of ours (${current}): another client sent from this key; continuing from the chain`);
+                    }
+                });
+            } else if (Date.now() - state.progressAt >= SENDER_STUCK_MS) {
+                await withSenderLock(sender, async () => {
+                    const chain = await readChainAccount(state.address);
+                    await applySnapshot(state, chain);
+                    const current = memNonce.get(sender);
+
+                    if (current !== undefined && chain.pending < current
+                        && Date.now() - state.progressAt >= SENDER_STUCK_MS) {
+                        memNonce.set(sender, chain.pending);
+                        void cache(() => redis.set(`nonce:${sender}`, chain.pending));
+                        state.repairs += 1;
+                        state.repairNext = true;
+                        state.progressAt = Date.now();
+                        console.warn(`sender ${state.address}: nonces ${chain.pending}..${current - 1} were sent but are no longer in Besu (none confirmed for ${SENDER_STUCK_MS / 1000}s); continuing from nonce ${chain.pending}. Transactions with those nonces will not be mined.`);
+                    }
+                });
+            }
+        }
+
+        if (checkErrorLogged) {
+            console.log("sender check: Besu reachable again");
+        }
+
+        checkErrorLogged = false;
+    } catch (error) {
+        if (!checkErrorLogged) {
+            console.warn(`sender check failed (${error.message}); retrying`);
+        }
+
+        checkErrorLogged = true;
+    } finally {
+        checkingSenders = false;
+    }
 }
+
+setInterval(checkSenders, SENDER_CHECK_MS).unref();
 
 const MEMO_LIMIT = 256;
 const MINT_MEMO_LIMIT = 4096;
@@ -325,12 +516,9 @@ function transferGas(bytes) {
 }
 
 async function assertCanPay(address, amount) {
-    const value = ethToWei(amount);
-    const cost = value;
-    const balance = await getBalanceWei(address);
-    const reserved = await reservedWei(address);
+    const cost = ethToWei(amount);
 
-    if (balance < reserved + cost) {
+    if (await availableWei(address) < cost) {
         const error = new Error("insufficient balance");
         error.statusCode = 400;
         throw error;
@@ -344,7 +532,8 @@ async function rememberPending(address, nonce, amount) {
 async function rememberPendingWei(address, nonce, wei) {
     const sender = address.toLowerCase();
     (await pendingFor(sender)).set(String(nonce), wei.toString());
-    await cache(() => redis.hset(pendingValueKey(sender), String(nonce), wei.toString()));
+    void cache(() => redis.hset(pendingValueKey(sender), String(nonce), wei.toString()));
+    afterSend(sender);
 }
 
 async function pay(sender, recipient, amount, ownedBySigner, memo = "") {
@@ -657,6 +846,42 @@ app.post("/transfer", async (req, res) => {
             error: error.message
         });
     }
+});
+
+// Live state of the senders the proxy is tracking (nonce, confirmed nonce, value in flight,
+// corrections made by the periodic chain check). Read-only; for operators and monitoring.
+app.get("/status/senders", (req, res) => {
+    const rows = [...senders.entries()].map(([sender, state]) => {
+        const pending = memPending.get(sender) || new Map();
+        const confirmed = state.snapshot ? state.snapshot.confirmed : null;
+        let inFlight = 0n;
+        let count = 0;
+
+        for (const [nonce, value] of pending) {
+            if (confirmed === null || Number(nonce) >= confirmed) {
+                inFlight += BigInt(value);
+                count += 1;
+            }
+        }
+
+        return {
+            address: state.address,
+            nextNonce: memNonce.has(sender) ? memNonce.get(sender) : null,
+            chainPendingNonce: state.chainPending,
+            confirmedNonce: confirmed,
+            snapshotBlock: state.snapshot ? state.snapshot.block : null,
+            snapshotAgeMs: state.snapshot ? Date.now() - state.snapshot.at : null,
+            balanceWei: state.snapshot ? state.snapshot.balance.toString() : null,
+            inFlightWei: inFlight.toString(),
+            inFlightTransactions: count,
+            secondsSinceLastConfirmed: Math.round((Date.now() - state.progressAt) / 1000),
+            nonceRepairs: state.repairs,
+            nonceAdoptedFromChain: state.adopted,
+            lastCheckError: state.lastError
+        };
+    });
+
+    res.json({ checkIntervalMs: SENDER_CHECK_MS, stuckAfterMs: SENDER_STUCK_MS, senders: rows });
 });
 
 app.get("/transfer/:txHash", async (req, res) => {
@@ -1129,10 +1354,8 @@ async function assertMintFits(from, to, data) {
 
 async function assertCanPayGas(address, gas, valueWei = 0n) {
     const cost = valueWei + gas * 0n;
-    const balance = await getBalanceWei(address);
-    const reserved = await reservedWei(address);
 
-    if (balance < reserved + cost) {
+    if (await availableWei(address) < cost) {
         throw httpError(400, "insufficient balance");
     }
 
