@@ -1,25 +1,30 @@
 # MPC signer: production deployment guide
 
 This guide deploys the 2-of-3 MPC signer for production:
-- **three MPC nodes** on three hosts, at different sites, run by **three different admin teams**;
-- **one or two coordinators**.
+- **three MPC nodes** on three hosts, run by **three different admin teams**;
+- **two coordinators**, behind HAProxy on a floating IP.
+
+In the production layout ([`../../docs/production-layout.md`](../../docs/production-layout.md)):
+mpc1 (`MPC_NODE_ID=0`) on 192.168.68.132, mpc2 (1) on .134, mpc3 (2) on .135; coord1 on .132,
+coord2 on .133; clients reach the coordinators at `192.168.68.150:9100` (coord1, coord2 as backup).
 
 Every step below was dry-run end to end: three node "hosts", a coordinator, the key ceremony,
 signing with a node stopped, and a backup → data loss → restore → signing again.
 
 ```
-                      private network (WireGuard / site-to-site VPN), firewall: only the ports below
-  proxy ──9100──► coordinator(s) ──7000──► node 0 (site A, team A)
-                       ▲    │      ──7000──► node 1 (site B, team B)
-                       │    │      ──7000──► node 2 (site C, team C)
-       nodes ──9100────┘    └──8545──► Besu RPC node
-       (relay WebSocket)
+                      private network, firewall: only the ports below
+  proxy ──► VIP .150:9100 (HAProxy) ──► coord1 (.132) | coord2 (.133, warm standby)
+                                            │  ──7000──► mpc1 (.132, team A)
+                                            │  ──7000──► mpc2 (.134, team B)
+                                            │  ──7000──► mpc3 (.135, team C)
+       nodes ──9100──► relay of the coordinator running the session (its own IP)
+       coordinators ──8545──► VIP .150:8545 (HAProxy) ──► rpc1 | rpc2
 ```
 
 | Role | Count | Holds | Package |
 |---|---|---|---|
 | MPC node | exactly 3, one per host/site/team | **one key share each** (sealed on disk) | `deploy/node/` |
-| Coordinator | 1–2 | nothing secret except the tokens | `deploy/coordinator/` |
+| Coordinator | 2 (coord1 active, coord2 warm standby) | nothing secret except the tokens | `deploy/coordinator/` |
 | Operator workstation / bastion | 1 | `MPC_ADMIN_TOKEN` | `deploy/make-cluster.sh`, `deploy/ceremony.sh` |
 
 > **The one rule that makes this secure:** no person, admin account, host, backup location or
@@ -31,23 +36,26 @@ signing with a node stopped, and a backup → data loss → restore → signing 
 ## 1. Prerequisites
 
 **Hosts**
-- **3 node hosts** (Linux + Docker Engine + Compose v2), one per site and team.
+- **3 node hosts** (Linux + Docker Engine + Compose v2), one per team: .132, .134, .135 (each
+  also runs a Besu validator).
   - **CPU:** presigning costs about 0.6 CPU-seconds per signature per node. Plan for about
     **0.4 cores per sustained transaction/s** (see `bench/RESULTS.md`), plus 2 cores of headroom.
   - **RAM:** 2–4 GB.
   - **Disk:** under 1 GB (shares are a few KB per key).
-- **1–2 coordinator hosts:** 2 cores and 1 GB are enough. They can share hosts with the proxy,
-  but **not** with a node.
+- **2 coordinator hosts:** 2 cores and 1 GB each are enough: .132 and .133, next to the proxies.
+  A coordinator holds no key material, so coord1 sharing .132 with mpc1 doesn't add a share there;
+  keep each MPC node's team the only one with access to that node's data.
 
 **Network**
-- **A private encrypted network between all hosts:** WireGuard, or your existing site-to-site VPN.
-  This is **required**:
+- **A private network between all hosts** (192.168.68.0/24 in the layout; encrypted, e.g.
+  WireGuard, if it crosses untrusted links). Isolation is **required**:
   - the node API uses a bearer token over HTTP (no mTLS yet);
   - the relay has no authentication;
   - MPC protocol messages are already end-to-end signed and encrypted, but transaction intents
     and the token are not.
-- **Firewall:** default-deny, then open only these ports (`deploy/firewall-example.sh` has the
-  ufw rules for each role):
+- **Firewall:** default-deny, then open only these ports
+  ([`../../ha/firewall-layout.sh`](../../ha/firewall-layout.sh) applies them with firewalld for the
+  layout; `deploy/firewall-example.sh` has generic ufw rules):
 
 | From | To | Port | Purpose |
 |---|---|---|---|
@@ -157,9 +165,9 @@ Edit `.env`:
 | Variable | Value |
 |---|---|
 | `MPC_IMAGE` | the image from step 2 |
-| `MPC_BIND_IP` | this host's private address |
-| `MPC_RELAY_URL` | `ws://<this coordinator's private IP>:9100/relay` |
-| `MPC_BESU_RPC` | an RPC node, never a validator |
+| `MPC_BIND_IP` | this host's address (`192.168.68.132` for coord1, `.133` for coord2) |
+| `MPC_RELAY_URL` | `ws://<this coordinator's OWN IP>:9100/relay`, never the VIP |
+| `MPC_BESU_RPC` | `http://192.168.68.150:8545` (HAProxy: rpc1, rpc2 as backup), never a validator |
 | `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN` | from step 3 |
 
 Then copy in `cluster.json` and start:
@@ -169,24 +177,31 @@ docker compose up -d
 docker compose logs --tail 5     # expect: "keys loaded from nodes keys=0"
 ```
 
-With a second coordinator, give it its **own** `MPC_RELAY_URL` (its own address). Put both
-behind your internal load balancer for the proxy's JSON-RPC.
+Do the same on .133 for **coord2**, with its own `MPC_BIND_IP` and `MPC_RELAY_URL`. Clients reach
+both through HAProxy on `192.168.68.150:9100` ([`../../ha/README.md`](../../ha/README.md)):
+coord1 normally, coord2 when coord1 is down. coord2 runs all the time and fills its own
+presignature pool, so it takes over warm.
+
+**Several coordinators, one cluster:** each coordinator reads the key list from the MPC nodes at
+start (2 of 3 answering are enough), again every 30 seconds, for `eth_accounts` when its copy is
+older than 5 seconds, and whenever it meets an account it doesn't know. An account created through
+coord1 (`/createaccount`) therefore signs through coord2 at once.
 
 ## 8. Key ceremony (operator, all 3 nodes up)
 
 ```bash
-COORD=http://<coordinator-ip>:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/deploy/ceremony.sh
+COORD=http://192.168.68.132:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/deploy/ceremony.sh
 ```
 
 - **Aux info** (safe primes and zero-knowledge proofs) runs once per cluster and takes 1–3 minutes.
 - **Distributed key generation** then creates the first key and prints it. **That address is
   `SENDER01`.** No private key existed at any point.
 
-**Enable the presignature pool for the hot sender** on every coordinator:
+**Enable the presignature pool for the hot sender** on **both** coordinators:
 1. Set `MPC_POOL_KEYS=<SENDER01>` in its `.env`.
 2. Run `docker compose up -d`.
-3. Check: `curl http://<coordinator-ip>:9100/admin/pool` should show `"pooled": true` and
-   `ready` climbing.
+3. Check each: `curl http://192.168.68.132:9100/admin/pool` (and `.133`) should show
+   `"pooled": true` and `ready` climbing.
 
 ## 9. Fund SENDER01 and connect the proxy
 
@@ -197,12 +212,13 @@ COORD=http://<coordinator-ip>:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/depl
 
 | Variable | Value |
 |---|---|
-| `WEB3SIGNER_IP` / `WEB3SIGNER_PORT` | the coordinator (or its load balancer), port 9100 |
+| `WEB3SIGNER_IP` / `WEB3SIGNER_PORT` | `192.168.68.150` / `9100` (HAProxy) |
 | `SENDER01` | the ceremony address |
-| `MPC_ADMIN_URL` | `http://<coordinator>:9100` |
+| `MPC_ADMIN_URL` | `http://192.168.68.150:9100` |
 | `MPC_ADMIN_TOKEN` | from step 3 |
 
-  Remove every `VAULT_*` line. See [`../../docs/proxy-with-mpc-signer.md`](../../docs/proxy-with-mpc-signer.md).
+  The same `.env` on both proxy hosts (`proxy/.env.example`). Remove every `VAULT_*` line. See
+  [`../../docs/proxy-with-mpc-signer.md`](../../docs/proxy-with-mpc-signer.md).
 - **Collections:** deploy your NFT collections with `/nft/deploy`. Their minter is `SENDER01`.
 
 ## 10. Verify before going live
@@ -210,8 +226,10 @@ COORD=http://<coordinator-ip>:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/depl
 1. Send a 0-value test transaction through the proxy and check it is mined.
 2. Stop one node (`docker compose stop` on its host), send another, and check it is mined too
    (2 of 3 still sign). Then start the node again.
-3. Run `POST /admin/pool/clear` (admin token) after restarting a node. Presignatures that the
-   node held in memory are gone, and clearing makes the pool refill with valid ones.
+3. Run `POST /admin/pool/clear` (admin token) **on both coordinators** after restarting a node.
+   Presignatures that the node held in memory are gone, and clearing makes the pools refill with
+   valid ones.
+4. Stop coord1: signing continues through coord2 (HAProxy). Start it again.
 
 ## 11. Backups (each node team, separately)
 
@@ -251,7 +269,7 @@ holds an identity.
 
 | Task | How |
 |---|---|
-| **Upgrade** | new image tag in `.env`, then `docker compose up -d`. **One node at a time:** signing continues on the other two. Then the coordinators. Run `/admin/pool/clear` after each node restart. |
+| **Upgrade** | new image tag in `.env`, then `docker compose up -d`. **One node at a time:** signing continues on the other two. Then the coordinators: **coord2 first**, then coord1 (HAProxy uses coord2 meanwhile). Run `/admin/pool/clear` on both coordinators after each node restart. |
 | **A node is down** | signing continues with 2 of 3, slower while the pool refills. `/createaccount` **fails** until all 3 are up, because key generation needs all three. Alert on it. |
 | **Monitoring** | Set `MPC_METRICS_TOKEN` on each coordinator and add it to [`../../monitoring/`](../../monitoring) (`prometheus/targets/mpc.yml`). The coordinator serves Prometheus metrics on `GET /metrics` (signatures hot/cold, latency, failures, policy refusals, pool per hot key, presign rate) and probes every MPC node, so `mpc_node_up` shows a node down before a signature needs it. The MPC signer dashboard and alerts (below threshold, node down, pool empty, policy refusals) come with it. `GET /admin/pool` still gives the same numbers as JSON. |
 | **Change the policy** | edit `cluster.json`, compare `sha256sum` across all teams, copy it everywhere, restart the nodes one by one, then the coordinators |
@@ -272,7 +290,7 @@ To recover redundancy:
 
 ## 15. Security checklist
 
-- [ ] 3 nodes on 3 hosts at 3 sites, run by 3 teams; no account can reach two nodes
+- [ ] 3 nodes on 3 hosts (.132, .134, .135), run by 3 teams; no account can reach two nodes
 - [ ] private encrypted network between all hosts; firewall default-deny with only the ports above
 - [ ] node `.env` files are mode 600, readable by root only; disks encrypted at rest
 - [ ] each node passphrase is in its own team's vault; backups are per team and stored apart from the passphrase

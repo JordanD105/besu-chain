@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Example host firewall (ufw) for the MPC signer, on top of the private/WireGuard network.
 # Adjust the addresses; run the matching block on each host. Default deny inbound.
-#   ROLE=node        COORDINATORS="10.10.0.5 10.10.0.6"
-#   ROLE=coordinator NODES="10.10.0.10 10.10.1.10 10.10.2.10" CLIENTS="10.10.0.30" OPERATOR=10.10.0.2
-#                    PROMETHEUS=10.10.0.40   (optional: monitoring scrapes /metrics on 9100)
-#   NODE_EXPORTER_FROM=10.10.0.40 on any role: host metrics (monitoring/node-exporter, port 9101)
+# For the 5-host production layout with firewalld, use ../../ha/firewall-layout.sh instead.
+#   ROLE=node        COORDINATORS="192.168.68.132 192.168.68.133"
+#   ROLE=coordinator NODES="192.168.68.132 192.168.68.134 192.168.68.135" CLIENTS="192.168.68.132 192.168.68.133" OPERATOR=<bastion>
+#                    PROMETHEUS=192.168.68.136   (optional: monitoring scrapes /metrics on 9100)
+#   NODE_EXPORTER_FROM=192.168.68.136 on any role: host metrics (monitoring/node-exporter, port 9101)
 set -Eeuo pipefail
 ufw default deny incoming
 ufw default allow outgoing

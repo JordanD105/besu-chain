@@ -119,8 +119,15 @@ to end. It uses the per-role packages in `deploy/`:
 | `deploy/ceremony.sh` | operator | aux info + first key (`SENDER01`) |
 | `deploy/firewall-example.sh` | every host | ufw rules per role |
 
-Three nodes on **three hosts at three sites, run by three different teams**, over a private
-encrypted network. If one person or machine can reach two nodes, the threshold protects nothing.
+Three nodes on **three hosts, run by three different teams**, over a private network. If one
+person or machine can reach two nodes, the threshold protects nothing. In the production layout
+([`../docs/production-layout.md`](../docs/production-layout.md)) the nodes are on 192.168.68.132,
+.134 and .135, and two coordinators (.132, .133) sit behind HAProxy on `192.168.68.150:9100`.
+
+**Several coordinators:** a coordinator re-reads the key list from the nodes at start (2 of 3
+answering are enough), every 30 s, for `eth_accounts` when its copy is older than 5 s, and when it
+meets an unknown account. An account created through one coordinator signs at once through
+another, so a standby coordinator can take over without a restart.
 
 Still to do before production:
 

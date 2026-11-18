@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time key ceremony, run from the operator/bastion against ONE coordinator, with all 3 nodes up.
-#   COORD=http://10.10.0.5:9100 ADMIN_TOKEN=... ./ceremony.sh
+#   COORD=http://192.168.68.132:9100 ADMIN_TOKEN=... ./ceremony.sh
 # 1) aux info (safe primes + ZK proofs; minutes, once per cluster)  2) first key = SENDER01
 set -Eeuo pipefail
 : "${COORD:?coordinator URL}" "${ADMIN_TOKEN:?admin token}"

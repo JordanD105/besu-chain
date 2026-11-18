@@ -14,14 +14,16 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 - node key backup;
 - **adding a 5th validator** to the running chain (new node, file update, rolling restart, vote).
 
+Production layout ([`../docs/production-layout.md`](../docs/production-layout.md)): 4 validators,
+one per host, and 2 RPC nodes, on the two application hosts.
+
 ```
-                 private network (WireGuard / site-to-site VPN), firewall default-deny
-  validator1 ◄──p2p 30303──► validator2 ◄──► validator3 ◄──► validator4     (one per site/AZ)
-       ▲                                                          ▲
-       └──────────────── p2p 30303 ──── rpc1, rpc2 (apps) ────────┘
-                                         rpc-explorer (chainlens)
-  proxy / MPC coordinator ──8545──► rpc1, rpc2        chainlens ──8545──► rpc-explorer
-  Prometheus ──9545──► every node                     operator ──SSH──► validator (RPC on 127.0.0.1)
+   .132: val1 + rpc1      .133: val2 + rpc2      .134: val3      .135: val4
+     ▲  p2p 30303 (validators), 30304 (rpc nodes); static peers + node allowlist  ▲
+     └───────────────────────────────────────────────────────────────────────────┘
+  proxy, coordinators ──► HAProxy VIP 192.168.68.150:8545 ──► rpc1 (rpc2 as backup)
+  chainlens (.136) ──► rpc2 :8545          Prometheus (.136) ──► :9545 / :9546 on every node
+  operator ──SSH──► validator host (validator RPC on 127.0.0.1 only)
 ```
 
 | Path | Used by | Purpose |
@@ -29,15 +31,16 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 | `node/` | every Besu host | `docker-compose.yml` (`docker-compose.host.yml` for several nodes per host), `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh`, `restore-key.sh`, `snapshot-chain.sh`, `restore-chain.sh`, `reset-chain.sh` |
 | `operator/make-network.sh` | operator, once | genesis (QBFT validator set), `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS` |
 | `operator/add-node.sh` | operator, later | add a node to a **running** network (genesis untouched) |
+| `operator/move-node.sh` | operator, later | a node keeps its key but moves to another host/port: updates its address in the network files |
 | `operator/qbft.sh` | on a validator host | validator set, add/remove votes, peers, health |
 | [`../monitoring/`](../monitoring) | monitoring host | Prometheus + Grafana, dashboards and alerts for these nodes and the MPC signer |
-| `firewall-example.sh` | every host | ufw rules per role |
+| `firewall-example.sh` | every host | ufw rules per role (generic; for the 5-host layout with firewalld use [`../ha/firewall-layout.sh`](../ha/firewall-layout.sh)) |
 
 ## Production vs. test network
 
 | | `besu-test-network` (test) | `besu-production` |
 |---|---|---|
-| Hosts | everything on one Docker host | one node per host, validators in separate sites/AZs |
+| Hosts | everything on one Docker host | one validator per host (.132–.135); an RPC node next to the validator on .132 and .133 |
 | Node keys | committed in the repo | generated on each host, kept in its volume |
 | Validator RPC | published, ADMIN/DEBUG/TRACE/PERM enabled, any host | `127.0.0.1` only, for the operator over SSH |
 | Client RPC | the same nodes as the validators | dedicated RPC nodes: ETH/NET/WEB3/TXPOOL (explorer: ETH/NET/WEB3), host allowlist |
@@ -47,15 +50,18 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 
 ## Sizing and topology
 
-- **Validators:** **4** (tolerates 1 faulty or offline validator, quorum 3) or **7** (tolerates
-  2). One per failure domain: never put two validators where one outage takes both. For 3 sites
-  with "survive a whole site", use **6 validators, 2 per site** (quorum 4).
-  - Each: 4 vCPU, 8 GB RAM, SSD, `JAVA_OPTS=-Xmx4g`.
-- **RPC nodes:**
-  - **2+ for applications**, behind an internal load balancer: proxy and MPC coordinator.
-  - **1 for the explorer** (`BESU_RPC_HTTP_API=ETH,NET,WEB3`), so explorer polling never slows the
-    transaction path.
+- **Validators:** **4**, one per host (.132, .133, .134, .135): quorum 3, so any one host can fail.
+  Never put two validators on one host: losing it would halt the chain. (7 validators tolerate 2;
+  with only 3 hosts, 6 validators, 2 per host, survive one host.)
+  - Each: 4 vCPU, 8 GB RAM, SSD. `JAVA_OPTS=-Xmx2g` is enough at today's load (~100–200 MB of heap
+    used); raise it if the *JVM heap used* panel says so.
+- **RPC nodes:** **rpc1** (.132) and **rpc2** (.133) behind HAProxy on the floating IP
+  `192.168.68.150:8545` (rpc1 normally, rpc2 when rpc1 is unhealthy; [`../ha/`](../ha)).
+  Chainlens reads **rpc2** directly, so explorer polling stays off rpc1.
   - Each: 4–8 vCPU, 8–16 GB RAM, SSD.
+- **Two nodes on one host** (.132, .133): host networking and separate ports (section *Several
+  nodes on one host*): validator P2P 30303 / metrics 9545 / RPC `127.0.0.1:8645`, rpc node P2P
+  30304 / metrics 9546 / RPC `<host IP>:8545`.
 - **Block period:** `BLOCK_PERIOD=2` across sites, 1 on one LAN. Set `REQUEST_TIMEOUT` to at least
   4 × the round-trip time between sites, and larger than `BLOCK_PERIOD`.
 
@@ -63,43 +69,46 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 
 ### 1. Hosts, network, firewall
 
-- Linux with Docker Engine and Compose v2 on every node host.
-- A private encrypted network between all nodes (WireGuard or a site-to-site VPN).
-- Firewall rules from `firewall-example.sh`:
+- Linux with Docker Engine and Compose v2 on every node host; synchronized clocks (`chrony`).
+- A private network between all nodes (the layout uses 192.168.68.0/24).
+- Firewall: [`../ha/firewall-layout.sh`](../ha/firewall-layout.sh) applies the layout's rules with
+  firewalld (or `firewall-example.sh` for ufw):
 
 | From | To | Port |
 |---|---|---|
-| every Besu node | every Besu node | 30303/tcp + udp (p2p) |
-| proxy, MPC coordinator(s) | app RPC nodes | 8545 (8546 for WebSocket) |
-| chainlens | explorer RPC node | 8545 |
-| Prometheus | every node | 9545 |
-| each team's bastion | its own host | 22 |
+| every Besu host (.132–.135) | every Besu node | 30303 (validators), 30304 (rpc1, rpc2) tcp + udp |
+| HAProxy, proxies, coordinators (.132, .133), chainlens (.136) | rpc1, rpc2 | 8545 |
+| Prometheus (.136) | every node | 9545 (validators), 9546 (rpc nodes) |
+| bastion | every host | 22 |
 
 Validators publish JSON-RPC on `127.0.0.1` only, so their firewall opens nothing for it.
 
 ### 2. Initialise each node (on each host)
 
+One directory per node, e.g. on .132 `/opt/besu-val1` and `/opt/besu-rpc1`:
+
 ```bash
-cp -r besu-production/node /opt/besu && cd /opt/besu
+cp -r besu-production/node /opt/besu-val1 && cd /opt/besu-val1
 cp .env.example .env
 ```
 
-Edit `.env`:
+The exact values of every node are in [`../docs/production-layout.md`](../docs/production-layout.md)
+(section 2). Edit `.env`:
 
 | Variable | Value |
 |---|---|
 | `BESU_IMAGE` | an exact version, e.g. `hyperledger/besu:26.11.0` |
 | `BESU_ROLE` | `validator` or `rpc` |
-| `NODE_NAME` | a unique name, e.g. `validator1` |
-| `P2P_HOST`, `BIND_IP` | this host's private IP |
+| `NODE_NAME` | a unique name: `val1` … `val4`, `rpc1`, `rpc2` |
+| `P2P_HOST`, `BIND_IP` | this host's IP, e.g. `192.168.68.132` |
+| `P2P_PORT`, `METRICS_PORT`, `RPC_PORT`, `WS_PORT`, `COMPOSE_FILE` | on .132 and .133 (two nodes per host): see the layout table |
 
 **RPC nodes** also need:
 
 | Variable | Value |
 |---|---|
-| `RPC_BIND_IP` | the private IP |
-| `BESU_HOST_ALLOWLIST` | the names/IPs clients use in the URL |
-| `BESU_RPC_HTTP_API` | `ETH,NET,WEB3` for the explorer node only |
+| `RPC_BIND_IP` | the host's IP (`192.168.68.132` for rpc1, `.133` for rpc2) |
+| `BESU_HOST_ALLOWLIST` | the names/IPs clients use in the URL: the host's IP **and the VIP** `192.168.68.150`, plus `localhost,127.0.0.1` |
 
 Then run:
 
@@ -110,16 +119,16 @@ Then run:
 `init.sh`:
 - generates the node key inside the `besu-data` volume (from the kernel's random generator);
 - writes `<NODE_NAME>.json` with the **public** enode and address. Send this file to the operator.
-- For a validator, back up the key now: `./backup-key.sh /secure/dir`, encrypt the file, and
-  store it in this team's vault. The key is the validator's identity; if it's lost, the validator
-  must be replaced by a vote.
+- Back up the key now: `./backup-key.sh /secure/dir`, encrypt the file, and store it in this team's
+  vault. A validator's key is its identity: if it's lost, the validator must be replaced by a vote,
+  and losing two at once ends the chain.
 
 ### 3. Build the network files (operator)
 
 ```bash
-CHAIN_ID=1337 BLOCK_PERIOD=2 REQUEST_TIMEOUT=4 \
+CHAIN_ID=1337 BLOCK_PERIOD=1 REQUEST_TIMEOUT=2 \
 ALLOC="0x<SENDER01>=1000000000000000000000000" \
-  besu-production/operator/make-network.sh network/ validator1.json validator2.json validator3.json validator4.json rpc1.json rpc2.json rpc-explorer.json
+  besu-production/operator/make-network.sh network/ val1.json val2.json val3.json val4.json rpc1.json rpc2.json
 ```
 
 This produces:
@@ -139,8 +148,8 @@ change once the chain is running.
 
 ### 4. Distribute and start (each host)
 
-Copy the 4 files into `/opt/besu/network/`. Compare `SHA256SUMS` with the operator over a second
-channel, then start:
+Copy the 4 files into each node directory's `network/` (e.g. `/opt/besu-val1/network/`). Compare
+`SHA256SUMS` with the operator over a second channel, then start:
 
 ```bash
 ./start.sh
@@ -158,41 +167,46 @@ operator/qbft.sh health       # block number increasing, peer count = number of 
 operator/qbft.sh validators   # the validator set from genesis
 ```
 
-From an application host:
+From an application host, each RPC node directly and, once HAProxy runs, through the VIP:
 
 ```bash
-curl -s http://<rpc1>:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
+curl -s http://192.168.68.132:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
+```
+
+```bash
+curl -s http://192.168.68.150:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
 ```
 
 Then point the applications at the RPC nodes:
-- proxy: `BESU_IP` / `BESU_PORT`;
-- MPC coordinator: `MPC_BESU_RPC`;
-- chainlens: `BESU_RPC` → the explorer node.
+- proxy (.132, .133): `BESU_IP=192.168.68.150`, `BESU_PORT=8545` (HAProxy);
+- coordinators: `MPC_BESU_RPC=http://192.168.68.150:8545`;
+- chainlens (.136): `BESU_RPC=http://192.168.68.133:8545` (rpc2).
 
 Add the nodes to monitoring: one line per node in `../monitoring/prometheus/targets/besu.yml` (see [`../monitoring/README.md`](../monitoring/README.md)).
 
 ## Several nodes on one host
 
-You can run more than one node on a host, for example `rpc1`, `val1` and `val2`:
+In the layout, .132 runs val1 + rpc1 and .133 runs val2 + rpc2:
 
-- **One directory per node**, e.g. `/opt/besu-val1`, `/opt/besu-val2`, `/opt/besu-rpc1`. The
+- **One directory per node**, e.g. `/opt/besu-val1` and `/opt/besu-rpc1`. The
   directory name becomes the compose project and the data volume, so the keys stay separate.
 - **Host networking:** `COMPOSE_FILE=docker-compose.host.yml` in each `.env`. With Docker's bridge
   network, a node connecting to another node on the same host arrives with the Docker gateway
   address (172.x) as its source, isn't found in `permissions_config.toml`, and is dropped.
-- **Different ports per node:** `P2P_PORT`, `RPC_PORT`, `WS_PORT`, `METRICS_PORT`. Same `P2P_HOST`
-  and `BIND_IP` (the host's private IP).
+- **Different ports per node:** validator P2P 30303, metrics 9545, RPC `127.0.0.1:8645`; rpc node
+  P2P 30304, metrics 9546, RPC `<host IP>:8545`. Same `P2P_HOST` and `BIND_IP` (the host's IP).
 - Validator RPC stays on `127.0.0.1`, on its own port: `RPC=http://127.0.0.1:8645 operator/qbft.sh health`.
-- Firewall: `P2P_PORTS="30303 30304 30305" METRICS_PORTS="9545 9546 9547" ./firewall-example.sh`.
+- Firewall: `../ha/firewall-layout.sh` opens both nodes' ports.
 
-**Fault tolerance:** a host with 2 of 4 validators takes 2 validators down when it fails, so the
-chain halts (quorum 3). Keep at most `f` validators per host (1 with 4 validators, 2 with 7).
+**Fault tolerance:** never put two **validators** on one host: losing it would take 2 of 4 down and
+halt the chain (quorum 3). An RPC node next to a validator is fine.
 
 ## Operations
 
 | Task | How |
 |---|---|
 | **Upgrade Besu** | set the new exact tag in `BESU_IMAGE` and run `./start.sh`, **one node at a time**, waiting until it is back at the chain head (`qbft.sh health`). With 4 validators, never have 2 down at once. |
+| **Move a node to another host** (same key, new IP:port) | operator: `operator/move-node.sh network/ <node>.json <new IP:port>`, copy the 4 files to every node, restart the others one at a time; stop the node on its old host, start it on the new one with `restore-key.sh`. **Never run one key on two hosts at once.** Full procedure: [`../docs/production-layout.md`](../docs/production-layout.md), section 7 |
 | **Add an RPC node** | `init.sh` on the new host, then `operator/add-node.sh network/ rpcN.json`. Copy the 4 files to **every** node, restart nodes one at a time (`./start.sh && docker compose restart`), then start the new node. |
 | **Add a validator** | same as an RPC node, then on **more than half** of the current validators run `operator/qbft.sh propose 0x<new address> true`. Once `qbft.sh validators` lists it, run `qbft.sh discard 0x<address>` on those validators. |
 | **Remove a validator** | `qbft.sh propose 0x<address> false` on more than half of the validators, then `discard`. Then remove its enode from the network files with care, and redistribute. |

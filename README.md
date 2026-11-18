@@ -6,13 +6,14 @@ A private Hyperledger Besu (QBFT) blockchain with:
 - **`mpc-signer/`**: **non-exportable transaction signing**, a 2-of-3 MPC signer where the private
   key never exists anywhere. It replaces Vault + Web3Signer.
 - **`chainlens/`**: a block explorer;
-- **`monitoring/`**: Prometheus + Grafana dashboards and alerts for production Besu and the MPC signer.
+- **`monitoring/`**: Prometheus + Grafana dashboards and alerts for production Besu and the MPC signer;
+- **`ha/`**: HAProxy + keepalived for the production application path (floating IPs, failover).
 
 The same components run in two setups:
 
 | | Development / test | Production |
 |---|---|---|
-| Where | everything on one Docker host | separate hosts, sites and admin teams |
+| Where | everything on one Docker host | 5 hosts (`192.168.68.132`–`.136`), HA pair for the application path, MPC nodes run by 3 teams |
 | Besu | [`besu-test-network/`](besu-test-network) | [`besu-production/`](besu-production) |
 | MPC signer | [`mpc-signer/quickstart/`](mpc-signer/quickstart) (3 nodes on one host) | [`mpc-signer/deploy/`](mpc-signer/deploy) (one node per host and team) |
 | Proxy, explorer | `proxy/`, `chainlens/` with Docker Compose | same images, private network, behind an API gateway |
@@ -37,6 +38,7 @@ The same components run in two setups:
 | [`mpc-signer/`](mpc-signer) | **2-of-3 threshold ECDSA signer** (CGGMP24 / LFDT Lockness), Web3Signer-compatible JSON-RPC. Quick start, production packages, benchmark. | 9100 coordinator, 7000 nodes |
 | [`proxy/`](proxy) | **Application API** (Node.js/Express): accounts, transfers, NFT collections. Redis is an optional cache: correctness comes from memory + the chain. | 30000 API, 36379 Redis |
 | [`chainlens/`](chainlens) | **Block explorer** (Node.js/Express): blocks, transactions, accounts, contracts, NFTs. NFT sales show the image. Polls RPC every 4 s, indexes in memory, re-indexes after a chain reset. | 30100 |
+| [`ha/`](ha) | **High availability** for .132/.133: HAProxy (Besu RPC and MPC signer behind one floating IP), keepalived (floating IPs, starts/stops the standby proxy), firewalld rules for every host. | VIPs 192.168.68.150 (:8545, :9100), 192.168.68.151 (:30000) |
 | [`monitoring/`](monitoring) | **Production monitoring**: Prometheus + Grafana on one host. Dashboards for Besu (quorum, block age, peers, sync, RPC, JVM), the MPC signer (nodes vs threshold, hot/cold signing, latency, pool, policy refusals) and hosts; alert rules. | 3000 Grafana, 9090 Prometheus (localhost), 9101 node-exporter |
 | [`besu-vault-web3signer/`](besu-vault-web3signer) | **Previous signer, being retired**: Vault KV keeps exportable private keys and Web3Signer loads them into memory. Kept for comparison benchmarks. | 8200 Vault, 9000 Web3Signer |
 
@@ -64,50 +66,74 @@ The same components run in two setups:
 
 <sub>Source: [`docs/architecture-production.svg`](docs/architecture-production.svg)</sub>
 
+Five hosts on one private network. Full details (every setting, port, the deployment order, the
+failover tests and the migration from the earlier layout): **[`docs/production-layout.md`](docs/production-layout.md)**.
+
+| Host | Runs |
+|---|---|
+| **192.168.68.132** | val1, rpc1, coord1, **proxy1** (active), mpc1, HAProxy + keepalived |
+| **192.168.68.133** | val2, rpc2, coord2 (warm), **proxy2** (standby), HAProxy + keepalived |
+| **192.168.68.134** | val3, mpc2 |
+| **192.168.68.135** | val4, mpc3 |
+| **192.168.68.136** | Prometheus, Grafana, chainlens |
+
+| Floating IP (keepalived) | Serves |
+|---|---|
+| `192.168.68.150` | HAProxy: Besu RPC `:8545` (rpc1, rpc2 as backup) and the MPC signer `:9100` (coord1, coord2 as backup) |
+| `192.168.68.151` | the active proxy `:30000`: the entry point for applications |
+
+- **Chain:** 4 validators, one per host .132–.135 (quorum 3): any one host can fail.
+- **Signing:** 3 MPC nodes on .132, .134, .135, each run by **its own team** (2 of 3 sign). Two
+  coordinators; either one signs for every account (they re-read the key list from the nodes).
+- **Application path:** everything on .132 has a twin on .133. keepalived moves the floating IPs and
+  starts the standby proxy; only one proxy is ever active (it counts nonces in memory).
+
 ### Network zones
 
 | Zone | Contents | Reachable from |
 |---|---|---|
-| **Public edge** | L7 load balancer / API gateway (HA pair, bring your own, e.g. nginx, HAProxy, Kong): TLS, client authentication, rate limits, WAF | internet: the **only** public entry |
-| **App zone** | `proxy` (1 active + standby), Redis (single instance, a cache), `chainlens` | the gateway |
-| **Signing zone** | `mpc-coordinator` × 1–2 (no key material); `mpc-node` 0/1/2 on **3 sites, run by 3 different admin teams** | proxy → coordinator → nodes, nodes → coordinator relay; each team's bastion |
-| **Chain zone** | 4 QBFT validators, one per failure domain (p2p only); RPC nodes × 2+ for apps; 1 read-only RPC node for the explorer | apps → RPC nodes only; validators: p2p + the operator over SSH |
-| **Ops** | Prometheus + Alertmanager, Grafana, logs; per-team secret stores and backups; bastion + MFA | scrapes metrics; cannot call signing APIs |
+| **Public edge** | API gateway in front of `192.168.68.151:30000` (bring your own: TLS, client authentication, rate limits) | internet: the **only** public entry |
+| **App** | proxy1/proxy2, HAProxy, chainlens (.136) | the gateway; admins |
+| **Signing** | coord1/coord2 (no key material), mpc1/mpc2/mpc3 | proxy → coordinator → nodes, nodes → coordinator relay; each team's admin |
+| **Chain** | val1–val4 (p2p only, RPC on localhost), rpc1/rpc2 | coordinators and proxies via HAProxy; chainlens → rpc2 |
+| **Ops** | Prometheus, Grafana (.136), node-exporter everywhere, backups | scrapes metrics; cannot call signing APIs |
 
-All hosts communicate over a **private encrypted network** (WireGuard or a site-to-site VPN),
-with default-deny firewalls. Each package includes `firewall-example.sh` with the exact ports.
+`ha/firewall-layout.sh` applies exactly these rules with firewalld on each host.
 
 ### Deployment order
 
-The MPC signer comes first: its first key, `SENDER01`, is funded in the Besu genesis block.
-
-| # | Step | Guide | Result |
-|---|---|---|---|
-| 1 | **MPC signer: nodes + key ceremony.** 3 node hosts (one team each), coordinator(s), `cluster.json` with the signing policy, aux info + key generation. | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md), steps 1–8 | `SENDER01` address; no private key exists |
-| 2 | **Besu network.** Each validator and RPC host runs `init.sh`; the operator runs `make-network.sh` with `ALLOC="<SENDER01>=<wei>"`; each host runs `start.sh` (verifies `SHA256SUMS`). | [`besu-production/README.md`](besu-production/README.md) | running chain; `SENDER01` funded |
-| 3 | **Connect the signer to Besu.** On the coordinator(s), set `MPC_BESU_RPC` = an app RPC node and `MPC_POOL_KEYS=<SENDER01>`, then `docker compose up -d`. | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md), steps 8–10 | hot-key presignature pool filling |
-| 4 | **Proxy + Redis.** In `proxy/.env` set: `BESU_IP` / `BESU_PORT` = app RPC node; `WEB3SIGNER_IP` / `WEB3SIGNER_PORT` = coordinator:9100; `SENDER01`; `MPC_ADMIN_URL` / `MPC_ADMIN_TOKEN`; `REDIS_*`; **no** `VAULT_*` and no `NFT_CONTRACT`. Then `docker compose up -d --build`. | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) | API on :30000 (private) |
-| 5 | **NFT collections.** `POST /nft/deploy` for each collection (unique name and symbol). | [`proxy/api.txt`](proxy/api.txt) | version-2 collections, minter = `SENDER01` |
-| 6 | **Explorer.** `chainlens/.env`: `BESU_RPC` = the read-only explorer RPC node; then `docker compose up -d --build`. | [`chainlens/`](chainlens) | explorer on :30100 (private) |
-| 7 | **API gateway** in front of the proxy and chainlens (TLS, auth, rate limits). | your gateway | the only public entry |
-| 8 | **Monitoring and backups.** `monitoring/`: `setup.sh`, list the Besu nodes, coordinators and hosts in `prometheus/targets/`, `docker compose up -d`. Then per-team MPC share backups (hourly, `deploy/node/backup.sh`), node key backups (`backup-key.sh`), a daily chain snapshot (`snapshot-chain.sh`, off-site copy), backup-age alerts, restore drill. | [`docs/disaster-recovery.md`](docs/disaster-recovery.md), [`monitoring/README.md`](monitoring/README.md) | Grafana dashboards + alerts; tested restore |
+| # | Step | Guide |
+|---|---|---|
+| 1 | Hosts: Docker, synchronized clocks, firewall (`ha/firewall-layout.sh`), node-exporter | [`docs/production-layout.md`](docs/production-layout.md) |
+| 2 | **MPC:** mpc1/2/3 (each team), `cluster.json`, coord1 + coord2, key ceremony → `SENDER01` | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) |
+| 3 | **Besu:** 6 nodes (val1–4, rpc1–2), network files with `ALLOC="<SENDER01>=…"`, start | [`besu-production/README.md`](besu-production/README.md) |
+| 4 | **HA:** HAProxy + keepalived on .132 and .133 | [`ha/README.md`](ha/README.md) |
+| 5 | **Proxy** on .132 and .133 (`proxy/.env.example`: everything through the VIPs) | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) |
+| 6 | **NFT collections:** `POST /nft/deploy` (unique name and symbol) | [`proxy/api.txt`](proxy/api.txt) |
+| 7 | **Monitoring + chainlens** on .136 | [`monitoring/README.md`](monitoring/README.md) |
+| 8 | **Backups:** node keys, hourly MPC shares, daily chain snapshot on val3 (.134) with an off-site copy | [`docs/disaster-recovery.md`](docs/disaster-recovery.md) |
+| 9 | **API gateway** in front of the proxy VIP; **failover tests**; go live | [`ha/README.md`](ha/README.md) |
 
 ### What keeps running when something fails
 
 | Failure | Effect |
 |---|---|
-| 1 MPC node, site or admin team | none: the other 2 of 3 sign. `/createaccount` waits for all 3 (key generation). |
+| **host .132** | chain continues (3 validators); signing via coord2 and mpc2 + mpc3; the VIPs move to .133 and proxy2 starts: a few seconds of failed requests |
+| host .133, .134 or .135 | none (one validator and at most one MPC node lost) |
+| host .136 | no monitoring and no explorer; payments continue |
+| rpc1, coord1 or the proxy process | HAProxy or keepalived switches to the twin on .133 |
+| 1 MPC node or admin team | none: 2 of 3 sign. `/createaccount` waits for all 3 (key generation) |
 | theft of 1 MPC node, disk or backup | the attacker gets one share: **no key, cannot sign** |
-| 1 validator (of 4) | none: quorum is 3. Grow to 7 validators to tolerate 2. |
-| 1 coordinator or app RPC node (with 2 deployed) | none, behind the internal load balancer |
-| Redis down, empty or restored from an old snapshot | none for correctness: the proxy uses memory + the chain (nonces, prices, collections, metadata) |
-| proxy process | requests fail until the standby takes over (one active replica today, see below) |
-| sustained load beyond the presignature rate | signing slows to the cold path (~0.6 s per signature). Size MPC node CPU at ~0.4 cores per sustained TPS ([`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md)). |
+| Redis down, empty or stale | none for correctness: the proxy uses memory + the chain |
+| **two** of .132–.135 at once, or the whole site | the chain halts: [`docs/disaster-recovery.md`](docs/disaster-recovery.md) |
+| sustained load beyond the presignature rate | signing slows to the cold path (~0.6 s per signature). Size MPC node CPU at ~0.4 cores per sustained TPS ([`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md)) |
 
 ### Remaining gaps before full production
 
-- **Proxy:** the per-sender lock is in process memory, so run **one active replica** (with a
-  standby) until it moves to Redis.
+- **One site:** all hosts share one subnet (the floating IPs need it). A site-wide disaster is
+  covered by off-site backups and the DR runbook, not by failover.
+- **Proxy:** one active instance at a time (nonces are counted in its memory); keepalived provides
+  the standby.
 - **MPC signer:**
   - no mTLS on the node API and no authentication on the relay; mitigated by the private
     network and firewall;
@@ -191,6 +217,8 @@ collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).
 | [`besu-production/README.md`](besu-production/README.md) | Production Besu: hosts, network files, start, validator add/remove, operations |
 | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) | Production MPC signer: 3 teams, tokens, key ceremony, backups and restore, operations |
 | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) | Running the proxy on the MPC signer, Redis-optional design, troubleshooting |
+| [`docs/production-layout.md`](docs/production-layout.md) | **Production layout**: the 5 hosts, every setting and port, deployment order, failure table, failover tests, migration |
+| [`ha/README.md`](ha/README.md) | HAProxy + keepalived setup, operations, failover tests |
 | [`docs/disaster-recovery.md`](docs/disaster-recovery.md) | **Disaster recovery runbook**: what to back up, schedule, alerts, recovery steps per scenario, drills |
 | [`monitoring/README.md`](monitoring/README.md) | Production monitoring: metrics endpoints, targets, dashboards, alerts, firewall |
 | [`mpc-signer/README.md`](mpc-signer/README.md) | MPC signer design, Docker quick start, security notes ([diagram](mpc-signer/docs/architecture.png)) |

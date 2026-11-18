@@ -1,7 +1,16 @@
 # Disaster recovery runbook
 
 What to back up, how to know the backups work, and the exact steps to recover from each kind of
-loss. It covers `besu-production/`, `mpc-signer/deploy/`, `proxy/`, `chainlens/` and `monitoring/`.
+loss. It covers `besu-production/`, `mpc-signer/deploy/`, `proxy/`, `chainlens/`, `monitoring/`
+and `ha/`, in the 5-host production layout ([`production-layout.md`](production-layout.md)):
+
+| Host | Runs |
+|---|---|
+| 192.168.68.132 | val1, rpc1, coord1, proxy1 (active), mpc1, HAProxy + keepalived |
+| 192.168.68.133 | val2, rpc2, coord2, proxy2 (standby), HAProxy + keepalived |
+| 192.168.68.134 | val3, mpc2 (takes the daily chain snapshot) |
+| 192.168.68.135 | val4, mpc3 |
+| 192.168.68.136 | Prometheus, Grafana, chainlens |
 
 Keep a **printed or offline copy** of this page and of the contact list: during a disaster the
 repository, the wiki or the network may be unavailable.
@@ -40,15 +49,15 @@ write-once** (ransomware encrypts every backup it can reach).
 
 | What | Command (from that host's directory) | When (cron example) |
 |---|---|---|
-| Chain snapshot | `./snapshot-chain.sh /backup/chain` with `COPY_TO=user@offsite:/besu-chain` | daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=… ./snapshot-chain.sh /backup/chain` |
-| MPC shares | `./backup.sh /secure/backup` (on each MPC node) | hourly: `0 * * * * /opt/mpc-node/backup.sh /secure/backup` |
-| Validator / node keys | `./backup-key.sh /secure/dir`, then `gpg --symmetric` and delete the plain copy | once per key |
+| Chain snapshot | on **val3 (.134)**: `./snapshot-chain.sh /backup/chain` with `COPY_TO=user@offsite:/besu-chain` | daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=… ./snapshot-chain.sh /backup/chain` |
+| MPC shares | `./backup.sh /secure/backup` on mpc1 (.132), mpc2 (.134), mpc3 (.135), each by its team | hourly: `0 * * * * /opt/mpc-node/backup.sh /secure/backup` |
+| Node keys | `./backup-key.sh /secure/dir` on all 6 Besu nodes (val1–4, rpc1–2), then `gpg --symmetric` and delete the plain copy | once per key |
 | Network files | `cp -r network /secure/network-$(date +%F)` (operator) | after every change |
 
 **Which node takes the chain snapshot:** it is **stopped** for a few minutes while its data is
-archived. Use a node your applications don't depend on: a second RPC node, `rpc-explorer`, or a
-validator (the chain continues with the other three). **Never** the only RPC node of the proxy and
-coordinator. The script refuses to stop a node that doesn't see all its peers (another node is
+archived, so the layout uses **val3 on .134**: a validator (the chain continues with the other
+three) that is alone on its host and not on the application path. Not rpc1 (it serves the proxy
+and coordinators); rpc2 would also work, but it is the failover target and chainlens' source. The script refuses to stop a node that doesn't see all its peers (another node is
 already down), so a snapshot can't halt the chain.
 
 The snapshot contains **no keys** and can be restored onto any node of the same chain.
@@ -87,10 +96,11 @@ table, and Prometheus alerts:
 | What you see | Go to |
 |---|---|
 | one validator down, blocks continue | [6.1](#61-one-validator-host-lost) |
-| **blocks stopped**, 2 validators down (e.g. host .132) | [6.2](#62-the-host-with-two-validators-lost-eg-192168681320) |
-| blocks continue, apps can't reach Besu | [6.3](#63-an-rpc-node-lost) |
+| host .132 or .133 down, blocks continue | [6.2](#62-application-host-132-or-133-lost) |
+| **blocks stopped**: two validator hosts down | [6.3](#63-two-validator-hosts-lost-blocks-stopped) |
 | `MpcNodeDown`, signing still works | [6.4](#64-one-mpc-node-lost) |
 | `MpcBelowThreshold`, **no signatures** | [6.5](#65-two-mpc-nodes-lost) |
+| rpc1 or rpc2 down | [6.3b](#63b-an-rpc-node-lost) |
 | coordinator / proxy / chainlens down | [6.6](#66-coordinator-proxy-chainlens-or-monitoring-host-lost) |
 | everything down | [6.7](#67-whole-site-lost) |
 | suspected intrusion / ransomware | [6.8](#68-intrusion-or-ransomware) |
@@ -126,33 +136,47 @@ the old `@<ip>:<port>` of that enode with the new one, regenerate the checksums
 (`sha256sum genesis.json static-nodes.json permissions_config.toml > SHA256SUMS`), copy the 4 files
 to **every** node and restart them one at a time. Never change `genesis.json`.
 
-### 6.2 The host with two validators lost (e.g. 192.168.68.132)
+### 6.2 Application host (.132 or .133) lost
 
-**Blocks stop** (2 of 4 validators), and on .132 also rpc1, the coordinator and the proxy. Priority:
-get **both validators** back, everything else depends on blocks.
+**Blocks continue** (3 of 4 validators), and signing continues (2 of 3 MPC nodes when .132 is
+lost). If it was **.132**, keepalived moves both floating IPs to .133 within seconds: HAProxy there
+sends Besu RPC to **rpc2** and signing to **coord2**, and **proxy2** starts. Applications see a few
+seconds of failed requests. If it was **.133**, nothing changes for applications: only the standby
+is gone.
 
-1. Replacement host with the **same IP** (or follow "New IP" in 6.1 for each node).
-2. Restore **val1 and val2** as in 6.1 steps 2–3 (`restore-key.sh` + `start.sh` in each directory;
-   `COMPOSE_FILE=docker-compose.host.yml` in their `.env`).
-3. When both have peers: blocks resume. **If no new block within about a minute**, the validators'
-   QBFT rounds have drifted apart during the outage: restart **all four validators at the same
-   time** (`docker compose restart` in each directory). Nothing is lost; in tests blocks resumed
-   within ~25 s.
-4. Restore rpc1 (6.3), then the coordinator and proxy (6.6).
+1. Check the failover worked: on .133 `ip -br addr | grep -E '68\.15[01]/'` lists both VIPs;
+   `curl -s http://192.168.68.151:30000/status/senders` answers; Grafana shows blocks and signatures.
+2. Rebuild the lost host with the **same IP**: its Besu nodes as in 6.1 (val and rpc, each with
+   `restore-key.sh` and `start.sh`; for a large chain `restore-chain.sh` first), mpc1 as in 6.4
+   (.132 only), the coordinator and the proxy (6.6), HAProxy + keepalived (`ha/README.md`).
+3. The VIPs **stay** on .133 (`nopreempt`). Move them back at a quiet time: on .133
+   `systemctl restart keepalived`.
 
-**If the keys of val1 and val2 are both lost:** the chain can't continue (no quorum, so no vote to
+### 6.3 Two validator hosts lost (blocks stopped)
+
+**Blocks stop** (2 of 4 validators). Priority: get **one** of the two validators back, then blocks
+resume; everything else depends on blocks.
+
+1. Replacement host(s) with the **same IP** (or follow "New IP" in 6.1).
+2. Restore the validator(s) as in 6.1 steps 2–3 (`restore-key.sh` + `start.sh`).
+3. When 3 validators have peers, blocks resume. **If no new block within about a minute**, the
+   validators' QBFT rounds have drifted apart during the outage: restart **all four validators at
+   the same time** (`docker compose restart` in each directory). Nothing is lost; in tests blocks
+   resumed within ~25 s.
+4. Then everything else that ran on those hosts (MPC nodes 6.4/6.5, RPC node, coordinator, proxy 6.6).
+
+**If two validators' keys are both lost:** the chain can't continue (no quorum, so no vote to
 replace them). Recovery means a **new chain**: new genesis with the balances re-created, which is a
 business decision, not a runbook step. This is why validator key backups are mandatory.
 
-### 6.3 An RPC node lost
+### 6.3b An RPC node lost
 
-Blocks continue; applications using that node fail.
+Blocks continue. If it is **rpc1**, HAProxy already sends Besu RPC to **rpc2** (within ~6 s);
+if it is **rpc2**, chainlens stops updating (point its `BESU_RPC` at rpc1 temporarily).
 
-1. Quick fix: point the proxy (`BESU_IP`), the coordinator (`MPC_BESU_RPC`) and chainlens
-   (`BESU_RPC`) at another RPC node if you have one.
-2. Rebuild as 6.1 (same IP, `restore-key.sh` with its backed-up node key, `start.sh`). For a large
-   chain, restore the latest snapshot first to skip the full sync:
-   `./restore-key.sh …` → `./restore-chain.sh /backup/chain/besu-chain-…tgz` (starts the node).
+Rebuild as 6.1 (same IP, `restore-key.sh` with its backed-up node key, `start.sh`). For a large
+chain, restore the latest snapshot first to skip the full sync:
+`./restore-key.sh …` → `./restore-chain.sh /backup/chain/besu-chain-…tgz` (starts the node).
 
 ### 6.4 One MPC node lost
 
@@ -192,14 +216,16 @@ node). As soon as **two** nodes are up, signing works again.
 
 ### 6.6 Coordinator, proxy, chainlens or monitoring host lost
 
-All four are stateless: redeploy from git plus the saved `.env` / `cluster.json`.
+All four are stateless: redeploy from git plus the saved `.env` / `cluster.json`. The coordinator
+and the proxy have twins on .132/.133: HAProxy and keepalived switch to the twin automatically
+(`ha/README.md`), so rebuilding the lost one isn't urgent, but redundancy is gone until it's back.
 
 | Component | Rebuild | Check |
 |---|---|---|
-| MPC coordinator | `mpc-signer/deploy/coordinator`: `.env`, `cluster.json`, `docker compose up -d` | log `keys loaded from nodes`; MPC dashboard |
-| Proxy | `proxy/`: `.env`, `docker compose up -d --build` (Redis optional, starts empty) | `GET /status/senders`: no gap, no stall; a test transfer |
-| Chainlens | `chainlens/`: `.env`, `docker compose up -d --build` | re-indexes from block 0 by itself |
-| Monitoring | `monitoring/`: `setup.sh` with the metrics token, targets, `docker compose up -d` | `./check-targets.sh`; history before the loss is gone |
+| MPC coordinator (coord1 .132 / coord2 .133) | `mpc-signer/deploy/coordinator`: `.env` (its own `MPC_BIND_IP`, `MPC_RELAY_URL`), `cluster.json`, `docker compose up -d` | log `keys loaded from nodes`; both coordinators UP on the MPC dashboard |
+| Proxy (proxy1 .132 / proxy2 .133) | `proxy/`: `.env`, `docker compose build`; **don't start it by hand**: keepalived starts it on the host holding `.151` | `GET http://192.168.68.151:30000/status/senders`: no gap, no stall; a test transfer |
+| Chainlens (.136) | `chainlens/`: `.env` (`BESU_RPC` = rpc2), `docker compose up -d --build` | re-indexes from block 0 by itself |
+| Monitoring (.136) | `monitoring/`: `setup.sh` with the metrics token, targets, `docker compose up -d` | `./check-targets.sh`; history before the loss is gone |
 
 ### 6.7 Whole site lost
 
@@ -216,7 +242,7 @@ Everything down. Work in this order; each step needs the previous one.
    Restoring the snapshot on every node avoids each node syncing from block 0. (Alternatively
    restore it on one node only and let the others sync from it.)
 3. **Check blocks:** `qbft.sh health` on a validator → height above the snapshot block and rising.
-   No new block within a minute → restart all validators together (see 6.2 step 3).
+   No new block within a minute → restart all validators together (see 6.3 step 3).
 4. **MPC nodes:** each team restores its node (6.4 steps 1–2). Then the coordinator(s) (6.6).
 5. **Proxy, chainlens, monitoring** (6.6).
 6. **Reconcile:** the chain is back at the snapshot's block. Everything after it is **gone**:

@@ -1,13 +1,15 @@
 # monitoring: Prometheus + Grafana for besu-production and mpc-signer
 
 The production counterpart of the Prometheus/Grafana bundled in `../besu-test-network`. It runs on
-**one monitoring host** and scrapes, over the private network:
+**one monitoring host**, 192.168.68.136 in the production layout
+([`../docs/production-layout.md`](../docs/production-layout.md)), next to chainlens, and scrapes,
+over the private network:
 
 | What | Endpoint | Exposed by |
 |---|---|---|
 | Every Besu validator and RPC node | `http://<BIND_IP>:<METRICS_PORT>/metrics` (9545…) | `besu-production/node` |
-| Every MPC coordinator | `http://<coordinator>:9100/metrics` (bearer token) | `mpc-signer` coordinator |
-| The proxy | `http://<proxy>:30000/metrics` | `proxy` (per sender: in flight, nonce gaps, stalls, repairs) |
+| Both MPC coordinators, on their own IPs | `http://<coordinator>:9100/metrics` (bearer token) | `mpc-signer` coordinator |
+| The active proxy, through its floating IP | `http://192.168.68.151:30000/metrics` | `proxy` (per sender: in flight, nonce gaps, stalls, repairs) |
 | MPC nodes | *not scraped*: each coordinator probes its nodes every 10 s and reports `mpc_node_up` | |
 | Host CPU / memory / disk / network | `http://<host>:9101/metrics` | `node-exporter/` (one per host) |
 
@@ -129,14 +131,16 @@ published there).
 
 ### 4. List your targets
 
-Edit the four files in `prometheus/targets/`. The examples match the network
-`192.168.68.132` (val1, val2, rpc1), `.133` (val3), `.134` (val4):
+Edit the four files in `prometheus/targets/`. They are filled in for the production layout:
+val1 + rpc1 on .132, val2 + rpc2 on .133, val3 on .134, val4 on .135 (validators on metrics port
+9545, RPC nodes on 9546), coord1/coord2 on .132/.133, the proxy on its floating IP `.151`, and
+node-exporter on all five hosts:
 
 | File | One entry per | Labels |
 |---|---|---|
 | `besu.yml` | Besu node: `"<BIND_IP>:<METRICS_PORT>"` | `node` = its `NODE_NAME`, `role` = `validator` or `rpc` |
 | `mpc.yml` | coordinator: `"<host>:9100"` | `name` |
-| `proxy.yml` | the proxy: `"<host>:30000"` | `name` |
+| `proxy.yml` | the proxy's **floating IP**: `"192.168.68.151:30000"` (the standby proxy is stopped, so its host would always show down) | `name` |
 | `hosts.yml` | host with node-exporter: `"<host>:9101"` | `host` |
 
 The `role` label matters: the quorum alert counts `role: validator`. Prometheus re-reads these files
@@ -164,11 +168,13 @@ prints one line per target. It exits with 1 if any target fails:
 ```
 Besu nodes (targets/besu.yml)
   OK   besu   val1           192.168.68.132:9545
-  FAIL besu   val2           192.168.68.132:9546  -> 403: Besu refuses the Host header: old node package, ...
+  FAIL besu   rpc1           192.168.68.132:9546  -> 403: Besu refuses the Host header: old node package, ...
 MPC coordinators (targets/mpc.yml)
-  FAIL mpc    coordinator-a  192.168.68.135:9100  -> 404: old coordinator image without /metrics: ...
+  FAIL mpc    coord2         192.168.68.133:9100  -> 404: old coordinator image without /metrics: ...
+Proxy (targets/proxy.yml)
+  OK   proxy  proxy          192.168.68.151:30000
 Hosts / node-exporter (targets/hosts.yml)
-  OK   host   besu-host-a    192.168.68.132:9101
+  OK   host   host-132       192.168.68.132:9101
 Prometheus scrape status:
       7 "health":"up"
       2 "health":"down"
