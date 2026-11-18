@@ -9,10 +9,13 @@ set -Eeuo pipefail
 cd "$(dirname "$0")"
 out="$(cd "${1:?backup directory}" 2>/dev/null && pwd || { mkdir -p "$1" && cd "$1" && pwd; })"
 set -a; . ./.env; set +a
+. ./backup-metrics.sh
+trap 'rc=$?; if [ $rc -ne 0 ]; then backup_metric mpc-share "mpc-node${MPC_NODE_ID}" failure; echo "backup FAILED" >&2; fi' EXIT
 vol="$(docker compose config --format json | grep -o '"name": *"[^"]*mpc-data"' | head -n1 | sed -E 's/.*"([^"]+)"$/\1/')"
 [ -n "$vol" ] && docker volume inspect "$vol" >/dev/null 2>&1 || { echo "volume $vol not found" >&2; exit 1; }
 name="mpc-node${MPC_NODE_ID}-$(date -u +%Y%m%dT%H%M%SZ).tgz"
 docker run --rm -u 0 --entrypoint tar -v "$vol":/data:ro -v "$out":/backup "$MPC_IMAGE" czf "/backup/$name" -C /data .
-docker run --rm -u 0 --entrypoint tar -v "$out":/backup "$MPC_IMAGE" tzf "/backup/$name" | grep -q 'identity.seed' \
+docker run --rm -u 0 --entrypoint tar -v "$out":/backup "$MPC_IMAGE" tzf "/backup/$name" | grep -c 'identity.seed' >/dev/null \
   || { echo "backup $name does not contain identity.seed" >&2; exit 1; }
+backup_metric mpc-share "mpc-node${MPC_NODE_ID}" success "$(stat -c %s "$out/$name")"
 echo "backup: $out/$name"

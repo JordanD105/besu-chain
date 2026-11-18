@@ -10,7 +10,7 @@ archive="$(cd "$(dirname "${1:?backup archive}")" && pwd)/$(basename "$1")"
 set -a; . ./.env; set +a
 case "$(basename "$archive")" in mpc-node${MPC_NODE_ID}-*) ;; *) echo "archive is not for node ${MPC_NODE_ID}" >&2; exit 1 ;; esac
 docker run --rm -u 0 --entrypoint tar -v "$(dirname "$archive")":/backup "$MPC_IMAGE" tzf "/backup/$(basename "$archive")" \
-  | grep -q 'identity.seed' || { echo "archive has no identity.seed" >&2; exit 1; }
+  | grep -c 'identity.seed' >/dev/null || { echo "archive has no identity.seed" >&2; exit 1; }
 vol="$(docker compose config --format json | grep -o '"name": *"[^"]*mpc-data"' | head -n1 | sed -E 's/.*"([^"]+)"$/\1/')"
 docker volume create "$vol" >/dev/null
 if docker run --rm -u 0 --entrypoint sh -v "$vol":/data "$MPC_IMAGE" -c 'test -e /data/identity.seed'; then

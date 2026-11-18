@@ -31,7 +31,7 @@ Dashboards (folder **Production**):
 |---|---|
 | **Besu production (QBFT)** | chain height, seconds since last block, validators up vs expected, a table per node (up, height, peers, in sync, last block age, tx pool), block time, tx/s, gas, tx pool, peers, refused connections, JSON-RPC rate/latency, P2P traffic, CPU, JVM heap, GC; **Proxy senders**: per sender mined OK / STALLED, in flight, nonce gap, repairs, fillers |
 | **MPC signer** | coordinator up, MPC nodes up vs threshold, keys, presignatures ready, signatures/s (hot/cold), signing latency p50/p95, failures and policy refusals, pool per hot key vs target, presign rate and duration |
-| **Hosts** | CPU, memory, fullest disk, disk I/O, network per host |
+| **Hosts** | CPU, memory, fullest disk, disk I/O, network per host; **Backups**: age, size, result of every backup |
 
 Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations](#operations)):
 
@@ -56,6 +56,10 @@ Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations]
 | `ProxyNonceRepaired` | info | the proxy repaired a gap (lost transactions or filler transactions): see its log |
 | `ProxySenderCheckFailing` / `ProxyDown` | warning / critical | the proxy can't read Besu for its check / doesn't answer |
 | `HostDown` / `HostDiskFull` / `HostMemoryHigh` | warning | node-exporter down; a disk > 80 %; memory > 90 % |
+| `BackupFailed` | warning | the last run of a backup script failed |
+| `ChainSnapshotTooOld` / `ChainSnapshotMissing` | warning | no chain snapshot in 2 days / never |
+| `MpcShareBackupTooOld` / `MpcShareBackupMissing` | warning | an MPC node's share backup older than 2 hours / fewer than 3 nodes backed up |
+| `ValidatorKeyBackupMissing` | warning | a validator key never backed up |
 
 Dry run (4 validators + RPC node, 3 MPC nodes + coordinator, all targets up): one validator and
 one MPC node stopped → `BesuNodeDown`, `MpcNodeDown`; a second of each → `BesuValidatorQuorumLost`,
@@ -93,7 +97,11 @@ docker compose up -d
 BIND_IP=<this host's private IP> docker compose up -d
 ```
 
-It listens on `BIND_IP:9101` (9100 is the MPC coordinator's port).
+It listens on `BIND_IP:9101` (9100 is the MPC coordinator's port). It also publishes the results of
+the backup scripts on that host (`snapshot-chain.sh`, `backup-key.sh`, the MPC `backup.sh`): they
+write small `*.prom` files to `/var/lib/node_exporter/textfile` (change with `TEXTFILE_DIR` here
+and `BACKUP_METRICS_DIR` for the scripts), shown in the **Backups** table and alerted on in
+`rules/backups.yml`. Run node-exporter on every host that runs a backup.
 
 ### 2. Firewall
 

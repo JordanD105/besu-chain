@@ -90,7 +90,7 @@ The MPC signer comes first: its first key, `SENDER01`, is funded in the Besu gen
 | 5 | **NFT collections.** `POST /nft/deploy` for each collection (unique name and symbol). | [`proxy/api.txt`](proxy/api.txt) | version-2 collections, minter = `SENDER01` |
 | 6 | **Explorer.** `chainlens/.env`: `BESU_RPC` = the read-only explorer RPC node; then `docker compose up -d --build`. | [`chainlens/`](chainlens) | explorer on :30100 (private) |
 | 7 | **API gateway** in front of the proxy and chainlens (TLS, auth, rate limits). | your gateway | the only public entry |
-| 8 | **Monitoring and backups.** `monitoring/`: `setup.sh`, list the Besu nodes, coordinators and hosts in `prometheus/targets/`, `docker compose up -d`. Then per-team MPC share backups (`deploy/node/backup.sh`), validator key backups (`backup-key.sh`), restore drill. | [`monitoring/README.md`](monitoring/README.md), both production guides | Grafana dashboards + alerts |
+| 8 | **Monitoring and backups.** `monitoring/`: `setup.sh`, list the Besu nodes, coordinators and hosts in `prometheus/targets/`, `docker compose up -d`. Then per-team MPC share backups (hourly, `deploy/node/backup.sh`), node key backups (`backup-key.sh`), a daily chain snapshot (`snapshot-chain.sh`, off-site copy), backup-age alerts, restore drill. | [`docs/disaster-recovery.md`](docs/disaster-recovery.md), [`monitoring/README.md`](monitoring/README.md) | Grafana dashboards + alerts; tested restore |
 
 ### What keeps running when something fails
 
@@ -191,6 +191,7 @@ collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).
 | [`besu-production/README.md`](besu-production/README.md) | Production Besu: hosts, network files, start, validator add/remove, operations |
 | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) | Production MPC signer: 3 teams, tokens, key ceremony, backups and restore, operations |
 | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) | Running the proxy on the MPC signer, Redis-optional design, troubleshooting |
+| [`docs/disaster-recovery.md`](docs/disaster-recovery.md) | **Disaster recovery runbook**: what to back up, schedule, alerts, recovery steps per scenario, drills |
 | [`monitoring/README.md`](monitoring/README.md) | Production monitoring: metrics endpoints, targets, dashboards, alerts, firewall |
 | [`mpc-signer/README.md`](mpc-signer/README.md) | MPC signer design, Docker quick start, security notes ([diagram](mpc-signer/docs/architecture.png)) |
 | [`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md) | Throughput: MPC vs Vault + Web3Signer, sizing |

@@ -228,6 +228,10 @@ The archive holds the node's sealed identity, aux info and **all key shares**.
   because two shares can sign.
 - **Passphrase:** the archive cannot be opened without that node's passphrase. Keep it in the
   team vault, **not** next to the archive.
+- **Monitoring:** each run records its result for node-exporter (`/var/lib/node_exporter/textfile`,
+  see `monitoring/node-exporter`). Prometheus alerts when a node's backup is older than 2 hours,
+  missing, or failed (`MpcShareBackupTooOld`, `MpcShareBackupMissing`, `BackupFailed`).
+- **Disaster recovery:** [`../../docs/disaster-recovery.md`](../../docs/disaster-recovery.md).
 
 ## 12. Restore a node (same node id, same passphrase)
 

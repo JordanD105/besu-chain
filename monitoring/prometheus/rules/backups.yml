@@ -1,0 +1,44 @@
+# Backup age and failures, from the result files the backup scripts write on each host
+# (published by node-exporter: job "hosts"). Thresholds: chain snapshot 2 days, MPC shares 2 hours.
+groups:
+  - name: backups
+    rules:
+      - alert: BackupFailed
+        expr: backup_last_failure_timestamp_seconds > backup_last_success_timestamp_seconds
+        labels: { severity: warning }
+        annotations:
+          summary: "The last {{ $labels.kind }} backup of {{ $labels.node }} FAILED: run it by hand and read its error"
+
+      - alert: ChainSnapshotTooOld
+        expr: time() - max(backup_last_success_timestamp_seconds{kind="chain"}) > 2 * 86400
+        labels: { severity: warning }
+        annotations:
+          summary: "No chain snapshot for {{ $value | humanizeDuration }}: after a whole-site loss, transactions since then would be lost"
+
+      - alert: ChainSnapshotMissing
+        expr: absent(backup_last_success_timestamp_seconds{kind="chain"} > 0)
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "No chain snapshot has ever been recorded (snapshot-chain.sh from cron, node-exporter textfile collector on that host)"
+
+      - alert: MpcShareBackupTooOld
+        expr: time() - backup_last_success_timestamp_seconds{kind="mpc-share"} > 2 * 3600
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.node }}: last key share backup {{ $value | humanizeDuration }} ago. Shares of accounts created since then exist only on the live node"
+
+      - alert: MpcShareBackupMissing
+        # 3 = number of MPC nodes
+        expr: (count(backup_last_success_timestamp_seconds{kind="mpc-share"} > 0) or vector(0)) < 3
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "Only {{ $value }} of 3 MPC nodes have a recorded key share backup"
+
+      - alert: ValidatorKeyBackupMissing
+        expr: count(up{job="besu",role="validator"}) > (count(backup_last_success_timestamp_seconds{kind="validator-key"} > 0) or vector(0))
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "Not every validator key has a recorded backup (backup-key.sh on each validator). Losing 2 of 4 validator keys ends the chain"

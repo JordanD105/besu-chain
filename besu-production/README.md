@@ -26,7 +26,7 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 
 | Path | Used by | Purpose |
 |---|---|---|
-| `node/` | every Besu host | `docker-compose.yml` (`docker-compose.host.yml` for several nodes per host), `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh`, `reset-chain.sh` |
+| `node/` | every Besu host | `docker-compose.yml` (`docker-compose.host.yml` for several nodes per host), `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh`, `restore-key.sh`, `snapshot-chain.sh`, `restore-chain.sh`, `reset-chain.sh` |
 | `operator/make-network.sh` | operator, once | genesis (QBFT validator set), `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS` |
 | `operator/add-node.sh` | operator, later | add a node to a **running** network (genesis untouched) |
 | `operator/qbft.sh` | on a validator host | validator set, add/remove votes, peers, health |
@@ -201,7 +201,7 @@ chain halts (quorum 3). Keep at most `f` validators per host (1 with 4 validator
 | **Chain halted, then quorum came back, but no new blocks** | While quorum is lost, every validator keeps moving to higher QBFT rounds, and each round doubles its timeout (`REQUEST_TIMEOUT` × 2^round). Validators that were down restart at round 0, so after a long outage they need minutes to meet in the same round (dry run: an ~8 min outage took **8 min 20 s** to resume on its own; a 3 min outage resumed within 45 s). If no block comes within about a minute of quorum being back, **restart all validators at the same time** (`docker compose restart` on each). Their round state is in memory only, so nothing is lost; in the dry run blocks resumed **25 s** after the restart. |
 | **New genesis (reset the chain)** | Besu refuses to start with *"Supplied genesis block does not match chain data stored in /data"*. Either put the original network files back, or, to really start a new chain, run `./reset-chain.sh` on **every** node (validators first). It deletes the chain data but keeps the node key, so the enodes stay valid. **Don't delete the volume**: that deletes the key too. |
 | **Monitoring** | [`../monitoring/`](../monitoring): Prometheus + Grafana with a Besu production dashboard and alerts (quorum lost, no new blocks, node down, peers missing, out of sync, tx pool, heap, disk). Metrics are served on `BIND_IP:METRICS_PORT`; the compose files add `BIND_IP` to the host allowlist so Prometheus is not refused with 403. |
-| **Backups** | validator keys: `backup-key.sh` (once, encrypted, per team). Chain data can be re-synced from peers; optionally snapshot an RPC node's volume to speed up adding nodes. |
+| **Backups** | **Keys:** `./backup-key.sh /secure/dir` on every node (once, then encrypt; losing 2 of 4 validator keys ends the chain). Restore on a rebuilt host with `./restore-key.sh <file>`. **Chain data:** `./snapshot-chain.sh /backup/chain` daily from cron on **one** node that applications don't depend on (a validator is fine: it checks all peers are connected first, then stops the node for a few minutes), with `COPY_TO=user@host:/path` for an off-site copy and `KEEP` snapshots kept. Restore onto any node of the chain with `./restore-chain.sh <archive>` (keeps that node's key; refuses another chain's snapshot). Results are published to monitoring (node-exporter textfile collector), with alerts on old, missing or failed backups. Full procedures: [`../docs/disaster-recovery.md`](../docs/disaster-recovery.md). |
 
 ## What it does not do (yet)
 
