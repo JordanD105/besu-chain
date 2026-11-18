@@ -246,6 +246,21 @@
                     }
                   ]
                 }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "\u2014",
+                        "color": "transparent"
+                      }
+                    }
+                  }
+                ]
               }
             ]
           }
