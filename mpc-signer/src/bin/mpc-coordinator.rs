@@ -76,6 +76,9 @@ struct Cli {
     metrics_token: String,
 }
 
+/// Seconds between background re-reads of the key list from the nodes.
+const KEY_REFRESH_SECS: u64 = 30;
+
 /// Latency histogram in Prometheus format (cumulative buckets, seconds).
 const BUCKETS_MS: [u64; 12] = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000];
 
@@ -158,6 +161,10 @@ struct Coord {
     chain_id: u64,
     node_health: Mutex<HashMap<u16, NodeHealth>>,
     started: Instant,
+    /// When the key list was last read from the nodes (None = never).
+    keys_refreshed: Mutex<Option<Instant>>,
+    /// Serialises refreshes, so a burst of unknown-account requests reads the nodes once.
+    refresh_gate: tokio::sync::Mutex<()>,
 }
 
 #[tokio::main]
@@ -195,6 +202,8 @@ async fn main() -> Result<()> {
         stats: Stats::default(),
         node_health: Mutex::new(HashMap::new()),
         started: Instant::now(),
+        keys_refreshed: Mutex::new(None),
+        refresh_gate: tokio::sync::Mutex::new(()),
     });
 
     let app = Router::new()
@@ -210,7 +219,8 @@ async fn main() -> Result<()> {
         .route("/metrics", get(metrics))
         .with_state(coord.clone());
 
-    // load keys once the HTTP server (and so the relay) is up
+    // load keys once the HTTP server (and so the relay) is up, then re-read them periodically:
+    // another coordinator of the same cluster may have created keys (POST /admin/keys)
     {
         let c = coord.clone();
         tokio::spawn(async move {
@@ -224,6 +234,12 @@ async fn main() -> Result<()> {
                         tracing::warn!("waiting for nodes: {e:#}");
                         tokio::time::sleep(Duration::from_secs(2)).await;
                     }
+                }
+            }
+            loop {
+                tokio::time::sleep(Duration::from_secs(KEY_REFRESH_SECS)).await;
+                if let Err(e) = c.refresh_keys().await {
+                    tracing::warn!("periodic key refresh failed: {e:#}");
                 }
             }
         });
@@ -306,23 +322,59 @@ impl Coord {
     }
 
     /// Keys must be identical on every node.
+    /// Read the key list from the nodes. A key is usable when at least `threshold` nodes hold it,
+    /// so one node being down (or restored from an older backup) does not block the refresh.
+    /// Keys are only ever added: a node that does not answer never removes a key.
     async fn refresh_keys(&self) -> Result<usize> {
-        let mut views = vec![];
-        for id in 0..self.cluster.n() {
-            views.push(self.node_get::<Vec<KeyInfo>>(id, "/v1/keys").await?);
+        let _gate = self.refresh_gate.lock().await;
+        let n = self.cluster.n();
+        let views = join_all((0..n).map(|id| async move {
+            tokio::time::timeout(Duration::from_secs(10), self.node_get::<Vec<KeyInfo>>(id, "/v1/keys"))
+                .await
+                .map_err(|_| anyhow!("node {id}: timeout"))
+                .and_then(|r| r)
+        }))
+        .await;
+        let answered: Vec<Vec<KeyInfo>> = views.into_iter().filter_map(|v| v.ok()).collect();
+        let threshold = self.cluster.threshold as usize;
+        ensure!(
+            answered.len() >= threshold,
+            "only {} of {n} nodes answered, {threshold} needed",
+            answered.len()
+        );
+        let mut held: HashMap<String, (KeyInfo, usize)> = HashMap::new();
+        for view in &answered {
+            for k in view {
+                held.entry(k.address.to_lowercase()).or_insert_with(|| (k.clone(), 0)).1 += 1;
+            }
         }
-        let first = views[0].clone();
-        ensure!(views.iter().all(|v| *v == first), "nodes disagree on the key set");
         let mut keys = self.keys.lock();
-        keys.clear();
-        for k in first {
-            keys.insert(k.address.to_lowercase(), k);
+        let before = keys.len();
+        for (address, (info, count)) in held {
+            if count >= threshold {
+                keys.entry(address).or_insert(info);
+            }
         }
         let mut pools = self.pools.lock();
         for k in keys.keys() {
-            pools.entry(k.clone()).or_default();
+            if self.pooled(k) {
+                pools.entry(k.clone()).or_default();
+            }
         }
+        if keys.len() > before && before > 0 {
+            tracing::info!(new = keys.len() - before, total = keys.len(), "new keys found on the nodes");
+        }
+        *self.keys_refreshed.lock() = Some(Instant::now());
         Ok(keys.len())
+    }
+
+    /// Refresh unless the last refresh is more recent than `max_age`.
+    async fn refresh_keys_if_older(&self, max_age: Duration) -> Result<()> {
+        let fresh = self.keys_refreshed.lock().map(|t| t.elapsed() < max_age).unwrap_or(false);
+        if !fresh {
+            self.refresh_keys().await?;
+        }
+        Ok(())
     }
 
     fn key(&self, address: &str) -> Result<KeyInfo> {
@@ -331,6 +383,18 @@ impl Coord {
             .get(&address.to_lowercase())
             .cloned()
             .ok_or_else(|| anyhow!("account {address} is not managed by this signer"))
+    }
+
+    /// Like key(), but an unknown account first triggers a refresh (at most once per second):
+    /// it may have been created through another coordinator.
+    async fn key_or_refresh(&self, address: &str) -> Result<KeyInfo> {
+        if let Ok(k) = self.key(address) {
+            return Ok(k);
+        }
+        if let Err(e) = self.refresh_keys_if_older(Duration::from_secs(1)).await {
+            tracing::warn!("key refresh for {address} failed: {e:#}");
+        }
+        self.key(address)
     }
 }
 
@@ -575,13 +639,17 @@ async fn handle_rpc(c: &Arc<Coord>, req: Value) -> Value {
     let res: Result<Value> = async {
         match method.as_str() {
             "eth_accounts" => {
+                // clients (the proxy) decide from this list whether we sign for an account
+                if let Err(e) = c.refresh_keys_if_older(Duration::from_secs(5)).await {
+                    tracing::warn!("key refresh for eth_accounts failed: {e:#}");
+                }
                 let mut v: Vec<String> = c.keys.lock().keys().cloned().collect();
                 v.sort();
                 Ok(json!(v))
             }
             "eth_signTransaction" | "eth_sendTransaction" => {
                 let t: RpcTx = serde_json::from_value(params.get(0).cloned().ok_or_else(|| anyhow!("missing tx"))?)?;
-                let key = c.key(&t.from)?;
+                let key = c.key_or_refresh(&t.from).await?;
                 let tx = build_intent(c, &t).await?;
                 let t0 = Instant::now();
                 let signed = sign_tx(c, &key, &tx).await.inspect_err(|e| {
