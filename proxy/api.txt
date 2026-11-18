@@ -85,3 +85,8 @@ GET /nft/owner/0xOwner                       (all collections, plus default-coll
 GET /nft/owner/0xOwner?collection=DRG        (one collection)
 
 # Token ids start at 1 in each collection.
+
+# ---------------------------------------------------------------
+# Sender state (nonces, value in flight, corrections by the periodic chain check)
+# ---------------------------------------------------------------
+GET /status/senders

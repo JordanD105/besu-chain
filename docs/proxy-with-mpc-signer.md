@@ -210,6 +210,48 @@ The proxy calls `eth_accounts` on `WEB3SIGNER_IP:WEB3SIGNER_PORT` (now the coord
   this setup there are no such accounts. Because `VAULT_TOKEN` is not set, any attempt fails
   closed with an error instead of signing.
 
+## Nonces and balance checks: fast path + periodic chain check
+
+Transactions from one sender must use consecutive nonces, so the proxy sends them **one at a time
+per sender** (a per-sender lock). To keep that lock short, it holds only **one signing round trip**:
+
+- **nonce:** counted in memory. Besu is read only when the proxy has no nonce for the sender yet
+  (start-up, after an error, after a repair);
+- **balance check:** against a snapshot (balance and confirmed nonce read **at the same block**)
+  minus the value of this sender's transactions not confirmed yet. It never allows more than the
+  chain would;
+- Redis writes are not waited for, and the signer's key list is cached for 10 s.
+
+A **background check** (every `SENDER_CHECK_MS`, default 2 s) reads Besu for every sender used in
+the last 5 minutes and corrects the in-memory state on its own:
+
+| Situation | What the check does |
+|---|---|
+| a transaction was mined | its value stops being reserved (it is now in the lower balance) |
+| someone deposited ETH to the sender | spendable within one check interval |
+| Besu's pending nonce is **ahead** of the proxy's (another client sent from this key) | continue from Besu's value. Log: `chain nonce N is ahead of ours` |
+| Besu's pending nonce is **behind** (the RPC node lost transactions, e.g. it restarted) | wait: usually other nodes still have them, and they are mined as soon as blocks are produced. Only if the chain keeps producing blocks (`SENDER_STUCK_MS`, default 30 s, **and** `SENDER_STUCK_BLOCKS`, default 10) without confirming them, continue from Besu's value, so the next transaction fills the gap. Log: `nonces A..B were sent but no Besu node mined them … they were lost`. Those transactions are never mined: their callers got a `txHash` that stays unknown. Nothing is repaired while the chain is halted. |
+
+Nothing needs manual action. To see the state and the corrections made:
+
+```bash
+curl -s http://<proxy>:30000/status/senders
+```
+
+`nextNonce`, `chainPendingNonce` and `confirmedNonce` per sender, `inFlightTransactions`,
+`gapSeconds` (Besu's pending nonce behind the proxy's), `nonceRepairs` and
+`nonceAdoptedFromChain` (corrections made so far), `lastCheckError`.
+
+Optional settings in `proxy/.env`: `SENDER_CHECK_MS` (2000), `SENDER_STUCK_MS` (30000),
+`SENDER_STUCK_BLOCKS` (10), `SENDER_IDLE_MS` (300000: stop checking a sender idle this long).
+
+Tested on 4 validators + RPC node + MPC cluster: a policy refusal in a series (no gap); two
+payments racing for the same balance (the second refused while the first was in flight); a deposit
+(spendable within 2 s); another client sending from the key (adopted, no failed request); the
+chain halted while rpc1 restarted (no repair; the transactions were mined when the chain resumed);
+transactions really lost (repaired after 11 blocks, the next transfers filled the gap, no gap left);
+Redis stopped. 400 transfers from one sender at concurrency 100: no errors, duplicate nonces or gaps.
+
 ## Operating it
 
 | Task | How |
@@ -225,7 +267,7 @@ The proxy calls `eth_accounts` on `WEB3SIGNER_IP:WEB3SIGNER_PORT` (now the coord
 | Symptom | Cause | Fix |
 |---|---|---|
 | `policy: value above limit` | the amount is above `max_value_wei` in `quickstart/cluster.json` (default 1000 ETH per transaction) | raise it, then `./quickstart.sh down && ./quickstart.sh up` |
-| `/createaccount` returns a `txHash`, but chainlens shows 0 transactions and the receipt is `null` | **nonce gap**: an earlier failed request used up a nonce (for example nonce 0), so later transactions wait in Besu's pool. Fixed in the proxy: a failed send now clears the cached nonce. | update the proxy, then fill the gap once: `eth_sendTransaction` on the coordinator from the sender to itself, `value 0x0`, `nonce` = the missing one. Then `docker exec <redis> redis-cli DEL nonce:<sender lowercase>`. |
+| `/createaccount` or `/transfer` returns a `txHash`, but chainlens shows no transaction and the receipt is `null` | **nonce gap**: a nonce was used but its transaction never reached the chain, so later transactions wait in Besu's pool. | the proxy repairs this by itself (see *Nonces and balance checks*): check `GET /status/senders` (`gapSeconds`, `nonceRepairs`) and the log. With an old proxy: fill the gap once with `eth_sendTransaction` on the coordinator from the sender to itself, `value 0x0`, `nonce` = the missing one. |
 | `/nft/deploy` says `alreadyDeployed` but chainlens shows no contract; `/nft/mint` says `NFT contract is not a collection` | `NFT_CONTRACT` in `proxy/.env` points to a contract from **before the chain was reset**. The proxy now reports this clearly. | delete the `NFT_CONTRACT` line, run `docker compose up -d --build`, then call `/nft/deploy` again (the proxy finds the collection on chain by itself) |
 | chainlens stuck with `Missing batch response` | old chainlens image (batch over Besu's 1024 limit) | `git pull`, then `docker compose up -d --build` in `chainlens/` |
 
@@ -238,7 +280,7 @@ working. Redis commands fail fast (no queueing), and the log shows
 
 | Redis key | Without Redis |
 |---|---|
-| `nonce:<sender>` | next nonce = max(cached counter, `eth_getTransactionCount(pending)`), so a stale or missing value is harmless |
+| `nonce:<sender>` | the nonce is counted in memory; when the proxy starts (or after an error) it takes max(Redis, `eth_getTransactionCount(pending)`), so a stale or missing value is harmless |
 | `pending-value:<sender>` | kept in memory; entries are dropped once their nonce is mined |
 | `nft:contract` (default collection) | `NFT_CONTRACT` env → memory → Redis → **found on chain** (SENDER01's deployment addresses whose `minter()` is SENDER01) |
 | `nft:collections` (all collections) | memory → Redis → found on chain the same way |

@@ -258,6 +258,9 @@ async function pendingFor(sender) {
 // with the chain; requests only read the chain when a sender has no recent snapshot.
 const SENDER_CHECK_MS = Number(process.env.SENDER_CHECK_MS) || 2000;
 const SENDER_STUCK_MS = Number(process.env.SENDER_STUCK_MS) || 30000;
+// ...and at least this many new blocks: a gap is only "lost transactions" if the chain keeps
+// producing blocks without confirming them. During a halt nothing is repaired.
+const SENDER_STUCK_BLOCKS = Number(process.env.SENDER_STUCK_BLOCKS) || 10;
 const SENDER_IDLE_MS = Number(process.env.SENDER_IDLE_MS) || 300000;
 const SNAPSHOT_MAX_AGE_MS = Math.max(3 * SENDER_CHECK_MS, 5000);
 
@@ -277,6 +280,7 @@ function senderState(address) {
             repairs: 0,
             adopted: 0,
             repairNext: false,
+            gap: null,           // { at, block, confirmed } when chain pending < our nonce was first seen
             lastError: null
         };
         senders.set(sender, state);
@@ -369,9 +373,11 @@ function afterSend(sender) {
 // Background check of every sender used recently (or with transactions not yet confirmed):
 // - refresh the balance snapshot (deposits appear within SENDER_CHECK_MS);
 // - chain pending nonce AHEAD of ours: someone else sent from this key -> adopt the chain value;
-// - chain pending nonce BEHIND ours and no transaction confirmed for SENDER_STUCK_MS:
-//   transactions were lost from Besu's pool (e.g. RPC node restart) -> continue from the chain
-//   value, so the next transaction fills the gap and nothing stays blocked behind it.
+// - chain pending nonce BEHIND ours: the RPC node does not have all our transactions. Usually
+//   they are only on other nodes (e.g. this RPC node restarted) and get mined as soon as blocks
+//   are produced. Only if the chain keeps producing blocks (SENDER_STUCK_MS and
+//   SENDER_STUCK_BLOCKS) without confirming them were they lost by every node -> continue from
+//   the chain value, so the next transaction fills the gap and nothing stays blocked behind it.
 // Nonce changes run under the sender's lock, after reading the chain again.
 let checkingSenders = false;
 let checkErrorLogged = false;
@@ -403,6 +409,14 @@ async function checkSenders() {
             }
 
             const ours = memNonce.get(sender);
+            const snap = state.snapshot;
+
+            // track how long, and over how many blocks, the gap has existed with no confirmation
+            if (ours === undefined || state.chainPending >= ours) {
+                state.gap = null;
+            } else if (!state.gap || snap.confirmed > state.gap.confirmed) {
+                state.gap = { at: Date.now(), block: snap.block, confirmed: snap.confirmed };
+            }
 
             if (ours === undefined || state.chainPending === ours) {
                 continue;
@@ -421,20 +435,23 @@ async function checkSenders() {
                         console.warn(`sender ${state.address}: chain nonce ${chain.pending} is ahead of ours (${current}): another client sent from this key; continuing from the chain`);
                     }
                 });
-            } else if (Date.now() - state.progressAt >= SENDER_STUCK_MS) {
+            } else if (state.gap && Date.now() - state.gap.at >= SENDER_STUCK_MS
+                && snap.block - state.gap.block >= SENDER_STUCK_BLOCKS) {
                 await withSenderLock(sender, async () => {
                     const chain = await readChainAccount(state.address);
                     await applySnapshot(state, chain);
                     const current = memNonce.get(sender);
+                    const gap = state.gap;
 
-                    if (current !== undefined && chain.pending < current
-                        && Date.now() - state.progressAt >= SENDER_STUCK_MS) {
+                    if (current !== undefined && gap && chain.pending < current
+                        && chain.confirmed <= gap.confirmed
+                        && chain.block - gap.block >= SENDER_STUCK_BLOCKS) {
                         memNonce.set(sender, chain.pending);
                         void cache(() => redis.set(`nonce:${sender}`, chain.pending));
                         state.repairs += 1;
                         state.repairNext = true;
-                        state.progressAt = Date.now();
-                        console.warn(`sender ${state.address}: nonces ${chain.pending}..${current - 1} were sent but are no longer in Besu (none confirmed for ${SENDER_STUCK_MS / 1000}s); continuing from nonce ${chain.pending}. Transactions with those nonces will not be mined.`);
+                        state.gap = null;
+                        console.warn(`sender ${state.address}: nonces ${chain.pending}..${current - 1} were sent but no Besu node mined them in ${chain.block - gap.block} blocks (${Math.round((Date.now() - gap.at) / 1000)}s); they were lost (e.g. RPC node restarted before they spread). Continuing from nonce ${chain.pending}: those transactions will not be mined, the next ones fill the gap.`);
                     }
                 });
             }
@@ -875,13 +892,14 @@ app.get("/status/senders", (req, res) => {
             inFlightWei: inFlight.toString(),
             inFlightTransactions: count,
             secondsSinceLastConfirmed: Math.round((Date.now() - state.progressAt) / 1000),
+            gapSeconds: state.gap ? Math.round((Date.now() - state.gap.at) / 1000) : null,
             nonceRepairs: state.repairs,
             nonceAdoptedFromChain: state.adopted,
             lastCheckError: state.lastError
         };
     });
 
-    res.json({ checkIntervalMs: SENDER_CHECK_MS, stuckAfterMs: SENDER_STUCK_MS, senders: rows });
+    res.json({ checkIntervalMs: SENDER_CHECK_MS, stuckAfterMs: SENDER_STUCK_MS, stuckAfterBlocks: SENDER_STUCK_BLOCKS, senders: rows });
 });
 
 app.get("/transfer/:txHash", async (req, res) => {
