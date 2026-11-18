@@ -1,0 +1,5 @@
+# file names (cluster.json, setup.sh) start some task names
+skip_list:
+  - name[casing]
+warn_list:
+  - command-instead-of-module   # git archive / status: no module for them

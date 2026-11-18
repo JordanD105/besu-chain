@@ -1,0 +1,45 @@
+# The proxy on .135 and .136: settings only (the image comes from 02-images.yml). keepalived
+# (07-ha.yml) starts it on the host holding the VIP .151; a proxy already running here is updated.
+- name: Proxy
+  hosts: app_hosts
+  become: true
+  tasks:
+    - name: SENDER01 known
+      ansible.builtin.assert:
+        that: sender01 is match('^0x[0-9a-fA-F]{40}$')
+        fail_msg: "state/sender01 missing: run 04-coordinators.yml first"
+
+    - name: Proxy settings
+      ansible.builtin.template:
+        src: templates/proxy.env.j2
+        dest: "{{ repo_dir }}/proxy/.env"
+        mode: "0600"
+      register: proxy_env
+
+    - name: Redis image present? (started with the proxy)
+      ansible.builtin.command: docker image inspect redis
+      register: redis_img
+      changed_when: false
+      failed_when: false
+
+    - name: Pull redis when missing
+      ansible.builtin.command: docker compose pull --quiet --ignore-buildable redis
+      args:
+        chdir: "{{ repo_dir }}/proxy"
+      when: redis_img.rc != 0
+      changed_when: true
+
+    - name: Proxy running on this host?
+      ansible.builtin.command: docker compose ps -q --status running proxy
+      args:
+        chdir: "{{ repo_dir }}/proxy"
+      register: proxy_running
+      changed_when: false
+
+    - name: Update the running proxy (new settings or image)
+      ansible.builtin.command: docker compose up -d proxy
+      args:
+        chdir: "{{ repo_dir }}/proxy"
+      when: proxy_running.stdout | length > 0
+      register: proxy_up
+      changed_when: proxy_up.stderr is search('Recreated|Started')

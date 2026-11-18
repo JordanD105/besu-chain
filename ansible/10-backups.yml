@@ -1,0 +1,39 @@
+# Daily chain snapshot on val3 (.137), and what stays manual.
+- name: Daily chain snapshot
+  hosts: besu_hosts
+  become: true
+  tasks:
+    - name: Only on the host of {{ snapshot_node }}
+      ansible.builtin.meta: end_host
+      when: inventory_hostname != (besu_nodes | selectattr('name', 'equalto', snapshot_node) | first).host
+
+    - name: Snapshot directory
+      ansible.builtin.file:
+        path: "{{ snapshot_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Cron job
+      ansible.builtin.cron:
+        name: besu chain snapshot
+        minute: "{{ snapshot_cron_minute }}"
+        hour: "{{ snapshot_cron_hour }}"
+        job: >-
+          cd /opt/besu-{{ snapshot_node }} && {{ ('COPY_TO=' ~ snapshot_copy_to) if snapshot_copy_to else '' }}
+          ./snapshot-chain.sh {{ snapshot_dir }} >> /var/log/besu-snapshot.log 2>&1
+
+- name: Done
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Next steps (manual on purpose)
+      ansible.builtin.debug:
+        msg:
+          - "Deployment complete. Applications: http://{{ vip_proxy }}:30000"
+          - "Grafana: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:3000 (admin / state/secrets/grafana_admin_password)"
+          - "Chainlens: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:30100"
+          - "1. Node key backups: on each host, in /opt/besu-<node>: ./backup-key.sh /secure/dir, then gpg --symmetric"
+          - "2. MPC teams: hourly backup.sh cron on their node (state/handoff/mpcN.md, step 5)"
+          - "3. Off-site: copy {{ state_dir }}/ (tokens, network files, cluster.json, sender01) to your vault"
+          - "4. Failover tests: docs/production-layout.md section 6, then go live"
+          - "{{ '' if snapshot_copy_to else 'WARNING: snapshot_copy_to is empty: chain snapshots stay on .137 only' }}"

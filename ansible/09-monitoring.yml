@@ -1,0 +1,88 @@
+# Prometheus + Grafana and chainlens on .139.
+- name: Monitoring and chainlens
+  hosts: monitoring_hosts
+  become: true
+  tasks:
+    - name: Monitoring files
+      ansible.builtin.copy:
+        src: "{{ repo_dir }}/monitoring/"
+        dest: /opt/monitoring/
+        remote_src: true
+        mode: preserve
+
+    - name: Monitoring settings created before?
+      ansible.builtin.stat:
+        path: /opt/monitoring/.env
+      register: mon_env
+
+    - name: setup.sh (Grafana password, MPC metrics token)
+      ansible.builtin.command: ./setup.sh
+      args:
+        chdir: /opt/monitoring
+      environment:
+        MPC_METRICS_TOKEN: "{{ mpc_metrics_token }}"
+      changed_when: not mon_env.stat.exists
+      no_log: true
+
+    - name: BIND_IP
+      ansible.builtin.lineinfile:
+        path: /opt/monitoring/.env
+        regexp: '^BIND_IP='
+        line: "BIND_IP={{ ansible_host }}"
+
+    - name: Read the Grafana password
+      ansible.builtin.slurp:
+        src: /opt/monitoring/.env
+      register: mon_env_content
+      no_log: true
+
+    - name: Keep the Grafana password in the operator state
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/secrets/grafana_admin_password"
+        content: "{{ mon_env_content.content | b64decode | regex_search('GRAFANA_ADMIN_PASSWORD=(.*)', '\\1') | first }}\n"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Start Prometheus and Grafana
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: /opt/monitoring
+      register: mon_up
+      changed_when: mon_up.stderr is search('Started|Recreated|Created')
+
+    - name: Every metrics target answers (check-targets.sh)
+      ansible.builtin.command: ./check-targets.sh
+      args:
+        chdir: /opt/monitoring
+      register: targets
+      until: targets.rc == 0
+      retries: 10
+      delay: 6
+      changed_when: false
+
+    - name: Targets
+      ansible.builtin.debug:
+        var: targets.stdout_lines
+
+    - name: Chainlens settings
+      ansible.builtin.template:
+        src: templates/chainlens.env.j2
+        dest: "{{ repo_dir }}/chainlens/.env"
+        mode: "0644"
+
+    - name: Chainlens (image from 02-images.yml)
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ repo_dir }}/chainlens"
+      register: cl_up
+      changed_when: cl_up.stderr is search('Started|Recreated')
+
+    - name: Chainlens answering
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:30100/"
+      register: cl
+      until: cl.status == 200
+      retries: 20
+      delay: 3

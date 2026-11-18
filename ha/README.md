@@ -5,7 +5,7 @@ losing .135 doesn't stop payments. Layout and settings: [`../docs/production-lay
 
 | VIP | What | Failover |
 |---|---|---|
-| `192.168.68.150` | HAProxy: `:8545` → rpc1 (rpc2 backup), `:9100` → coord1 (coord2 backup) | HAProxy switches backends in ~6 s; keepalived moves the VIP if HAProxy itself fails |
+| `192.168.68.150` | HAProxy: `:8545` → rpc1 `:8555` (rpc2 backup), `:9100` → coord1 (coord2 backup) | HAProxy switches backends in ~6 s; keepalived moves the VIP if HAProxy itself fails |
 | `192.168.68.151` | the proxy, `:30000` | keepalived moves the VIP and starts proxy2 / stops proxy1 |
 
 | File | Goes to (on .135 and .136) |
@@ -21,7 +21,11 @@ Why this design:
   the time with its pool full, and re-reads the key list from the MPC nodes, so it signs for
   every account the moment it takes over.
 - **Only one proxy at a time**: the proxy counts nonces per sender in memory. keepalived starts
-  the proxy on the host that takes `.151` and stops it on the host that gives it up.
+  the proxy on the host that takes `.151` and stops it on the host that gives it up, and
+  `check-proxy.sh` (every 3 s) stops a proxy that runs on the host without `.151`, e.g. one that
+  Docker restarted after a reboot.
+- **RPC nodes on 8555**: HAProxy holds 8545 on the VIP on both hosts, and Besu refuses to start
+  when its port is in use on any address of the host, so rpc1/rpc2 can't use 8545 there.
 - **`nopreempt`**: after a failover the VIPs stay on .136 when .135 returns (no second
   interruption). Move them back at a quiet time (section 5).
 

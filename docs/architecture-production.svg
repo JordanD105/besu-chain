@@ -47,7 +47,7 @@
   <!-- HAProxy -->
   <rect x="420" y="312" width="340" height="64" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6"/>
   <text x="436" y="338" font-size="15" font-weight="700" fill="#9a3412">HAProxy · VIP 192.168.68.150</text>
-  <text x="436" y="360" font-size="12.5" fill="#9a3412">:8545 → rpc1 (rpc2)  ·  :9100 → coord1 (coord2)</text>
+  <text x="436" y="360" font-size="12.5" fill="#9a3412">:8545 → rpc1:8555 (rpc2)  ·  :9100 → coord1 (coord2)</text>
   <rect x="1200" y="312" width="340" height="64" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6" stroke-dasharray="7 4"/>
   <text x="1216" y="338" font-size="15" font-weight="700" fill="#9a3412">HAProxy (takes VIP .150 on failover)</text>
   <text x="1216" y="360" font-size="12.5" fill="#9a3412">same configuration as on .135</text>
@@ -63,10 +63,10 @@
 
   <!-- rpc nodes -->
   <rect x="420" y="404" width="340" height="70" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.6"/>
-  <text x="436" y="431" font-size="15" font-weight="700" fill="#1e40af">rpc1  :8545  (Besu RPC node)</text>
+  <text x="436" y="431" font-size="15" font-weight="700" fill="#1e40af">rpc1  :8555  (Besu RPC node)</text>
   <text x="436" y="453" font-size="12.5" fill="#1e40af">p2p 30304 · metrics 9546 · TXPOOL API</text>
   <rect x="1200" y="404" width="340" height="70" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="7 4"/>
-  <text x="1216" y="431" font-size="15" font-weight="700" fill="#1e40af">rpc2  :8545  (backup, chainlens)</text>
+  <text x="1216" y="431" font-size="15" font-weight="700" fill="#1e40af">rpc2  :8555  (backup, chainlens)</text>
   <text x="1216" y="453" font-size="12.5" fill="#1e40af">p2p 30304 · metrics 9546</text>
 
   <line x1="520" y1="378" x2="320" y2="402" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>

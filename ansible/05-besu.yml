@@ -1,0 +1,174 @@
+# The 6 Besu nodes: keys (on their hosts), network files (operator, once), validators, then RPC nodes.
+- name: Besu node keys
+  hosts: besu_hosts
+  become: true
+  vars:
+    my_nodes: "{{ besu_nodes | selectattr('host', 'equalto', inventory_hostname) | list }}"
+  tasks:
+    - name: Node package
+      ansible.builtin.copy:
+        src: "{{ repo_dir }}/besu-production/node/"
+        dest: "/opt/besu-{{ item.name }}/"
+        remote_src: true
+        mode: preserve
+      loop: "{{ my_nodes }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Node settings
+      ansible.builtin.template:
+        src: templates/besu.env.j2
+        dest: "/opt/besu-{{ node.name }}/.env"
+        mode: "0600"
+      loop: "{{ my_nodes }}"
+      loop_control:
+        loop_var: node
+        label: "{{ node.name }}"
+      register: besu_env
+
+    - name: Node key (created once, inside the node's data volume)
+      ansible.builtin.command: ./init.sh
+      args:
+        chdir: "/opt/besu-{{ item.name }}"
+        creates: "/opt/besu-{{ item.name }}/{{ item.name }}.json"
+      loop: "{{ my_nodes }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Public node files to the operator
+      ansible.builtin.fetch:
+        src: "/opt/besu-{{ item.name }}/{{ item.name }}.json"
+        dest: "{{ state_dir }}/besu/"
+        flat: true
+      loop: "{{ my_nodes }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Network files already on this host?
+      ansible.builtin.stat:
+        path: "/opt/besu-{{ item.name }}/network/genesis.json"
+      loop: "{{ my_nodes }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: host_genesis
+
+- name: Network files (operator, once)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Genesis in the state?
+      ansible.builtin.stat:
+        path: "{{ state_dir }}/network/genesis.json"
+      register: state_genesis
+
+    - name: Never create a second genesis
+      ansible.builtin.assert:
+        that: deployed | length == 0
+        fail_msg: >-
+          {{ deployed | join(', ') }} already have network files but {{ state_dir }}/network/ is empty.
+          A new genesis would start a different chain. Copy network/ from a node into
+          {{ state_dir }}/network/ and run again.
+      vars:
+        deployed: "{{ groups['besu_hosts'] | map('extract', hostvars, 'host_genesis') | map(attribute='results') | flatten
+                      | selectattr('stat.exists') | map(attribute='item.name') | list }}"
+      when: not state_genesis.stat.exists
+
+    - name: SENDER01 known
+      ansible.builtin.assert:
+        that: sender01 is match('^0x[0-9a-fA-F]{40}$')
+        fail_msg: "state/sender01 missing: run 04-coordinators.yml first"
+      when: not state_genesis.stat.exists
+
+    - name: Create the network files
+      ansible.builtin.command: >-
+        {{ repo_root }}/besu-production/operator/make-network.sh {{ state_dir }}/network
+        {% for n in besu_nodes %}{{ state_dir }}/besu/{{ n.name }}.json {% endfor %}
+      environment:
+        CHAIN_ID: "{{ chain_id }}"
+        BLOCK_PERIOD: "{{ block_period }}"
+        REQUEST_TIMEOUT: "{{ request_timeout }}"
+        GAS_LIMIT: "{{ block_gas_limit }}"
+        ALLOC: "{{ sender01 }}={{ sender01_funding_wei }}"
+        BESU_IMAGE: "{{ besu_image }}"
+      when: not state_genesis.stat.exists
+      changed_when: true
+
+    - name: Network files checksum
+      ansible.builtin.command: sha256sum -c --quiet SHA256SUMS
+      args:
+        chdir: "{{ state_dir }}/network"
+      changed_when: false
+
+- name: Network files to every node
+  hosts: besu_hosts
+  become: true
+  vars:
+    my_nodes: "{{ besu_nodes | selectattr('host', 'equalto', inventory_hostname) | list }}"
+  tasks:
+    - name: Copy the 4 network files
+      ansible.builtin.copy:
+        src: "{{ state_dir }}/network/{{ item.1 }}"
+        dest: "/opt/besu-{{ item.0.name }}/network/{{ item.1 }}"
+        mode: "0644"
+      loop: "{{ my_nodes | product(['genesis.json', 'static-nodes.json', 'permissions_config.toml', 'SHA256SUMS']) | list }}"
+      loop_control:
+        label: "{{ item.0.name }}/{{ item.1 }}"
+      register: netfiles
+
+- name: Start the validators
+  hosts: besu_hosts
+  become: true
+  serial: 1
+  vars:
+    role_nodes: "{{ besu_nodes | selectattr('host', 'equalto', inventory_hostname) | selectattr('role', 'equalto', 'validator') | list }}"
+  tasks:
+    - name: Validator
+      ansible.builtin.include_tasks: tasks/besu-start.yml
+      loop: "{{ role_nodes }}"
+      loop_control:
+        loop_var: node
+        label: "{{ node.name }}"
+
+- name: Blocks are produced
+  hosts: besu_hosts
+  become: true
+  tasks:
+    - name: Block number rising on {{ besu_nodes[0].name }}
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ besu_nodes[0].rpc_port }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", id: 1, method: eth_blockNumber, params: [] }
+      register: bn
+      until: bn.json is defined and (bn.json.result | int(base=16)) > 2
+      retries: 60
+      delay: 5
+      when: inventory_hostname == besu_nodes[0].host
+
+- name: Start the RPC nodes
+  hosts: besu_hosts
+  become: true
+  serial: 1
+  vars:
+    role_nodes: "{{ besu_nodes | selectattr('host', 'equalto', inventory_hostname) | selectattr('role', 'equalto', 'rpc') | list }}"
+  tasks:
+    - name: RPC node
+      ansible.builtin.include_tasks: tasks/besu-start.yml
+      loop: "{{ role_nodes }}"
+      loop_control:
+        loop_var: node
+        label: "{{ node.name }}"
+
+    - name: RPC node in sync
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:{{ item.rpc_port }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", id: 1, method: eth_syncing, params: [] }
+      register: syncing
+      until: syncing.json is defined and syncing.json.result == false
+      retries: 60
+      delay: 5
+      loop: "{{ role_nodes }}"
+      loop_control:
+        label: "{{ item.name }}"

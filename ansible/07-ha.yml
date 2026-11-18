@@ -1,0 +1,120 @@
+# HAProxy + keepalived on .135 and .136 (ha/README.md). .135 first: it takes both VIPs and
+# keepalived starts proxy1 there. Config changes later are applied with a reload, which keeps
+# the VIPs where they are.
+- name: HAProxy and keepalived
+  hosts: app_hosts
+  become: true
+  serial: 1
+  tasks:
+    - name: Packages
+      ansible.builtin.include_tasks: tasks/packages.yml
+      vars:
+        packages: [haproxy, keepalived]
+      when: install_packages | bool
+
+    - name: Allow binding the VIPs on the host that doesn't hold them
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/90-vip.conf
+        content: "net.ipv4.ip_nonlocal_bind = 1\n"
+        mode: "0644"
+      register: sysctl_file
+
+    - name: Apply sysctl
+      ansible.builtin.command: sysctl -p /etc/sysctl.d/90-vip.conf
+      when: sysctl_file.changed  # noqa: no-handler (before HAProxy binds the VIP)
+      changed_when: true
+
+    - name: SELinux lets HAProxy connect to 8545 and 9100
+      ansible.builtin.command: setsebool -P haproxy_connect_any 1
+      when: ansible_facts.selinux.status | default('disabled') == 'enabled'
+      changed_when: false
+
+    - name: haproxy.cfg
+      ansible.builtin.copy:
+        src: "{{ repo_dir }}/ha/haproxy.cfg"
+        dest: /etc/haproxy/haproxy.cfg
+        remote_src: true
+        mode: "0644"
+        validate: haproxy -c -f %s
+      register: haproxy_cfg
+
+    - name: HAProxy running
+      ansible.builtin.systemd_service:
+        name: haproxy
+        state: started
+        enabled: true
+
+    - name: Reload HAProxy
+      ansible.builtin.systemd_service:
+        name: haproxy
+        state: reloaded
+      when: haproxy_cfg.changed  # noqa: no-handler (before keepalived tracks HAProxy)
+
+    - name: keepalived scripts
+      ansible.builtin.copy:
+        src: "{{ repo_dir }}/ha/{{ item }}"
+        dest: /etc/keepalived/{{ item }}
+        remote_src: true
+        mode: "0700"
+        owner: root
+        group: root
+      loop: [check-proxy.sh, proxy-start.sh, proxy-stop.sh]
+
+    - name: VRRP interface from the settings
+      ansible.builtin.set_fact:
+        vrrp_if: "{{ vrrp_interface }}"
+
+    - name: Otherwise the interface holding {{ ansible_host }}
+      ansible.builtin.set_fact:
+        vrrp_if: "{{ item }}"
+      loop: "{{ ansible_facts.interfaces }}"
+      when:
+        - not vrrp_interface
+        - (ansible_facts[item | replace('-', '_')].ipv4.address | default('')) == ansible_host
+
+    - name: Interface found
+      ansible.builtin.assert:
+        that: vrrp_if | default('') | length > 0
+        fail_msg: "no interface holds {{ ansible_host }}: set vrrp_interface in settings.yml"
+
+    - name: Keepalived configuration from the file of host {{ host_no }}
+      ansible.builtin.copy:
+        dest: /etc/keepalived/keepalived.conf
+        content: >-
+          {{ lookup('ansible.builtin.file', repo_root ~ '/ha/keepalived-' ~ host_no ~ '.conf', rstrip=false)
+             | replace('interface INTERFACE', 'interface ' ~ vrrp_if)
+             | replace('auth_pass CHANGE01', 'auth_pass ' ~ vrrp_pass_rpc)
+             | replace('auth_pass CHANGE02', 'auth_pass ' ~ vrrp_pass_proxy) }}
+        mode: "0600"
+      register: keepalived_conf
+
+    - name: keepalived running
+      ansible.builtin.systemd_service:
+        name: keepalived
+        state: started
+        enabled: true
+      register: keepalived_started
+
+    - name: Reload keepalived (keeps the VIPs where they are)
+      ansible.builtin.systemd_service:
+        name: keepalived
+        state: reloaded
+      when: keepalived_conf.changed and not keepalived_started.changed
+
+    - name: VIPs on .135 after the first start
+      ansible.builtin.command: ip -o addr
+      register: vips
+      until: (vips.stdout | regex_findall(' (' ~ (vip_rpc | regex_escape) ~ '|' ~ (vip_proxy | regex_escape) ~ ')/') | length) == 2
+      retries: 20
+      delay: 3
+      changed_when: false
+      when: inventory_hostname == coordinators[0].host and keepalived_started.changed
+
+    - name: Proxy started by keepalived on the VIP holder
+      ansible.builtin.uri:
+        url: "http://{{ vip_proxy }}:30000/status/senders"
+      register: proxy_vip
+      until: proxy_vip.status == 200
+      retries: 40
+      delay: 3
+      when: inventory_hostname == coordinators[0].host and keepalived_started.changed

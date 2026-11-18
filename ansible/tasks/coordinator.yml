@@ -1,0 +1,37 @@
+# One MPC coordinator on this host (coord1 on .135, coord2 on .136). Rerun-safe.
+- name: Coordinator files
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/mpc-signer/deploy/coordinator/"
+    dest: /opt/mpc-coordinator/
+    remote_src: true
+    mode: preserve
+
+- name: cluster.json
+  ansible.builtin.copy:
+    src: "{{ state_dir }}/cluster.json"
+    dest: /opt/mpc-coordinator/cluster.json
+    mode: "0644"
+  register: coord_cluster
+
+- name: Coordinator settings
+  ansible.builtin.template:
+    src: templates/coordinator.env.j2
+    dest: /opt/mpc-coordinator/.env
+    mode: "0600"
+  vars:
+    coord_name: "{{ (coordinators | selectattr('host', 'equalto', inventory_hostname) | first).name }}"
+
+- name: Start the coordinator (recreated when its settings or cluster.json change)
+  ansible.builtin.command: docker compose up -d {{ '--force-recreate' if coord_cluster.changed else '' }}
+  args:
+    chdir: /opt/mpc-coordinator
+  register: coord_up
+  changed_when: coord_up.stderr is search('Started|Recreated|Created')
+
+- name: Coordinator answering
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:9100/health"
+  register: coord_health
+  until: coord_health.status == 200
+  retries: 30
+  delay: 2

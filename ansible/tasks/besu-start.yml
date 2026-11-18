@@ -1,0 +1,27 @@
+# Start (or update) one Besu node `node`. Recreated when its settings or network files changed.
+- name: Start {{ node.name }}
+  ansible.builtin.command: ./start.sh
+  args:
+    chdir: "/opt/besu-{{ node.name }}"
+  register: started
+  changed_when: started.stderr is search('Started|Recreated|Created')
+
+- name: Restart after a network file change, {{ node.name }}
+  ansible.builtin.command: docker compose up -d --force-recreate
+  args:
+    chdir: "/opt/besu-{{ node.name }}"
+  when: >-
+    not started.changed and
+    (netfiles.results | selectattr('item.0.name', 'equalto', node.name) | selectattr('changed') | list | length) > 0
+  changed_when: true
+
+- name: JSON-RPC answering, {{ node.name }}
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host if node.rpc_bind == 'host' else '127.0.0.1' }}:{{ node.rpc_port }}"
+    method: POST
+    body_format: json
+    body: { jsonrpc: "2.0", id: 1, method: net_version, params: [] }
+  register: rpc_up
+  until: rpc_up.status == 200
+  retries: 40
+  delay: 3

@@ -28,8 +28,13 @@ n=${#validators[@]}
 [ "$n" -ge 4 ] || echo "WARNING: $n validators; QBFT needs >= 4 to tolerate one faulty validator" >&2
 # QBFT extraData with the validator set, encoded by Besu itself
 printf '[%s]\n' "$(printf '"%s",' "${validators[@]}" | sed 's/,$//')" > "$out/validators.json"
-extra=$(docker run --rm -v "$out":/w "$BESU_IMAGE" rlp encode --from=/w/validators.json --type=QBFT_EXTRA_DATA 2>/dev/null | grep -Eo '0x[0-9a-f]+' | tail -n1)
-[ -n "$extra" ] || { echo "rlp encode failed" >&2; exit 1; }
+# encode from a temporary readable directory: $out may be private (mode 700), which Besu's user
+# inside the container can't read. validators.json holds only public addresses.
+enc="$(mktemp -d)"; trap 'rm -rf -- "$enc"' EXIT
+chmod 755 "$enc"; cp "$out/validators.json" "$enc/"; chmod 644 "$enc/validators.json"
+rlp=$(docker run --rm -v "$enc":/w:ro "$BESU_IMAGE" rlp encode --from=/w/validators.json --type=QBFT_EXTRA_DATA 2>&1) || true
+extra=$(printf '%s\n' "$rlp" | grep -Eo '0x[0-9a-f]+' | tail -n1 || true)
+[ -n "$extra" ] || { echo "rlp encode failed:" >&2; printf '%s\n' "$rlp" | tail -n 5 >&2; exit 1; }
 alloc=""
 IFS=',' read -ra items <<< "${ALLOC:-}"
 for it in "${items[@]}"; do

@@ -1,0 +1,105 @@
+# Every host: packages, the repository in /opt/besu-chain, firewall, node-exporter.
+- name: Package the repository (committed HEAD)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Archive the deployable directories
+      ansible.builtin.command: >-
+        git -C {{ repo_root }} archive --format=tar.gz -o {{ state_dir }}/repo.tar.gz HEAD
+        besu-production ha monitoring mpc-signer/deploy proxy chainlens
+      changed_when: false
+
+- name: Prepare the hosts
+  hosts: servers
+  become: true
+  tasks:
+    - name: Packages
+      ansible.builtin.include_tasks: tasks/packages.yml
+      vars:
+        packages: >-
+          {{ ['docker-ce', 'docker-ce-cli', 'containerd.io', 'docker-compose-plugin', 'chrony', 'firewalld',
+              'curl', 'tar', 'gzip', 'rsync']
+             + (['cronie'] if ansible_facts.os_family == 'RedHat' else ['cron']) }}
+        docker_repo: true
+      when: install_packages | bool
+
+    - name: Services running
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - docker
+        - firewalld
+        - "{{ 'chronyd' if ansible_facts.os_family == 'RedHat' else 'chrony' }}"
+        - "{{ 'crond' if ansible_facts.os_family == 'RedHat' else 'cron' }}"
+
+    - name: firewalld answering
+      ansible.builtin.command: firewall-cmd --state
+      register: fw_state
+      changed_when: false
+      failed_when: false
+
+    - name: Reload D-Bus and restart firewalld when it doesn't answer (policy installed after D-Bus started)
+      ansible.builtin.shell: systemctl reload dbus && systemctl restart firewalld && sleep 2 && firewall-cmd --state
+      when: fw_state.rc != 0
+      changed_when: true
+
+    - name: Clock synchronized
+      ansible.builtin.command: chronyc tracking
+      register: chrony
+      changed_when: false
+      failed_when: false
+
+    - name: Warn when the clock is not synchronized
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: chrony is not synchronized yet. QBFT and the alerts need synchronized clocks."
+      when: chrony.rc != 0 or 'Normal' not in chrony.stdout
+
+    - name: Repository directory
+      ansible.builtin.file:
+        path: "{{ repo_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Repository files
+      ansible.builtin.unarchive:
+        src: "{{ state_dir }}/repo.tar.gz"
+        dest: "{{ repo_dir }}"
+
+    - name: Firewall rules before
+      ansible.builtin.command: firewall-cmd --permanent --list-rich-rules
+      register: fw_before
+      changed_when: false
+
+    - name: Firewall (ha/firewall-layout.sh)
+      ansible.builtin.command: "{{ repo_dir }}/ha/firewall-layout.sh {{ host_no }}"
+      environment:
+        ADMIN: "{{ operator_ip }}"
+        CLIENTS: "{{ client_ips | join(' ') }}"
+      register: fw
+      changed_when: false
+
+    - name: Firewall rules after
+      ansible.builtin.command: firewall-cmd --permanent --list-rich-rules
+      register: fw_after
+      changed_when: fw_after.stdout != fw_before.stdout
+
+    - name: Textfile directory for the backup metrics
+      ansible.builtin.file:
+        path: /var/lib/node_exporter/textfile
+        state: directory
+        mode: "0755"
+
+    - name: node-exporter settings
+      ansible.builtin.copy:
+        dest: "{{ repo_dir }}/monitoring/node-exporter/.env"
+        content: "BIND_IP={{ ansible_host }}\n"
+        mode: "0644"
+
+    - name: node-exporter
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ repo_dir }}/monitoring/node-exporter"
+      register: ne
+      changed_when: ne.stderr is search('Started|Recreated|Created')

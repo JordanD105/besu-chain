@@ -1,0 +1,15 @@
+# Copy the image archive `tar` from the operator and load it.
+- name: Copy the image archive
+  ansible.builtin.copy:
+    src: "{{ tar }}"
+    dest: /var/tmp/ansible-image.tar
+    mode: "0600"
+
+- name: Load the image
+  ansible.builtin.command: docker load -i /var/tmp/ansible-image.tar
+  changed_when: true
+
+- name: Remove the archive
+  ansible.builtin.file:
+    path: /var/tmp/ansible-image.tar
+    state: absent

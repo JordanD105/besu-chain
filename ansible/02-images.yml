@@ -1,0 +1,125 @@
+# Images, built ONCE on the operator and copied to the hosts (docker save/load), so every host
+# runs the identical image: the MPC signer (coordinators + MPC node hosts), the proxy (.135, .136)
+# and chainlens (.139). Proxy and chainlens are built from the committed HEAD (state/build/).
+- name: Build the images on the operator
+  hosts: localhost
+  gather_facts: false
+  vars:
+    mpc_tar: "{{ state_dir }}/images/{{ mpc_image | regex_replace('[/:]', '_') }}.tar"
+  tasks:
+    - name: MPC image present?
+      ansible.builtin.command: docker image inspect {{ mpc_image }}
+      register: img
+      changed_when: false
+      failed_when: false
+      when: mpc_image_build | bool
+
+    - name: Build the MPC image (several minutes)
+      ansible.builtin.command: >-
+        docker build {{ ('--build-arg BIGINT=' ~ mpc_bigint) if mpc_bigint else '' }}
+        -t {{ mpc_image }} {{ repo_root }}/mpc-signer
+      when: mpc_image_build | bool and img.rc != 0
+      changed_when: true
+
+    - name: Save the MPC image for the hosts
+      ansible.builtin.command: docker save -o {{ mpc_tar }} {{ mpc_image }}
+      args:
+        creates: "{{ mpc_tar }}"
+      when: mpc_image_build | bool
+
+    - name: Build directory
+      ansible.builtin.file:
+        path: "{{ state_dir }}/build"
+        state: directory
+        mode: "0700"
+
+    - name: Committed sources (from 01-hosts.yml's archive)
+      ansible.builtin.unarchive:
+        src: "{{ state_dir }}/repo.tar.gz"
+        dest: "{{ state_dir }}/build"
+
+    - name: Empty .env for the builds (compose reads env_file even when building)
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/build/{{ item }}/.env"
+        content: ""
+        mode: "0600"
+        force: false
+      loop: [proxy, chainlens]
+
+    - name: Build the proxy and chainlens images
+      ansible.builtin.command: >-
+        docker compose -f docker-compose.yml
+        {% for f in build_compose_overrides[item] | default([]) %}-f {{ f }} {% endfor %}
+        build {{ item }}
+      args:
+        chdir: "{{ state_dir }}/build/{{ item }}"
+      environment:
+        COMPOSE_BAKE: "false"
+      loop: [proxy, chainlens]
+      changed_when: false
+
+    - name: Image content IDs (layers and config, the same for identical builds on every image store)
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        docker image inspect -f '{% raw %}{{json .RootFS.Layers}}{{json .Config}}{% endraw %}' {{ app_images[item] }}
+        | sha256sum | cut -d' ' -f1
+      args:
+        executable: /bin/bash
+      loop: [proxy, chainlens]
+      register: app_ids
+      changed_when: false
+
+    - name: Save changed images for the hosts
+      ansible.builtin.shell: >-
+        docker save -o {{ state_dir }}/images/{{ item.item }}.tar {{ app_images[item.item] }}
+        && printf '%s' '{{ item.stdout }}' > {{ state_dir }}/images/{{ item.item }}.id
+      loop: "{{ app_ids.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: (lookup('ansible.builtin.file', state_dir ~ '/images/' ~ item.item ~ '.id', errors='ignore') | default('', true)) != item.stdout
+      changed_when: true
+
+    - name: Content IDs for the hosts
+      ansible.builtin.set_fact:
+        wanted_image_id: "{{ dict(['proxy', 'chainlens'] | zip(app_ids.results | map(attribute='stdout'))) }}"
+
+- name: MPC image on the coordinator and MPC node hosts
+  hosts: app_hosts:mpc_hosts
+  become: true
+  vars:
+    mpc_tar: "{{ state_dir }}/images/{{ mpc_image | regex_replace('[/:]', '_') }}.tar"
+  tasks:
+    - name: MPC image present?
+      ansible.builtin.command: docker image inspect {{ mpc_image }}
+      register: img
+      changed_when: false
+      failed_when: false
+
+    - name: Copy and load the MPC image
+      ansible.builtin.include_tasks: tasks/load-image.yml
+      vars:
+        tar: "{{ mpc_tar }}"
+      when: img.rc != 0 and mpc_image_build | bool
+
+    - name: Pull the MPC image from the registry
+      ansible.builtin.command: docker pull {{ mpc_image }}
+      when: img.rc != 0 and not mpc_image_build | bool
+      changed_when: true
+
+- name: Proxy image on .135 and .136
+  hosts: app_hosts
+  become: true
+  tasks:
+    - name: Proxy image
+      ansible.builtin.include_tasks: tasks/ship-image.yml
+      vars:
+        app: proxy
+
+- name: Chainlens image on .139
+  hosts: monitoring_hosts
+  become: true
+  tasks:
+    - name: Chainlens image
+      ansible.builtin.include_tasks: tasks/ship-image.yml
+      vars:
+        app: chainlens

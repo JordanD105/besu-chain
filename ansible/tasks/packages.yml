@@ -1,0 +1,37 @@
+# Install `packages` with dnf (RHEL family) or apt (Debian/Ubuntu). docker_repo: add Docker's repository first.
+- name: Docker repository (RHEL family)
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/rhel/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: "0644"
+  when: docker_repo | default(false) and ansible_facts.os_family == 'RedHat'
+
+- name: Packages (dnf)
+  ansible.builtin.dnf:
+    name: "{{ packages }}"
+    state: present
+  when: ansible_facts.os_family == 'RedHat'
+
+- name: Docker repository key (Debian/Ubuntu)
+  ansible.builtin.get_url:
+    url: "https://download.docker.com/linux/{{ ansible_facts.distribution | lower }}/gpg"
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+  when: docker_repo | default(false) and ansible_facts.os_family == 'Debian'
+
+- name: Docker repository (Debian/Ubuntu)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: >
+      deb [arch={{ 'arm64' if ansible_facts.architecture == 'aarch64' else 'amd64' }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/{{ ansible_facts.distribution | lower }} {{ ansible_facts.distribution_release }} stable
+    mode: "0644"
+  when: docker_repo | default(false) and ansible_facts.os_family == 'Debian'
+
+- name: Packages (apt)
+  ansible.builtin.apt:
+    name: "{{ packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_facts.os_family == 'Debian'

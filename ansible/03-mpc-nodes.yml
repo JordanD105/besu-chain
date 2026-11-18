@@ -1,0 +1,100 @@
+# MPC nodes (option B): each node is initialised and started by ITS OWN TEAM, never by Ansible, so
+# no single person or tool holds two key shares. This phase:
+#   1. writes the instructions for each team (state/handoff/mpcN.md);
+#   2. stops until the three teams have sent node0.json, node1.json, node2.json (state/mpc/);
+#   3. builds cluster.json (state/cluster.json) and stops until the teams have started their nodes;
+#   4. continues when all three nodes answer.
+# Run the playbook again after each team step: it continues where it stopped.
+- name: MPC nodes (run by their teams)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Team instructions
+      ansible.builtin.template:
+        src: templates/mpc-handoff.md.j2
+        dest: "{{ state_dir }}/handoff/{{ n.name }}.md"
+        mode: "0600"
+      loop: "{{ mpc_nodes }}"
+      loop_control:
+        loop_var: n
+        label: "{{ n.name }}"
+
+    - name: Node files from the teams
+      ansible.builtin.stat:
+        path: "{{ state_dir }}/mpc/node{{ item.id }}.json"
+      loop: "{{ mpc_nodes }}"
+      loop_control:
+        label: "node{{ item.id }}.json"
+      register: node_files
+
+    - name: Waiting for the MPC teams (1/2)
+      ansible.builtin.fail:
+        msg: |
+          STOPPED: waiting for the MPC teams. Missing: {{ missing | join(', ') }}
+          1. Give each team its instructions: {{ state_dir }}/handoff/mpc1.md, mpc2.md, mpc3.md
+             and MPC_NODE_TOKEN (state/secrets/mpc_node_token) over a secret channel.
+          2. Each team runs init.sh on its host and sends node<ID>.json back.
+          3. Put the files in {{ state_dir }}/mpc/ and run the playbook again.
+      vars:
+        missing: "{{ node_files.results | rejectattr('stat.exists') | map(attribute='item.id') | map('regex_replace', '^(.*)$', 'node\\1.json') | list }}"
+      when: missing | length > 0
+
+    - name: Node files match the layout
+      ansible.builtin.assert:
+        that:
+          - nf.id == item.id
+          - nf.url == 'http://' ~ ip_of[item.host] ~ ':7000'
+        fail_msg: "node{{ item.id }}.json: id {{ nf.id }} / url {{ nf.url }}, expected id {{ item.id }} and http://{{ ip_of[item.host] }}:7000"
+      vars:
+        nf: "{{ lookup('ansible.builtin.file', state_dir ~ '/mpc/node' ~ item.id ~ '.json') | from_json }}"
+      loop: "{{ mpc_nodes }}"
+      loop_control:
+        label: "node{{ item.id }}.json"
+
+    - name: cluster.json (created once)
+      ansible.builtin.shell: >-
+        {{ repo_root }}/mpc-signer/deploy/make-cluster.sh node0.json node1.json node2.json > ../cluster.json.tmp
+        && mv ../cluster.json.tmp ../cluster.json
+      args:
+        chdir: "{{ state_dir }}/mpc"
+        creates: "{{ state_dir }}/cluster.json"
+      environment:
+        CHAIN_ID: "{{ chain_id }}"
+        MAX_VALUE_WEI: "{{ mpc_max_value_wei }}"
+        MAX_GAS: "{{ mpc_max_gas }}"
+        ALLOWED_TO: "{{ mpc_allowed_to }}"
+
+    - name: cluster.json checksum
+      ansible.builtin.stat:
+        path: "{{ state_dir }}/cluster.json"
+        checksum_algorithm: sha256
+      register: cluster
+
+    - name: MPC nodes answering (checked from coord1's host; port 7000 is open to the coordinators only)
+      ansible.builtin.uri:
+        url: "http://{{ ip_of[item.host] }}:7000/health"
+        return_content: true
+        timeout: 5
+      delegate_to: "{{ coordinators[0].host }}"
+      register: health
+      failed_when: false
+      loop: "{{ mpc_nodes }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Waiting for the MPC teams (2/2)
+      ansible.builtin.fail:
+        msg: |
+          STOPPED: waiting for the MPC teams to start their nodes. Not answering: {{ down | join(', ') }}
+          Send {{ state_dir }}/cluster.json to the three teams.
+          sha256: {{ cluster.stat.checksum }}  (each team compares it over a second channel)
+          Each team copies it to /opt/mpc-node/ and runs: docker compose up -d
+          Then run the playbook again.
+      vars:
+        down: "{{ health.results | rejectattr('content', 'defined') | map(attribute='item.name') | list
+                  + health.results | selectattr('content', 'defined') | rejectattr('content', 'equalto', 'ok') | map(attribute='item.name') | list }}"
+      when: down | length > 0
+
+    - name: MPC nodes up
+      ansible.builtin.debug:
+        msg: "mpc1, mpc2, mpc3 answer. cluster.json sha256 {{ cluster.stat.checksum }}"

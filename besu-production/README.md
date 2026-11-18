@@ -22,7 +22,7 @@ one per host, and 2 RPC nodes, on the two application hosts.
      ▲  p2p 30303 (validators), 30304 (rpc nodes); static peers + node allowlist  ▲
      └───────────────────────────────────────────────────────────────────────────┘
   proxy, coordinators ──► HAProxy VIP 192.168.68.150:8545 ──► rpc1 (rpc2 as backup)
-  chainlens (.139) ──► rpc2 :8545          Prometheus (.139) ──► :9545 / :9546 on every node
+  chainlens (.139) ──► rpc2 :8555          Prometheus (.139) ──► :9545 / :9546 on every node
   operator ──SSH──► validator host (validator RPC on 127.0.0.1 only)
 ```
 
@@ -61,7 +61,7 @@ one per host, and 2 RPC nodes, on the two application hosts.
   - Each: 4–8 vCPU, 8–16 GB RAM, SSD.
 - **Two nodes on one host** (.135, .136): host networking and separate ports (section *Several
   nodes on one host*): validator P2P 30303 / metrics 9545 / RPC `127.0.0.1:8645`, rpc node P2P
-  30304 / metrics 9546 / RPC `<host IP>:8545`.
+  30304 / metrics 9546 / RPC `<host IP>:8555` (8545 is HAProxy's port on the VIP).
 - **Block period:** `BLOCK_PERIOD=2` across sites, 1 on one LAN. Set `REQUEST_TIMEOUT` to at least
   4 × the round-trip time between sites, and larger than `BLOCK_PERIOD`.
 
@@ -77,7 +77,8 @@ one per host, and 2 RPC nodes, on the two application hosts.
 | From | To | Port |
 |---|---|---|
 | every Besu host (.135–.138) | every Besu node | 30303 (validators), 30304 (rpc1, rpc2) tcp + udp |
-| HAProxy, proxies, coordinators (.135, .136), chainlens (.139) | rpc1, rpc2 | 8545 |
+| HAProxy (.135, .136), chainlens (.139) | rpc1, rpc2 | 8555 |
+| proxies, coordinators (.135, .136) | HAProxy on the VIP `.150` | 8545 |
 | Prometheus (.139) | every node | 9545 (validators), 9546 (rpc nodes) |
 | bastion | every host | 22 |
 
@@ -170,7 +171,7 @@ operator/qbft.sh validators   # the validator set from genesis
 From an application host, each RPC node directly and, once HAProxy runs, through the VIP:
 
 ```bash
-curl -s http://192.168.68.135:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
+curl -s http://192.168.68.135:8555 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
 ```
 
 ```bash
@@ -180,7 +181,7 @@ curl -s http://192.168.68.150:8545 -H 'content-type: application/json' --data '{
 Then point the applications at the RPC nodes:
 - proxy (.135, .136): `BESU_IP=192.168.68.150`, `BESU_PORT=8545` (HAProxy);
 - coordinators: `MPC_BESU_RPC=http://192.168.68.150:8545`;
-- chainlens (.139): `BESU_RPC=http://192.168.68.136:8545` (rpc2).
+- chainlens (.139): `BESU_RPC=http://192.168.68.136:8555` (rpc2).
 
 Add the nodes to monitoring: one line per node in `../monitoring/prometheus/targets/besu.yml` (see [`../monitoring/README.md`](../monitoring/README.md)).
 
@@ -194,7 +195,7 @@ In the layout, .135 runs val1 + rpc1 and .136 runs val2 + rpc2:
   network, a node connecting to another node on the same host arrives with the Docker gateway
   address (172.x) as its source, isn't found in `permissions_config.toml`, and is dropped.
 - **Different ports per node:** validator P2P 30303, metrics 9545, RPC `127.0.0.1:8645`; rpc node
-  P2P 30304, metrics 9546, RPC `<host IP>:8545`. Same `P2P_HOST` and `BIND_IP` (the host's IP).
+  P2P 30304, metrics 9546, RPC `<host IP>:8555`. Same `P2P_HOST` and `BIND_IP` (the host's IP).
 - Validator RPC stays on `127.0.0.1`, on its own port: `RPC=http://127.0.0.1:8645 operator/qbft.sh health`.
 - Firewall: `../ha/firewall-layout.sh` opens both nodes' ports.
 

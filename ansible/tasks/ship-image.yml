@@ -1,0 +1,17 @@
+# The operator's build of `app` (proxy or chainlens) on this host, when its content differs.
+- name: Image content ID on this host ({{ app }})
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    docker image inspect -f '{% raw %}{{json .RootFS.Layers}}{{json .Config}}{% endraw %}' {{ app_images[app] }}
+    | sha256sum | cut -d' ' -f1
+  args:
+    executable: /bin/bash
+  register: host_id
+  changed_when: false
+  failed_when: false
+
+- name: Copy and load the image ({{ app }})
+  ansible.builtin.include_tasks: tasks/load-image.yml
+  vars:
+    tar: "{{ state_dir }}/images/{{ app }}.tar"
+  when: host_id.rc != 0 or host_id.stdout != hostvars['localhost'].wanted_image_id[app]

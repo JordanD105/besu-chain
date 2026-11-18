@@ -1,0 +1,62 @@
+# The application path through the VIPs, from the operator (like an application would).
+- name: Check through the VIPs
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Besu through HAProxy (VIP .150:8545)
+      ansible.builtin.uri:
+        url: "http://{{ vip_rpc }}:8545"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", id: 1, method: eth_blockNumber, params: [] }
+      register: bn
+
+    - name: MPC signer through HAProxy (VIP .150:9100)
+      ansible.builtin.uri:
+        url: "http://{{ vip_rpc }}:9100/health"
+
+    - name: Proxy (VIP .151:30000)
+      ansible.builtin.uri:
+        url: "http://{{ vip_proxy }}:30000/status/senders"
+        return_content: true
+      register: senders
+
+    - name: Smoke test done before?
+      ansible.builtin.stat:
+        path: "{{ state_dir }}/smoke-test.json"
+      register: smoke_done
+
+    - name: Smoke test, once (new MPC account funded with 1 ETH, then a transfer from SENDER01)
+      when: smoke_test | bool and not smoke_done.stat.exists
+      block:
+        - name: Create an account
+          ansible.builtin.uri:
+            url: "http://{{ vip_proxy }}:30000/createaccount"
+            method: POST
+            body_format: json
+            body: { amount: "1" }
+            timeout: 120
+          register: account
+
+        - name: Transfer from SENDER01
+          ansible.builtin.uri:
+            url: "http://{{ vip_proxy }}:30000/transfer"
+            method: POST
+            body_format: json
+            body: { from: "{{ sender01 }}", to: "{{ account.json.address }}", amount: "0.01" }
+            timeout: 120
+          register: transfer
+
+        - name: Record the smoke test
+          ansible.builtin.copy:
+            dest: "{{ state_dir }}/smoke-test.json"
+            content: "{{ {'account': account.json, 'transfer': transfer.json} | to_nice_json }}"
+            mode: "0600"
+
+    - name: Application path
+      ansible.builtin.debug:
+        msg:
+          - "block {{ bn.json.result | int(base=16) }} via {{ vip_rpc }}:8545"
+          - "proxy {{ vip_proxy }}:30000 answers"
+          - "{{ ('smoke test: account ' ~ account.json.address ~ ', transfer ' ~ (transfer.json.txHash | default(transfer.json)))
+                if (account.json is defined) else 'smoke test: done before (state/smoke-test.json)' }}"

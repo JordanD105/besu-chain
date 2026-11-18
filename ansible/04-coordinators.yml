@@ -1,0 +1,78 @@
+# coord1 (.135) and coord2 (.136), the key ceremony (SENDER01), then the presignature pool.
+# They point at Besu through the VIP .150, which comes up in 07-ha.yml: until then they can't
+# reach Besu, which is fine (nothing to send yet).
+- name: Coordinators
+  hosts: app_hosts
+  become: true
+  serial: 1
+  tasks:
+    - name: Coordinator
+      ansible.builtin.include_tasks: tasks/coordinator.yml
+
+- name: Key ceremony (once)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Keys on the cluster
+      ansible.builtin.uri:
+        url: "{{ coord1_url }}/admin/keys"
+        return_content: true
+      register: keys
+      when: sender01 == ''
+
+    - name: Ceremony (aux info 1-3 minutes, then key generation)
+      ansible.builtin.command: "{{ repo_root }}/mpc-signer/deploy/ceremony.sh"
+      environment:
+        COORD: "{{ coord1_url }}"
+        ADMIN_TOKEN: "{{ mpc_admin_token }}"
+      when: sender01 == '' and keys.json | length == 0
+      changed_when: true
+      no_log: false
+
+    - name: Keys after the ceremony
+      ansible.builtin.uri:
+        url: "{{ coord1_url }}/admin/keys"
+        return_content: true
+      register: keys_after
+      when: sender01 == ''
+
+    - name: One key = SENDER01
+      ansible.builtin.assert:
+        that: keys_after.json | length == 1
+        fail_msg: >-
+          The cluster holds {{ keys_after.json | length }} keys and state/sender01 is missing:
+          write the SENDER01 address into {{ state_dir }}/sender01 and run again.
+      when: sender01 == ''
+
+    - name: Save SENDER01
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/sender01"
+        content: "{{ keys_after.json[0].address }}\n"
+        mode: "0600"
+      when: sender01 == ''
+
+    - name: SENDER01
+      ansible.builtin.debug:
+        msg: "SENDER01 = {{ sender01 }}"
+
+- name: Presignature pool for SENDER01 on both coordinators
+  hosts: app_hosts
+  become: true
+  serial: 1
+  tasks:
+    - name: Coordinator with MPC_POOL_KEYS
+      ansible.builtin.include_tasks: tasks/coordinator.yml
+
+    - name: Presignatures being made for SENDER01
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:9100/admin/pool"
+        headers:
+          Authorization: "Bearer {{ mpc_admin_token }}"
+        return_content: true
+      register: pool
+      until: >-
+        pool.status == 200 and
+        (pool.json.pools.values() | selectattr('pooled') | map(attribute='ready') | select('gt', 0) | list | length) > 0
+      retries: 30
+      delay: 2
+      no_log: true

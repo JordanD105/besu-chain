@@ -1,0 +1,47 @@
+# ---- The production layout (docs/production-layout.md). Fixed: other repository files use it. ----
+
+vip_rpc: 192.168.68.150     # HAProxy: Besu RPC :8545 (rpc1, rpc2 backup), MPC :9100 (coord1, coord2 backup)
+vip_proxy: 192.168.68.151   # the active proxy :30000
+
+besu_nodes:
+  - { name: val1, host: h135, role: validator, p2p_port: 30303, metrics_port: 9545, rpc_bind: local, rpc_port: 8645, ws_port: 8646, host_network: true }
+  - { name: rpc1, host: h135, role: rpc,       p2p_port: 30304, metrics_port: 9546, rpc_bind: host,  rpc_port: 8555, ws_port: 8546, host_network: true }
+  - { name: val2, host: h136, role: validator, p2p_port: 30303, metrics_port: 9545, rpc_bind: local, rpc_port: 8645, ws_port: 8646, host_network: true }
+  - { name: rpc2, host: h136, role: rpc,       p2p_port: 30304, metrics_port: 9546, rpc_bind: host,  rpc_port: 8555, ws_port: 8546, host_network: true }
+  - { name: val3, host: h137, role: validator, p2p_port: 30303, metrics_port: 9545, rpc_bind: local, rpc_port: 8545, ws_port: 8546, host_network: false }
+  - { name: val4, host: h138, role: validator, p2p_port: 30303, metrics_port: 9545, rpc_bind: local, rpc_port: 8545, ws_port: 8546, host_network: false }
+
+mpc_nodes:
+  - { id: 0, name: mpc1, host: h135 }
+  - { id: 1, name: mpc2, host: h137 }
+  - { id: 2, name: mpc3, host: h138 }
+
+coordinators:
+  - { name: coord1, host: h135 }
+  - { name: coord2, host: h136 }
+
+chainlens_rpc_host: h136      # chainlens reads rpc2
+snapshot_node: val3           # daily chain snapshot
+
+# ---- Operator state (ansible/state/, never committed) ----------------------------------------
+ansible_root: "{{ playbook_dir }}"
+repo_root: "{{ playbook_dir | dirname }}"
+state_dir: "{{ playbook_dir }}/state"
+
+# Shared secrets: generated once into state/secrets/ (00-preflight.yml), then read from there.
+mpc_node_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/mpc_node_token', chars=['hexdigits'], length=64) }}"
+mpc_admin_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/mpc_admin_token', chars=['hexdigits'], length=64) }}"
+mpc_metrics_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/mpc_metrics_token', chars=['hexdigits'], length=64) }}"
+vrrp_pass_rpc: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_rpc', chars=['ascii_letters', 'digits'], length=8) }}"
+vrrp_pass_proxy: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_proxy', chars=['ascii_letters', 'digits'], length=8) }}"
+
+# SENDER01: written by 04-coordinators.yml after the key ceremony
+sender01: "{{ lookup('ansible.builtin.file', state_dir ~ '/sender01', errors='ignore') | default('', true) | trim }}"
+
+ip_of: "{{ dict(groups['servers'] | zip(groups['servers'] | map('extract', hostvars, 'ansible_host'))) }}"
+coord1_url: "http://{{ hostvars[coordinators[0].host].ansible_host }}:9100"
+
+# Images built on the operator by 02-images.yml (names from proxy/ and chainlens/docker-compose.yml)
+app_images:
+  proxy: localhost/besu-proxy/besu-proxy
+  chainlens: localhost/besu-chainlens/chainlens

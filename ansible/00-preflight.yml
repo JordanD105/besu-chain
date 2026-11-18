@@ -1,0 +1,61 @@
+# Checks before anything changes, and the operator's state directory + shared secrets.
+- name: Operator checks and state
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Settings are filled in
+      ansible.builtin.assert:
+        that:
+          - operator_ip is match('^[0-9]+(\.[0-9]+){3}$')
+          - client_ips is sequence and client_ips is not string
+          - request_timeout | int > block_period | int
+        fail_msg: >-
+          Set operator_ip (this machine's IP, as the hosts see it) and client_ips in
+          group_vars/all/settings.yml. The firewall only lets operator_ip in.
+
+    - name: Operator tools (docker for the image and genesis, git, curl)
+      ansible.builtin.command: "{{ item }}"
+      loop: ["docker info --format json", "git --version", "curl --version"]
+      changed_when: false
+
+    - name: State directories (mode 700)
+      ansible.builtin.file:
+        path: "{{ state_dir }}/{{ item }}"
+        state: directory
+        mode: "0700"
+      loop: ["", secrets, mpc, besu, network, handoff, images]
+
+    - name: Shared secrets (created once, then reused)
+      ansible.builtin.set_fact:
+        _secret: "{{ item }}"
+      loop:
+        - "{{ mpc_node_token }}"
+        - "{{ mpc_admin_token }}"
+        - "{{ mpc_metrics_token }}"
+        - "{{ vrrp_pass_rpc }}"
+        - "{{ vrrp_pass_proxy }}"
+      no_log: true
+
+    - name: Uncommitted changes are not deployed (the hosts get the committed HEAD)
+      ansible.builtin.command: git -C {{ repo_root }} status --porcelain -- besu-production ha monitoring mpc-signer/deploy proxy chainlens
+      register: dirty
+      changed_when: false
+
+    - name: Warn about uncommitted changes
+      ansible.builtin.debug:
+        msg: "Not deployed (uncommitted): {{ dirty.stdout_lines }}"
+      when: dirty.stdout | length > 0
+
+- name: Host checks
+  hosts: servers
+  gather_facts: true
+  tasks:
+    - name: Host matches the layout
+      ansible.builtin.assert:
+        that:
+          - ansible_host == '192.168.68.' ~ host_no
+          - ansible_host in ansible_facts.all_ipv4_addresses
+          - ansible_facts.os_family in ['RedHat', 'Debian']
+        fail_msg: >-
+          {{ inventory_hostname }}: expected IP 192.168.68.{{ host_no }} on this host, and a RHEL-family
+          or Debian/Ubuntu system (found {{ ansible_facts.all_ipv4_addresses }}, {{ ansible_facts.os_family }}).

@@ -1,0 +1,26 @@
+# Production deployment from scratch, option B: everything except the MPC nodes, which their teams
+# run (03-mpc-nodes.yml stops and tells you what they must do; run this again afterwards).
+#   ansible-playbook site.yml
+# Rerun-safe: keys, genesis, cluster.json and the key ceremony are created once and never again.
+- name: Preflight
+  ansible.builtin.import_playbook: 00-preflight.yml
+- name: Hosts
+  ansible.builtin.import_playbook: 01-hosts.yml
+- name: Images (MPC signer, proxy, chainlens)
+  ansible.builtin.import_playbook: 02-images.yml
+- name: MPC nodes (teams)
+  ansible.builtin.import_playbook: 03-mpc-nodes.yml
+- name: Coordinators and key ceremony
+  ansible.builtin.import_playbook: 04-coordinators.yml
+- name: Besu
+  ansible.builtin.import_playbook: 05-besu.yml
+- name: Proxy
+  ansible.builtin.import_playbook: 06-proxy.yml
+- name: HAProxy and keepalived
+  ansible.builtin.import_playbook: 07-ha.yml
+- name: Checks
+  ansible.builtin.import_playbook: 08-check.yml
+- name: Monitoring and chainlens
+  ansible.builtin.import_playbook: 09-monitoring.yml
+- name: Backups
+  ansible.builtin.import_playbook: 10-backups.yml

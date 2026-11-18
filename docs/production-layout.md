@@ -26,7 +26,7 @@ own guide has the details:
 
 | VIP | Serves | Used by |
 |---|---|---|
-| `192.168.68.150` | HAProxy: `:8545` → rpc1 (rpc2 as backup), `:9100` → coord1 (coord2 as backup) | proxies (`BESU_IP`, `WEB3SIGNER_IP`, `MPC_ADMIN_URL`), coordinators (`MPC_BESU_RPC`) |
+| `192.168.68.150` | HAProxy: `:8545` → rpc1 `:8555` (rpc2 as backup), `:9100` → coord1 (coord2 as backup) | proxies (`BESU_IP`, `WEB3SIGNER_IP`, `MPC_ADMIN_URL`), coordinators (`MPC_BESU_RPC`) |
 | `192.168.68.151` | `:30000` → the active proxy | applications, Prometheus (proxy job) |
 
 ```
@@ -36,7 +36,7 @@ own guide has the details:
      ┌── .135 ───┴──────────────┐              ┌── .136 ───────┴───────────┐
      │ proxy1 (active)          │              │ proxy2 (stopped: standby) │
      │ HAProxy ◄── VIP .150 ──► │◄── keepalived ──►│ HAProxy               │
-     │   :8545 → rpc1 | rpc2    │              │                           │
+     │   :8545 → rpc1|rpc2 :8555│              │                           │
      │   :9100 → coord1 | coord2│              │                           │
      │ rpc1  coord1  val1  mpc1 │              │ rpc2  coord2  val2        │
      └──────────────────────────┘              └───────────────────────────┘
@@ -54,13 +54,16 @@ own guide has the details:
 | Node | Host | Directory (example) | `BESU_ROLE` | `P2P_PORT` | `METRICS_PORT` | `RPC_BIND_IP:RPC_PORT` | `WS_PORT` | `COMPOSE_FILE` |
 |---|---|---|---|---|---|---|---|---|
 | val1 | .135 | `/opt/besu-val1` | validator | 30303 | 9545 | `127.0.0.1:8645` | 8646 | `docker-compose.host.yml` |
-| rpc1 | .135 | `/opt/besu-rpc1` | rpc | 30304 | 9546 | `192.168.68.135:8545` | 8546 | `docker-compose.host.yml` |
+| rpc1 | .135 | `/opt/besu-rpc1` | rpc | 30304 | 9546 | `192.168.68.135:8555` | 8546 | `docker-compose.host.yml` |
 | val2 | .136 | `/opt/besu-val2` | validator | 30303 | 9545 | `127.0.0.1:8645` | 8646 | `docker-compose.host.yml` |
-| rpc2 | .136 | `/opt/besu-rpc2` | rpc | 30304 | 9546 | `192.168.68.136:8545` | 8546 | `docker-compose.host.yml` |
+| rpc2 | .136 | `/opt/besu-rpc2` | rpc | 30304 | 9546 | `192.168.68.136:8555` | 8546 | `docker-compose.host.yml` |
 | val3 | .137 | `/opt/besu-val3` | validator | 30303 | 9545 | `127.0.0.1:8545` | 8546 | default |
 | val4 | .138 | `/opt/besu-val4` | validator | 30303 | 9545 | `127.0.0.1:8545` | 8546 | default |
 
 Every node: `NODE_NAME` = the node's name, `P2P_HOST` and `BIND_IP` = its host's IP.
+The RPC nodes listen on **8555**, not 8545: HAProxy holds 8545 on the VIP `.150` on the same hosts,
+and Besu refuses to start when its port is taken on any address of the host (after a reboot,
+HAProxy starts first). Clients always use the VIP `192.168.68.150:8545`.
 `BESU_HOST_ALLOWLIST` on the RPC nodes:
 
 - rpc1: `192.168.68.135,192.168.68.150,localhost,127.0.0.1`
@@ -104,7 +107,7 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 
 ### Chainlens and monitoring (.139)
 
-- chainlens: `BESU_RPC=http://192.168.68.136:8545` (rpc2, so explorer polling stays off rpc1).
+- chainlens: `BESU_RPC=http://192.168.68.136:8555` (rpc2, so explorer polling stays off rpc1).
 - monitoring: `BIND_IP=192.168.68.139`; the target files in `monitoring/prometheus/targets/` are set
   for this layout (6 Besu nodes, coord1 and coord2 on their own IPs, the proxy on its VIP, 5 hosts).
 
@@ -117,7 +120,8 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 |---|---|---|
 | 30303, 30304 tcp+udp | Besu p2p on .135–.138 | the other Besu hosts |
 | 9545, 9546 | Besu metrics | .139 |
-| 8545 | rpc1 / rpc2 (and the VIP `.150`) | .135, .136 (HAProxy, proxies, coordinators), .139 (chainlens), admin |
+| 8545 | HAProxy on the VIP `.150` | .135, .136 (proxies, coordinators), admin |
+| 8555 | rpc1 / rpc2 | .135, .136 (HAProxy), .139 (chainlens), admin |
 | 9100 | coord1 / coord2 (and the VIP `.150`) | .135, .136, the MPC nodes (relay), .139 (metrics), admin |
 | 7000 | mpc1 / mpc2 / mpc3 | .135, .136 (coordinators) |
 | 30000 | proxy (and the VIP `.151`) | application clients, .139, admin |
@@ -128,7 +132,9 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 
 ## 4. Deploying from scratch
 
-A new chain and a new MPC cluster on five empty hosts. Do the steps **in this order**: the genesis
+A new chain and a new MPC cluster on five empty hosts. **Automated:** [`ansible/`](../ansible/README.md)
+runs all of this except the MPC nodes, which their teams run (it stops and tells you when). By hand,
+do the steps **in this order**: the genesis
 needs `SENDER01` (MPC key ceremony), HAProxy needs the RPC nodes, and keepalived needs the proxy.
 
 | Step | Where | What |
@@ -341,7 +347,7 @@ BIND_IP=192.168.68.135
 P2P_PORT=30304
 METRICS_PORT=9546
 RPC_BIND_IP=192.168.68.135
-RPC_PORT=8545
+RPC_PORT=8555
 WS_PORT=8546
 JAVA_OPTS=-Xmx4g
 COMPOSE_FILE=docker-compose.host.yml
@@ -404,7 +410,7 @@ Expect the block number rising and 5 peers. Then the RPC nodes, `/opt/besu-rpc1`
 `/opt/besu-rpc2` (.136), with `./start.sh`, and check each one:
 
 ```bash
-curl -s http://192.168.68.135:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_syncing","params":[]}'
+curl -s http://192.168.68.135:8555 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_syncing","params":[]}'
 ```
 
 Expect `"result":false` (in sync); `.136` for rpc2.
@@ -470,7 +476,7 @@ Grafana: `http://192.168.68.139:3000`. Chainlens, reading rpc2:
 
 ```bash
 cd /opt/besu-chain/chainlens && cp .env.example .env
-sed -i 's|^BESU_RPC=.*|BESU_RPC=http://192.168.68.136:8545|' .env && docker compose up -d --build
+sed -i 's|^BESU_RPC=.*|BESU_RPC=http://192.168.68.136:8555|' .env && docker compose up -d --build
 ```
 
 Explorer: `http://192.168.68.139:30100`.

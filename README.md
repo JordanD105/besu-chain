@@ -39,6 +39,7 @@ The same components run in two setups:
 | [`proxy/`](proxy) | **Application API** (Node.js/Express): accounts, transfers, NFT collections. Redis is an optional cache: correctness comes from memory + the chain. | 30000 API, 36379 Redis |
 | [`chainlens/`](chainlens) | **Block explorer** (Node.js/Express): blocks, transactions, accounts, contracts, NFTs. NFT sales show the image. Polls RPC every 4 s, indexes in memory, re-indexes after a chain reset. | 30100 |
 | [`ha/`](ha) | **High availability** for .135/.136: HAProxy (Besu RPC and MPC signer behind one floating IP), keepalived (floating IPs, starts/stops the standby proxy), firewalld rules for every host. | VIPs 192.168.68.150 (:8545, :9100), 192.168.68.151 (:30000) |
+| [`ansible/`](ansible) | **Production deployment** with Ansible from the operator machine: hosts, images, coordinators and key ceremony, Besu, proxy, HAProxy + keepalived, monitoring, backups. Stops for the MPC teams, who run their own nodes. | — |
 | [`monitoring/`](monitoring) | **Production monitoring**: Prometheus + Grafana on one host. Dashboards for Besu (quorum, block age, peers, sync, RPC, JVM), the MPC signer (nodes vs threshold, hot/cold signing, latency, pool, policy refusals) and hosts; alert rules. | 3000 Grafana, 9090 Prometheus (localhost), 9101 node-exporter |
 | [`besu-vault-web3signer/`](besu-vault-web3signer) | **Previous signer, being retired**: Vault KV keeps exportable private keys and Web3Signer loads them into memory. Kept for comparison benchmarks. | 8200 Vault, 9000 Web3Signer |
 
@@ -103,7 +104,8 @@ deployment from scratch, the failover tests): **[`docs/production-layout.md`](do
 ### Deployment order
 
 Every command, host by host: **[`docs/production-layout.md`](docs/production-layout.md), section 4
-"Deploying from scratch"**.
+"Deploying from scratch"**. Automated with Ansible (everything except the MPC nodes, which their
+teams run): **[`ansible/`](ansible/README.md)**.
 
 | # | Step | Guide |
 |---|---|---|
@@ -221,6 +223,7 @@ collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).
 | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) | Production MPC signer: 3 teams, tokens, key ceremony, backups and restore, operations |
 | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) | Running the proxy on the MPC signer, Redis-optional design, troubleshooting |
 | [`docs/production-layout.md`](docs/production-layout.md) | **Production layout**: the 5 hosts, every setting and port, step-by-step deployment from scratch, failure table, failover tests |
+| [`ansible/README.md`](ansible/README.md) | **Automated deployment**: settings, the three runs and the MPC team steps, the operator state, reruns, security notes |
 | [`ha/README.md`](ha/README.md) | HAProxy + keepalived setup, operations, failover tests |
 | [`docs/disaster-recovery.md`](docs/disaster-recovery.md) | **Disaster recovery runbook**: what to back up, schedule, alerts, recovery steps per scenario, drills |
 | [`monitoring/README.md`](monitoring/README.md) | Production monitoring: metrics endpoints, targets, dashboards, alerts, firewall |

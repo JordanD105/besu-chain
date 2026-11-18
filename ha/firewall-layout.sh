@@ -30,7 +30,8 @@ case "$host" in
     firewall-cmd --permanent -q --add-rich-rule="rule family=\"ipv4\" source address=\"$peer\" protocol value=\"vrrp\" accept"
     for p in 30303/tcp 30303/udp 30304/tcp 30304/udp; do allow_all "$p" $BESU_HOSTS; done   # val + rpc p2p
     allow_all 9545/tcp "$MON"; allow_all 9546/tcp "$MON"                                   # Besu metrics
-    allow_all 8545/tcp $COORDS "$MON" "$ADMIN"     # rpc node direct (HAProxy, chainlens -> rpc2, operator)
+    allow_all 8545/tcp $COORDS "$ADMIN"            # HAProxy on the VIP .150 (proxies, coordinators, operator)
+    allow_all 8555/tcp $COORDS "$MON" "$ADMIN"     # rpc node direct (HAProxy, chainlens -> rpc2, operator)
     allow_all 9100/tcp $COORDS $MPC_HOSTS "$MON" "$ADMIN"  # coordinator: HAProxy, MPC relay, metrics, admin
     allow_all 30000/tcp $CLIENTS "$MON" "$ADMIN"   # proxy (VIP .151 and this host)
     [ "$host" = 135 ] && allow_all 7000/tcp $COORDS                                        # mpc1

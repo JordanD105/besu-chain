@@ -1,0 +1,52 @@
+# ---- Settings to review before the first run -------------------------------------------------
+
+# The operator / bastion running Ansible: SSH, MPC admin API, Grafana are opened for it.
+# REQUIRED: the firewall closes everything else, so a wrong value locks you out.
+operator_ip: ""
+# applications calling the proxy (VIP .151:30000) and users of chainlens (.139:30100)
+client_ips: []
+
+# VRRP network interface on .135/.136: empty = the interface holding the host's IP
+vrrp_interface: ""
+
+# Chain (genesis): only used when the network files are created, never changed afterwards
+chain_id: 1337
+block_period: 1          # seconds per block (1 on one LAN)
+request_timeout: 2       # QBFT round timeout seconds (> block_period)
+block_gas_limit: "0x1c9c380"
+sender01_funding_wei: "1000000000000000000000000"   # SENDER01 balance in the genesis (1,000,000 ETH)
+
+# MPC signing policy (cluster.json; every node enforces it)
+mpc_max_value_wei: "1000000000000000000000"   # 1000 ETH per transaction
+mpc_max_gas: 30000000
+mpc_allowed_to: ""        # leave empty for the proxy (see mpc-signer/docs/production.md)
+mpc_pool_target: 500
+
+# Images
+besu_image: hyperledger/besu:26.11.0
+besu_java_opts: -Xmx4g
+mpc_image: registry.example.com/mpc-signer:1.2.0
+# true: build mpc_image on the operator and copy it to the hosts (docker save/load).
+# false: the hosts pull mpc_image from your registry.
+mpc_image_build: true
+mpc_bigint: bigint-rug    # GMP backend (faster, LGPL); "" for the pure-Rust default
+
+# Extra compose files for building the proxy / chainlens images on the operator, e.g. to set a
+# build proxy or a corporate CA:  { proxy: [/path/override.yml], chainlens: [...] }
+build_compose_overrides: {}
+
+# Install Docker, firewalld, chrony, HAProxy, keepalived (dnf on RHEL family, apt on Debian/Ubuntu).
+# false: they are already installed.
+install_packages: true
+
+# Daily chain snapshot on val3 (.137)
+snapshot_dir: /backup/chain
+snapshot_copy_to: ""      # off-site rsync target, e.g. backup@offsite:/besu-chain (needs root's SSH key)
+snapshot_cron_hour: 3
+snapshot_cron_minute: 17
+
+# Test account + transfer through the VIPs after the deployment (once; costs 1 ETH of SENDER01)
+smoke_test: true
+
+# Where the repository goes on every host (the keepalived scripts use /opt/besu-chain/proxy)
+repo_dir: /opt/besu-chain
