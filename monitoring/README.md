@@ -134,18 +134,80 @@ by itself within a minute, so adding a node later needs no restart.
 docker compose up -d
 ```
 
-Open `http://<BIND_IP>:3000`, log in with `admin` and the password from `setup.sh`. Then check
-that every target is **up**: Grafana → *Explore*, query `up`, or on the monitoring host:
+Open `http://<BIND_IP>:3000`, log in with `admin` and the password from `setup.sh`.
+
+### 6. Test the metrics endpoints
+
+**All at once** (on the monitoring host, so the network path is the same as Prometheus'):
+
+```bash
+./check-targets.sh
+```
+
+It reads `prometheus/targets/*.yml`, calls every `/metrics` (with the token for coordinators) and
+prints one line per target. It exits with 1 if any target fails:
+
+```
+Besu nodes (targets/besu.yml)
+  OK   besu   val1           192.168.68.132:9545
+  FAIL besu   val2           192.168.68.132:9546  -> 403: Besu refuses the Host header: old node package, ...
+MPC coordinators (targets/mpc.yml)
+  FAIL mpc    coordinator-a  192.168.68.135:9100  -> 404: old coordinator image without /metrics: ...
+Hosts / node-exporter (targets/hosts.yml)
+  OK   host   besu-host-a    192.168.68.132:9101
+Prometheus scrape status:
+      7 "health":"up"
+      2 "health":"down"
+```
+
+**One endpoint by hand** (prints the HTTP status; `200` = OK):
+
+```bash
+# Besu node: <BIND_IP>:<METRICS_PORT> from that node's .env
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.68.132:9545/metrics
+```
+
+```bash
+# MPC coordinator: needs the metrics token
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(cat secrets/mpc-metrics-token)" http://<coordinator IP>:9100/metrics
+```
+
+```bash
+# node-exporter on a host
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.68.133:9101/metrics
+```
+
+**Look at a few values** (useful to see that the numbers are real):
+
+```bash
+# Besu: height, peers, in sync
+curl -s http://192.168.68.132:9545/metrics | grep -E '^(ethereum_blockchain_height|ethereum_peer_count|besu_synchronizer_in_sync) '
+```
+
+```bash
+# MPC: nodes up, keys, pool, signatures
+curl -s -H "Authorization: Bearer $(cat secrets/mpc-metrics-token)" http://<coordinator IP>:9100/metrics | grep -E '^mpc_(node_up|keys|pool_ready|signs_total)'
+```
+
+**What Prometheus sees** (the same data Grafana uses):
 
 ```bash
 curl -s localhost:9090/api/v1/targets | grep -o '"health":"[a-z]*"' | sort | uniq -c
 ```
 
-| Target down with | Cause |
-|---|---|
-| `403 Forbidden` (Besu) | old node package: Besu rejects the Host header. Update `docker-compose*.yml`, `./start.sh` |
-| `401 Unauthorized` (coordinator) | `secrets/mpc-metrics-token` ≠ the coordinator's `MPC_METRICS_TOKEN` |
-| `connection refused` / timeout | wrong IP/port in `targets/`, node down, or firewall |
+```bash
+# the error of every target that is down, e.g.
+# "scrapeUrl":"http://192.168.68.133:9101/metrics","lastError":"Get "...": connect: connection refused"
+curl -s localhost:9090/api/v1/targets | grep -oE '"scrapeUrl":"[^"]*","globalUrl":"[^"]*","lastError":"([^"\\]|\\.)+"' | sed -E 's/"globalUrl":"[^"]*",//; s/\\"/"/g'
+```
+
+| Status | Meaning | Fix |
+|---|---|---|
+| `200` | OK | |
+| `403` (Besu) | old node package: Besu rejects the Host header | copy the new `docker-compose*.yml` to the node, `./start.sh` |
+| `401` (coordinator) | `secrets/mpc-metrics-token` ≠ the coordinator's `MPC_METRICS_TOKEN` | same value on both sides, restart the coordinator |
+| `404` (coordinator) | coordinator image older than `/metrics` | build and deploy the new `mpc-signer` image, set `MPC_IMAGE` |
+| `000` | no answer | wrong IP/port in `targets/`, service down, or firewall blocks the monitoring host |
 
 ## Operations
 
