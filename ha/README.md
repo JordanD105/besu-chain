@@ -87,8 +87,8 @@ cp check-proxy.sh proxy-start.sh proxy-stop.sh /etc/keepalived/ && chmod 700 /et
 
 Edit `/etc/keepalived/keepalived.conf`: `INTERFACE` and both `auth_pass` values (8 characters, the
 same on both hosts). Edit `PROXY_DIR` in `proxy-start.sh` and `proxy-stop.sh` (the proxy
-directory on that host). The proxy on .133 must be built and configured like the one on .132
-(`docker compose build`), but **not started**.
+directory on that host). The proxy must already be configured and built on **both** hosts
+(`docker compose build`), but **not started**: keepalived starts it on the host that takes `.151`.
 
 Start keepalived on .132 first, then on .133:
 

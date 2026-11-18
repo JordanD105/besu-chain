@@ -66,8 +66,8 @@ The same components run in two setups:
 
 <sub>Source: [`docs/architecture-production.svg`](docs/architecture-production.svg)</sub>
 
-Five hosts on one private network. Full details (every setting, port, the deployment order, the
-failover tests and the migration from the earlier layout): **[`docs/production-layout.md`](docs/production-layout.md)**.
+Five hosts on one private network. Full details (every setting and port, the step-by-step
+deployment from scratch, the failover tests): **[`docs/production-layout.md`](docs/production-layout.md)**.
 
 | Host | Runs |
 |---|---|
@@ -102,14 +102,17 @@ failover tests and the migration from the earlier layout): **[`docs/production-l
 
 ### Deployment order
 
+Every command, host by host: **[`docs/production-layout.md`](docs/production-layout.md), section 4
+"Deploying from scratch"**.
+
 | # | Step | Guide |
 |---|---|---|
-| 1 | Hosts: Docker, synchronized clocks, firewall (`ha/firewall-layout.sh`), node-exporter | [`docs/production-layout.md`](docs/production-layout.md) |
-| 2 | **MPC:** mpc1/2/3 (each team), `cluster.json`, coord1 + coord2, key ceremony → `SENDER01` | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) |
-| 3 | **Besu:** 6 nodes (val1–4, rpc1–2), network files with `ALLOC="<SENDER01>=…"`, start | [`besu-production/README.md`](besu-production/README.md) |
-| 4 | **HA:** HAProxy + keepalived on .132 and .133 | [`ha/README.md`](ha/README.md) |
-| 5 | **Proxy** on .132 and .133 (`proxy/.env.example`: everything through the VIPs) | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) |
-| 6 | **NFT collections:** `POST /nft/deploy` (unique name and symbol) | [`proxy/api.txt`](proxy/api.txt) |
+| 1 | Hosts: Docker, synchronized clocks, repository in `/opt/besu-chain`, firewall (`ha/firewall-layout.sh`), node-exporter | [`docs/production-layout.md`](docs/production-layout.md) |
+| 2 | **MPC:** image + tokens, mpc1/2/3 (each team), `cluster.json`, coord1 + coord2, key ceremony → `SENDER01` | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) |
+| 3 | **Besu:** 6 nodes (val1–4, rpc1–2), network files with `ALLOC="<SENDER01>=…"`, validators then RPC nodes | [`besu-production/README.md`](besu-production/README.md) |
+| 4 | **Proxy** on .132 and .133 (`proxy/.env.example`: everything through the VIPs): build only | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) |
+| 5 | **HA:** HAProxy + keepalived on .132 and .133; keepalived starts proxy1 | [`ha/README.md`](ha/README.md) |
+| 6 | **Check** through the VIPs; **NFT collections:** `POST /nft/deploy` (unique name and symbol) | [`proxy/api.txt`](proxy/api.txt) |
 | 7 | **Monitoring + chainlens** on .136 | [`monitoring/README.md`](monitoring/README.md) |
 | 8 | **Backups:** node keys, hourly MPC shares, daily chain snapshot on val3 (.134) with an off-site copy | [`docs/disaster-recovery.md`](docs/disaster-recovery.md) |
 | 9 | **API gateway** in front of the proxy VIP; **failover tests**; go live | [`ha/README.md`](ha/README.md) |
@@ -217,7 +220,7 @@ collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).
 | [`besu-production/README.md`](besu-production/README.md) | Production Besu: hosts, network files, start, validator add/remove, operations |
 | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) | Production MPC signer: 3 teams, tokens, key ceremony, backups and restore, operations |
 | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) | Running the proxy on the MPC signer, Redis-optional design, troubleshooting |
-| [`docs/production-layout.md`](docs/production-layout.md) | **Production layout**: the 5 hosts, every setting and port, deployment order, failure table, failover tests, migration |
+| [`docs/production-layout.md`](docs/production-layout.md) | **Production layout**: the 5 hosts, every setting and port, step-by-step deployment from scratch, failure table, failover tests |
 | [`ha/README.md`](ha/README.md) | HAProxy + keepalived setup, operations, failover tests |
 | [`docs/disaster-recovery.md`](docs/disaster-recovery.md) | **Disaster recovery runbook**: what to back up, schedule, alerts, recovery steps per scenario, drills |
 | [`monitoring/README.md`](monitoring/README.md) | Production monitoring: metrics endpoints, targets, dashboards, alerts, firewall |

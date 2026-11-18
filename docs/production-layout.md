@@ -1,8 +1,8 @@
 # Production layout: 5 hosts, high availability
 
 The production deployment of this repository, host by host: what runs where, the exact settings,
-the ports, the order to deploy, what survives which failure, and how to migrate from the earlier
-layout. Each component's own guide has the details:
+the ports, the full deployment from scratch, and what survives which failure. Each component's
+own guide has the details:
 [`besu-production/README.md`](../besu-production/README.md),
 [`mpc-signer/docs/production.md`](../mpc-signer/docs/production.md),
 [`docs/proxy-with-mpc-signer.md`](proxy-with-mpc-signer.md), [`ha/README.md`](../ha/README.md),
@@ -128,16 +128,369 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 
 ## 4. Deploying from scratch
 
-| Step | What | Guide |
+A new chain and a new MPC cluster on five empty hosts. Do the steps **in this order**: the genesis
+needs `SENDER01` (MPC key ceremony), HAProxy needs the RPC nodes, and keepalived needs the proxy.
+
+| Step | Where | What |
 |---|---|---|
-| 1 | hosts: Docker + Compose, `chrony` (synchronized clocks), firewall (`ha/firewall-layout.sh`), node-exporter on every host | [`monitoring/README.md`](../monitoring/README.md) |
-| 2 | **MPC:** init mpc1/2/3 (each team), `cluster.json`, coord1 + coord2, key ceremony on coord1 → `SENDER01` | [`mpc-signer/docs/production.md`](../mpc-signer/docs/production.md) |
-| 3 | **Besu:** `init.sh` for the 6 nodes (settings above), operator `make-network.sh` with the 6 JSON files and `ALLOC="<SENDER01>=…"`, distribute, `start.sh` (validators first) | [`besu-production/README.md`](../besu-production/README.md) |
-| 4 | **HA:** HAProxy + keepalived on .132 and .133; check the VIPs answer | [`ha/README.md`](../ha/README.md) |
-| 5 | **Proxy** on .132 and .133 (same `.env`); keepalived starts it on the VIP holder | [`docs/proxy-with-mpc-signer.md`](proxy-with-mpc-signer.md) |
-| 6 | **Monitoring + chainlens** on .136 | [`monitoring/README.md`](../monitoring/README.md) |
-| 7 | **Backups:** `backup-key.sh` on all 6 Besu nodes, MPC `backup.sh` hourly on .132/.134/.135, `snapshot-chain.sh` daily on **val3 (.134)** with `COPY_TO` | [`docs/disaster-recovery.md`](disaster-recovery.md) |
-| 8 | **Failover tests** (section 6), then go live | [`ha/README.md`](../ha/README.md) |
+| [4.1](#41-prepare-every-host) | .132–.136 | Docker, clock, repository, firewall, node-exporter |
+| [4.2](#42-mpc-image-and-tokens-operator) | operator | build the MPC image, generate the tokens |
+| [4.3](#43-mpc-nodes-132-134-135) | .132, .134, .135 | mpc1, mpc2, mpc3 (each by its own team) |
+| [4.4](#44-clusterjson-operator) | operator | `cluster.json`, then start the 3 MPC nodes |
+| [4.5](#45-coordinators-and-key-ceremony-132-133) | .132, .133 | coord1, coord2, key ceremony → `SENDER01` |
+| [4.6](#46-besu-node-keys-132-135) | .132–.135 | the 6 Besu nodes: keys |
+| [4.7](#47-besu-network-files-operator) | operator | genesis and network files (`SENDER01` funded) |
+| [4.8](#48-start-besu-132-135) | .132–.135 | validators, then the RPC nodes |
+| [4.9](#49-proxy-132-133) | .132, .133 | build the proxy (not started) |
+| [4.10](#410-haproxy-and-keepalived-132-133) | .132, .133 | HAProxy, keepalived: VIPs up, proxy1 starts |
+| [4.11](#411-check-the-application-path) | any | test account and transfer through the VIPs |
+| [4.12](#412-monitoring-and-chainlens-136) | .136 | Prometheus, Grafana, chainlens |
+| [4.13](#413-backups) | .132–.135 | key backups, MPC backups, daily chain snapshot |
+| [4.14](#414-failover-tests-then-go-live) | — | the failover tests of section 6, then go live |
+
+The **operator** machine is the bastion (or .136): it needs Docker and a clone of this repository.
+It only handles public files and the shared tokens; no Besu key or MPC share ever goes there.
+All commands below run as root (or with `sudo`).
+
+### 4.1 Prepare every host
+
+On **each** of .132, .133, .134, .135, .136:
+
+1. Docker Engine and the Compose plugin (Docker's instructions for your distribution), plus:
+
+   ```bash
+   dnf install -y git chrony firewalld && systemctl enable --now docker chronyd firewalld
+   ```
+
+   `chronyc tracking` must show a synchronized clock (QBFT and the alerts depend on it).
+2. The repository, at the same path on every host (the keepalived scripts use it):
+
+   ```bash
+   git clone https://github.com/JordanD105/besu-chain.git /opt/besu-chain
+   ```
+
+   (with a deploy key or token if the repository is private).
+
+3. Firewall, with that host's last number (`132` … `136`):
+
+   ```bash
+   CLIENTS="<application IPs>" ADMIN=<bastion IP> /opt/besu-chain/ha/firewall-layout.sh 132
+   ```
+
+4. node-exporter, with that host's IP:
+
+   ```bash
+   cd /opt/besu-chain/monitoring/node-exporter && echo BIND_IP=192.168.68.132 > .env && docker compose up -d
+   ```
+
+### 4.2 MPC image and tokens (operator)
+
+```bash
+cd /opt/besu-chain/mpc-signer
+docker build --build-arg BIGINT=bigint-rug -t registry.example.com/mpc-signer:1.2.0 .
+docker push registry.example.com/mpc-signer:1.2.0
+```
+
+Without a registry, copy it to the four hosts that run MPC components:
+
+```bash
+for h in 132 133 134 135; do docker save registry.example.com/mpc-signer:1.2.0 | ssh root@192.168.68.$h docker load; done
+```
+
+Generate the three shared tokens (hand them over through each team's secret channel, never chat
+or email):
+
+```bash
+openssl rand -hex 32    # MPC_NODE_TOKEN    : the 3 MPC nodes and both coordinators
+openssl rand -hex 32    # MPC_ADMIN_TOKEN   : both coordinators, the operator, both proxies
+openssl rand -hex 32    # MPC_METRICS_TOKEN : both coordinators and the monitoring host
+```
+
+### 4.3 MPC nodes (.132, .134, .135)
+
+Each node by **its own team**, on its own host:
+
+| Node | Host | `MPC_NODE_ID` | `MPC_BIND_IP` |
+|---|---|---|---|
+| mpc1 | .132 | 0 | `192.168.68.132` |
+| mpc2 | .134 | 1 | `192.168.68.134` |
+| mpc3 | .135 | 2 | `192.168.68.135` |
+
+```bash
+cp -r /opt/besu-chain/mpc-signer/deploy/node /opt/mpc-node && cd /opt/mpc-node
+cp .env.example .env && chmod 600 .env
+```
+
+In `.env`: `MPC_IMAGE=registry.example.com/mpc-signer:1.2.0`, `MPC_NODE_ID` and `MPC_BIND_IP`
+from the table, `MPC_NODE_TOKEN`, `MPC_COMPUTE_THREADS` = about the host's core count. Then:
+
+```bash
+./init.sh
+```
+
+It generates this node's `MPC_NODE_PASSPHRASE` into `.env`: **store it in this team's vault now**
+(without it, the share and its backups can't be opened). Send `node<ID>.json` (public keys only)
+to the operator. Don't start the node yet.
+
+### 4.4 `cluster.json` (operator)
+
+```bash
+cd /opt/besu-chain/mpc-signer/deploy
+CHAIN_ID=1337 MAX_VALUE_WEI=1000000000000000000000 MAX_GAS=30000000 \
+  ./make-cluster.sh node0.json node1.json node2.json > cluster.json
+sha256sum cluster.json
+```
+
+Leave `ALLOWED_TO` empty (the proxy creates accounts and deploys contracts). Copy `cluster.json`
+to `/opt/mpc-node/` on .132, .134, .135 and to the operator's coordinator copies below; every team
+compares the `sha256sum`. Then each MPC team starts its node:
+
+```bash
+cd /opt/mpc-node && docker compose up -d && docker compose logs --tail 5
+```
+
+Expect `node loaded` and `node API listening`.
+
+### 4.5 Coordinators and key ceremony (.132, .133)
+
+On .132 (coord1) and .133 (coord2):
+
+```bash
+cp -r /opt/besu-chain/mpc-signer/deploy/coordinator /opt/mpc-coordinator && cd /opt/mpc-coordinator
+cp .env.example .env && chmod 600 .env
+```
+
+| Setting | coord1 (.132) | coord2 (.133) |
+|---|---|---|
+| `MPC_IMAGE` | `registry.example.com/mpc-signer:1.2.0` | same |
+| `MPC_BIND_IP` | `192.168.68.132` | `192.168.68.133` |
+| `MPC_RELAY_URL` | `ws://192.168.68.132:9100/relay` | `ws://192.168.68.133:9100/relay` |
+| `MPC_BESU_RPC` | `http://192.168.68.150:8545` | same |
+| `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN`, `MPC_METRICS_TOKEN` | from 4.2 | same |
+| `MPC_POOL_KEYS` | empty for now | empty for now |
+
+Copy `cluster.json` next to `docker-compose.yml`, then:
+
+```bash
+docker compose up -d && docker compose logs --tail 5
+```
+
+Expect `keys loaded from nodes keys=0`. `MPC_BESU_RPC` points at the VIP, which comes up in 4.10:
+until then the coordinators can't reach Besu, which is fine (nothing to send yet).
+
+**Key ceremony** (operator, all 3 MPC nodes up), directly against coord1:
+
+```bash
+COORD=http://192.168.68.132:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> /opt/besu-chain/mpc-signer/deploy/ceremony.sh
+```
+
+Aux info takes 1–3 minutes, then the distributed key generation prints the first address: that is
+**`SENDER01`**. Write it down: the genesis funds it (4.7) and the proxy uses it (4.9).
+
+On **both** coordinators set `MPC_POOL_KEYS=<SENDER01>` in `.env`, then `docker compose up -d`.
+Check that each fills its pool (`"pooled": true`, `ready` climbing):
+
+```bash
+curl -s -H "Authorization: Bearer <MPC_ADMIN_TOKEN>" http://192.168.68.132:9100/admin/pool
+curl -s -H "Authorization: Bearer <MPC_ADMIN_TOKEN>" http://192.168.68.133:9100/admin/pool
+```
+
+### 4.6 Besu node keys (.132–.135)
+
+One directory per node, with the values of section 2:
+
+| Host | Directories |
+|---|---|
+| .132 | `/opt/besu-val1`, `/opt/besu-rpc1` |
+| .133 | `/opt/besu-val2`, `/opt/besu-rpc2` |
+| .134 | `/opt/besu-val3` |
+| .135 | `/opt/besu-val4` |
+
+For each node (example: val1):
+
+```bash
+cp -r /opt/besu-chain/besu-production/node /opt/besu-val1 && cd /opt/besu-val1
+cp .env.example .env && chmod 600 .env
+```
+
+`.env` of **val1** (.132):
+
+```bash
+BESU_IMAGE=hyperledger/besu:26.11.0
+BESU_ROLE=validator
+NODE_NAME=val1
+P2P_HOST=192.168.68.132
+BIND_IP=192.168.68.132
+P2P_PORT=30303
+METRICS_PORT=9545
+RPC_BIND_IP=127.0.0.1
+RPC_PORT=8645
+WS_PORT=8646
+JAVA_OPTS=-Xmx4g
+COMPOSE_FILE=docker-compose.host.yml
+```
+
+`.env` of **rpc1** (.132):
+
+```bash
+BESU_IMAGE=hyperledger/besu:26.11.0
+BESU_ROLE=rpc
+NODE_NAME=rpc1
+P2P_HOST=192.168.68.132
+BIND_IP=192.168.68.132
+P2P_PORT=30304
+METRICS_PORT=9546
+RPC_BIND_IP=192.168.68.132
+RPC_PORT=8545
+WS_PORT=8546
+JAVA_OPTS=-Xmx4g
+COMPOSE_FILE=docker-compose.host.yml
+BESU_HOST_ALLOWLIST=192.168.68.132,192.168.68.150,localhost,127.0.0.1
+BESU_RPC_HTTP_API=ETH,NET,WEB3,TXPOOL
+BESU_RPC_WS_API=ETH,NET,WEB3,TXPOOL
+```
+
+- **val2 / rpc2** (.133): the same as val1 / rpc1 with `192.168.68.133` everywhere and
+  `NODE_NAME=val2` / `rpc2` (rpc2's allowlist: `192.168.68.133,192.168.68.150,localhost,127.0.0.1`).
+- **val3** (.134) / **val4** (.135): like val1 with their own IP and name, `RPC_PORT=8545`,
+  `WS_PORT=8546`, and **no** `COMPOSE_FILE` line (one node on the host: default networking).
+
+Then, in each directory:
+
+```bash
+./init.sh
+```
+
+It creates the node key inside the data volume (it never leaves the host) and writes
+`<NODE_NAME>.json` (public enode and address). Send the six files `val1.json` … `val4.json`,
+`rpc1.json`, `rpc2.json` to the operator.
+
+### 4.7 Besu network files (operator)
+
+```bash
+cd /opt/besu-chain/besu-production/operator
+CHAIN_ID=1337 BLOCK_PERIOD=1 REQUEST_TIMEOUT=2 \
+ALLOC="<SENDER01>=1000000000000000000000000" \
+  ./make-network.sh network/ val1.json val2.json val3.json val4.json rpc1.json rpc2.json
+cat network/SHA256SUMS
+```
+
+- `CHAIN_ID` must be the one in `cluster.json` (4.4).
+- `ALLOC` funds `SENDER01` in the genesis (here 1,000,000 ETH, in wei).
+- `BLOCK_PERIOD=1` and `REQUEST_TIMEOUT=2` suit hosts on one LAN.
+
+Copy the 4 files of `network/` (`genesis.json`, `static-nodes.json`, `permissions_config.toml`,
+`SHA256SUMS`) into the `network/` directory of **all six** node directories. Each team compares
+`SHA256SUMS` with the operator over a second channel. Keep a copy of `network/` in a safe place
+(section 4.13).
+
+### 4.8 Start Besu (.132–.135)
+
+Validators first, in their directories: `/opt/besu-val1` (.132), `/opt/besu-val2` (.133),
+`/opt/besu-val3` (.134), `/opt/besu-val4` (.135):
+
+```bash
+./start.sh
+```
+
+Blocks start once at least 3 validators are up. Check on .132 (on .134/.135 without `RPC=`,
+port 8545):
+
+```bash
+RPC=http://127.0.0.1:8645 /opt/besu-chain/besu-production/operator/qbft.sh health
+```
+
+Expect the block number rising and 5 peers. Then the RPC nodes, `/opt/besu-rpc1` (.132) and
+`/opt/besu-rpc2` (.133), with `./start.sh`, and check each one:
+
+```bash
+curl -s http://192.168.68.132:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_syncing","params":[]}'
+```
+
+Expect `"result":false` (in sync); `.133` for rpc2.
+
+### 4.9 Proxy (.132, .133)
+
+On both hosts, the same `.env`:
+
+```bash
+cd /opt/besu-chain/proxy && cp .env.example .env && chmod 600 .env
+```
+
+In `.env`: `SENDER01=<SENDER01>` and `MPC_ADMIN_TOKEN`; the VIP addresses are already set
+(`BESU_IP`/`WEB3SIGNER_IP=192.168.68.150`, `MPC_ADMIN_URL=http://192.168.68.150:9100`). Build
+the image, but **don't start** it: keepalived does that on the host holding `.151`.
+
+```bash
+docker compose build
+```
+
+### 4.10 HAProxy and keepalived (.132, .133)
+
+Follow [`ha/README.md`](../ha/README.md), sections 1, 3 and 4: `ip_nonlocal_bind`, SELinux,
+`haproxy.cfg`, then keepalived (`INTERFACE`, the two `auth_pass` values, `PROXY_DIR=/opt/besu-chain/proxy`).
+Start keepalived on **.132 first**, then on .133. Check on .132:
+
+```bash
+ip -br addr | grep -E '68\.15[01]/'
+```
+
+Both VIPs are on .132, and keepalived started proxy1 (`docker ps` shows the proxy;
+`journalctl -t besu-ha`). .133 holds no VIP and its proxy is stopped.
+
+### 4.11 Check the application path
+
+From an application host:
+
+```bash
+curl -s http://192.168.68.150:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
+curl -s http://192.168.68.151:30000/status/senders
+curl -s -X POST http://192.168.68.151:30000/createaccount -H 'content-type: application/json' --data '{"amount":"1"}'
+```
+
+The last call creates an MPC account and funds it from `SENDER01`. Then send a transfer with
+`POST /transfer` (`from`, `to`, `amount`) and the NFT calls you use
+([`proxy/api.txt`](../proxy/api.txt), [`docs/proxy-with-mpc-signer.md`](proxy-with-mpc-signer.md)).
+
+### 4.12 Monitoring and chainlens (.136)
+
+```bash
+cp -r /opt/besu-chain/monitoring /opt/monitoring && cd /opt/monitoring
+MPC_METRICS_TOKEN=<MPC_METRICS_TOKEN> ./setup.sh
+```
+
+`setup.sh` prints the Grafana admin password once. In `.env` set `BIND_IP=192.168.68.136`. The
+targets in `prometheus/targets/` already match this layout. Start and check every target:
+
+```bash
+docker compose up -d && ./check-targets.sh
+```
+
+Grafana: `http://192.168.68.136:3000`. Chainlens, reading rpc2:
+
+```bash
+cd /opt/besu-chain/chainlens && cp .env.example .env
+sed -i 's|^BESU_RPC=.*|BESU_RPC=http://192.168.68.133:8545|' .env && docker compose up -d --build
+```
+
+Explorer: `http://192.168.68.136:30100`.
+
+### 4.13 Backups
+
+| What | Where | How |
+|---|---|---|
+| Besu node keys | all 6 node directories | once: `./backup-key.sh /secure/dir`, then `gpg --symmetric` and delete the plain copy |
+| MPC shares | `/opt/mpc-node` on .132, .134, .135 (each team) | cron, hourly: `0 * * * * /opt/mpc-node/backup.sh /secure/backup` |
+| Chain snapshot | `/opt/besu-val3` on .134 | cron, daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=user@offsite:/besu-chain ./snapshot-chain.sh /backup/chain` |
+| Network files, `cluster.json`, tokens | operator | after every change, to the vault |
+
+Prometheus alerts when a backup is too old or failed. Details and restore steps:
+[`docs/disaster-recovery.md`](disaster-recovery.md).
+
+### 4.14 Failover tests, then go live
+
+Run the tests of section 6 one at a time, and check Grafana between them. Then point the
+applications at `http://192.168.68.151:30000`.
 
 ## 5. What survives a failure
 
@@ -167,40 +520,3 @@ Planned maintenance: never take two of .132–.135 down at once.
 
 After each test, start the component again and wait until Grafana shows everything up before the
 next one.
-
-## 7. Migrating from the earlier layout
-
-Earlier: .132 = val1, val2, rpc1, coordinator, proxy; .133 = val3; .134 = val4 (+ an MPC node).
-Target: as in section 1. Nodes keep their **keys**; only their host changes. Rules:
-
-- **Never run one key on two hosts at the same time.** Stop the old node before starting it on the
-  new host.
-- **One validator at a time.** With 4 validators, the chain tolerates one being down.
-- Free a host before moving a node onto it, so the order is: val4 → .135, then val3 → .134, then
-  val2 → .133.
-
-**Prepare:** set up .135 and .136 (step 1 in section 4), back up all node keys (`backup-key.sh`).
-
-**Move one validator** (e.g. val4 from .134 to .135); the operator:
-
-```bash
-cd /secure/network            # the operator's copy of the 4 network files
-/path/to/besu-production/operator/move-node.sh . validator4.json 192.168.68.135:30303
-```
-
-1. Copy the 4 updated files to **every** node and restart the **other** nodes one at a time
-   (`./start.sh && docker compose restart`, wait for peers).
-2. Stop val4 on .134: `docker compose down` (keep its volume until the move is verified).
-3. On .135: node package, `.env` with `P2P_HOST`/`BIND_IP=192.168.68.135`, the 4 network files,
-   `./restore-key.sh validator4.key`, `./start.sh`. Check `qbft.sh health`: blocks rising, all peers.
-4. Repeat for val3 (.133 → .134), then val2 (.132 → .133, with the ports in section 2).
-
-**Add rpc2** (.133): `init.sh` (settings above), operator `add-node.sh network/ rpc2.json`,
-distribute, restart the others one at a time, start rpc2.
-
-**MPC nodes:** move each to its target host with its own backup: on the new host the same `.env`
-(same `MPC_NODE_ID` and passphrase), `restore.sh`, start; update its `url` in `cluster.json`, copy
-`cluster.json` to all nodes and coordinators, restart them one at a time. Never two at once.
-
-**Then:** coord2 on .133, HAProxy + keepalived, proxy2, the new proxy `.env` (VIPs), monitoring +
-chainlens on .136, the new monitoring targets, backups, and the failover tests.

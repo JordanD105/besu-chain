@@ -31,7 +31,7 @@ one per host, and 2 RPC nodes, on the two application hosts.
 | `node/` | every Besu host | `docker-compose.yml` (`docker-compose.host.yml` for several nodes per host), `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh`, `restore-key.sh`, `snapshot-chain.sh`, `restore-chain.sh`, `reset-chain.sh` |
 | `operator/make-network.sh` | operator, once | genesis (QBFT validator set), `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS` |
 | `operator/add-node.sh` | operator, later | add a node to a **running** network (genesis untouched) |
-| `operator/move-node.sh` | operator, later | a node keeps its key but moves to another host/port: updates its address in the network files |
+| `operator/move-node.sh` | operator, later | a node keeps its key but gets a new IP/port (e.g. a replacement host): updates its address in the network files |
 | `operator/qbft.sh` | on a validator host | validator set, add/remove votes, peers, health |
 | [`../monitoring/`](../monitoring) | monitoring host | Prometheus + Grafana, dashboards and alerts for these nodes and the MPC signer |
 | `firewall-example.sh` | every host | ufw rules per role (generic; for the 5-host layout with firewalld use [`../ha/firewall-layout.sh`](../ha/firewall-layout.sh)) |
@@ -206,7 +206,7 @@ halt the chain (quorum 3). An RPC node next to a validator is fine.
 | Task | How |
 |---|---|
 | **Upgrade Besu** | set the new exact tag in `BESU_IMAGE` and run `./start.sh`, **one node at a time**, waiting until it is back at the chain head (`qbft.sh health`). With 4 validators, never have 2 down at once. |
-| **Move a node to another host** (same key, new IP:port) | operator: `operator/move-node.sh network/ <node>.json <new IP:port>`, copy the 4 files to every node, restart the others one at a time; stop the node on its old host, start it on the new one with `restore-key.sh`. **Never run one key on two hosts at once.** Full procedure: [`../docs/production-layout.md`](../docs/production-layout.md), section 7 |
+| **A node gets a new IP** (same key, e.g. a replacement host) | operator: `operator/move-node.sh network/ <node>.json <new IP:port>`, copy the 4 files to every node, restart the others one at a time; start the node on the new host with `restore-key.sh`. **Never run one key on two hosts at once.** See [`../docs/disaster-recovery.md`](../docs/disaster-recovery.md), 6.1 |
 | **Add an RPC node** | `init.sh` on the new host, then `operator/add-node.sh network/ rpcN.json`. Copy the 4 files to **every** node, restart nodes one at a time (`./start.sh && docker compose restart`), then start the new node. |
 | **Add a validator** | same as an RPC node, then on **more than half** of the current validators run `operator/qbft.sh propose 0x<new address> true`. Once `qbft.sh validators` lists it, run `qbft.sh discard 0x<address>` on those validators. |
 | **Remove a validator** | `qbft.sh propose 0x<address> false` on more than half of the validators, then `discard`. Then remove its enode from the network files with care, and redistribute. |

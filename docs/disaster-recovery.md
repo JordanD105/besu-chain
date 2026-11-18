@@ -131,10 +131,11 @@ back.
 restart them one at a time, and vote: `qbft.sh propose 0x<new address> true` on more than half of
 the validators, then `qbft.sh propose 0x<old address> false`. See `besu-production/README.md`.
 
-**New IP (same key):** in `network/static-nodes.json` and `network/permissions_config.toml`, replace
-the old `@<ip>:<port>` of that enode with the new one, regenerate the checksums
-(`sha256sum genesis.json static-nodes.json permissions_config.toml > SHA256SUMS`), copy the 4 files
-to **every** node and restart them one at a time. Never change `genesis.json`.
+**New IP (same key):** the operator updates that enode's `@<ip>:<port>` in the network files
+(`static-nodes.json`, `permissions_config.toml`, `SHA256SUMS`):
+`operator/move-node.sh network/ <node>.json <new IP:port>`. Copy the 4 files to **every** node and
+restart the others one at a time, then start the node on its new host. Never change
+`genesis.json`, and never run one key on two hosts at once.
 
 ### 6.2 Application host (.132 or .133) lost
 
