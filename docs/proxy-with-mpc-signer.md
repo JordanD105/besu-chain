@@ -24,7 +24,7 @@ Everything below was tested end to end:
 The examples assume one Docker host, `192.168.68.130` (development). Replace it with your host's IP.
 
 **Production** (5 hosts, [`production-layout.md`](production-layout.md)): the same proxy runs on
-192.168.68.132 (proxy1, active) and .133 (proxy2, standby), with the same `.env` from
+192.168.68.135 (proxy1, active) and .136 (proxy2, standby), with the same `.env` from
 [`../proxy/.env.example`](../proxy/.env.example): Besu and the MPC signer through HAProxy on the
 floating IP `192.168.68.150` (`BESU_IP`, `WEB3SIGNER_IP`, `MPC_ADMIN_URL`). Applications call the
 proxy's floating IP `192.168.68.151:30000`. keepalived starts the proxy only on the host holding
@@ -289,7 +289,7 @@ Tested on 4 validators + RPC node + MPC cluster:
 | Faster sustained throughput | more CPU per MPC node, `MPC_REFILL_CONCURRENCY`, `MPC_COMPUTE_THREADS`, a larger `MPC_POOL_TARGET` for bursts (see `mpc-signer/bench/RESULTS.md`) |
 | Backups | each node's Docker volume (`node0-data`, `node1-data`, `node2-data`) **and** its passphrase in `quickstart/.env`. Keep them separate per node. |
 | A node is down | signing continues with the other 2. `/createaccount` needs **all 3** (key generation), so new accounts fail until it returns. |
-| Production | [`production-layout.md`](production-layout.md): MPC nodes on 3 hosts run by different teams (`mpc-signer/deploy/`), two coordinators behind HAProxy, the proxy active on .132 and standby on .133 (one active replica: the sender lock and nonce counter are in its memory) |
+| Production | [`production-layout.md`](production-layout.md): MPC nodes on 3 hosts run by different teams (`mpc-signer/deploy/`), two coordinators behind HAProxy, the proxy active on .135 and standby on .136 (one active replica: the sender lock and nonce counter are in its memory) |
 
 ## Troubleshooting
 

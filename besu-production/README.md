@@ -18,11 +18,11 @@ Production layout ([`../docs/production-layout.md`](../docs/production-layout.md
 one per host, and 2 RPC nodes, on the two application hosts.
 
 ```
-   .132: val1 + rpc1      .133: val2 + rpc2      .134: val3      .135: val4
+   .135: val1 + rpc1      .136: val2 + rpc2      .137: val3      .138: val4
      ▲  p2p 30303 (validators), 30304 (rpc nodes); static peers + node allowlist  ▲
      └───────────────────────────────────────────────────────────────────────────┘
   proxy, coordinators ──► HAProxy VIP 192.168.68.150:8545 ──► rpc1 (rpc2 as backup)
-  chainlens (.136) ──► rpc2 :8545          Prometheus (.136) ──► :9545 / :9546 on every node
+  chainlens (.139) ──► rpc2 :8545          Prometheus (.139) ──► :9545 / :9546 on every node
   operator ──SSH──► validator host (validator RPC on 127.0.0.1 only)
 ```
 
@@ -40,7 +40,7 @@ one per host, and 2 RPC nodes, on the two application hosts.
 
 | | `besu-test-network` (test) | `besu-production` |
 |---|---|---|
-| Hosts | everything on one Docker host | one validator per host (.132–.135); an RPC node next to the validator on .132 and .133 |
+| Hosts | everything on one Docker host | one validator per host (.135–.138); an RPC node next to the validator on .135 and .136 |
 | Node keys | committed in the repo | generated on each host, kept in its volume |
 | Validator RPC | published, ADMIN/DEBUG/TRACE/PERM enabled, any host | `127.0.0.1` only, for the operator over SSH |
 | Client RPC | the same nodes as the validators | dedicated RPC nodes: ETH/NET/WEB3/TXPOOL (explorer: ETH/NET/WEB3), host allowlist |
@@ -50,16 +50,16 @@ one per host, and 2 RPC nodes, on the two application hosts.
 
 ## Sizing and topology
 
-- **Validators:** **4**, one per host (.132, .133, .134, .135): quorum 3, so any one host can fail.
+- **Validators:** **4**, one per host (.135, .136, .137, .138): quorum 3, so any one host can fail.
   Never put two validators on one host: losing it would halt the chain. (7 validators tolerate 2;
   with only 3 hosts, 6 validators, 2 per host, survive one host.)
   - Each: 4 vCPU, 8 GB RAM, SSD. `JAVA_OPTS=-Xmx2g` is enough at today's load (~100–200 MB of heap
     used); raise it if the *JVM heap used* panel says so.
-- **RPC nodes:** **rpc1** (.132) and **rpc2** (.133) behind HAProxy on the floating IP
+- **RPC nodes:** **rpc1** (.135) and **rpc2** (.136) behind HAProxy on the floating IP
   `192.168.68.150:8545` (rpc1 normally, rpc2 when rpc1 is unhealthy; [`../ha/`](../ha)).
   Chainlens reads **rpc2** directly, so explorer polling stays off rpc1.
   - Each: 4–8 vCPU, 8–16 GB RAM, SSD.
-- **Two nodes on one host** (.132, .133): host networking and separate ports (section *Several
+- **Two nodes on one host** (.135, .136): host networking and separate ports (section *Several
   nodes on one host*): validator P2P 30303 / metrics 9545 / RPC `127.0.0.1:8645`, rpc node P2P
   30304 / metrics 9546 / RPC `<host IP>:8545`.
 - **Block period:** `BLOCK_PERIOD=2` across sites, 1 on one LAN. Set `REQUEST_TIMEOUT` to at least
@@ -76,16 +76,16 @@ one per host, and 2 RPC nodes, on the two application hosts.
 
 | From | To | Port |
 |---|---|---|
-| every Besu host (.132–.135) | every Besu node | 30303 (validators), 30304 (rpc1, rpc2) tcp + udp |
-| HAProxy, proxies, coordinators (.132, .133), chainlens (.136) | rpc1, rpc2 | 8545 |
-| Prometheus (.136) | every node | 9545 (validators), 9546 (rpc nodes) |
+| every Besu host (.135–.138) | every Besu node | 30303 (validators), 30304 (rpc1, rpc2) tcp + udp |
+| HAProxy, proxies, coordinators (.135, .136), chainlens (.139) | rpc1, rpc2 | 8545 |
+| Prometheus (.139) | every node | 9545 (validators), 9546 (rpc nodes) |
 | bastion | every host | 22 |
 
 Validators publish JSON-RPC on `127.0.0.1` only, so their firewall opens nothing for it.
 
 ### 2. Initialise each node (on each host)
 
-One directory per node, e.g. on .132 `/opt/besu-val1` and `/opt/besu-rpc1`:
+One directory per node, e.g. on .135 `/opt/besu-val1` and `/opt/besu-rpc1`:
 
 ```bash
 cp -r besu-production/node /opt/besu-val1 && cd /opt/besu-val1
@@ -100,14 +100,14 @@ The exact values of every node are in [`../docs/production-layout.md`](../docs/p
 | `BESU_IMAGE` | an exact version, e.g. `hyperledger/besu:26.11.0` |
 | `BESU_ROLE` | `validator` or `rpc` |
 | `NODE_NAME` | a unique name: `val1` … `val4`, `rpc1`, `rpc2` |
-| `P2P_HOST`, `BIND_IP` | this host's IP, e.g. `192.168.68.132` |
-| `P2P_PORT`, `METRICS_PORT`, `RPC_PORT`, `WS_PORT`, `COMPOSE_FILE` | on .132 and .133 (two nodes per host): see the layout table |
+| `P2P_HOST`, `BIND_IP` | this host's IP, e.g. `192.168.68.135` |
+| `P2P_PORT`, `METRICS_PORT`, `RPC_PORT`, `WS_PORT`, `COMPOSE_FILE` | on .135 and .136 (two nodes per host): see the layout table |
 
 **RPC nodes** also need:
 
 | Variable | Value |
 |---|---|
-| `RPC_BIND_IP` | the host's IP (`192.168.68.132` for rpc1, `.133` for rpc2) |
+| `RPC_BIND_IP` | the host's IP (`192.168.68.135` for rpc1, `.136` for rpc2) |
 | `BESU_HOST_ALLOWLIST` | the names/IPs clients use in the URL: the host's IP **and the VIP** `192.168.68.150`, plus `localhost,127.0.0.1` |
 
 Then run:
@@ -170,7 +170,7 @@ operator/qbft.sh validators   # the validator set from genesis
 From an application host, each RPC node directly and, once HAProxy runs, through the VIP:
 
 ```bash
-curl -s http://192.168.68.132:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
+curl -s http://192.168.68.135:8545 -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
 ```
 
 ```bash
@@ -178,15 +178,15 @@ curl -s http://192.168.68.150:8545 -H 'content-type: application/json' --data '{
 ```
 
 Then point the applications at the RPC nodes:
-- proxy (.132, .133): `BESU_IP=192.168.68.150`, `BESU_PORT=8545` (HAProxy);
+- proxy (.135, .136): `BESU_IP=192.168.68.150`, `BESU_PORT=8545` (HAProxy);
 - coordinators: `MPC_BESU_RPC=http://192.168.68.150:8545`;
-- chainlens (.136): `BESU_RPC=http://192.168.68.133:8545` (rpc2).
+- chainlens (.139): `BESU_RPC=http://192.168.68.136:8545` (rpc2).
 
 Add the nodes to monitoring: one line per node in `../monitoring/prometheus/targets/besu.yml` (see [`../monitoring/README.md`](../monitoring/README.md)).
 
 ## Several nodes on one host
 
-In the layout, .132 runs val1 + rpc1 and .133 runs val2 + rpc2:
+In the layout, .135 runs val1 + rpc1 and .136 runs val2 + rpc2:
 
 - **One directory per node**, e.g. `/opt/besu-val1` and `/opt/besu-rpc1`. The
   directory name becomes the compose project and the data volume, so the keys stay separate.

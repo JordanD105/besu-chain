@@ -9,7 +9,7 @@
   <rect width="1600" height="1160" fill="#f8fafc"/>
 
   <text x="40" y="50" font-size="30" font-weight="700" fill="#0f172a">besu-chain: production layout (5 hosts)</text>
-  <text x="40" y="80" font-size="15.5" fill="#475569">Any one host can fail: 4 validators (quorum 3) and 3 MPC nodes (2 of 3) on separate hosts · the application path fails over from .132 to .133</text>
+  <text x="40" y="80" font-size="15.5" fill="#475569">Any one host can fail: 4 validators (quorum 3) and 3 MPC nodes (2 of 3) on separate hosts · the application path fails over from .135 to .136</text>
 
   <!-- ===================== entry ===================== -->
   <rect x="560" y="104" width="480" height="58" rx="12" fill="#ffffff" stroke="#94a3b8" filter="url(#sh)"/>
@@ -20,14 +20,14 @@
   <text x="800" y="218" font-size="15" font-weight="700" fill="#065f46" text-anchor="middle">VIP 192.168.68.151 : 30000  (proxy)</text>
   <line x1="800" y1="162" x2="800" y2="188" stroke="#059669" stroke-width="2.2" marker-end="url(#aG)"/>
 
-  <!-- ===================== host .132 ===================== -->
+  <!-- ===================== host .135 ===================== -->
   <rect x="40" y="262" width="740" height="420" rx="16" fill="#ffffff" stroke="#334155" stroke-width="2" filter="url(#sh)"/>
-  <text x="60" y="292" font-size="19" font-weight="700" fill="#0f172a">192.168.68.132</text>
+  <text x="60" y="292" font-size="19" font-weight="700" fill="#0f172a">192.168.68.135</text>
   <text x="235" y="292" font-size="14" fill="#475569">primary application host · keepalived MASTER (priority 150)</text>
 
-  <!-- ===================== host .133 ===================== -->
+  <!-- ===================== host .136 ===================== -->
   <rect x="820" y="262" width="740" height="420" rx="16" fill="#ffffff" stroke="#334155" stroke-width="2" stroke-dasharray="9 5" filter="url(#sh)"/>
-  <text x="840" y="292" font-size="19" font-weight="700" fill="#0f172a">192.168.68.133</text>
+  <text x="840" y="292" font-size="19" font-weight="700" fill="#0f172a">192.168.68.136</text>
   <text x="1015" y="292" font-size="14" fill="#475569">standby application host · keepalived BACKUP (100)</text>
 
   <!-- VRRP link -->
@@ -50,7 +50,7 @@
   <text x="436" y="360" font-size="12.5" fill="#9a3412">:8545 → rpc1 (rpc2)  ·  :9100 → coord1 (coord2)</text>
   <rect x="1200" y="312" width="340" height="64" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6" stroke-dasharray="7 4"/>
   <text x="1216" y="338" font-size="15" font-weight="700" fill="#9a3412">HAProxy (takes VIP .150 on failover)</text>
-  <text x="1216" y="360" font-size="12.5" fill="#9a3412">same configuration as on .132</text>
+  <text x="1216" y="360" font-size="12.5" fill="#9a3412">same configuration as on .135</text>
   <line x1="386" y1="344" x2="418" y2="344" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
 
   <!-- coordinators -->
@@ -74,7 +74,7 @@
   <line x1="700" y1="378" x2="1010" y2="402" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="7 4" marker-end="url(#aP)"/>
   <line x1="740" y1="378" x2="1300" y2="402" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="7 4" marker-end="url(#aB)"/>
 
-  <!-- validators and mpc on .132/.133 -->
+  <!-- validators and mpc on .135/.136 -->
   <rect x="64" y="502" width="330" height="70" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.6"/>
   <text x="80" y="529" font-size="15" font-weight="700" fill="#1e3a8a">val1  (QBFT validator)</text>
   <text x="80" y="551" font-size="12.5" fill="#1e3a8a">p2p 30303 · RPC 127.0.0.1:8645 · metrics 9545</text>
@@ -87,14 +87,14 @@
 
   <text x="64" y="606" font-size="13" fill="#475569">Also on each host: node-exporter :9101, backups (keys; mpc1 hourly share backup)</text>
   <text x="64" y="628" font-size="13" fill="#475569">Two Besu nodes per host → host networking (docker-compose.host.yml), own ports</text>
-  <text x="844" y="606" font-size="13" fill="#475569">Same proxy .env and image as .132 · HAProxy, keepalived</text>
-  <text x="844" y="628" font-size="13" fill="#475569">No MPC node here: .133 holds no key share</text>
+  <text x="844" y="606" font-size="13" fill="#475569">Same proxy .env and image as .135 · HAProxy, keepalived</text>
+  <text x="844" y="628" font-size="13" fill="#475569">No MPC node here: .136 holds no key share</text>
   <text x="844" y="660" font-size="12.5" fill="#64748b">Dashed arrows from HAProxy: backup paths when coord1 / rpc1 fail</text>
   <text x="64" y="660" font-size="12.5" fill="#64748b">keepalived moves .150 if HAProxy fails, .151 if the proxy fails (then starts proxy2, stops proxy1)</text>
 
-  <!-- ===================== hosts .134 .135 .136 ===================== -->
+  <!-- ===================== hosts .137 .138 .139 ===================== -->
   <rect x="40" y="712" width="470" height="210" rx="16" fill="#ffffff" stroke="#334155" stroke-width="2" filter="url(#sh)"/>
-  <text x="60" y="742" font-size="19" font-weight="700" fill="#0f172a">192.168.68.134</text>
+  <text x="60" y="742" font-size="19" font-weight="700" fill="#0f172a">192.168.68.137</text>
   <rect x="64" y="760" width="200" height="70" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.6"/>
   <text x="80" y="787" font-size="15" font-weight="700" fill="#1e3a8a">val3</text>
   <text x="80" y="809" font-size="12.5" fill="#1e3a8a">daily chain snapshot</text>
@@ -105,7 +105,7 @@
   <text x="64" y="884" font-size="13" fill="#475569">validator RPC on 127.0.0.1 only</text>
 
   <rect x="565" y="712" width="470" height="210" rx="16" fill="#ffffff" stroke="#334155" stroke-width="2" filter="url(#sh)"/>
-  <text x="585" y="742" font-size="19" font-weight="700" fill="#0f172a">192.168.68.135</text>
+  <text x="585" y="742" font-size="19" font-weight="700" fill="#0f172a">192.168.68.138</text>
   <rect x="589" y="760" width="200" height="70" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.6"/>
   <text x="605" y="787" font-size="15" font-weight="700" fill="#1e3a8a">val4</text>
   <text x="605" y="809" font-size="12.5" fill="#1e3a8a">QBFT validator</text>
@@ -116,7 +116,7 @@
   <text x="589" y="884" font-size="13" fill="#475569">validator RPC on 127.0.0.1 only</text>
 
   <rect x="1090" y="712" width="470" height="210" rx="16" fill="#ffffff" stroke="#334155" stroke-width="2" filter="url(#sh)"/>
-  <text x="1110" y="742" font-size="19" font-weight="700" fill="#0f172a">192.168.68.136</text>
+  <text x="1110" y="742" font-size="19" font-weight="700" fill="#0f172a">192.168.68.139</text>
   <rect x="1114" y="760" width="200" height="70" rx="10" fill="#f1f5f9" stroke="#475569" stroke-width="1.6"/>
   <text x="1130" y="787" font-size="15" font-weight="700" fill="#0f172a">Prometheus · Grafana</text>
   <text x="1130" y="809" font-size="12.5" fill="#334155">dashboards, alerts</text>
@@ -138,9 +138,9 @@
   <!-- ===================== footer / legend ===================== -->
   <rect x="40" y="950" width="1520" height="180" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
   <text x="60" y="980" font-size="16" font-weight="700" fill="#0f172a">What survives</text>
-  <text x="60" y="1006" font-size="14" fill="#334155">.132 lost: chain continues (val2–4), signing via coord2 with mpc2 + mpc3, VIPs move to .133 and proxy2 starts — seconds of errors.</text>
-  <text x="60" y="1030" font-size="14" fill="#334155">.133, .134, .135 lost: nothing visible (one validator, at most one MPC node). .136 lost: no monitoring/explorer, payments continue.</text>
-  <text x="60" y="1054" font-size="14" fill="#334155">Two of .132–.135 at once, or the whole site: the chain halts → docs/disaster-recovery.md (keys, hourly MPC backups, daily off-site chain snapshot).</text>
+  <text x="60" y="1006" font-size="14" fill="#334155">.135 lost: chain continues (val2–4), signing via coord2 with mpc2 + mpc3, VIPs move to .136 and proxy2 starts — seconds of errors.</text>
+  <text x="60" y="1030" font-size="14" fill="#334155">.136, .137, .138 lost: nothing visible (one validator, at most one MPC node). .139 lost: no monitoring/explorer, payments continue.</text>
+  <text x="60" y="1054" font-size="14" fill="#334155">Two of .135–.138 at once, or the whole site: the chain halts → docs/disaster-recovery.md (keys, hourly MPC backups, daily off-site chain snapshot).</text>
 
   <rect x="60" y="1078" width="18" height="12" fill="#dbeafe" stroke="#1d4ed8"/><text x="86" y="1089" font-size="13" fill="#334155">chain (Besu)</text>
   <rect x="190" y="1078" width="18" height="12" fill="#ede9fe" stroke="#6d28d9"/><text x="216" y="1089" font-size="13" fill="#334155">signing (MPC)</text>

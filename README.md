@@ -13,7 +13,7 @@ The same components run in two setups:
 
 | | Development / test | Production |
 |---|---|---|
-| Where | everything on one Docker host | 5 hosts (`192.168.68.132`–`.136`), HA pair for the application path, MPC nodes run by 3 teams |
+| Where | everything on one Docker host | 5 hosts (`192.168.68.135`–`.139`), HA pair for the application path, MPC nodes run by 3 teams |
 | Besu | [`besu-test-network/`](besu-test-network) | [`besu-production/`](besu-production) |
 | MPC signer | [`mpc-signer/quickstart/`](mpc-signer/quickstart) (3 nodes on one host) | [`mpc-signer/deploy/`](mpc-signer/deploy) (one node per host and team) |
 | Proxy, explorer | `proxy/`, `chainlens/` with Docker Compose | same images, private network, behind an API gateway |
@@ -38,7 +38,7 @@ The same components run in two setups:
 | [`mpc-signer/`](mpc-signer) | **2-of-3 threshold ECDSA signer** (CGGMP24 / LFDT Lockness), Web3Signer-compatible JSON-RPC. Quick start, production packages, benchmark. | 9100 coordinator, 7000 nodes |
 | [`proxy/`](proxy) | **Application API** (Node.js/Express): accounts, transfers, NFT collections. Redis is an optional cache: correctness comes from memory + the chain. | 30000 API, 36379 Redis |
 | [`chainlens/`](chainlens) | **Block explorer** (Node.js/Express): blocks, transactions, accounts, contracts, NFTs. NFT sales show the image. Polls RPC every 4 s, indexes in memory, re-indexes after a chain reset. | 30100 |
-| [`ha/`](ha) | **High availability** for .132/.133: HAProxy (Besu RPC and MPC signer behind one floating IP), keepalived (floating IPs, starts/stops the standby proxy), firewalld rules for every host. | VIPs 192.168.68.150 (:8545, :9100), 192.168.68.151 (:30000) |
+| [`ha/`](ha) | **High availability** for .135/.136: HAProxy (Besu RPC and MPC signer behind one floating IP), keepalived (floating IPs, starts/stops the standby proxy), firewalld rules for every host. | VIPs 192.168.68.150 (:8545, :9100), 192.168.68.151 (:30000) |
 | [`monitoring/`](monitoring) | **Production monitoring**: Prometheus + Grafana on one host. Dashboards for Besu (quorum, block age, peers, sync, RPC, JVM), the MPC signer (nodes vs threshold, hot/cold signing, latency, pool, policy refusals) and hosts; alert rules. | 3000 Grafana, 9090 Prometheus (localhost), 9101 node-exporter |
 | [`besu-vault-web3signer/`](besu-vault-web3signer) | **Previous signer, being retired**: Vault KV keeps exportable private keys and Web3Signer loads them into memory. Kept for comparison benchmarks. | 8200 Vault, 9000 Web3Signer |
 
@@ -71,21 +71,21 @@ deployment from scratch, the failover tests): **[`docs/production-layout.md`](do
 
 | Host | Runs |
 |---|---|
-| **192.168.68.132** | val1, rpc1, coord1, **proxy1** (active), mpc1, HAProxy + keepalived |
-| **192.168.68.133** | val2, rpc2, coord2 (warm), **proxy2** (standby), HAProxy + keepalived |
-| **192.168.68.134** | val3, mpc2 |
-| **192.168.68.135** | val4, mpc3 |
-| **192.168.68.136** | Prometheus, Grafana, chainlens |
+| **192.168.68.135** | val1, rpc1, coord1, **proxy1** (active), mpc1, HAProxy + keepalived |
+| **192.168.68.136** | val2, rpc2, coord2 (warm), **proxy2** (standby), HAProxy + keepalived |
+| **192.168.68.137** | val3, mpc2 |
+| **192.168.68.138** | val4, mpc3 |
+| **192.168.68.139** | Prometheus, Grafana, chainlens |
 
 | Floating IP (keepalived) | Serves |
 |---|---|
 | `192.168.68.150` | HAProxy: Besu RPC `:8545` (rpc1, rpc2 as backup) and the MPC signer `:9100` (coord1, coord2 as backup) |
 | `192.168.68.151` | the active proxy `:30000`: the entry point for applications |
 
-- **Chain:** 4 validators, one per host .132–.135 (quorum 3): any one host can fail.
-- **Signing:** 3 MPC nodes on .132, .134, .135, each run by **its own team** (2 of 3 sign). Two
+- **Chain:** 4 validators, one per host .135–.138 (quorum 3): any one host can fail.
+- **Signing:** 3 MPC nodes on .135, .137, .138, each run by **its own team** (2 of 3 sign). Two
   coordinators; either one signs for every account (they re-read the key list from the nodes).
-- **Application path:** everything on .132 has a twin on .133. keepalived moves the floating IPs and
+- **Application path:** everything on .135 has a twin on .136. keepalived moves the floating IPs and
   starts the standby proxy; only one proxy is ever active (it counts nonces in memory).
 
 ### Network zones
@@ -93,10 +93,10 @@ deployment from scratch, the failover tests): **[`docs/production-layout.md`](do
 | Zone | Contents | Reachable from |
 |---|---|---|
 | **Public edge** | API gateway in front of `192.168.68.151:30000` (bring your own: TLS, client authentication, rate limits) | internet: the **only** public entry |
-| **App** | proxy1/proxy2, HAProxy, chainlens (.136) | the gateway; admins |
+| **App** | proxy1/proxy2, HAProxy, chainlens (.139) | the gateway; admins |
 | **Signing** | coord1/coord2 (no key material), mpc1/mpc2/mpc3 | proxy → coordinator → nodes, nodes → coordinator relay; each team's admin |
 | **Chain** | val1–val4 (p2p only, RPC on localhost), rpc1/rpc2 | coordinators and proxies via HAProxy; chainlens → rpc2 |
-| **Ops** | Prometheus, Grafana (.136), node-exporter everywhere, backups | scrapes metrics; cannot call signing APIs |
+| **Ops** | Prometheus, Grafana (.139), node-exporter everywhere, backups | scrapes metrics; cannot call signing APIs |
 
 `ha/firewall-layout.sh` applies exactly these rules with firewalld on each host.
 
@@ -110,25 +110,25 @@ Every command, host by host: **[`docs/production-layout.md`](docs/production-lay
 | 1 | Hosts: Docker, synchronized clocks, repository in `/opt/besu-chain`, firewall (`ha/firewall-layout.sh`), node-exporter | [`docs/production-layout.md`](docs/production-layout.md) |
 | 2 | **MPC:** image + tokens, mpc1/2/3 (each team), `cluster.json`, coord1 + coord2, key ceremony → `SENDER01` | [`mpc-signer/docs/production.md`](mpc-signer/docs/production.md) |
 | 3 | **Besu:** 6 nodes (val1–4, rpc1–2), network files with `ALLOC="<SENDER01>=…"`, validators then RPC nodes | [`besu-production/README.md`](besu-production/README.md) |
-| 4 | **Proxy** on .132 and .133 (`proxy/.env.example`: everything through the VIPs): build only | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) |
-| 5 | **HA:** HAProxy + keepalived on .132 and .133; keepalived starts proxy1 | [`ha/README.md`](ha/README.md) |
+| 4 | **Proxy** on .135 and .136 (`proxy/.env.example`: everything through the VIPs): build only | [`docs/proxy-with-mpc-signer.md`](docs/proxy-with-mpc-signer.md) |
+| 5 | **HA:** HAProxy + keepalived on .135 and .136; keepalived starts proxy1 | [`ha/README.md`](ha/README.md) |
 | 6 | **Check** through the VIPs; **NFT collections:** `POST /nft/deploy` (unique name and symbol) | [`proxy/api.txt`](proxy/api.txt) |
-| 7 | **Monitoring + chainlens** on .136 | [`monitoring/README.md`](monitoring/README.md) |
-| 8 | **Backups:** node keys, hourly MPC shares, daily chain snapshot on val3 (.134) with an off-site copy | [`docs/disaster-recovery.md`](docs/disaster-recovery.md) |
+| 7 | **Monitoring + chainlens** on .139 | [`monitoring/README.md`](monitoring/README.md) |
+| 8 | **Backups:** node keys, hourly MPC shares, daily chain snapshot on val3 (.137) with an off-site copy | [`docs/disaster-recovery.md`](docs/disaster-recovery.md) |
 | 9 | **API gateway** in front of the proxy VIP; **failover tests**; go live | [`ha/README.md`](ha/README.md) |
 
 ### What keeps running when something fails
 
 | Failure | Effect |
 |---|---|
-| **host .132** | chain continues (3 validators); signing via coord2 and mpc2 + mpc3; the VIPs move to .133 and proxy2 starts: a few seconds of failed requests |
-| host .133, .134 or .135 | none (one validator and at most one MPC node lost) |
-| host .136 | no monitoring and no explorer; payments continue |
-| rpc1, coord1 or the proxy process | HAProxy or keepalived switches to the twin on .133 |
+| **host .135** | chain continues (3 validators); signing via coord2 and mpc2 + mpc3; the VIPs move to .136 and proxy2 starts: a few seconds of failed requests |
+| host .136, .137 or .138 | none (one validator and at most one MPC node lost) |
+| host .139 | no monitoring and no explorer; payments continue |
+| rpc1, coord1 or the proxy process | HAProxy or keepalived switches to the twin on .136 |
 | 1 MPC node or admin team | none: 2 of 3 sign. `/createaccount` waits for all 3 (key generation) |
 | theft of 1 MPC node, disk or backup | the attacker gets one share: **no key, cannot sign** |
 | Redis down, empty or stale | none for correctness: the proxy uses memory + the chain |
-| **two** of .132–.135 at once, or the whole site | the chain halts: [`docs/disaster-recovery.md`](docs/disaster-recovery.md) |
+| **two** of .135–.138 at once, or the whole site | the chain halts: [`docs/disaster-recovery.md`](docs/disaster-recovery.md) |
 | sustained load beyond the presignature rate | signing slows to the cold path (~0.6 s per signature). Size MPC node CPU at ~0.4 cores per sustained TPS ([`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md)) |
 
 ### Remaining gaps before full production

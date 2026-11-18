@@ -121,8 +121,8 @@ to end. It uses the per-role packages in `deploy/`:
 
 Three nodes on **three hosts, run by three different teams**, over a private network. If one
 person or machine can reach two nodes, the threshold protects nothing. In the production layout
-([`../docs/production-layout.md`](../docs/production-layout.md)) the nodes are on 192.168.68.132,
-.134 and .135, and two coordinators (.132, .133) sit behind HAProxy on `192.168.68.150:9100`.
+([`../docs/production-layout.md`](../docs/production-layout.md)) the nodes are on 192.168.68.135,
+.137 and .138, and two coordinators (.135, .136) sit behind HAProxy on `192.168.68.150:9100`.
 
 **Several coordinators:** a coordinator re-reads the key list from the nodes at start (2 of 3
 answering are enough), every 30 s, for `eth_accounts` when its copy is older than 5 s, and when it

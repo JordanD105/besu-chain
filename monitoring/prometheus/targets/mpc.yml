@@ -1,6 +1,6 @@
 # MPC coordinators: each one's own address (not the HAProxy VIP), so both are watched. Each
 # coordinator also reports whether every MPC node answers it (mpc_node_up).
-- targets: ["192.168.68.132:9100"]
+- targets: ["192.168.68.135:9100"]
   labels: { name: coord1 }
-- targets: ["192.168.68.133:9100"]
+- targets: ["192.168.68.136:9100"]
   labels: { name: coord2 }

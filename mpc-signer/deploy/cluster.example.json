@@ -1,9 +1,9 @@
 {
   "threshold": 2,
   "parties": [
-    { "id": 0, "url": "http://192.168.68.132:7000", "sign_pk": "<node0 sign_pk>", "kx_pk": "<node0 kx_pk>" },
-    { "id": 1, "url": "http://192.168.68.134:7000", "sign_pk": "<node1 sign_pk>", "kx_pk": "<node1 kx_pk>" },
-    { "id": 2, "url": "http://192.168.68.135:7000", "sign_pk": "<node2 sign_pk>", "kx_pk": "<node2 kx_pk>" }
+    { "id": 0, "url": "http://192.168.68.135:7000", "sign_pk": "<node0 sign_pk>", "kx_pk": "<node0 kx_pk>" },
+    { "id": 1, "url": "http://192.168.68.137:7000", "sign_pk": "<node1 sign_pk>", "kx_pk": "<node1 kx_pk>" },
+    { "id": 2, "url": "http://192.168.68.138:7000", "sign_pk": "<node2 sign_pk>", "kx_pk": "<node2 kx_pk>" }
   ],
   "policy": {
     "chain_id": 1337,

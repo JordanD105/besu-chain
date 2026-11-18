@@ -1,0 +1,5 @@
+# Secrets and per-host settings: never commit
+proxy/.env
+# created inside the /opt/besu-chain clone by the production deployment
+chainlens/.env
+monitoring/node-exporter/.env

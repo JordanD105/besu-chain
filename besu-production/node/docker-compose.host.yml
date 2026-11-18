@@ -1,4 +1,4 @@
-# Besu node with HOST networking. Use it when SEVERAL Besu nodes share one host (layout: val1 + rpc1 on .132, val2 + rpc2 on .133).
+# Besu node with HOST networking. Use it when SEVERAL Besu nodes share one host (layout: val1 + rpc1 on .135, val2 + rpc2 on .136).
 # Enable it in .env:   COMPOSE_FILE=docker-compose.host.yml
 #
 # Why: with Docker's bridge network, a connection from one container to ANOTHER node on the SAME host

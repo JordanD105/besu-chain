@@ -5,18 +5,18 @@ This guide deploys the 2-of-3 MPC signer for production:
 - **two coordinators**, behind HAProxy on a floating IP.
 
 In the production layout ([`../../docs/production-layout.md`](../../docs/production-layout.md)):
-mpc1 (`MPC_NODE_ID=0`) on 192.168.68.132, mpc2 (1) on .134, mpc3 (2) on .135; coord1 on .132,
-coord2 on .133; clients reach the coordinators at `192.168.68.150:9100` (coord1, coord2 as backup).
+mpc1 (`MPC_NODE_ID=0`) on 192.168.68.135, mpc2 (1) on .137, mpc3 (2) on .138; coord1 on .135,
+coord2 on .136; clients reach the coordinators at `192.168.68.150:9100` (coord1, coord2 as backup).
 
 Every step below was dry-run end to end: three node "hosts", a coordinator, the key ceremony,
 signing with a node stopped, and a backup → data loss → restore → signing again.
 
 ```
                       private network, firewall: only the ports below
-  proxy ──► VIP .150:9100 (HAProxy) ──► coord1 (.132) | coord2 (.133, warm standby)
-                                            │  ──7000──► mpc1 (.132, team A)
-                                            │  ──7000──► mpc2 (.134, team B)
-                                            │  ──7000──► mpc3 (.135, team C)
+  proxy ──► VIP .150:9100 (HAProxy) ──► coord1 (.135) | coord2 (.136, warm standby)
+                                            │  ──7000──► mpc1 (.135, team A)
+                                            │  ──7000──► mpc2 (.137, team B)
+                                            │  ──7000──► mpc3 (.138, team C)
        nodes ──9100──► relay of the coordinator running the session (its own IP)
        coordinators ──8545──► VIP .150:8545 (HAProxy) ──► rpc1 | rpc2
 ```
@@ -36,14 +36,14 @@ signing with a node stopped, and a backup → data loss → restore → signing 
 ## 1. Prerequisites
 
 **Hosts**
-- **3 node hosts** (Linux + Docker Engine + Compose v2), one per team: .132, .134, .135 (each
+- **3 node hosts** (Linux + Docker Engine + Compose v2), one per team: .135, .137, .138 (each
   also runs a Besu validator).
   - **CPU:** presigning costs about 0.6 CPU-seconds per signature per node. Plan for about
     **0.4 cores per sustained transaction/s** (see `bench/RESULTS.md`), plus 2 cores of headroom.
   - **RAM:** 2–4 GB.
   - **Disk:** under 1 GB (shares are a few KB per key).
-- **2 coordinator hosts:** 2 cores and 1 GB each are enough: .132 and .133, next to the proxies.
-  A coordinator holds no key material, so coord1 sharing .132 with mpc1 doesn't add a share there;
+- **2 coordinator hosts:** 2 cores and 1 GB each are enough: .135 and .136, next to the proxies.
+  A coordinator holds no key material, so coord1 sharing .135 with mpc1 doesn't add a share there;
   keep each MPC node's team the only one with access to that node's data.
 
 **Network**
@@ -165,7 +165,7 @@ Edit `.env`:
 | Variable | Value |
 |---|---|
 | `MPC_IMAGE` | the image from step 2 |
-| `MPC_BIND_IP` | this host's address (`192.168.68.132` for coord1, `.133` for coord2) |
+| `MPC_BIND_IP` | this host's address (`192.168.68.135` for coord1, `.136` for coord2) |
 | `MPC_RELAY_URL` | `ws://<this coordinator's OWN IP>:9100/relay`, never the VIP |
 | `MPC_BESU_RPC` | `http://192.168.68.150:8545` (HAProxy: rpc1, rpc2 as backup), never a validator |
 | `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN` | from step 3 |
@@ -177,7 +177,7 @@ docker compose up -d
 docker compose logs --tail 5     # expect: "keys loaded from nodes keys=0"
 ```
 
-Do the same on .133 for **coord2**, with its own `MPC_BIND_IP` and `MPC_RELAY_URL`. Clients reach
+Do the same on .136 for **coord2**, with its own `MPC_BIND_IP` and `MPC_RELAY_URL`. Clients reach
 both through HAProxy on `192.168.68.150:9100` ([`../../ha/README.md`](../../ha/README.md)):
 coord1 normally, coord2 when coord1 is down. coord2 runs all the time and fills its own
 presignature pool, so it takes over warm.
@@ -190,7 +190,7 @@ coord1 (`/createaccount`) therefore signs through coord2 at once.
 ## 8. Key ceremony (operator, all 3 nodes up)
 
 ```bash
-COORD=http://192.168.68.132:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/deploy/ceremony.sh
+COORD=http://192.168.68.135:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/deploy/ceremony.sh
 ```
 
 - **Aux info** (safe primes and zero-knowledge proofs) runs once per cluster and takes 1–3 minutes.
@@ -200,7 +200,7 @@ COORD=http://192.168.68.132:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/deploy
 **Enable the presignature pool for the hot sender** on **both** coordinators:
 1. Set `MPC_POOL_KEYS=<SENDER01>` in its `.env`.
 2. Run `docker compose up -d`.
-3. Check each: `curl http://192.168.68.132:9100/admin/pool` (and `.133`) should show
+3. Check each: `curl http://192.168.68.135:9100/admin/pool` (and `.136`) should show
    `"pooled": true` and `ready` climbing.
 
 ## 9. Fund SENDER01 and connect the proxy
@@ -290,7 +290,7 @@ To recover redundancy:
 
 ## 15. Security checklist
 
-- [ ] 3 nodes on 3 hosts (.132, .134, .135), run by 3 teams; no account can reach two nodes
+- [ ] 3 nodes on 3 hosts (.135, .137, .138), run by 3 teams; no account can reach two nodes
 - [ ] private encrypted network between all hosts; firewall default-deny with only the ports above
 - [ ] node `.env` files are mode 600, readable by root only; disks encrypted at rest
 - [ ] each node passphrase is in its own team's vault; backups are per team and stored apart from the passphrase

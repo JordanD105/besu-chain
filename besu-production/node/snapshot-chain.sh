@@ -4,7 +4,7 @@
 #   ./snapshot-chain.sh /backup/chain
 # The node is STOPPED while its data is archived (a few minutes for a large chain), then started.
 # Which node: a node your applications do not depend on, e.g. a validator (the chain continues with
-# the others): val3 on .134 in the production layout. NOT the RPC node serving the proxy/coordinators.
+# the others): val3 on .137 in the production layout. NOT the RPC node serving the proxy/coordinators.
 # Before stopping, it checks that this node sees ALL the other nodes, so a validator is never
 # stopped while another node is already down (that could halt the chain).
 #

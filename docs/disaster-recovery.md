@@ -6,11 +6,11 @@ and `ha/`, in the 5-host production layout ([`production-layout.md`](production-
 
 | Host | Runs |
 |---|---|
-| 192.168.68.132 | val1, rpc1, coord1, proxy1 (active), mpc1, HAProxy + keepalived |
-| 192.168.68.133 | val2, rpc2, coord2, proxy2 (standby), HAProxy + keepalived |
-| 192.168.68.134 | val3, mpc2 (takes the daily chain snapshot) |
-| 192.168.68.135 | val4, mpc3 |
-| 192.168.68.136 | Prometheus, Grafana, chainlens |
+| 192.168.68.135 | val1, rpc1, coord1, proxy1 (active), mpc1, HAProxy + keepalived |
+| 192.168.68.136 | val2, rpc2, coord2, proxy2 (standby), HAProxy + keepalived |
+| 192.168.68.137 | val3, mpc2 (takes the daily chain snapshot) |
+| 192.168.68.138 | val4, mpc3 |
+| 192.168.68.139 | Prometheus, Grafana, chainlens |
 
 Keep a **printed or offline copy** of this page and of the contact list: during a disaster the
 repository, the wiki or the network may be unavailable.
@@ -49,13 +49,13 @@ write-once** (ransomware encrypts every backup it can reach).
 
 | What | Command (from that host's directory) | When (cron example) |
 |---|---|---|
-| Chain snapshot | on **val3 (.134)**: `./snapshot-chain.sh /backup/chain` with `COPY_TO=user@offsite:/besu-chain` | daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=… ./snapshot-chain.sh /backup/chain` |
-| MPC shares | `./backup.sh /secure/backup` on mpc1 (.132), mpc2 (.134), mpc3 (.135), each by its team | hourly: `0 * * * * /opt/mpc-node/backup.sh /secure/backup` |
+| Chain snapshot | on **val3 (.137)**: `./snapshot-chain.sh /backup/chain` with `COPY_TO=user@offsite:/besu-chain` | daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=… ./snapshot-chain.sh /backup/chain` |
+| MPC shares | `./backup.sh /secure/backup` on mpc1 (.135), mpc2 (.137), mpc3 (.138), each by its team | hourly: `0 * * * * /opt/mpc-node/backup.sh /secure/backup` |
 | Node keys | `./backup-key.sh /secure/dir` on all 6 Besu nodes (val1–4, rpc1–2), then `gpg --symmetric` and delete the plain copy | once per key |
 | Network files | `cp -r network /secure/network-$(date +%F)` (operator) | after every change |
 
 **Which node takes the chain snapshot:** it is **stopped** for a few minutes while its data is
-archived, so the layout uses **val3 on .134**: a validator (the chain continues with the other
+archived, so the layout uses **val3 on .137**: a validator (the chain continues with the other
 three) that is alone on its host and not on the application path. Not rpc1 (it serves the proxy
 and coordinators); rpc2 would also work, but it is the failover target and chainlens' source. The script refuses to stop a node that doesn't see all its peers (another node is
 already down), so a snapshot can't halt the chain.
@@ -96,7 +96,7 @@ table, and Prometheus alerts:
 | What you see | Go to |
 |---|---|
 | one validator down, blocks continue | [6.1](#61-one-validator-host-lost) |
-| host .132 or .133 down, blocks continue | [6.2](#62-application-host-132-or-133-lost) |
+| host .135 or .136 down, blocks continue | [6.2](#62-application-host-135-or-136-lost) |
 | **blocks stopped**: two validator hosts down | [6.3](#63-two-validator-hosts-lost-blocks-stopped) |
 | `MpcNodeDown`, signing still works | [6.4](#64-one-mpc-node-lost) |
 | `MpcBelowThreshold`, **no signatures** | [6.5](#65-two-mpc-nodes-lost) |
@@ -137,20 +137,20 @@ the validators, then `qbft.sh propose 0x<old address> false`. See `besu-producti
 restart the others one at a time, then start the node on its new host. Never change
 `genesis.json`, and never run one key on two hosts at once.
 
-### 6.2 Application host (.132 or .133) lost
+### 6.2 Application host (.135 or .136) lost
 
-**Blocks continue** (3 of 4 validators), and signing continues (2 of 3 MPC nodes when .132 is
-lost). If it was **.132**, keepalived moves both floating IPs to .133 within seconds: HAProxy there
+**Blocks continue** (3 of 4 validators), and signing continues (2 of 3 MPC nodes when .135 is
+lost). If it was **.135**, keepalived moves both floating IPs to .136 within seconds: HAProxy there
 sends Besu RPC to **rpc2** and signing to **coord2**, and **proxy2** starts. Applications see a few
-seconds of failed requests. If it was **.133**, nothing changes for applications: only the standby
+seconds of failed requests. If it was **.136**, nothing changes for applications: only the standby
 is gone.
 
-1. Check the failover worked: on .133 `ip -br addr | grep -E '68\.15[01]/'` lists both VIPs;
+1. Check the failover worked: on .136 `ip -br addr | grep -E '68\.15[01]/'` lists both VIPs;
    `curl -s http://192.168.68.151:30000/status/senders` answers; Grafana shows blocks and signatures.
 2. Rebuild the lost host with the **same IP**: its Besu nodes as in 6.1 (val and rpc, each with
    `restore-key.sh` and `start.sh`; for a large chain `restore-chain.sh` first), mpc1 as in 6.4
-   (.132 only), the coordinator and the proxy (6.6), HAProxy + keepalived (`ha/README.md`).
-3. The VIPs **stay** on .133 (`nopreempt`). Move them back at a quiet time: on .133
+   (.135 only), the coordinator and the proxy (6.6), HAProxy + keepalived (`ha/README.md`).
+3. The VIPs **stay** on .136 (`nopreempt`). Move them back at a quiet time: on .136
    `systemctl restart keepalived`.
 
 ### 6.3 Two validator hosts lost (blocks stopped)
@@ -218,15 +218,15 @@ node). As soon as **two** nodes are up, signing works again.
 ### 6.6 Coordinator, proxy, chainlens or monitoring host lost
 
 All four are stateless: redeploy from git plus the saved `.env` / `cluster.json`. The coordinator
-and the proxy have twins on .132/.133: HAProxy and keepalived switch to the twin automatically
+and the proxy have twins on .135/.136: HAProxy and keepalived switch to the twin automatically
 (`ha/README.md`), so rebuilding the lost one isn't urgent, but redundancy is gone until it's back.
 
 | Component | Rebuild | Check |
 |---|---|---|
-| MPC coordinator (coord1 .132 / coord2 .133) | `mpc-signer/deploy/coordinator`: `.env` (its own `MPC_BIND_IP`, `MPC_RELAY_URL`), `cluster.json`, `docker compose up -d` | log `keys loaded from nodes`; both coordinators UP on the MPC dashboard |
-| Proxy (proxy1 .132 / proxy2 .133) | `proxy/`: `.env`, `docker compose build`; **don't start it by hand**: keepalived starts it on the host holding `.151` | `GET http://192.168.68.151:30000/status/senders`: no gap, no stall; a test transfer |
-| Chainlens (.136) | `chainlens/`: `.env` (`BESU_RPC` = rpc2), `docker compose up -d --build` | re-indexes from block 0 by itself |
-| Monitoring (.136) | `monitoring/`: `setup.sh` with the metrics token, targets, `docker compose up -d` | `./check-targets.sh`; history before the loss is gone |
+| MPC coordinator (coord1 .135 / coord2 .136) | `mpc-signer/deploy/coordinator`: `.env` (its own `MPC_BIND_IP`, `MPC_RELAY_URL`), `cluster.json`, `docker compose up -d` | log `keys loaded from nodes`; both coordinators UP on the MPC dashboard |
+| Proxy (proxy1 .135 / proxy2 .136) | `proxy/`: `.env`, `docker compose build`; **don't start it by hand**: keepalived starts it on the host holding `.151` | `GET http://192.168.68.151:30000/status/senders`: no gap, no stall; a test transfer |
+| Chainlens (.139) | `chainlens/`: `.env` (`BESU_RPC` = rpc2), `docker compose up -d --build` | re-indexes from block 0 by itself |
+| Monitoring (.139) | `monitoring/`: `setup.sh` with the metrics token, targets, `docker compose up -d` | `./check-targets.sh`; history before the loss is gone |
 
 ### 6.7 Whole site lost
 

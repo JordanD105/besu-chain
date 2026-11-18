@@ -1,4 +1,4 @@
-# The ACTIVE proxy, through its floating IP: proxy1 (.132) or, after a failover, proxy2 (.133).
+# The ACTIVE proxy, through its floating IP: proxy1 (.135) or, after a failover, proxy2 (.136).
 # The standby proxy is stopped, so scraping the hosts directly would always show one as down.
 # If METRICS_TOKEN is set on the proxy, add an authorization block to the proxy job.
 - targets: ["192.168.68.151:30000"]
