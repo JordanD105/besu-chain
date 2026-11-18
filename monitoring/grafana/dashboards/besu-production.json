@@ -1026,7 +1026,7 @@
     },
     {
       "type": "row",
-      "title": "Peers and RPC",
+      "title": "Transaction volume",
       "id": 17,
       "collapsed": false,
       "gridPos": {
@@ -1038,9 +1038,400 @@
       "panels": []
     },
     {
+      "type": "stat",
+      "title": "Transactions in selected range",
+      "id": 18,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Transactions mined during the time range selected at the top of the dashboard.",
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Last 1 hour",
+      "id": 19,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 6,
+        "y": 38,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[1h])))",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Last 24 hours",
+      "id": 20,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Needs 24 h of Prometheus history; less is counted until then.",
+      "gridPos": {
+        "x": 12,
+        "y": 38,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[24h])))",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Average tx/s in range",
+      "id": 21,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 18,
+        "y": 38,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[$__range])) / $__range_s",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Transactions per interval",
+      "id": 22,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Transactions mined per bar. The bar width follows the zoom: 1 minute at most, wider for long ranges (the 'Interval' shown when hovering the panel's info).",
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[$__interval])))",
+          "legendFormat": "transactions",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "timeseries",
+      "title": "Cumulative transactions in range",
+      "id": 23,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Running total from the start of the selected range.",
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[$__interval])))",
+          "legendFormat": "transactions",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "interval": "1m",
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "cumulativeFunctions",
+            "cumulative": {
+              "field": "transactions",
+              "reducer": "sum"
+            },
+            "alias": "total since start of range",
+            "replaceFields": true
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Peers and RPC",
+      "id": 24,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
       "type": "timeseries",
       "title": "Peers",
-      "id": 18,
+      "id": 25,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1048,7 +1439,7 @@
       "description": "Expected: number of nodes - 1.",
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 51,
         "w": 12,
         "h": 8
       },
@@ -1098,7 +1489,7 @@
     {
       "type": "timeseries",
       "title": "Refused connections (node allowlist)",
-      "id": 19,
+      "id": 26,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1106,7 +1497,7 @@
       "description": "Connection attempts from nodes not in permissions_config.toml.",
       "gridPos": {
         "x": 12,
-        "y": 38,
+        "y": 51,
         "w": 12,
         "h": 8
       },
@@ -1156,7 +1547,7 @@
     {
       "type": "timeseries",
       "title": "JSON-RPC requests per second",
-      "id": 20,
+      "id": 27,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1164,7 +1555,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 59,
         "w": 12,
         "h": 8
       },
@@ -1214,7 +1605,7 @@
     {
       "type": "timeseries",
       "title": "JSON-RPC latency p95 (slowest method)",
-      "id": 21,
+      "id": 28,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1222,7 +1613,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 46,
+        "y": 59,
         "w": 12,
         "h": 8
       },
@@ -1272,7 +1663,7 @@
     {
       "type": "timeseries",
       "title": "P2P traffic in",
-      "id": 22,
+      "id": 29,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1280,7 +1671,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 54,
+        "y": 67,
         "w": 12,
         "h": 8
       },
@@ -1330,7 +1721,7 @@
     {
       "type": "timeseries",
       "title": "P2P traffic out",
-      "id": 23,
+      "id": 30,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1338,7 +1729,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 54,
+        "y": 67,
         "w": 12,
         "h": 8
       },
@@ -1388,11 +1779,11 @@
     {
       "type": "row",
       "title": "JVM and process",
-      "id": 24,
+      "id": 31,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 62,
+        "y": 75,
         "w": 24,
         "h": 1
       },
@@ -1401,7 +1792,7 @@
     {
       "type": "timeseries",
       "title": "CPU (cores)",
-      "id": 25,
+      "id": 32,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1409,7 +1800,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 63,
+        "y": 76,
         "w": 12,
         "h": 8
       },
@@ -1459,7 +1850,7 @@
     {
       "type": "timeseries",
       "title": "JVM heap used",
-      "id": 26,
+      "id": 33,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1467,7 +1858,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 63,
+        "y": 76,
         "w": 12,
         "h": 8
       },
@@ -1526,7 +1917,7 @@
     {
       "type": "timeseries",
       "title": "GC time (share of wall time)",
-      "id": 27,
+      "id": 34,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1534,7 +1925,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 71,
+        "y": 84,
         "w": 12,
         "h": 8
       },
@@ -1584,7 +1975,7 @@
     {
       "type": "timeseries",
       "title": "Resident memory",
-      "id": 28,
+      "id": 35,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1592,7 +1983,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 71,
+        "y": 84,
         "w": 12,
         "h": 8
       },
@@ -1642,11 +2033,11 @@
     {
       "type": "row",
       "title": "Proxy senders",
-      "id": 29,
+      "id": 36,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 79,
+        "y": 92,
         "w": 24,
         "h": 1
       },
@@ -1655,7 +2046,7 @@
     {
       "type": "table",
       "title": "Senders (proxy)",
-      "id": 30,
+      "id": 37,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1663,7 +2054,7 @@
       "description": "Per sender of the proxy. Mined = STALLED: transactions are ready in the RPC node's pool but blocks do not include them (restart one validator). Nonce gap: a missing nonce blocks later transactions; the proxy repairs it once the chain moved on for 30 s / 10 blocks.",
       "gridPos": {
         "x": 0,
-        "y": 80,
+        "y": 93,
         "w": 24,
         "h": 6
       },
@@ -1909,7 +2300,7 @@
     {
       "type": "timeseries",
       "title": "Transactions in flight (proxy)",
-      "id": 31,
+      "id": 38,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1917,7 +2308,7 @@
       "description": "Sent by the proxy, not confirmed yet. Should fall back to ~0 after a burst.",
       "gridPos": {
         "x": 0,
-        "y": 86,
+        "y": 99,
         "w": 12,
         "h": 8
       },
@@ -1967,7 +2358,7 @@
     {
       "type": "timeseries",
       "title": "Not mined / gap (seconds)",
-      "id": 32,
+      "id": 39,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1975,7 +2366,7 @@
       "description": "How long ready transactions have waited with nothing confirmed, and how long a nonce gap has existed.",
       "gridPos": {
         "x": 12,
-        "y": 86,
+        "y": 99,
         "w": 12,
         "h": 8
       },
