@@ -22,12 +22,24 @@ groups:
         annotations:
           summary: "Fewer MPC nodes reachable than the threshold: NO signatures possible"
 
+      # big keys (hot senders such as SENDER01); class "" = coordinator older than pool classes
       - alert: MpcPoolEmpty
-        expr: mpc_pool_ready == 0 and on(instance) mpc_pool_target > 0
+        expr: mpc_pool_ready{class=~"big|"} == 0
         for: 2m
         labels: { severity: warning }
         annotations:
           summary: "No presignature ready for {{ $labels.address }}: signing falls back to the slow cold path"
+
+      # small keys: one empty after a burst is normal (it refills); most of them empty for long
+      # means presigning can't keep up with the number of small accounts
+      - alert: MpcSmallPoolsEmpty
+        expr: >
+          count by (instance) (mpc_pool_ready{class="small"} == 0)
+            / on(instance) max by (instance) (mpc_pool_keys{class="small"}) > 0.5
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the small presignature pools on {{ $labels.instance }} are empty: raise MPC_REFILL_CONCURRENCY / MPC_COMPUTE_THREADS, lower MPC_POOL_TARGET_SMALL, or move idle accounts to pool none"
 
       - alert: MpcPresignFailing
         expr: increase(mpc_presigs_failed_total[10m]) > 5

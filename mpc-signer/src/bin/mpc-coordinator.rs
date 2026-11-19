@@ -56,15 +56,21 @@ struct Cli {
     /// Besu JSON-RPC endpoint (downstream).
     #[arg(long, env = "MPC_BESU_RPC", default_value = "http://127.0.0.1:8545")]
     besu_rpc: String,
-    /// Presignatures kept ready per key.
+    /// Presignatures kept ready per key of pool class "big" (hot senders such as SENDER01).
     #[arg(long, env = "MPC_POOL_TARGET", default_value_t = 200)]
     pool_target: usize,
+    /// Presignatures kept ready per key of pool class "small" (e.g. accounts created through the
+    /// proxy: enough for a short burst without the cost of a big pool for every account).
+    /// 0 = this coordinator keeps no small pools (e.g. on the standby coordinator).
+    #[arg(long, env = "MPC_POOL_TARGET_SMALL", default_value_t = 20)]
+    pool_target_small: usize,
     /// Concurrent presign sessions (cluster wide).
     #[arg(long, env = "MPC_REFILL_CONCURRENCY", default_value_t = 4)]
     refill_concurrency: usize,
-    /// Comma-separated addresses that keep a presignature pool (hot senders). Empty = every key.
-    /// Keys not listed are signed with the full interactive protocol (cold path), so creating
-    /// many user keys does not multiply background presigning work.
+    /// Comma-separated addresses of class "big" for keys without a pool class stored on the
+    /// nodes (e.g. SENDER01 from the key ceremony). Empty = every such key is "big". Keys with a
+    /// class (POST /admin/keys {"pool": ...}, POST /admin/keys/<address>/pool) follow their
+    /// class; other keys are signed with the full interactive protocol (cold path).
     #[arg(long, env = "MPC_POOL_KEYS", default_value = "")]
     pool_keys: String,
     /// When the pool is empty, run the full interactive (3+1 round) protocol instead of failing.
@@ -146,13 +152,16 @@ struct Stats {
 
 struct Coord {
     cli: Cli,
-    /// lowercase addresses with a presignature pool; None = all keys
+    /// lowercase addresses of class "big" when the nodes store no class for them; None = all
     pool_keys: Option<std::collections::HashSet<String>>,
+    /// pool class stored on the nodes per key (lowercase address -> big/small/none)
+    classes: Mutex<HashMap<String, String>>,
     cluster: Arc<ClusterConfig>,
     http: reqwest::Client,
     keys: Mutex<HashMap<String, KeyInfo>>, // address (lowercase) -> key
     pools: Mutex<HashMap<String, KeyPool>>,
     pool_target: AtomicUsize,
+    pool_target_small: AtomicUsize,
     refill: Arc<Semaphore>,
     rotation: AtomicUsize,
     node_down_until: Mutex<HashMap<u16, Instant>>,
@@ -190,6 +199,8 @@ async fn main() -> Result<()> {
         pool_keys: if pool_keys.is_empty() { None } else { Some(pool_keys) },
         chain_id: cluster.policy.chain_id,
         pool_target: AtomicUsize::new(cli.pool_target),
+        pool_target_small: AtomicUsize::new(cli.pool_target_small),
+        classes: Mutex::new(HashMap::new()),
         refill: Arc::new(Semaphore::new(cli.refill_concurrency.max(1))),
         cli: cli.clone(),
         cluster,
@@ -213,6 +224,7 @@ async fn main() -> Result<()> {
         .route("/relay/:session", get(relay_ws))
         .route("/admin/aux", post(admin_aux))
         .route("/admin/keys", post(admin_keygen).get(admin_keys))
+        .route("/admin/keys/:address/pool", post(admin_key_pool))
         .route("/admin/pool", get(admin_pool))
         .route("/admin/pool/target", post(admin_pool_target))
         .route("/admin/pool/clear", post(admin_pool_clear))
@@ -296,8 +308,26 @@ impl Coord {
         Ok(r.json().await?)
     }
 
+    /// The key's pool class: the one stored on the nodes, else MPC_POOL_KEYS (listed or empty
+    /// list = "big", otherwise "none").
+    fn class_of(&self, address: &str) -> String {
+        if let Some(c) = self.classes.lock().get(address) {
+            return c.clone();
+        }
+        if self.pool_keys.as_ref().map(|k| k.contains(address)).unwrap_or(true) { "big" } else { "none" }.to_string()
+    }
+
+    /// Presignatures this coordinator keeps ready for the key.
+    fn target_for(&self, address: &str) -> usize {
+        match self.class_of(address).as_str() {
+            "big" => self.pool_target.load(Relaxed),
+            "small" => self.pool_target_small.load(Relaxed),
+            _ => 0,
+        }
+    }
+
     fn pooled(&self, address: &str) -> bool {
-        self.pool_keys.as_ref().map(|k| k.contains(address)).unwrap_or(true)
+        self.target_for(address) > 0
     }
 
     fn mark_down(&self, id: u16) {
@@ -343,11 +373,21 @@ impl Coord {
             answered.len()
         );
         let mut held: HashMap<String, (KeyInfo, usize)> = HashMap::new();
+        let mut votes: HashMap<String, HashMap<String, usize>> = HashMap::new();
         for view in &answered {
             for k in view {
                 held.entry(k.address.to_lowercase()).or_insert_with(|| (k.clone(), 0)).1 += 1;
+                if let Some(p) = &k.pool {
+                    *votes.entry(k.address.to_lowercase()).or_default().entry(p.clone()).or_default() += 1;
+                }
             }
         }
+        // pool class: the one most nodes store (a node that missed a change is outvoted)
+        let classes: HashMap<String, String> = votes
+            .into_iter()
+            .filter_map(|(a, v)| majority_class(v).map(|p| (a, p)))
+            .collect();
+        *self.classes.lock() = classes;
         let mut keys = self.keys.lock();
         let before = keys.len();
         for (address, (info, count)) in held {
@@ -423,13 +463,13 @@ fn new_session() -> String {
 
 async fn refill_loop(c: Arc<Coord>) {
     loop {
-        let target = c.pool_target.load(Relaxed);
         let mut wanted: Vec<String> = vec![];
         {
             let mut pools = c.pools.lock();
             // round-robin one job per key per pass, so many keys share capacity fairly
             for (key, p) in pools.iter_mut() {
-                if !c.pooled(key) {
+                let target = c.target_for(key);
+                if target == 0 {
                     continue;
                 }
                 if p.ready.len() + p.inflight < target && c.refill.available_permits() > wanted.len() {
@@ -825,9 +865,30 @@ async fn admin_aux(State(c): State<Arc<Coord>>, h: HeaderMap) -> Result<Json<Val
     Ok(Json(json!({"nodes": rs, "seconds": t0.elapsed().as_secs_f64()})))
 }
 
-async fn admin_keygen(State(c): State<Arc<Coord>>, h: HeaderMap) -> Result<Json<KeyInfo>, (StatusCode, String)> {
+#[derive(Deserialize, Default)]
+struct PoolBody {
+    /// big, small or none
+    #[serde(default)]
+    pool: Option<String>,
+}
+
+fn bad_request(e: anyhow::Error) -> (StatusCode, String) {
+    (StatusCode::BAD_REQUEST, format!("{e:#}"))
+}
+
+/// POST /admin/keys, optional body {"pool": "big"|"small"|"none"}: the new key's pool class,
+/// stored with the key on the nodes (no body: no class, MPC_POOL_KEYS decides).
+async fn admin_keygen(
+    State(c): State<Arc<Coord>>,
+    h: HeaderMap,
+    body: Option<Json<PoolBody>>,
+) -> Result<Json<KeyInfo>, (StatusCode, String)> {
     admin_ok(&c, &h)?;
-    let req = KeygenReq { session: new_session(), relay_url: c.cli.relay_url.clone() };
+    let pool = body.map(|Json(b)| b.pool).unwrap_or_default();
+    if let Some(p) = &pool {
+        check_pool_class(p).map_err(bad_request)?;
+    }
+    let req = KeygenReq { session: new_session(), relay_url: c.cli.relay_url.clone(), pool };
     let rs = join_all((0..c.cluster.n()).map(|id| c.node_post::<_, KeyInfo>(id, "/v1/keygen", &req))).await;
     let rs: Vec<KeyInfo> = rs.into_iter().collect::<Result<_>>().map_err(err500)?;
     if !rs.windows(2).all(|w| w[0] == w[1]) {
@@ -837,8 +898,50 @@ async fn admin_keygen(State(c): State<Arc<Coord>>, h: HeaderMap) -> Result<Json<
     Ok(Json(rs[0].clone()))
 }
 
+/// POST /admin/keys/<address>/pool {"pool": "big"|"small"|"none"} (null: clear, MPC_POOL_KEYS
+/// decides): stored on every node that answers; needs at least `threshold` of them. Every
+/// coordinator follows the new class at its next key refresh (this one at once).
+async fn admin_key_pool(
+    State(c): State<Arc<Coord>>,
+    axum::extract::Path(address): axum::extract::Path<String>,
+    h: HeaderMap,
+    Json(b): Json<PoolBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    admin_ok(&c, &h)?;
+    if let Some(p) = &b.pool {
+        check_pool_class(p).map_err(bad_request)?;
+    }
+    let key = c.key_or_refresh(&address).await.map_err(|e| (StatusCode::NOT_FOUND, format!("{e:#}")))?;
+    let req = KeyPoolReq { key_id: key.key_id.clone(), pool: b.pool.clone() };
+    let rs = join_all((0..c.cluster.n()).map(|id| c.node_post::<_, KeyInfo>(id, "/v1/keys/pool", &req))).await;
+    let ok = rs.iter().filter(|r| r.is_ok()).count();
+    let errors: Vec<String> = rs.iter().filter_map(|r| r.as_ref().err().map(|e| format!("{e:#}"))).collect();
+    if ok < c.cluster.threshold as usize {
+        return Err(err500(anyhow!(
+            "pool class stored on {ok} nodes, {} needed (nodes must run a version with /v1/keys/pool): {}",
+            c.cluster.threshold,
+            errors.join("; ")
+        )));
+    }
+    c.refresh_keys().await.map_err(err500)?;
+    let addr = key.address.to_lowercase();
+    Ok(Json(json!({"address": key.address, "pool": c.class_of(&addr), "target": c.target_for(&addr),
+                   "nodes_updated": ok, "errors": errors})))
+}
+
 async fn admin_keys(State(c): State<Arc<Coord>>) -> Json<Vec<KeyInfo>> {
-    let mut v: Vec<KeyInfo> = c.keys.lock().values().cloned().collect();
+    let mut v: Vec<KeyInfo> = c
+        .keys
+        .lock()
+        .iter()
+        .map(|(a, k)| (a.clone(), k.clone()))
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|(a, mut k)| {
+            k.pool = Some(c.class_of(&a));
+            k
+        })
+        .collect();
     v.sort_by(|a, b| a.address.cmp(&b.address));
     Json(v)
 }
@@ -848,12 +951,14 @@ async fn admin_pool(State(c): State<Arc<Coord>>) -> Json<Value> {
         .pools
         .lock()
         .iter()
-        .map(|(k, p)| (k.clone(), json!({"ready": p.ready.len(), "inflight": p.inflight, "pooled": c.pooled(k)})))
+        .map(|(k, p)| (k.clone(), json!({"ready": p.ready.len(), "inflight": p.inflight, "pooled": c.pooled(k),
+                                             "class": c.class_of(k), "target": c.target_for(k)})))
         .collect();
     let s = &c.stats;
     let gen = s.presigs_generated.load(Relaxed);
     Json(json!({
         "target": c.pool_target.load(Relaxed),
+        "target_small": c.pool_target_small.load(Relaxed),
         "pools": pools,
         "stats": {
             "hot_signs": s.hot_signs.load(Relaxed),
@@ -926,14 +1031,32 @@ async fn metrics(State(c): State<Arc<Coord>>, h: HeaderMap) -> Response {
         ids.iter().filter_map(|id| health.get(id).map(|h| (format!("node=\"{id}\""), h.seconds))).collect(),
     );
     metric("mpc_keys", "gauge", "Keys known to the coordinator.", vec![(String::new(), c.keys.lock().len() as f64)]);
-    metric("mpc_pool_target", "gauge", "Presignatures kept ready per hot key.", vec![(String::new(), c.pool_target.load(Relaxed) as f64)]);
+    metric(
+        "mpc_pool_target",
+        "gauge",
+        "Presignatures kept ready per key of the class.",
+        vec![
+            ("class=\"big\"".to_string(), c.pool_target.load(Relaxed) as f64),
+            ("class=\"small\"".to_string(), c.pool_target_small.load(Relaxed) as f64),
+        ],
+    );
     let pools: Vec<(String, usize, usize)> = c
         .pools
         .lock()
         .iter()
         .filter(|(k, _)| c.pooled(k))
-        .map(|(k, p)| (k.clone(), p.ready.len(), p.inflight))
+        .map(|(k, p)| (format!("{k}\",class=\"{}", c.class_of(k)), p.ready.len(), p.inflight))
         .collect();
+    let mut per_class: HashMap<String, f64> = POOL_CLASSES.iter().map(|p| (p.to_string(), 0.0)).collect();
+    for a in c.keys.lock().keys() {
+        *per_class.entry(c.class_of(a)).or_default() += 1.0;
+    }
+    metric(
+        "mpc_pool_keys",
+        "gauge",
+        "Keys per pool class.",
+        per_class.into_iter().map(|(p, n)| (format!("class=\"{p}\""), n)).collect(),
+    );
     metric("mpc_pool_ready", "gauge", "Presignatures ready for the key.", pools.iter().map(|(k, r, _)| (format!("address=\"{k}\""), *r as f64)).collect());
     metric("mpc_pool_inflight", "gauge", "Presign sessions running for the key.", pools.iter().map(|(k, _, i)| (format!("address=\"{k}\""), *i as f64)).collect());
     metric("mpc_relay_sessions", "gauge", "Open relay sessions (presign, keygen, cold sign).", vec![(String::new(), c.relay.lock().len() as f64)]);
@@ -956,7 +1079,12 @@ async fn metrics(State(c): State<Arc<Coord>>, h: HeaderMap) -> Response {
 
 #[derive(Deserialize)]
 struct TargetReq {
-    target: usize,
+    /// pool size of class "big"
+    #[serde(default)]
+    target: Option<usize>,
+    /// pool size of class "small"
+    #[serde(default)]
+    small: Option<usize>,
 }
 
 async fn admin_pool_target(
@@ -965,8 +1093,13 @@ async fn admin_pool_target(
     Json(t): Json<TargetReq>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     admin_ok(&c, &h)?;
-    c.pool_target.store(t.target, Relaxed);
-    Ok(Json(json!({"target": t.target})))
+    if let Some(v) = t.target {
+        c.pool_target.store(v, Relaxed);
+    }
+    if let Some(v) = t.small {
+        c.pool_target_small.store(v, Relaxed);
+    }
+    Ok(Json(json!({"target": c.pool_target.load(Relaxed), "target_small": c.pool_target_small.load(Relaxed)})))
 }
 
 /// Drop every ready presignature (coordinator and nodes). Used to force the cold path.

@@ -142,7 +142,9 @@
           None: keepalived is not MASTER anywhere (journalctl -u keepalived on .135 and .136).
           Two: the hosts don't see each other's VRRP messages (firewall, auth_pass).
       vars:
-        holders: "{{ ansible_play_hosts | zip(ansible_play_hosts | map('extract', hostvars, 'holds_proxy_vip')) | selectattr('1') | map(attribute='0') | list }}"
+        holders: >-
+          {{ ansible_play_hosts | zip(ansible_play_hosts | map('extract', hostvars, 'holds_proxy_vip'))
+             | selectattr('1') | map(attribute='0') | list }}
       run_once: true  # noqa: run-once[task] (linear strategy)
 
     - name: Proxy running here?

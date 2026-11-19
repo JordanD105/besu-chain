@@ -105,9 +105,9 @@ Edit `mpc-signer/quickstart/.env`:
 ```bash
 # Besu as seen from the coordinator container (rpcnode on the same host)
 MPC_BESU_RPC=http://host.docker.internal:8545
-# Only SENDER01 keeps a presignature pool (fast signing, ~1 network round).
-# User accounts created by /createaccount are signed on the cold path (~0.6-1.5 s),
-# so thousands of accounts do not create background presigning work.
+# SENDER01 keeps a big presignature pool (fast signing, ~1 network round). Accounts created by
+# /createaccount get a small pool by default (MPC_NEW_ACCOUNT_POOL on the proxy, MPC_POOL_TARGET_SMALL
+# here) or none ("pool":"none": cold path, ~0.6-1.5 s). See mpc-signer/docs/production.md.
 MPC_POOL_KEYS=0x3a554bc204821a020b6a12749aaf95b23b82111d
 # Listen on the host IP so the proxy container can reach the coordinator
 MPC_PUBLISH=192.168.68.130:9100

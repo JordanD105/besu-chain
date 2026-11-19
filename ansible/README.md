@@ -75,6 +75,12 @@ rewrites missing or different ones. The built images are copied from `state/imag
 To change a version, set the new tag (and archive file name) and rerun
 `site.yml`: Besu nodes are recreated one at a time, each back in sync before the next.
 
+**Presignature pools:** `mpc_pool_target` (big keys such as `SENDER01`), `mpc_pool_target_small`
+(small keys) and `mpc_new_account_pool` (the class of accounts from `/createaccount` that name
+none: `big`, `small` or `none`). See "Presignature pools" in
+[`../mpc-signer/docs/production.md`](../mpc-signer/docs/production.md). When the MPC image version
+changes, the MPC node teams upgrade their nodes **before** you rerun `site.yml`.
+
 Review the rest: chain id, block period, `SENDER01` funding, MPC policy, image names,
 `mpc_image_build` (build on the operator, or pull from your registry), `install_packages`.
 `build_compose_overrides` adds compose files to the proxy / chainlens builds, e.g. for a build

@@ -69,14 +69,14 @@ signing with a node stopped, and a backup → data loss → restore → signing 
 
 ```bash
 cd mpc-signer
-docker build --build-arg BIGINT=bigint-rug -t registry.example.com/mpc-signer:1.2.0 .
-docker push registry.example.com/mpc-signer:1.2.0
+docker build --build-arg BIGINT=bigint-rug -t registry.example.com/mpc-signer:1.3.0 .
+docker push registry.example.com/mpc-signer:1.3.0
 ```
 
 - `BIGINT=bigint-rug` uses the GMP backend: presigning is several times faster, but it adds an
   LGPL dependency. Omit it for the pure-Rust default.
 - **Without a registry**, copy the image to each host:
-  `docker save registry.example.com/mpc-signer:1.2.0 | ssh HOST docker load`.
+  `docker save registry.example.com/mpc-signer:1.3.0 | ssh HOST docker load`.
 - Use an exact version tag, never `latest`. Record the image digest
   (`docker inspect --format '{{index .RepoDigests 0}}' …`) and have each team confirm it runs
   the same one.
@@ -203,6 +203,42 @@ COORD=http://192.168.68.135:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/deploy
 3. Check each: `curl http://192.168.68.135:9100/admin/pool` (and `.136`) should show
    `"pooled": true` and `ready` climbing.
 
+### Presignature pools: big, small and none
+
+A presignature belongs to one key, and signing with one takes a single fast round (hot path,
+milliseconds). Without one, a signature runs the full protocol (cold path, about 0.5–1.5 s). Each
+key has a **pool class**, stored with the key on the MPC nodes (so it survives restarts and both
+coordinators see it):
+
+| Class | Presignatures kept ready (per coordinator) | For |
+|---|---|---|
+| `big` | `MPC_POOL_TARGET` (e.g. 500) | hot senders: `SENDER01`, busy accounts |
+| `small` | `MPC_POOL_TARGET_SMALL` (default 20) | ordinary accounts: fast for a short burst, small cost each |
+| `none` | 0: cold signing | idle accounts |
+
+- **New accounts:** `POST /createaccount {"amount": "1", "pool": "small"}` on the proxy. Without
+  `pool`, the proxy's `MPC_NEW_ACCOUNT_POOL` applies (default `small`). Directly on a
+  coordinator: `POST /admin/keys` with body `{"pool": "small"}`.
+- **Change later:** `POST /account/pool {"address": "0x…", "pool": "big"}` on the proxy, or
+  `POST /admin/keys/<address>/pool {"pool": "big"}` on a coordinator. It is stored on every MPC
+  node that answers (at least 2 of 3 are needed); the other coordinator follows within 30 s. A
+  node that was down keeps the old class, but is outvoted by the other two: repeat the same
+  request once it is back to bring it in line.
+- **Keys without a stored class** (`SENDER01` from the key ceremony, accounts created before
+  1.3.0): `big` if listed in `MPC_POOL_KEYS`, otherwise `none`. An empty `MPC_POOL_KEYS` makes all
+  of them `big`.
+- **Sizes:** `MPC_POOL_TARGET` and `MPC_POOL_TARGET_SMALL` per coordinator. At runtime:
+  `POST /admin/pool/target {"target": 500, "small": 20}` (until the coordinator restarts). Setting
+  `MPC_POOL_TARGET_SMALL=0` on coord2 halves the presigning work: then only coord1 keeps small
+  pools, and small accounts sign cold for a while after a failover to coord2.
+- **Capacity:** every presignature is made by the nodes, about as fast as the dashboard's
+  "Presignatures generated per second", and held in their memory (`MPC_MAX_PRESIGS`, default
+  100,000 per node, counts both coordinators' pools). 1,000 small accounts × 20 × 2 coordinators =
+  40,000. Big pools for many accounts don't fit: 100 big keys × 500 × 2 = 100,000.
+- **Monitoring:** the MPC dashboard shows the big pools one by one, the small pools as totals
+  (ready, target, keys with an empty pool) and the number of keys per class. Alerts:
+  `MpcPoolEmpty` (a big key) and `MpcSmallPoolsEmpty` (most small pools empty for 15 min).
+
 ## 9. Fund SENDER01 and connect the proxy
 
 - **Funding:** give `SENDER01` its ETH, either in the Besu genesis `alloc` (new chain) or with a
@@ -275,6 +311,8 @@ holds an identity.
 | **Change the policy** | edit `cluster.json`, compare `sha256sum` across all teams, copy it everywhere, restart the nodes one by one, then the coordinators |
 | **Rotate `MPC_NODE_TOKEN`** | set the new value on all nodes and coordinators, then restart them |
 | **Rotate `MPC_ADMIN_TOKEN`** | update the coordinators, the proxy and the operator, then restart |
+| **Upgrade to 1.3.0 (pool classes)** | the **MPC nodes first** (each team: `MPC_IMAGE` in `.env`, `docker compose up -d`, one at a time), then the coordinators and the proxy. Coordinators on 1.3.0 with older nodes can't store pool classes: new accounts would get no pool and `POST /admin/keys/<address>/pool` fails |
+| **Pool class of an account** | `POST /account/pool {"address", "pool"}` on the proxy; see "Presignature pools" in section 8 |
 | **Throughput** | sustained signing is limited by presigning CPU. Give the nodes more cores and raise `MPC_COMPUTE_THREADS` and `MPC_REFILL_CONCURRENCY`. Bursts are covered by `MPC_POOL_TARGET`. |
 
 ## 14. If a share is lost for good

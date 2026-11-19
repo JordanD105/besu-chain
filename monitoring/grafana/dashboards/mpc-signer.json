@@ -1271,13 +1271,13 @@
     },
     {
       "type": "timeseries",
-      "title": "Pool per hot key",
+      "title": "Pools of big keys",
       "id": 20,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Ready presignatures. A pool that stays low while signing means signing faster than presigning.",
+      "description": "Ready presignatures per big key (SENDER01 and other hot senders), per coordinator. A pool that stays low while signing means signing faster than presigning.",
       "gridPos": {
         "x": 0,
         "y": 36,
@@ -1287,8 +1287,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\"}",
-          "legendFormat": "{{address}}",
+          "expr": "mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"big|\"}",
+          "legendFormat": "{{name}} {{address}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1296,7 +1296,7 @@
         },
         {
           "refId": "B",
-          "expr": "max(mpc_pool_target{job=\"mpc-coordinator\",instance=~\"$coordinator\"})",
+          "expr": "max(mpc_pool_target{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"big|\"})",
           "legendFormat": "target",
           "datasource": {
             "type": "prometheus",
@@ -1338,16 +1338,92 @@
     },
     {
       "type": "timeseries",
-      "title": "Presignatures generated per second",
+      "title": "Pools of small keys",
       "id": 21,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Small pools (e.g. accounts from /createaccount), summed per coordinator: one line per account would be unreadable. A small key with an empty pool signs cold until its pool refills. A coordinator with MPC_POOL_TARGET_SMALL=0 keeps no small pools.",
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=\"small\"})",
+          "legendFormat": "{{name}} ready, all small keys",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "max by (name) (mpc_pool_keys{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=\"small\"}) * on (name) max by (name) (mpc_pool_target{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=\"small\"})",
+          "legendFormat": "{{name}} target, all small keys",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "count by (name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=\"small\"} == 0)",
+          "legendFormat": "{{name}} small keys with an empty pool",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Presignatures generated per second",
+      "id": 22,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "description": "This is the sustained hot-path capacity: signatures/s above it drain the pool.",
       "gridPos": {
-        "x": 12,
-        "y": 36,
+        "x": 0,
+        "y": 44,
         "w": 12,
         "h": 8
       },
@@ -1397,14 +1473,14 @@
     {
       "type": "timeseries",
       "title": "Average presign duration",
-      "id": 22,
+      "id": 23,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "description": "",
       "gridPos": {
-        "x": 0,
+        "x": 12,
         "y": 44,
         "w": 12,
         "h": 8
@@ -1455,15 +1531,15 @@
     {
       "type": "timeseries",
       "title": "Presign sessions running",
-      "id": 23,
+      "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "description": "",
       "gridPos": {
-        "x": 12,
-        "y": 44,
+        "x": 0,
+        "y": 52,
         "w": 12,
         "h": 8
       },
@@ -1512,8 +1588,67 @@
     },
     {
       "type": "timeseries",
+      "title": "Keys per pool class",
+      "id": 25,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "big = MPC_POOL_TARGET presignatures each, small = MPC_POOL_TARGET_SMALL, none = cold signing. Change an account's class: POST /account/pool on the proxy.",
+      "gridPos": {
+        "x": 12,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (class) (mpc_pool_keys{job=\"mpc-coordinator\",instance=~\"$coordinator\"})",
+          "legendFormat": "{{class}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
       "title": "MPC node reachability",
-      "id": 24,
+      "id": 26,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1521,7 +1656,7 @@
       "description": "Each coordinator checks every MPC node, so there is one line per coordinator and node (coord1 \u2192 node 0 ...). 1 = the node answers that coordinator. Node 0 = mpc1 (.135), node 1 = mpc2 (.137), node 2 = mpc3 (.138).",
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 60,
         "w": 24,
         "h": 6
       },

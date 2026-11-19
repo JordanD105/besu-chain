@@ -50,7 +50,8 @@ Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations]
 | `MpcBelowThreshold` | critical | fewer MPC nodes reachable than the threshold: **no signatures possible** |
 | `MpcCoordinatorDown` | critical | a coordinator's `/metrics` doesn't answer (or the token doesn't match) |
 | `MpcNodeDown` | warning | an MPC node doesn't answer its coordinator for 1 min |
-| `MpcPoolEmpty` | warning | no presignature ready for a hot key for 2 min (signing falls back to the slow path) |
+| `MpcPoolEmpty` | warning | no presignature ready for a big (hot) key for 2 min (signing falls back to the slow path) |
+| `MpcSmallPoolsEmpty` | warning | more than half of the small pools (accounts from `/createaccount`) empty for 15 min: presigning can't keep up |
 | `MpcSignErrors` / `MpcPresignFailing` | warning | signing or presign sessions failing |
 | `MpcPolicyRefusals` | warning | a transaction was refused by the policy (value, gas, chain id, destination) |
 | `ProxySenderStalled` | critical | a sender's transactions are ready in the RPC node's pool but blocks keep coming without them: the validators don't have them. Restart **one** validator; check `tx-pool-max-future-by-sender=2000` on the validators |

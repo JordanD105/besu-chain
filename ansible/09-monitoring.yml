@@ -9,6 +9,7 @@
         dest: /opt/monitoring/
         remote_src: true
         mode: preserve
+      register: monitoring_files
 
     - name: Monitoring settings created before?
       ansible.builtin.stat:
@@ -57,6 +58,16 @@
         chdir: /opt/monitoring
       register: mon_up
       changed_when: mon_up.stderr is search('Started|Recreated|Created')
+
+    - name: Reload Prometheus after a change of its config or rules (a bad rule fails here)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/reload
+        method: POST
+      register: prom_reload
+      until: prom_reload.status == 200
+      retries: 10
+      delay: 3
+      when: monitoring_files.changed  # noqa: no-handler (before the targets are checked)
 
     - name: Every metrics target answers (check-targets.sh)
       ansible.builtin.command: ./check-targets.sh

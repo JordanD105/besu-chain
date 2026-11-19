@@ -200,7 +200,8 @@ Results are in [`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md).
 
 | Endpoint | Body / query | What it does |
 |---|---|---|
-| `POST /createaccount` | `{amount}` | new account = new MPC key, funded with `amount` ETH from `SENDER01` |
+| `POST /createaccount` | `{amount, pool?}` | new account = new MPC key, funded with `amount` ETH from `SENDER01`. `pool`: `big`, `small` (default, `MPC_NEW_ACCOUNT_POOL`) or `none`: how many presignatures are kept ready for fast signing |
+| `POST /account/pool` | `{address, pool}` | change an account's presignature pool class (`big`, `small`, `none`) |
 | `POST /transfer` | `{from, to, amount, memo?}` | ETH transfer signed by the MPC signer |
 | `GET /transfer/:txHash` | | transaction status and memo |
 | `POST /nft/deploy` | `{name, symbol}` | deploys a **new** collection (names and symbols must be unique) |

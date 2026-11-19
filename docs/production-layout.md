@@ -193,14 +193,14 @@ On **each** of .135, .136, .137, .138, .139:
 
 ```bash
 cd /opt/besu-chain/mpc-signer
-docker build --build-arg BIGINT=bigint-rug -t registry.example.com/mpc-signer:1.2.0 .
-docker push registry.example.com/mpc-signer:1.2.0
+docker build --build-arg BIGINT=bigint-rug -t registry.example.com/mpc-signer:1.3.0 .
+docker push registry.example.com/mpc-signer:1.3.0
 ```
 
 Without a registry, copy it to the four hosts that run MPC components:
 
 ```bash
-for h in 135 136 137 138; do docker save registry.example.com/mpc-signer:1.2.0 | ssh root@192.168.68.$h docker load; done
+for h in 135 136 137 138; do docker save registry.example.com/mpc-signer:1.3.0 | ssh root@192.168.68.$h docker load; done
 ```
 
 Generate the three shared tokens (hand them over through each team's secret channel, never chat
@@ -227,7 +227,7 @@ cp -r /opt/besu-chain/mpc-signer/deploy/node /opt/mpc-node && cd /opt/mpc-node
 cp .env.example .env && chmod 600 .env
 ```
 
-In `.env`: `MPC_IMAGE=registry.example.com/mpc-signer:1.2.0`, `MPC_NODE_ID` and `MPC_BIND_IP`
+In `.env`: `MPC_IMAGE=registry.example.com/mpc-signer:1.3.0`, `MPC_NODE_ID` and `MPC_BIND_IP`
 from the table, `MPC_NODE_TOKEN`, `MPC_COMPUTE_THREADS` = about the host's core count. Then:
 
 ```bash
@@ -268,7 +268,7 @@ cp .env.example .env && chmod 600 .env
 
 | Setting | coord1 (.135) | coord2 (.136) |
 |---|---|---|
-| `MPC_IMAGE` | `registry.example.com/mpc-signer:1.2.0` | same |
+| `MPC_IMAGE` | `registry.example.com/mpc-signer:1.3.0` | same |
 | `MPC_BIND_IP` | `192.168.68.135` | `192.168.68.136` |
 | `MPC_RELAY_URL` | `ws://192.168.68.135:9100/relay` | `ws://192.168.68.136:9100/relay` |
 | `MPC_BESU_RPC` | `http://192.168.68.150:8545` | same |

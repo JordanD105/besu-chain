@@ -180,8 +180,9 @@ fn load_node(
         };
         let aux = aux.clone().ok_or_else(|| anyhow!("key {key_id} present but aux info missing"))?;
         let ks = KeyShare::from_parts((core, aux))?;
-        let info = key_info(&ks)?;
+        let mut info = key_info(&ks)?;
         ensure!(info.key_id == key_id, "key file name mismatch for {key_id}");
+        info.pool = load_pool_class(&store, &key_id)?;
         keys.insert(key_id, (Arc::new(ks), info));
     }
     tracing::info!(party = me, keys = keys.len(), has_aux = aux.is_some(), "node loaded");
@@ -209,11 +210,33 @@ fn optimize_aux(aux: AuxInfo, _me: u16) -> Result<AuxInfo> {
     Valid::validate(d).map_err(|_| anyhow!("aux info invalid after precomputation"))
 }
 
+/// The presignature pool class stored with a key (keys/<id>.pool, sealed like the share), if any.
+fn load_pool_class(store: &SecretStore, key_id: &str) -> Result<Option<String>> {
+    let name = format!("keys/{key_id}.pool");
+    if !store.exists(&name) {
+        return Ok(None);
+    }
+    let pool = String::from_utf8(store.get(&name)?.to_vec()).context("pool class not UTF-8")?;
+    check_pool_class(&pool)?;
+    Ok(Some(pool))
+}
+
+fn save_pool_class(store: &SecretStore, key_id: &str, pool: Option<&str>) -> Result<()> {
+    let name = format!("keys/{key_id}.pool");
+    match pool {
+        Some(p) => store.put(&name, p.as_bytes()),
+        None => match std::fs::remove_file(store.path(&name)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
+            _ => Ok(()),
+        },
+    }
+}
+
 fn key_info(ks: &KeyShare) -> Result<KeyInfo> {
     let pk = ks.shared_public_key;
     let uncompressed = pk.to_bytes(false);
     let address = eth::address_hex(&eth::address_from_uncompressed(&uncompressed)?);
-    Ok(KeyInfo { key_id: address.clone(), address, public_key: hex::encode(pk.to_bytes(true)) })
+    Ok(KeyInfo { key_id: address.clone(), address, public_key: hex::encode(pk.to_bytes(true)), pool: None })
 }
 
 async fn serve(node: Arc<Node>, listen: SocketAddr) -> Result<()> {
@@ -222,6 +245,7 @@ async fn serve(node: Arc<Node>, listen: SocketAddr) -> Result<()> {
         .route("/v1/keys", get(keys))
         .route("/v1/aux", post(aux))
         .route("/v1/keygen", post(keygen))
+        .route("/v1/keys/pool", post(key_pool))
         .route("/v1/presign", post(presign))
         .route("/v1/presign/discard", post(discard))
         .route("/v1/partial", post(partial))
@@ -353,6 +377,9 @@ async fn aux(State(node): State<Arc<Node>>, Json(req): Json<AuxReq>) -> ApiResul
 
 async fn keygen(State(node): State<Arc<Node>>, Json(req): Json<KeygenReq>) -> ApiResult<KeyInfo> {
     check_session_id(&req.session)?;
+    if let Some(p) = &req.pool {
+        check_pool_class(p)?;
+    }
     let aux = node.aux.read().clone().ok_or_else(|| anyhow!("aux info not generated yet"))?;
     let n = node.cluster.n();
     let t = node.cluster.threshold;
@@ -365,12 +392,31 @@ async fn keygen(State(node): State<Arc<Node>>, Json(req): Json<KeygenReq>) -> Ap
     .await?;
     let core_json = serde_json::to_vec(&incomplete)?;
     let ks = KeyShare::from_parts((incomplete, aux))?;
-    let info = key_info(&ks)?;
+    let mut info = key_info(&ks)?;
     // persist only the core share; aux info is stored once and shared by all keys
     node.store.put(&format!("keys/{}.share", info.key_id), &core_json)?;
+    save_pool_class(&node.store, &info.key_id, req.pool.as_deref())?;
+    info.pool = req.pool.clone();
     node.keys.write().insert(info.key_id.clone(), (Arc::new(ks), info.clone()));
     tracing::info!(address = %info.address, "key generated (this node holds one share)");
     Ok(Json(info))
+}
+
+/// Set or clear a key's presignature pool class (public metadata: it only tells the coordinators
+/// how many presignatures to keep ready for this key).
+async fn key_pool(State(node): State<Arc<Node>>, Json(req): Json<KeyPoolReq>) -> ApiResult<KeyInfo> {
+    if let Some(p) = &req.pool {
+        check_pool_class(p)?;
+    }
+    if !node.keys.read().contains_key(&req.key_id) {
+        return Err(anyhow!("unknown key {}", req.key_id).into());
+    }
+    save_pool_class(&node.store, &req.key_id, req.pool.as_deref())?;
+    let mut keys = node.keys.write();
+    let entry = keys.get_mut(&req.key_id).ok_or_else(|| anyhow!("unknown key {}", req.key_id))?;
+    entry.1.pool = req.pool.clone();
+    tracing::info!(address = %entry.1.address, pool = ?req.pool, "pool class set");
+    Ok(Json(entry.1.clone()))
 }
 
 fn get_key(node: &Node, key_id: &str) -> Result<Arc<KeyShare>> {

@@ -33,6 +33,9 @@ const CONFIG = {
     // private key in Vault. Point WEB3SIGNER_IP/PORT at the same coordinator for signing.
     MPC_ADMIN_URL: (process.env.MPC_ADMIN_URL || "").trim().replace(/\/$/, ""),
     MPC_ADMIN_TOKEN: (process.env.MPC_ADMIN_TOKEN || "").trim(),
+    // presignature pool class of accounts created by /createaccount when the request names none:
+    // big (MPC_POOL_TARGET presignatures, like SENDER01), small (MPC_POOL_TARGET_SMALL), none (cold)
+    MPC_NEW_ACCOUNT_POOL: (process.env.MPC_NEW_ACCOUNT_POOL || "small").trim().toLowerCase(),
     NFT_BASE_URL: (process.env.NFT_BASE_URL || "").trim().replace(/\/$/, ""),
     REDIS: {
         host: process.env.REDIS_IP || process.env.IP || BESU_IP,
@@ -859,16 +862,39 @@ async function sendFromSigner(from, to, amount, nonce, data = "0x", gas = 21000n
 
 // Create a new account as an MPC key: the three MPC nodes run distributed key generation and
 // each keeps one share. Returns the checksummed address.
-async function createMpcAccount() {
+const POOL_CLASSES = ["big", "small", "none"];
+
+// The pool class of a request: the given one, or MPC_NEW_ACCOUNT_POOL. 400 for anything else.
+function poolClass(pool) {
+    const value = pool === undefined || pool === null || pool === ""
+        ? CONFIG.MPC_NEW_ACCOUNT_POOL
+        : String(pool).trim().toLowerCase();
+
+    if (!POOL_CLASSES.includes(value)) {
+        throw httpError(400, `pool must be one of ${POOL_CLASSES.join(", ")}`);
+    }
+
+    return value;
+}
+
+async function mpcAdmin(path, body) {
     if (!CONFIG.MPC_ADMIN_TOKEN) {
         throw new Error("MPC_ADMIN_TOKEN is not configured");
     }
 
-    const response = await fetch(`${CONFIG.MPC_ADMIN_URL}/admin/keys`, {
+    return fetch(`${CONFIG.MPC_ADMIN_URL}${path}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${CONFIG.MPC_ADMIN_TOKEN}` },
+        headers: {
+            Authorization: `Bearer ${CONFIG.MPC_ADMIN_TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(120000)
     });
+}
+
+async function createMpcAccount(pool) {
+    const response = await mpcAdmin("/admin/keys", { pool });
 
     if (!response.ok) {
         const detail = await response.text();
@@ -879,7 +905,7 @@ async function createMpcAccount() {
     return ethers.getAddress(key.address);
 }
 
-async function createAccount(amount) {
+async function createAccount(amount, pool) {
     if (!await signerOwns(CONFIG.SENDER01)) {
         throw new Error("sender01 is not managed by the signer");
     }
@@ -891,7 +917,7 @@ async function createAccount(amount) {
         await assertCanPay(CONFIG.SENDER01, amount);
     }
 
-    const address = useMpc ? await createMpcAccount() : wallet.address;
+    const address = useMpc ? await createMpcAccount(pool) : wallet.address;
 
     const payment = await withSenderLock(CONFIG.SENDER01, async () => {
         await assertCanPay(CONFIG.SENDER01, amount);
@@ -906,6 +932,7 @@ async function createAccount(amount) {
         address,
         from: CONFIG.SENDER01,
         amount,
+        ...(useMpc ? { pool } : {}),
         txHash: payment.txHash,
         nonce: payment.nonce
     };
@@ -929,8 +956,46 @@ app.post("/createaccount", async (req, res) => {
             });
         }
 
-        const result = await withAccountLock(() => createAccount(amountText));
+        const pool = poolClass(req.body.pool);
+        const result = await withAccountLock(() => createAccount(amountText, pool));
         res.json(result);
+    } catch (error) {
+        console.error(error);
+
+        res.status(error.statusCode || 500).json({
+            error: error.message
+        });
+    }
+});
+
+// =======================
+// Presignature pool class of an account (MPC signer only)
+// =======================
+
+app.post("/account/pool", async (req, res) => {
+    try {
+        const { address } = req.body;
+
+        if (!CONFIG.MPC_ADMIN_URL) {
+            return res.status(400).json({ error: "pool classes need the MPC signer (MPC_ADMIN_URL)" });
+        }
+
+        if (!address || !isAddress(address)) {
+            return res.status(400).json({ error: "invalid address" });
+        }
+
+        const pool = poolClass(req.body.pool);
+        const response = await mpcAdmin(`/admin/keys/${ethers.getAddress(address)}/pool`, { pool });
+        const detail = await response.text();
+
+        if (!response.ok) {
+            return res.status(response.status === 404 ? 404 : 502).json({
+                error: `pool change failed (${response.status}): ${detail.slice(0, 300)}`
+            });
+        }
+
+        const result = JSON.parse(detail);
+        res.json({ success: true, address: ethers.getAddress(address), pool: result.pool, target: result.target });
     } catch (error) {
         console.error(error);
 

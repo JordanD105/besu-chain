@@ -20,7 +20,11 @@ sender01_funding_wei: "1000000000000000000000000"   # SENDER01 balance in the ge
 mpc_max_value_wei: "1000000000000000000000"   # 1000 ETH per transaction
 mpc_max_gas: 30000000
 mpc_allowed_to: ""        # leave empty for the proxy (see mpc-signer/docs/production.md)
+# Presignature pools: big keys (SENDER01) keep mpc_pool_target, small keys mpc_pool_target_small.
+# Accounts from /createaccount get mpc_new_account_pool unless the request names a pool.
 mpc_pool_target: 500
+mpc_pool_target_small: 20
+mpc_new_account_pool: small     # big, small or none
 
 # Third-party images (exact versions)
 besu_image: hyperledger/besu:26.11.1
@@ -41,7 +45,7 @@ image_archives:
   redis: redis-8.10.3-docker.tar
 
 besu_java_opts: -Xmx4g
-mpc_image: registry.example.com/mpc-signer:1.2.0
+mpc_image: registry.example.com/mpc-signer:1.3.0
 # true: build mpc_image on the operator and copy it to the hosts (docker save/load).
 # false: the hosts pull mpc_image from your registry.
 mpc_image_build: true

@@ -18,6 +18,9 @@ pub struct AuxReq {
 pub struct KeygenReq {
     pub session: String,
     pub relay_url: String,
+    /// Presignature pool class of the new key (see `POOL_CLASSES`); None = not set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pool: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -26,6 +29,36 @@ pub struct KeyInfo {
     pub address: String,
     /// SEC1 compressed public key, hex.
     pub public_key: String,
+    /// Presignature pool class stored with the key on the nodes (None = not set: the
+    /// coordinator's MPC_POOL_KEYS rule applies). Older nodes don't send it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pool: Option<String>,
+}
+
+/// Presignature pool classes. Each coordinator sets the pool size of each class:
+/// big = MPC_POOL_TARGET, small = MPC_POOL_TARGET_SMALL, none = no pool (cold signing).
+pub const POOL_CLASSES: [&str; 3] = ["big", "small", "none"];
+
+pub fn check_pool_class(pool: &str) -> Result<()> {
+    if POOL_CLASSES.contains(&pool) {
+        Ok(())
+    } else {
+        Err(anyhow!("pool must be one of {}, not {pool:?}", POOL_CLASSES.join(", ")))
+    }
+}
+
+/// The pool class most nodes store for a key; a tie goes to the alphabetically first class
+/// (deterministic on every coordinator). None when no node stores a class.
+pub fn majority_class(votes: std::collections::HashMap<String, usize>) -> Option<String> {
+    votes.into_iter().max_by(|x, y| x.1.cmp(&y.1).then(y.0.cmp(&x.0))).map(|(p, _)| p)
+}
+
+/// Set (or clear, with None) the pool class of a key on a node.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KeyPoolReq {
+    pub key_id: String,
+    #[serde(default)]
+    pub pool: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -119,5 +152,45 @@ impl PresigPublic {
                 .map(|(d, s)| Ok(PresignatureCommitment { tilde_Delta: h2p(d)?, tilde_S: h2p(s)? }))
                 .collect::<Result<_>>()?,
         })
+    }
+}
+
+#[cfg(test)]
+mod pool_class_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn votes(v: &[(&str, usize)]) -> HashMap<String, usize> {
+        v.iter().map(|(k, n)| (k.to_string(), *n)).collect()
+    }
+
+    #[test]
+    fn majority_wins_and_ties_are_deterministic() {
+        assert_eq!(majority_class(votes(&[("small", 2), ("big", 1)])), Some("small".into()));
+        assert_eq!(majority_class(votes(&[("big", 1), ("small", 1)])), Some("big".into()));
+        assert_eq!(majority_class(votes(&[("none", 1), ("small", 1)])), Some("none".into()));
+        assert_eq!(majority_class(HashMap::new()), None);
+    }
+
+    #[test]
+    fn classes_are_checked() {
+        for p in POOL_CLASSES {
+            assert!(check_pool_class(p).is_ok());
+        }
+        assert!(check_pool_class("huge").is_err());
+        assert!(check_pool_class("").is_err());
+    }
+
+    #[test]
+    fn older_nodes_and_coordinators_stay_compatible() {
+        // an older node sends no pool field
+        let k: KeyInfo = serde_json::from_str(r#"{"key_id":"0xa","address":"0xa","public_key":"02"}"#).unwrap();
+        assert_eq!(k.pool, None);
+        // an older coordinator sends a keygen request without pool
+        let r: KeygenReq = serde_json::from_str(r#"{"session":"s","relay_url":"ws://x"}"#).unwrap();
+        assert_eq!(r.pool, None);
+        // no class: the field is left out, so older peers see the format they know
+        let out = serde_json::to_string(&KeyInfo { key_id: "0xa".into(), address: "0xa".into(), public_key: "02".into(), pool: None }).unwrap();
+        assert!(!out.contains("pool"));
     }
 }
