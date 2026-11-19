@@ -13,7 +13,7 @@ says exactly what they must do, and continues where it stopped when you run it a
 | 3 | `03-mpc-nodes.yml` | operator | **stops for the MPC teams** (twice): team instructions, `cluster.json`, nodes answering |
 | 4 | `04-coordinators.yml` | .135, .136 | coord1 + coord2, key ceremony → `SENDER01`, presignature pool |
 | 5 | `05-besu.yml` | .135–.138 | 6 node keys (on their hosts), genesis (once) with `SENDER01` funded, validators, then RPC nodes |
-| 6 | `06-proxy.yml` | .135, .136 | proxy settings (not started) |
+| 6 | `06-proxy.yml` | operator, .135, .136 | the SectionRegistry (once: admin MPC key, contract); proxy settings (not started) |
 | 7 | `07-ha.yml` | .135, .136 | HAProxy, keepalived: VIPs on .135, proxy1 started |
 | 8 | `08-check.yml` | operator | Besu, MPC and proxy through the VIPs; once: test account + transfer |
 | 9 | `09-monitoring.yml` | .139 | Prometheus, Grafana (all targets checked), chainlens, Remix IDE ([`../remix/`](../remix/README.md)) |
@@ -179,7 +179,8 @@ Restoring everything from these backups after losing the whole site: **[`RESTORE
 
 | Path | Contents | |
 |---|---|---|
-| `secrets/` | `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN`, `MPC_METRICS_TOKEN`, the two VRRP passwords, the Grafana admin password | **secret** |
+| `secrets/` | `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN`, `MPC_METRICS_TOKEN`, the two VRRP passwords, the Grafana admin password, the proxy admin token (`proxy_admin_token`), the chainlens deploy token | **secret** |
+| `registry.json`, `registry-admin` | the SectionRegistry's address and its admin MPC key ([`../docs/sections.md`](../docs/sections.md)), created once by `06-proxy.yml` | public, integrity matters |
 | `mpc/node*.json`, `cluster.json` | MPC nodes' public keys, the cluster file | public, integrity matters |
 | `besu/*.json`, `network/` | Besu nodes' public keys, genesis and network files | public, integrity matters |
 | `sender01` | the hot MPC key's address | public |

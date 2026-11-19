@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && chown -R node:node /app
 
-COPY --chown=node:node stress-latest.js nft-collection.json ./
+COPY --chown=node:node stress-latest.js nft-collection.json section-registry.json ./
 
 USER node
 

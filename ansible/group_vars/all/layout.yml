@@ -33,6 +33,9 @@ mpc_admin_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/mp
 mpc_metrics_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/mpc_metrics_token', chars=['hexdigits'], length=64) }}"
 vrrp_pass_rpc: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_rpc', chars=['ascii_letters', 'digits'], length=8) }}"
 chainlens_deploy_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/chainlens_deploy_token', chars=['hexdigits'], length=48) }}"
+proxy_admin_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/proxy_admin_token', chars=['hexdigits'], length=48) }}"
+# The SectionRegistry, deployed once by 06-proxy.yml
+registry: "{{ (lookup('ansible.builtin.file', state_dir ~ '/registry.json') | from_json) if (state_dir ~ '/registry.json') is file else {} }}"
 vrrp_pass_proxy: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_proxy', chars=['ascii_letters', 'digits'], length=8) }}"
 
 # SENDER01: written by 04-coordinators.yml after the key ceremony

@@ -3,6 +3,77 @@
 - name: Hosts have the current code
   ansible.builtin.import_playbook: code-current.yml
 
+# The SectionRegistry (docs/sections.md), once: an MPC admin key, then the contract deployed from
+# it with deploy-contract.js (operator, proxy image), straight to coord1 and rpc1 (the VIPs come up
+# in 07-ha.yml). The address and admin go to state/registry.json, then into the proxy settings.
+- name: Section registry (once)
+  hosts: localhost
+  gather_facts: false
+  vars:
+    registry_file: "{{ state_dir }}/registry.json"
+    admin_file: "{{ state_dir }}/registry-admin"
+    rpc1_url: "http://{{ ip_of[rpc_nodes[0].host] }}:{{ rpc_nodes[0].rpc_port }}"
+  tasks:
+    - name: Registry already deployed?
+      ansible.builtin.stat:
+        path: "{{ registry_file }}"
+      register: registry_stat
+
+    - name: Deploy the registry
+      when: not registry_stat.stat.exists
+      block:
+        - name: Admin key already created (an earlier run stopped before the deployment)?
+          ansible.builtin.stat:
+            path: "{{ admin_file }}"
+          register: admin_stat
+
+        - name: Registry admin key (MPC, small presignature pool)
+          ansible.builtin.uri:
+            url: "{{ coord1_url }}/admin/keys"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ mpc_admin_token }}"
+            body_format: json
+            body: { pool: small }
+            timeout: 180
+          register: admin_key
+          when: not admin_stat.stat.exists
+
+        - name: Remember the admin key
+          ansible.builtin.copy:
+            dest: "{{ admin_file }}"
+            content: "{{ admin_key.json.address }}\n"
+            mode: "0600"
+          when: not admin_stat.stat.exists
+
+        - name: Deploy SectionRegistry, signed by the admin key (MPC)
+          ansible.builtin.shell: >-
+            docker run --rm --network host -u "$(id -u)" -v {{ repo_root | quote }}:/work -w /work
+            -e NODE_PATH=/app/node_modules {{ app_images.proxy }}
+            node besu-production/operator/deploy-contract.js --artifact proxy/section-registry.json
+            --from {{ lookup('ansible.builtin.file', admin_file) | trim }} --name SectionRegistry
+            --coordinator {{ coord1_url }} --rpc {{ rpc1_url }}
+            --sender01 {{ (state_dir ~ '/sender01') | relpath(repo_root) }}
+            --out {{ (state_dir ~ '/registry-record') | relpath(repo_root) }} --yes
+          register: registry_deploy
+          changed_when: true
+
+        - name: The deployed address
+          ansible.builtin.set_fact:
+            registry_address: "{{ registry_deploy.stdout | regex_search('deployed\\s+(0x[0-9a-fA-F]{40})', '\\1') | first }}"
+
+        - name: Record the registry (state/registry.json)
+          ansible.builtin.copy:
+            dest: "{{ registry_file }}"
+            content: "{{ {'address': registry_address, 'admin': lookup('ansible.builtin.file', admin_file) | trim} | to_nice_json }}\n"
+            mode: "0600"
+
+    - name: Registry
+      ansible.builtin.debug:
+        msg: "SectionRegistry {{ reg.address }}, admin {{ reg.admin }}"
+      vars:
+        reg: "{{ lookup('ansible.builtin.file', registry_file) | from_json }}"
+
 - name: Proxy
   hosts: app_hosts
   become: true

@@ -87,6 +87,36 @@ GET /nft/owner/0xOwner?collection=DRG        (one collection)
 # Token ids start at 1 in each collection.
 
 # ---------------------------------------------------------------
+# Admin API: sections (docs/sections.md)
+# ---------------------------------------------------------------
+# Header Authorization: Bearer <ADMIN_TOKEN> (Ansible: state/secrets/proxy_admin_token), and only from
+# ADMIN_ALLOWED_IPS (the operator and the monitoring host). Sections live in the on-chain
+# SectionRegistry (REGISTRY_CONTRACT), written by REGISTRY_ADMIN through this proxy.
+
+GET /admin/sections                 (?fresh=1 skips the 10 s cache)
+-> { "success": true, "registry": "0x...", "sections": [ { "id": 1, "name": "Section 1", "active": true,
+     "allowedIps": ["10.1.2.3"], "accounts": { "upfront": "0x...", "consumption": "0x...", "payment": "0x..." },
+     "balances": { "upfront": "0.0", "consumption": "0.0", "payment": "0.0" }, "createdAt": 1795129062 } ] }
+
+GET /admin/sections/1
+
+# Create: 3 MPC keys (upfront: big pool, consumption + payment: none), needs all MPC nodes online.
+# The API key is in this answer only. No funding (top up the upfront account later).
+POST /admin/sections
+{ "name": "Section 1", "allowedIps": ["10.1.2.3", "10.1.5.0/24"] }
+-> { "success": true, "section": { "id": 1, ... }, "apiKey": "sk_...", "txHash": "0x..." }
+
+# New API key (in this answer only); the old one stops working at once
+POST /admin/sections/1/key
+-> { "success": true, "id": 1, "apiKey": "sk_...", "txHash": "0x..." }
+
+POST /admin/sections/1/ips
+{ "allowedIps": ["10.1.2.3", "10.1.2.4"] }
+
+POST /admin/sections/1/active
+{ "active": false }
+
+# ---------------------------------------------------------------
 # Sender state (nonces, value in flight, corrections by the periodic chain check)
 # ---------------------------------------------------------------
 GET /status/senders

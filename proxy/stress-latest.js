@@ -2,7 +2,9 @@ const path = require("path");
 const express = require("express");
 const Redis = require("ioredis");
 const { ethers } = require("ethers");
+const crypto = require("crypto");
 const nftArtifact = require("./nft-collection.json");
+const registryArtifact = require("./section-registry.json");
 
 require("dotenv").config({
     path: path.join(__dirname, ".env")
@@ -37,6 +39,12 @@ const CONFIG = {
     // big (MPC_POOL_TARGET presignatures, like SENDER01), small (MPC_POOL_TARGET_SMALL), none (cold)
     MPC_NEW_ACCOUNT_POOL: (process.env.MPC_NEW_ACCOUNT_POOL || "small").trim().toLowerCase(),
     NFT_BASE_URL: (process.env.NFT_BASE_URL || "").trim().replace(/\/$/, ""),
+    // Sections (docs/sections.md): the on-chain SectionRegistry and the MPC account that writes it
+    REGISTRY_CONTRACT: (process.env.REGISTRY_CONTRACT || "").trim(),
+    REGISTRY_ADMIN: (process.env.REGISTRY_ADMIN || "").trim(),
+    // Admin API (/admin/*): bearer token and the source addresses allowed to use it
+    ADMIN_TOKEN: (process.env.ADMIN_TOKEN || "").trim(),
+    ADMIN_ALLOWED_IPS: (process.env.ADMIN_ALLOWED_IPS || "").split(/[\s,]+/).filter(Boolean),
     REDIS: {
         host: process.env.REDIS_IP || process.env.IP || BESU_IP,
         port: Number(process.env.REDIS_PORT) || 36379
@@ -2407,6 +2415,342 @@ app.get("/nft/:tokenId", async (req, res) => {
         });
     }
 });
+
+// =======================
+// Sections (docs/sections.md)
+// =======================
+// The SectionRegistry contract on chain holds the sections: name, three MPC accounts (upfront pays
+// out, consumption receives, payment collects), the API-key hash, the allowed source IPs, active.
+// Only REGISTRY_ADMIN writes it, through this proxy's send queue (one sender, ordered nonces).
+// The admin API (/admin/*) needs ADMIN_TOKEN and a source address in ADMIN_ALLOWED_IPS.
+
+const registryIface = new ethers.Interface(registryArtifact.abi);
+const SECTION_POOLS = { upfront: "big", consumption: "none", payment: "none" };
+const SECTION_CACHE_MS = 10000;
+const sectionCache = { at: 0, list: null };
+let sectionWriteChain = Promise.resolve();
+
+function sectionsConfigured() {
+    return isAddress(CONFIG.REGISTRY_CONTRACT) && isAddress(CONFIG.REGISTRY_ADMIN);
+}
+
+function requireSections() {
+    if (!sectionsConfigured()) {
+        throw httpError(503, "sections are not configured (REGISTRY_CONTRACT, REGISTRY_ADMIN)");
+    }
+}
+
+async function registryCall(fn, args = []) {
+    const data = registryIface.encodeFunctionData(fn, args);
+    const result = await ethCall(CONFIG.REGISTRY_CONTRACT, data);
+    return registryIface.decodeFunctionResult(fn, result);
+}
+
+// One registry write at a time, signed by REGISTRY_ADMIN; waits until it is mined.
+function registryWrite(fn, args) {
+    const run = sectionWriteChain.then(async () => {
+        const data = registryIface.encodeFunctionData(fn, args);
+        let sent;
+
+        try {
+            sent = await withSenderLock(CONFIG.REGISTRY_ADMIN, () =>
+                sendData(CONFIG.REGISTRY_ADMIN, CONFIG.REGISTRY_CONTRACT, data, true)
+            );
+        } catch (error) {
+            const reason = String(error.message || "").match(/revert(?:ed)?:?\s*(.*)$/i);
+            throw reason ? httpError(409, `registry refused: ${reason[1] || error.message}`) : error;
+        }
+
+        const receipt = await waitForReceipt(sent.txHash);
+        sectionCache.at = 0;
+        return { txHash: sent.txHash, receipt };
+    });
+    sectionWriteChain = run.then(() => {}, () => {});
+    return run;
+}
+
+function sectionFromTuple(id, s) {
+    return {
+        id,
+        name: s.name,
+        active: s.active,
+        createdAt: Number(s.createdAt),
+        allowedIps: s.allowedIps ? s.allowedIps.split(" ").filter(Boolean) : [],
+        accounts: {
+            upfront: ethers.getAddress(s.upfront),
+            consumption: ethers.getAddress(s.consumption),
+            payment: ethers.getAddress(s.payment)
+        },
+        keyHash: s.keyHash
+    };
+}
+
+async function listSections(fresh = false) {
+    requireSections();
+
+    if (!fresh && sectionCache.list && Date.now() - sectionCache.at < SECTION_CACHE_MS) {
+        return sectionCache.list;
+    }
+
+    const count = Number((await registryCall("sectionCount"))[0]);
+    const list = [];
+
+    for (let id = 1; id <= count; id += 1) {
+        const [s] = await registryCall("getSection", [id]);
+        list.push(sectionFromTuple(id, s));
+    }
+
+    sectionCache.list = list;
+    sectionCache.at = Date.now();
+    return list;
+}
+
+async function getSection(id, fresh = false) {
+    const n = Number(id);
+    const section = Number.isInteger(n) ? (await listSections(fresh)).find((s) => s.id === n) : null;
+
+    if (!section) {
+        throw httpError(404, `no section ${id}`);
+    }
+
+    return section;
+}
+
+async function withBalances(section) {
+    const balances = {};
+
+    for (const [role, address] of Object.entries(section.accounts)) {
+        balances[role] = ethers.formatEther(await getBalanceWei(address));
+    }
+
+    const { keyHash, ...rest } = section;
+    return { ...rest, balances };
+}
+
+function newSectionKey() {
+    const key = "sk_" + crypto.randomBytes(32).toString("hex");
+    return { key, hash: ethers.keccak256(ethers.toUtf8Bytes(key)) };
+}
+
+function sectionName(value) {
+    const name = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+
+    if (!name || Buffer.byteLength(name) > 64) {
+        throw httpError(400, "name: 1 to 64 characters");
+    }
+
+    return name;
+}
+
+// ---- IPv4 addresses and networks (allowed IPs of sections and of the admin API)
+
+function ipv4ToInt(ip) {
+    const parts = String(ip).split(".");
+
+    if (parts.length !== 4 || !parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255)) {
+        return null;
+    }
+
+    return parts.reduce((acc, p) => ((acc << 8) | Number(p)) >>> 0, 0);
+}
+
+function validIpEntry(entry) {
+    const [net, bits, extra] = String(entry).split("/");
+    return extra === undefined && ipv4ToInt(net) !== null
+        && (bits === undefined || (/^\d{1,2}$/.test(bits) && Number(bits) <= 32));
+}
+
+function allowedIpList(value) {
+    const list = Array.isArray(value) ? value : String(value || "").split(/[\s,]+/);
+    const entries = [...new Set(list.map((e) => String(e).trim()).filter(Boolean))];
+
+    if (!entries.length) {
+        throw httpError(400, "allowedIps: at least one IPv4 address or network, e.g. [\"10.1.2.3\", \"10.1.5.0/24\"]");
+    }
+
+    const bad = entries.filter((e) => !validIpEntry(e));
+
+    if (bad.length) {
+        throw httpError(400, `allowedIps: not an IPv4 address or network: ${bad.join(", ")}`);
+    }
+
+    if (entries.join(" ").length > 1024) {
+        throw httpError(400, "allowedIps: too many entries");
+    }
+
+    return entries;
+}
+
+function ipMatches(ip, entries) {
+    const addr = ipv4ToInt(String(ip || "").replace(/^::ffff:/, ""));
+
+    if (addr === null) {
+        return false;
+    }
+
+    return entries.some((entry) => {
+        const [net, bits = "32"] = String(entry).split("/");
+        const base = ipv4ToInt(net);
+        const n = Number(bits);
+
+        if (base === null || !(n >= 0 && n <= 32)) {
+            return false;
+        }
+
+        const mask = n === 0 ? 0 : (0xffffffff << (32 - n)) >>> 0;
+        return ((addr & mask) >>> 0) === ((base & mask) >>> 0);
+    });
+}
+
+// ---- Admin API guard
+
+function adminTokenOk(req) {
+    const given = Buffer.from(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
+    const want = Buffer.from(CONFIG.ADMIN_TOKEN);
+    return given.length === want.length && crypto.timingSafeEqual(given, want);
+}
+
+function adminGuard(req, res, next) {
+    if (CONFIG.ADMIN_TOKEN.length < 16 || !CONFIG.ADMIN_ALLOWED_IPS.length) {
+        return res.status(404).json({ error: "the admin API is off (ADMIN_TOKEN, ADMIN_ALLOWED_IPS)" });
+    }
+
+    if (!ipMatches(req.socket.remoteAddress, CONFIG.ADMIN_ALLOWED_IPS)) {
+        return res.status(403).json({ error: "the admin API is not allowed from this address" });
+    }
+
+    if (!adminTokenOk(req)) {
+        console.warn(`admin: wrong token from ${req.socket.remoteAddress}`);
+        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
+    }
+
+    next();
+}
+
+function adminRoute(handler) {
+    return async (req, res) => {
+        try {
+            res.json(await handler(req));
+        } catch (error) {
+            if (!error.statusCode) {
+                console.error(error);
+            }
+
+            res.status(error.statusCode || 500).json({ error: error.message });
+        }
+    };
+}
+
+// ---- Admin routes: sections
+
+app.get("/admin/sections", adminGuard, adminRoute(async (req) => {
+    const list = await listSections(req.query.fresh === "1");
+    const sections = [];
+
+    for (const section of list) {
+        sections.push(await withBalances(section));
+    }
+
+    return { success: true, registry: ethers.getAddress(CONFIG.REGISTRY_CONTRACT), sections };
+}));
+
+app.get("/admin/sections/:id", adminGuard, adminRoute(async (req) => ({
+    success: true,
+    section: await withBalances(await getSection(req.params.id, true))
+})));
+
+// Create: three MPC keys (needs all MPC nodes online), the API key (shown only in this answer),
+// the registry entry. No funding: top up the upfront account separately.
+app.post("/admin/sections", adminGuard, adminRoute(async (req) => {
+    requireSections();
+    const name = sectionName(req.body.name);
+    const allowedIps = allowedIpList(req.body.allowedIps);
+
+    if ((await listSections(true)).some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+        throw httpError(409, `a section named "${name}" exists already`);
+    }
+
+    if (!CONFIG.MPC_ADMIN_URL) {
+        throw httpError(503, "sections need the MPC signer (MPC_ADMIN_URL)");
+    }
+
+    const accounts = {};
+
+    for (const [role, pool] of Object.entries(SECTION_POOLS)) {
+        accounts[role] = await createMpcAccount(pool);
+    }
+
+    const { key, hash } = newSectionKey();
+    const written = await registryWrite("createSection", [
+        name, accounts.upfront, accounts.consumption, accounts.payment, hash, allowedIps.join(" ")
+    ]);
+    const created = written.receipt.logs
+        .map((log) => { try { return registryIface.parseLog(log); } catch { return null; } })
+        .find((log) => log && log.name === "SectionCreated");
+    const id = created ? Number(created.args.id) : (await listSections(true)).find((s) => s.name === name).id;
+    console.log(`section ${id} "${name}" created: upfront ${accounts.upfront}, consumption ${accounts.consumption}, payment ${accounts.payment}`);
+
+    return {
+        success: true,
+        section: await withBalances(await getSection(id, true)),
+        apiKey: key,
+        note: "the API key is shown only now: store it for the section's applications",
+        txHash: written.txHash
+    };
+}));
+
+// New API key; the old one stops working at once
+app.post("/admin/sections/:id/key", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    const { key, hash } = newSectionKey();
+    const written = await registryWrite("setKey", [section.id, hash]);
+    console.log(`section ${section.id}: API key rotated`);
+    return { success: true, id: section.id, apiKey: key, note: "the API key is shown only now", txHash: written.txHash };
+}));
+
+app.post("/admin/sections/:id/ips", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    const allowedIps = allowedIpList(req.body.allowedIps);
+    const written = await registryWrite("setAllowedIps", [section.id, allowedIps.join(" ")]);
+    return { success: true, id: section.id, allowedIps, txHash: written.txHash };
+}));
+
+app.post("/admin/sections/:id/active", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+
+    if (typeof req.body.active !== "boolean") {
+        throw httpError(400, "active: true or false");
+    }
+
+    const written = await registryWrite("setActive", [section.id, req.body.active]);
+    return { success: true, id: section.id, active: req.body.active, txHash: written.txHash };
+}));
+
+// Startup check: the configured registry answers and its admin is REGISTRY_ADMIN
+async function checkRegistryAtStart() {
+    if (!CONFIG.REGISTRY_CONTRACT && !CONFIG.REGISTRY_ADMIN) {
+        console.log("sections: off (no REGISTRY_CONTRACT)");
+        return;
+    }
+
+    try {
+        requireSections();
+        const [admin] = await registryCall("admin");
+        const [version] = await registryCall("VERSION");
+        const [count] = await registryCall("sectionCount");
+
+        if (ethers.getAddress(admin) !== ethers.getAddress(CONFIG.REGISTRY_ADMIN)) {
+            console.error(`sections: the registry's admin is ${admin}, not REGISTRY_ADMIN ${CONFIG.REGISTRY_ADMIN}: writes will fail`);
+        }
+
+        senderState(CONFIG.REGISTRY_ADMIN).pinned = true;
+        console.log(`sections: registry ${CONFIG.REGISTRY_CONTRACT} v${version}, ${count} section(s), admin API ${CONFIG.ADMIN_TOKEN ? "on" : "off"}`);
+    } catch (error) {
+        console.error(`sections: registry ${CONFIG.REGISTRY_CONTRACT} not usable: ${error.message}`);
+    }
+}
+
+setTimeout(checkRegistryAtStart, 1500).unref();
 
 // =======================
 // Start

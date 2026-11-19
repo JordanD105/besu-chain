@@ -24,6 +24,21 @@
         return_content: true
       register: senders
 
+    - name: Proxy admin API and the section registry (VIP .151:30000/admin/sections)
+      ansible.builtin.uri:
+        url: "http://{{ vip_proxy }}:30000/admin/sections"
+        headers:
+          Authorization: "Bearer {{ proxy_admin_token }}"
+        return_content: true
+      register: sections
+      until: sections.status == 200
+      retries: 10
+      delay: 3
+
+    - name: Sections
+      ansible.builtin.debug:
+        msg: "SectionRegistry {{ sections.json.registry }}: {{ sections.json.sections | length }} section(s)"
+
     - name: Smoke test done before?
       ansible.builtin.stat:
         path: "{{ state_dir }}/smoke-test.json"
