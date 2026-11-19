@@ -226,6 +226,7 @@ collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).
 | [`docs/production-layout.md`](docs/production-layout.md) | **Production layout**: the 5 hosts, every setting and port, step-by-step deployment from scratch, failure table, failover tests |
 | [`ansible/README.md`](ansible/README.md) | **Automated deployment**: settings, the three runs and the MPC team steps, the operator state, reruns, security notes |
 | [`ansible/OPERATOR.md`](ansible/OPERATOR.md) | **Running the Ansible deployment** on the operator machine, step by step: tools, SSH access, settings, the three runs, after the deployment |
+| [`mpc-signer/docs/upgrade.md`](mpc-signer/docs/upgrade.md) | **Upgrading the MPC signer** (e.g. to 1.3.0): ship the image, MPC nodes one at a time by their teams, then coordinators and proxy; rollback |
 | [`ha/README.md`](ha/README.md) | HAProxy + keepalived setup, operations, failover tests |
 | [`docs/disaster-recovery.md`](docs/disaster-recovery.md) | **Disaster recovery runbook**: what to back up, schedule, alerts, recovery steps per scenario, drills |
 | [`monitoring/README.md`](monitoring/README.md) | Production monitoring: metrics endpoints, targets, dashboards, alerts, firewall |

@@ -311,7 +311,7 @@ holds an identity.
 | **Change the policy** | edit `cluster.json`, compare `sha256sum` across all teams, copy it everywhere, restart the nodes one by one, then the coordinators |
 | **Rotate `MPC_NODE_TOKEN`** | set the new value on all nodes and coordinators, then restart them |
 | **Rotate `MPC_ADMIN_TOKEN`** | update the coordinators, the proxy and the operator, then restart |
-| **Upgrade to 1.3.0 (pool classes)** | the **MPC nodes first** (each team: `MPC_IMAGE` in `.env`, `docker compose up -d`, one at a time), then the coordinators and the proxy. Coordinators on 1.3.0 with older nodes can't store pool classes: new accounts would get no pool and `POST /admin/keys/<address>/pool` fails |
+| **Upgrade to 1.3.0 (pool classes)** | step by step: [`upgrade.md`](upgrade.md). The **MPC nodes first** (each team: `MPC_IMAGE` in `.env`, `docker compose up -d`, one at a time), then the coordinators and the proxy. Coordinators on 1.3.0 with older nodes can't store pool classes: new accounts would get no pool and `POST /admin/keys/<address>/pool` fails |
 | **Pool class of an account** | `POST /account/pool {"address", "pool"}` on the proxy; see "Presignature pools" in section 8 |
 | **Throughput** | sustained signing is limited by presigning CPU. Give the nodes more cores and raise `MPC_COMPUTE_THREADS` and `MPC_REFILL_CONCURRENCY`. Bursts are covered by `MPC_POOL_TARGET`. |
 

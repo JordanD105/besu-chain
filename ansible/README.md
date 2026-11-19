@@ -79,7 +79,8 @@ To change a version, set the new tag (and archive file name) and rerun
 (small keys) and `mpc_new_account_pool` (the class of accounts from `/createaccount` that name
 none: `big`, `small` or `none`). See "Presignature pools" in
 [`../mpc-signer/docs/production.md`](../mpc-signer/docs/production.md). When the MPC image version
-changes, the MPC node teams upgrade their nodes **before** you rerun `site.yml`.
+changes, the MPC node teams upgrade their nodes **before** you rerun `site.yml`:
+[`../mpc-signer/docs/upgrade.md`](../mpc-signer/docs/upgrade.md).
 
 Review the rest: chain id, block period, `SENDER01` funding, MPC policy, image names,
 `mpc_image_build` (build on the operator, or pull from your registry), `install_packages`.
