@@ -105,7 +105,9 @@
       loop: "{{ app_ids.results }}"
       loop_control:
         label: "{{ item.item }}"
-      when: (lookup('ansible.builtin.file', state_dir ~ '/images/' ~ item.item ~ '.id', errors='ignore') | default('', true)) != item.stdout
+      when: (lookup('ansible.builtin.file', id_file) if id_file is file else '') != item.stdout
+      vars:
+        id_file: "{{ state_dir }}/images/{{ item.item }}.id"
       changed_when: true
 
     - name: Content IDs for the hosts

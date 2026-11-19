@@ -36,7 +36,7 @@ chainlens_deploy_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/sec
 vrrp_pass_proxy: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_proxy', chars=['ascii_letters', 'digits'], length=8) }}"
 
 # SENDER01: written by 04-coordinators.yml after the key ceremony
-sender01: "{{ lookup('ansible.builtin.file', state_dir ~ '/sender01', errors='ignore') | default('', true) | trim }}"
+sender01: "{{ (lookup('ansible.builtin.file', state_dir ~ '/sender01') | trim) if (state_dir ~ '/sender01') is file else '' }}"
 
 ip_of: "{{ dict(groups['servers'] | zip(groups['servers'] | map('extract', hostvars, 'ansible_host'))) }}"
 coord1_url: "http://{{ hostvars[coordinators[0].host].ansible_host }}:9100"
