@@ -32,6 +32,7 @@ one per host, and 2 RPC nodes, on the two application hosts.
 | `operator/make-network.sh` | operator, once | genesis (QBFT validator set), `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS` |
 | `operator/add-node.sh` | operator, later | add a node to a **running** network (genesis untouched) |
 | `operator/move-node.sh` | operator, later | a node keeps its key but gets a new IP/port (e.g. a replacement host): updates its address in the network files |
+| `operator/deploy-contract.js` | operator | deploy a compiled contract, signed by an MPC account, and record it for chainlens ([Deploying a contract](#deploying-a-contract)) |
 | `operator/qbft.sh` | on a validator host | validator set, add/remove votes, peers, health |
 | [`../monitoring/`](../monitoring) | monitoring host | Prometheus + Grafana, dashboards and alerts for these nodes and the MPC signer |
 | `firewall-example.sh` | every host | ufw rules per role (generic; for the 5-host layout with firewalld use [`../ha/firewall-layout.sh`](../ha/firewall-layout.sh)) |
@@ -201,6 +202,55 @@ In the layout, .135 runs val1 + rpc1 and .136 runs val2 + rpc2:
 
 **Fault tolerance:** never put two **validators** on one host: losing it would take 2 of 4 down and
 halt the chain (quorum 3). An RPC node next to a validator is fine.
+
+## Deploying a contract
+
+`operator/deploy-contract.js` deploys a compiled contract with an **MPC account** (the coordinator
+signs, no private key exists anywhere), checks the result and writes a record to
+[`../contracts/deployments/`](../contracts/deployments). Chainlens reads those records: the contract
+gets its name, and its page lists its functions and runs the read-only ones.
+
+**1. Compile** for this chain: Solidity with `evmVersion` **`cancun`** or older (Besu here has no
+Prague opcodes), and keep the compiler version and optimizer settings with the source. Export the
+full compiler artifact (ABI **and** bytecode): Hardhat `artifacts/…/X.json`, Foundry `out/X.sol/X.json`,
+Remix `artifacts/X.json` (Remix: *Solidity compiler → Advanced → EVM version cancun*), or the
+solc standard-JSON output (`--contract X` picks one). Test on a dev or staging chain first.
+
+**2. A deployer account**, once: an MPC key used only for deployments, never `SENDER01` or another
+account the proxy sends from (the proxy tracks their nonces in memory; a transaction from outside
+breaks its next one, and the script refuses `SENDER01`). Gas is free on this chain, so no funding
+is needed:
+
+```bash
+curl -s -X POST http://192.168.68.151:30000/createaccount -H 'content-type: application/json' -d '{"amount":"0","pool":"none"}'
+```
+
+Keep the returned `address` as the deployer. The MPC policy must allow contract creation: an empty
+`ALLOWED_TO` (the default), and enough `MAX_GAS` (default 30 000 000, the block gas limit).
+
+**3. Dry run**, from the repository root on the operator (it runs in the proxy image, which has
+everything it needs, so nothing is installed). It checks the deployer, the arguments, the gas and
+prints the address the contract will get:
+
+```bash
+docker run --rm --network host -u "$(id -u)" -v "$PWD":/work -w /work -e NODE_PATH=/app/node_modules localhost/besu-proxy/besu-proxy node besu-production/operator/deploy-contract.js --artifact build/MyToken.json --from 0xDEPLOYER --args '["My token", "MTK", "1000000"]'
+```
+
+Constructor arguments are a JSON array; write large numbers as strings. Defaults: coordinator
+`http://192.168.68.150:9100`, RPC `http://192.168.68.150:8545` (both through HAProxy on the VIP;
+`--coordinator` / `--rpc` or `COORDINATOR_URL` / `RPC_URL` for other addresses).
+
+**4. Deploy:** the same command with `--yes`. It signs through the coordinator (2 of 3 MPC nodes),
+checks the signed transaction against the request, sends it, waits for the receipt and compares
+the code on chain with the artifact's runtime bytecode (exit code 3 if it differs). The record is
+`contracts/deployments/<address>.json`.
+
+**5. Publish the record:** commit it, then `ansible-playbook 01-hosts.yml` (or the whole
+`site.yml`) copies it to the hosts. Chainlens picks it up within 15 s:
+`http://192.168.68.139:30100/#/contracts/<address>`.
+
+Chainlens only **reads** (`eth_call` of view/pure functions). Calls that change state go through the
+proxy or a script like this one, signed by an MPC account.
 
 ## Operations
 

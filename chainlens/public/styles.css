@@ -506,3 +506,20 @@ tr:last-child td { border-bottom: 0; }
     .stats, .split, .detail, .hero { grid-template-columns: 1fr; }
     .side { display: none; }
 }
+
+/* contract page: read functions */
+.badge.abi { background: var(--create); margin-left: 6px; }
+.fn-list { display: grid; gap: 10px; }
+.fn { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.fn-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.fn-head .muted { word-break: break-all; }
+.fn-args { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.fn-arg { width: 100%; box-sizing: border-box; }
+.fn-run { padding: 5px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); color: var(--text); cursor: pointer; }
+.fn-run:hover { border-color: var(--orange); }
+.fn-result:empty { display: none; }
+.fn-out { margin: 2px 0; }
+.fn-at { font-size: 12px; }
+.fn-sigs { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.bad-text { color: var(--bad, #e5484d); }
+@media (max-width: 700px) { .kv { grid-template-columns: 1fr; gap: 2px 0; } }

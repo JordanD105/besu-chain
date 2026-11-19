@@ -6,7 +6,7 @@
     - name: Archive the deployable directories
       ansible.builtin.command: >-
         git -C {{ repo_root }} archive --format=tar.gz -o {{ state_dir }}/repo.tar.gz HEAD
-        besu-production ha monitoring mpc-signer/deploy proxy chainlens
+        besu-production ha monitoring mpc-signer/deploy proxy chainlens contracts
       changed_when: false
 
 - name: Prepare the hosts

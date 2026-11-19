@@ -502,7 +502,7 @@ function dataTable(columns, rows, options) {
 
 function txTo(tx) {
     if (tx.to) {
-        return tx.toLabel ? contractLink(tx.toLabel, tx.to, "#/contracts") : addr(tx.to);
+        return tx.toLabel ? contractLink(tx.toLabel, tx.to, "#/contracts/" + tx.to) : addr(tx.to);
     }
 
     return tx.contractAddress ? ident(tx.contractAddress, "#/transactions?address=" + tx.contractAddress) : el("span", {}, "—");
@@ -658,7 +658,7 @@ function noteStatus(status) {
 }
 
 function skipRefresh() {
-    if (document.hidden) {
+    if (document.hidden || /^#\/contracts\/0x/.test(location.hash)) {
         return true;
     }
 
@@ -771,6 +771,11 @@ async function render(options) {
 
         if (path === "#/contracts") {
             return showContracts(page, params.get("type") || "all", status);
+        }
+
+        const contract = path.match(/^#\/contracts\/(0x[0-9a-fA-F]{40})$/);
+        if (contract) {
+            return showContract(contract[1]);
         }
 
         if (path === "#/transactions") {
@@ -1011,8 +1016,8 @@ async function showDashboard(status) {
     ]);
 
     const contracts = dataTable([
-        { label: "col.address", sort: (row) => row.label || row.address, search: (row) => row.label + " " + row.address, cell: (row) => contractLink(row.label, row.address, "#/transactions?address=" + row.address) },
-        { label: "col.type", sort: (row) => row.type, cell: (row) => el("span", { class: "badge type" }, row.type) },
+        { label: "col.address", sort: (row) => row.label || row.address, search: (row) => row.label + " " + row.address, cell: (row) => contractLink(row.label, row.address, "#/contracts/" + row.address) },
+        { label: "col.type", sort: (row) => row.type, cell: (row) => el("span", {}, [el("span", { class: "badge type" }, row.type), row.registered ? el("span", { class: "badge abi", title: t("contract.abiTip") }, "ABI") : null]) },
         { label: "col.txCount", sort: (row) => row.txCount || 0, cell: (row) => String(row.txCount) },
         { label: "col.created", sort: (row) => row.createdAt || 0, search: (row) => stamp(row.createdAt), cell: (row) => stamp(row.createdAt) }
     ], data.contractsActive, { sort: 2, dir: "desc", key: "dash-contracts" });
@@ -1293,7 +1298,7 @@ async function showContracts(page, type, status) {
     ]);
     select.value = type;
     const table = dataTable([
-        { label: "col.address", sort: (row) => row.label || row.address, search: (row) => row.label + " " + row.address, cell: (row) => contractLink(row.label, row.address, "#/transactions?address=" + row.address) },
+        { label: "col.address", sort: (row) => row.label || row.address, search: (row) => row.label + " " + row.address, cell: (row) => contractLink(row.label, row.address, "#/contracts/" + row.address) },
         { label: "col.type", sort: (row) => row.type, cell: (row) => el("span", { class: "badge type" }, row.type) },
         { label: "col.txCount", sort: (row) => row.txCount || 0, cell: (row) => String(row.txCount) },
         { label: "col.created", sort: (row) => row.createdAt || 0, search: (row) => stamp(row.createdAt), cell: (row) => stamp(row.createdAt) },
@@ -1304,6 +1309,114 @@ async function showContracts(page, type, status) {
         el("div", { class: "card-head" }, [el("h2", {}, t("contracts.title")), select]),
         table
     ]));
+}
+
+// A contract: details, and its functions when the contract is in the registry
+// (contracts/deployments). View/pure functions can be run (eth_call); state-changing functions are
+// only listed: transactions are signed by the MPC signer through the proxy or the deploy tools.
+async function showContract(address) {
+    const token = showToken;
+    const data = await api("/api/contracts/" + address);
+
+    if (token !== showToken) {
+        return;
+    }
+
+    const kv = (label, value) => [el("span", { class: "muted" }, label), el("span", { style: "word-break:break-all" }, value == null || value === "" ? "—" : value)];
+    const rec = data.record;
+    const facts = el("div", { class: "kv" }, [
+        ...kv(t("contract.address"), copyValue(data.address)),
+        ...kv(t("col.type"), data.type),
+        ...kv(t("contract.codeSize"), data.codeSize + " bytes"),
+        ...(rec ? [
+            ...kv(t("contract.deployer"), addr(rec.deployer)),
+            ...kv(t("contract.deployTx"), rec.txHash ? ident(rec.txHash, "#/transactions/" + rec.txHash) : null),
+            ...kv(t("tx.block"), rec.blockNumber != null ? el("a", { href: "#/blocks/" + rec.blockNumber }, "#" + rec.blockNumber) : null),
+            ...kv(t("contract.deployedAt"), rec.deployedAt),
+            ...kv(t("contract.artifact"), rec.artifact),
+            ...kv(t("contract.args"), rec.constructorArgs && rec.constructorArgs.length ? JSON.stringify(rec.constructorArgs) : "—"),
+            ...kv(t("contract.code"), data.codeMatchesRecord === false ? t("contract.codeChanged") : (rec.codeCheck || "—"))
+        ] : [])
+    ]);
+
+    const parts = [
+        el("div", { class: "muted", style: "margin-bottom:10px" }, [
+            el("a", { href: "#/contracts" }, t("contracts.title")), " / ", data.address
+        ]),
+        el("section", { class: "card" }, [
+            el("div", { class: "card-head" }, [
+                el("h2", {}, [data.label && data.label !== data.address ? data.label : t("contract.details"), " ", data.registered ? el("span", { class: "badge abi" }, "ABI") : null]),
+                el("a", { href: "#/transactions?address=" + data.address }, t("contract.txs") + " (" + data.txCount + ")")
+            ]),
+            facts
+        ])
+    ];
+
+    if (!data.registered) {
+        parts.push(el("section", { class: "card stack" }, [
+            el("h2", {}, t("contract.read")),
+            el("div", { class: "empty" }, t("contract.noAbi")),
+            data.registryError ? el("div", { class: "muted" }, data.registryError) : null
+        ]));
+        return show(el("div", {}, parts));
+    }
+
+    const readList = el("div", { class: "fn-list" });
+    if (!data.read.length) {
+        readList.append(el("div", { class: "empty" }, t("contract.noRead")));
+    }
+    for (const fn of data.read) {
+        const inputs = fn.inputs.map((p, i) => el("input", {
+            class: "table-search fn-arg",
+            placeholder: (p.name || "arg" + i) + " (" + p.type + ")",
+            "aria-label": (p.name || "arg" + i) + " " + p.type
+        }));
+        const result = el("div", { class: "fn-result" });
+        const run = async () => {
+            result.replaceChildren(el("span", { class: "muted" }, "…"));
+            try {
+                const response = await fetch("/api/contracts/" + data.address + "/call", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ signature: fn.signature, args: inputs.map((input) => input.value) })
+                });
+                const body = await response.json();
+                if (!response.ok) {
+                    throw new Error(body.error || "call failed");
+                }
+                result.replaceChildren(...body.outputs.map((o) => el("div", { class: "fn-out" }, [
+                    el("span", { class: "muted" }, (o.name && !/^\d+$/.test(o.name) ? o.name + " " : "") + o.type + ": "),
+                    /^0x[0-9a-fA-F]{40}$/.test(String(o.value)) ? addr(o.value) : el("code", { style: "word-break:break-all" }, typeof o.value === "object" ? JSON.stringify(o.value) : String(o.value))
+                ])), el("div", { class: "muted fn-at" }, t("contract.atBlock") + " #" + body.block));
+            } catch (error) {
+                result.replaceChildren(el("span", { class: "bad-text" }, error.message));
+            }
+        };
+        for (const input of inputs) {
+            input.addEventListener("keydown", (event) => { if (event.key === "Enter") run(); });
+        }
+        readList.append(el("div", { class: "fn" }, [
+            el("div", { class: "fn-head" }, [
+                el("b", {}, fn.name),
+                el("span", { class: "muted" }, "(" + fn.inputs.map((p) => p.type + (p.name ? " " + p.name : "")).join(", ") + ")" + (fn.outputs.length ? " → " + fn.outputs.map((p) => p.type).join(", ") : ""))
+            ]),
+            inputs.length ? el("div", { class: "fn-args" }, inputs) : null,
+            el("div", {}, [el("button", { type: "button", class: "fn-run", onclick: run }, t("contract.query"))]),
+            result
+        ]));
+    }
+
+    parts.push(el("section", { class: "card stack" }, [el("h2", {}, t("contract.read")), readList]));
+    parts.push(el("section", { class: "card stack" }, [
+        el("h2", {}, t("contract.write")),
+        el("div", { class: "muted", style: "margin-bottom:8px" }, t("contract.writeNote")),
+        data.write.length
+            ? el("ul", { class: "fn-sigs" }, data.write.map((fn) => el("li", {}, [el("code", {}, fn.signature), fn.stateMutability === "payable" ? " payable" : ""])))
+            : el("div", { class: "empty" }, "—"),
+        data.events.length ? el("h3", {}, t("tx.events")) : null,
+        data.events.length ? el("ul", { class: "fn-sigs" }, data.events.map((e) => el("li", {}, el("code", {}, e)))) : null
+    ]));
+    show(el("div", {}, parts));
 }
 
 const TX_TYPES = ["call", "transfer", "create"];
@@ -1528,8 +1641,8 @@ async function showTx(hash) {
     );
     draw(txTab || "function");
     const to = tx.to
-        ? (tx.toLabel ? contractLink(tx.toLabel, tx.to, "#/transactions?address=" + tx.to) : addr(tx.to))
-        : (tx.contractAddress ? ident(tx.contractAddress, "#/transactions?address=" + tx.contractAddress) : el("span", {}, "—"));
+        ? (tx.toLabel ? contractLink(tx.toLabel, tx.to, "#/contracts/" + tx.to) : addr(tx.to))
+        : (tx.contractAddress ? ident(tx.contractAddress, "#/contracts/" + tx.contractAddress) : el("span", {}, "—"));
 
     show(el("div", {}, [
         el("div", { class: "muted", style: "margin-bottom:10px" }, [
@@ -1650,6 +1763,8 @@ function showApi() {
         ["GET", "/api/dashboard", t("api.dashboard")],
         ["GET", "/api/accounts", t("api.accounts")],
         ["GET", "/api/accounts/:address", t("api.account")],
+        ["GET", "/api/contracts/:address", t("api.contract")],
+        ["POST", "/api/contracts/:address/call", t("api.contractCall")],
         ["GET", "/api/nfts", t("api.nfts")],
         ["GET", "/api/transactions", t("api.transactions")],
         ["GET", "/api/blocks", t("api.blocks")],

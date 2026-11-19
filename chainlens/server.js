@@ -1,3 +1,4 @@
+const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const { ethers } = require("ethers");
@@ -55,6 +56,81 @@ const db = {
     peers: [],
     peerCount: 0
 };
+
+// ---- Contract registry: the records besu-production/operator/deploy-contract.js writes
+// (contracts/deployments/<address>.json, mounted read-only). Gives contracts their name and ABI, so
+// the contract page can list functions and run view/pure ones (eth_call, never a transaction).
+const REGISTRY_DIR = process.env.REGISTRY_DIR || "/registry";
+const registry = { byAddress: new Map(), files: "", error: null };
+
+function loadRegistry() {
+    let names;
+    try {
+        names = fs.readdirSync(REGISTRY_DIR).filter((name) => name.endsWith(".json")).sort();
+    } catch (error) {
+        registry.byAddress = new Map();
+        registry.error = error.code === "ENOENT" ? null : error.message;
+        return;
+    }
+    const sig = names.map((name) => {
+        try {
+            const st = fs.statSync(path.join(REGISTRY_DIR, name));
+            return name + ":" + st.mtimeMs + ":" + st.size;
+        } catch (error) {
+            return name;
+        }
+    }).join("|");
+    if (sig === registry.files) {
+        return;
+    }
+    const next = new Map();
+    const problems = [];
+    for (const name of names) {
+        try {
+            const record = JSON.parse(fs.readFileSync(path.join(REGISTRY_DIR, name), "utf8"));
+            const iface = new ethers.Interface(record.abi || []);
+            next.set(ethers.getAddress(record.address).toLowerCase(), { record, iface });
+        } catch (error) {
+            problems.push(name + ": " + error.message);
+        }
+    }
+    registry.byAddress = next;
+    registry.files = sig;
+    registry.error = problems.length ? problems.join("; ") : null;
+    if (problems.length) {
+        console.error("contract registry:", registry.error);
+    }
+}
+
+loadRegistry();
+setInterval(loadRegistry, 15000).unref();
+
+function contractEntry(address) {
+    return registry.byAddress.get(String(address).toLowerCase()) || null;
+}
+
+function fragmentInfo(fragment) {
+    return {
+        name: fragment.name,
+        signature: fragment.format("sighash"),
+        stateMutability: fragment.stateMutability,
+        inputs: fragment.inputs.map((p) => ({ name: p.name || "", type: p.format("sighash"), baseType: p.baseType })),
+        outputs: (fragment.outputs || []).map((p) => ({ name: p.name || "", type: p.format("sighash") }))
+    };
+}
+
+function jsonValue(value) {
+    if (typeof value === "bigint") {
+        return value.toString();
+    }
+    if (value instanceof Uint8Array) {
+        return ethers.hexlify(value);
+    }
+    if (Array.isArray(value)) {
+        return [...value].map(jsonValue);
+    }
+    return value;
+}
 
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
@@ -937,16 +1013,13 @@ function contractLabel(address) {
     }
 
     const row = db.contracts.get(address.toLowerCase());
+    const entry = contractEntry(address);
 
-    if (!row) {
-        return null;
-    }
-
-    if (row.name && row.symbol) {
+    if (row && row.name && row.symbol) {
         return `${row.name} (${row.symbol})`;
     }
 
-    return row.name || null;
+    return (row && row.name) || (entry && entry.record.name) || null;
 }
 
 // A successful buy(tokenId) on an NFT collection: describe it like a payment memo so the
@@ -1014,7 +1087,8 @@ function publicContract(row) {
         txCount: row.txCount,
         createdAt: row.createdAt,
         lastAt: row.lastAt,
-        creator: row.creator
+        creator: row.creator,
+        registered: Boolean(contractEntry(row.address))
     };
 }
 
@@ -1249,6 +1323,97 @@ app.get("/api/contracts", (req, res) => {
 
     rows.sort((a, b) => b.txCount - a.txCount);
     res.json(pageOf(rows, req));
+});
+
+app.get("/api/contracts/:address", async (req, res) => {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(req.params.address)) {
+        return res.status(400).json({ error: "invalid address" });
+    }
+    const address = checksum(req.params.address);
+    const row = db.contracts.get(address.toLowerCase());
+    const entry = contractEntry(address);
+    let code = "0x";
+    try {
+        code = await rpc("eth_getCode", [address, "latest"]);
+    } catch (error) {
+        return res.status(502).json({ error: error.message });
+    }
+    if (code === "0x" && !row && !entry) {
+        return res.status(404).json({ error: "no contract at this address" });
+    }
+    const out = {
+        ...(row ? publicContract(row) : { address, label: address, name: "", symbol: "", type: "Contract", txCount: 0 }),
+        codeSize: code === "0x" ? 0 : ethers.dataLength(code),
+        registered: Boolean(entry),
+        registryError: registry.error
+    };
+    if (entry) {
+        const r = entry.record;
+        out.label = contractLabel(address) || out.label;
+        out.record = {
+            name: r.name, deployer: r.deployer, txHash: r.txHash, blockNumber: r.blockNumber,
+            deployedAt: r.deployedAt, artifact: r.artifact, constructorArgs: r.constructorArgs, codeCheck: r.codeCheck
+        };
+        // the code on chain is the code that was recorded (not replaced by a different contract)
+        out.codeMatchesRecord = r.codeHash ? ethers.keccak256(code) === r.codeHash : null;
+        const fns = entry.iface.fragments.filter((f) => f.type === "function");
+        out.read = fns.filter((f) => f.stateMutability === "view" || f.stateMutability === "pure").map(fragmentInfo);
+        out.write = fns.filter((f) => f.stateMutability !== "view" && f.stateMutability !== "pure").map(fragmentInfo);
+        out.events = entry.iface.fragments.filter((f) => f.type === "event").map((f) => f.format("sighash"));
+    }
+    res.json(out);
+});
+
+// Runs a view/pure function of a registered contract (eth_call on the latest block): read only.
+app.post("/api/contracts/:address/call", express.json({ limit: "64kb" }), async (req, res) => {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(req.params.address)) {
+        return res.status(400).json({ error: "invalid address" });
+    }
+    const entry = contractEntry(req.params.address);
+    if (!entry) {
+        return res.status(404).json({ error: "contract not in the registry (no ABI)" });
+    }
+    const signature = String((req.body && req.body.signature) || "");
+    let fragment;
+    try {
+        fragment = entry.iface.getFunction(signature);
+    } catch (error) {
+        fragment = null;
+    }
+    if (!fragment) {
+        return res.status(400).json({ error: "unknown function " + signature });
+    }
+    if (fragment.stateMutability !== "view" && fragment.stateMutability !== "pure") {
+        return res.status(403).json({ error: "only view and pure functions can be called here" });
+    }
+    const raw = Array.isArray(req.body.args) ? req.body.args : [];
+    let data;
+    try {
+        const args = fragment.inputs.map((p, i) => {
+            const v = raw[i];
+            if (p.baseType === "array" || p.baseType === "tuple") {
+                return typeof v === "string" ? JSON.parse(v) : v;
+            }
+            if (p.baseType === "bool") {
+                return v === true || String(v).trim().toLowerCase() === "true";
+            }
+            return typeof v === "string" ? v.trim() : v;
+        });
+        data = entry.iface.encodeFunctionData(fragment, args);
+    } catch (error) {
+        return res.status(400).json({ error: "arguments: " + (error.shortMessage || error.message) });
+    }
+    try {
+        const result = await ethCall(checksum(req.params.address), data);
+        const decoded = entry.iface.decodeFunctionResult(fragment, result);
+        res.json({
+            signature: fragment.format("sighash"),
+            block: db.head,
+            outputs: fragment.outputs.map((p, i) => ({ name: p.name || String(i), type: p.format("sighash"), value: jsonValue(decoded[i]) }))
+        });
+    } catch (error) {
+        res.status(400).json({ error: "call failed: " + (error.shortMessage || error.message) });
+    }
 });
 
 app.get("/api/transactions", (req, res) => {

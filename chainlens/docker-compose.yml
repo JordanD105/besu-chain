@@ -14,6 +14,10 @@ services:
     environment:
       LISTEN_HOST: 0.0.0.0
       PORT: 30100
+    volumes:
+      # contract registry (records of besu-production/operator/deploy-contract.js): names and ABIs
+      # for the contract pages. Read-only; new records are picked up within 15 s.
+      - ${CONTRACT_REGISTRY_DIR:-../contracts/deployments}:/registry:ro
     extra_hosts:
       # lets BESU_RPC=http://host.docker.internal:8545 reach a Besu node on this host
       - "host.docker.internal:host-gateway"
