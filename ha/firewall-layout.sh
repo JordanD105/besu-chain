@@ -2,15 +2,18 @@
 # firewalld rules for the production layout (docs/production-layout.md). Run on each host as root.
 #
 # By hand, with the documented addresses (192.168.68.135-.139):
-#   CLIENTS="10.1.2.3 10.1.2.4" ADMIN=10.1.2.9 ./firewall-layout.sh 135      (135 136 137 138 139)
+#   PROXY_CLIENTS="10.1.2.3 10.1.2.4" ADMIN=10.1.2.9 ./firewall-layout.sh 135   (135 136 137 138 139)
 # With any IP plan (Ansible passes these from inventory.yml + settings.yml):
 #   ROLE=app|node|monitoring  this host's role (app = HA pair: coordinator, proxy, HAProxy)
 #   PEER=<ip>                 app only: the other HA host (VRRP)
 #   HAS_MPC=1                 an MPC node runs on this host (port 7000)
 #   BESU_HOSTS, MPC_HOSTS, COORDS (the HA pair), MON: space-separated IPs
-#   CLIENTS  applications that call the proxy (VIP:30000) and users of chainlens (:30100)
-#   ADMIN    the bastion / operator host (SSH, Grafana, MPC admin API, Remix)
-#   REMIX_USERS  developers allowed to open Remix (:30200 on the monitoring host), optional
+#   ADMIN            the bastion / operator host: SSH, MPC admin API, Besu RPC and every service below
+#   PROXY_CLIENTS    applications that call the proxy (VIP:30000)
+#   CHAINLENS_USERS  users of chainlens (:30100 on the monitoring host)
+#   GRAFANA_USERS    users of Grafana (:3000 on the monitoring host)
+#   REMIX_USERS      developers using Remix (:30200 on the monitoring host)
+#   (CLIENTS, the former single list, still sets PROXY_CLIENTS and CHAINLENS_USERS when they're unset)
 # Only the listed sources reach each port; everything else stays closed (firewalld default zone).
 # Review with: firewall-cmd --list-all
 #
@@ -23,6 +26,10 @@ set -Eeuo pipefail
 host="${1:-}"
 NET=192.168.68
 CLIENTS="${CLIENTS:-}"
+PROXY_CLIENTS="${PROXY_CLIENTS:-$CLIENTS}"
+CHAINLENS_USERS="${CHAINLENS_USERS:-$CLIENTS}"
+GRAFANA_USERS="${GRAFANA_USERS:-}"
+REMIX_USERS="${REMIX_USERS:-}"
 ADMIN="${ADMIN:?set ADMIN to the bastion/operator IP}"
 
 # defaults: the documented layout, chosen by the host number
@@ -59,16 +66,16 @@ case "$ROLE" in
     allow_all 8545/tcp $COORDS "$ADMIN"            # HAProxy on the VIP (proxies, coordinators, operator)
     allow_all 8555/tcp $COORDS $MON "$ADMIN"       # rpc node direct (HAProxy, chainlens -> rpc2, operator)
     allow_all 9100/tcp $COORDS $MPC_HOSTS $MON "$ADMIN"  # coordinator: HAProxy, MPC relay, metrics, admin
-    allow_all 30000/tcp $CLIENTS $MON "$ADMIN"     # proxy (VIP and this host)
+    allow_all 30000/tcp $PROXY_CLIENTS $MON "$ADMIN"   # proxy (VIP and this host)
     ;;
   node)
     for p in 30303/tcp 30303/udp; do allow_all "$p" $BESU_HOSTS; done                     # validator p2p
     allow_all 9545/tcp $MON
     ;;
   monitoring)
-    allow_all 3000/tcp "$ADMIN"                    # Grafana
-    allow_all 30100/tcp $CLIENTS "$ADMIN"          # chainlens
-    allow_all 30200/tcp "$ADMIN" ${REMIX_USERS:-}  # Remix IDE (remix/)
+    allow_all 3000/tcp "$ADMIN" $GRAFANA_USERS        # Grafana
+    allow_all 30100/tcp "$ADMIN" $CHAINLENS_USERS     # chainlens
+    allow_all 30200/tcp "$ADMIN" $REMIX_USERS         # Remix IDE (remix/)
     ;;
   *) echo "unknown ROLE $ROLE (app, node or monitoring)" >&2; exit 1 ;;
 esac

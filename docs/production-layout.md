@@ -119,7 +119,8 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 ## 3. Ports and firewall
 
 `ha/firewall-layout.sh` applies these rules with firewalld on each host
-(`CLIENTS="…" ADMIN=… ./firewall-layout.sh 135`):
+(`PROXY_CLIENTS="…" ADMIN=… ./firewall-layout.sh 135`; with Ansible the lists come from
+`ansible/group_vars/all/settings.yml`, named in the table):
 
 | Port | On | From |
 |---|---|---|
@@ -129,12 +130,13 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 | 8555 | rpc1 / rpc2 | .135, .136 (HAProxy), .139 (chainlens), admin |
 | 9100 | coord1 / coord2 (and the VIP `.150`) | .135, .136, the MPC nodes (relay), .139 (metrics), admin |
 | 7000 | mpc1 / mpc2 / mpc3 | .135, .136 (coordinators) |
-| 30000 | proxy (and the VIP `.151`) | application clients, .139, admin |
+| 30000 | proxy (and the VIP `.151`) | applications (`proxy_client_ips`), .139, admin |
 | VRRP (protocol 112) | .135 ↔ .136 | each other |
 | 9101 | node-exporter on every host | .139 |
-| 3000, 30100 | Grafana, chainlens on .139 | admin; clients for chainlens |
-| 30200 | Remix IDE on .139 ([`remix/`](../remix/README.md)) | admin, `remix_users` |
-| 22 | every host | admin / bastion |
+| 3000 | Grafana on .139 | admin, `grafana_ips` |
+| 30100 | chainlens on .139 | admin, `chainlens_ips` |
+| 30200 | Remix IDE on .139 ([`remix/`](../remix/README.md)) | admin, `remix_ips` |
+| 22 | every host | admin / bastion (`operator_ip`) |
 
 **Ports published by Docker bypass firewalld.** The proxy, coordinators, MPC nodes, Grafana,
 chainlens, Redis and the Besu nodes without host networking are reached through Docker's port
@@ -204,7 +206,7 @@ On **each** of .135, .136, .137, .138, .139:
 3. Firewall, with that host's last number (`135` … `139`):
 
    ```bash
-   CLIENTS="<application IPs>" ADMIN=<bastion IP> /opt/besu-chain/ha/firewall-layout.sh 135
+   PROXY_CLIENTS="<application IPs>" CHAINLENS_USERS="<explorer users>" GRAFANA_USERS="<dashboard users>" REMIX_USERS="<developers>" ADMIN=<bastion IP> /opt/besu-chain/ha/firewall-layout.sh 135
    ```
 
 4. node-exporter, with that host's IP:

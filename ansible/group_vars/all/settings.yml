@@ -1,10 +1,17 @@
 # ---- Settings to review before the first run -------------------------------------------------
 
-# The operator / bastion running Ansible: SSH, MPC admin API, Grafana are opened for it.
-# REQUIRED: the firewall closes everything else, so a wrong value locks you out.
+# ---- Who may connect: the firewall opens each service only to these IPs ----------------------
+# The operator / bastion running Ansible: SSH, the MPC admin API, Besu RPC, and every service
+# below. REQUIRED: the firewall closes everything else, so a wrong value locks you out.
 operator_ip: ""
-# applications calling the proxy (VIP .151:30000) and users of chainlens (.139:30100)
-client_ips: []
+# Applications calling the proxy API (VIP .151:30000)
+proxy_client_ips: []
+# Users of chainlens, the block explorer (monitoring host :30100)
+chainlens_ips: []
+# Users of Grafana, the monitoring dashboards (monitoring host :3000)
+grafana_ips: []
+# Developers using the Remix IDE (monitoring host :30200, remix_enabled below)
+remix_ips: []
 
 # Floating IPs (keepalived) on the HA pair (app_hosts). The host IPs are in inventory.yml.
 # Both VIPs must be UNUSED addresses in the same subnet as the two app hosts (keepalived moves
@@ -70,7 +77,7 @@ remix_enabled: true
 remix_repo: https://github.com/remix-project-org/remix-live.git   # branch gh-pages = Remix builds
 remix_commit: b694f46a0adad6ff2a54bcf0b0a5340e94631a56            # Remix 2.6.15
 remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version is always added)
-remix_users: []                   # IPs allowed to open Remix besides operator_ip (developers)
+# (who may open Remix: remix_ips at the top)
 
 # Extra compose files for building the proxy / chainlens / remix images on the operator, e.g. to
 # set a build proxy or a corporate CA:  { proxy: [/path/override.yml], chainlens: [...] }

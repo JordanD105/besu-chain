@@ -9,7 +9,7 @@ internet at use time: the compilers come from a mirror inside the image.
 | Remix | the prebuilt site of `github.com/remix-project-org/remix-live` (branch `gh-pages`, what remix.ethereum.org serves), pinned by commit: `remix_commit` in `ansible/group_vars/all/settings.yml` (Remix 2.6.15) |
 | Compilers | `remix_solc_versions` (default `0.8.28`) plus the version Remix selects by default (0.8.34 in 2.6.15), from the npm package `solc` (the official Emscripten builds), served at `/solc-bin/` with a `list.json` like binaries.soliditylang.org |
 | Server | `serve.js`, a small static server on `node:22-alpine` (the base image the proxy and chainlens already use) |
-| Access | the operator (`operator_ip`) and `remix_users`; everyone else is blocked by the firewall |
+| Access | the operator (`operator_ip`) and `remix_ips`; everyone else is blocked by the firewall |
 
 ## Deployment
 
@@ -20,7 +20,7 @@ Ansible does it all when `remix_enabled: true` (the default):
   this) and builds `localhost/besu-remix/remix`. Like the other images it is built once and copied to
   the host, and `save-images.yml` saves it as `remix-docker.tar`.
 - `09-monitoring.yml` starts it on the monitoring host and checks the compiler list.
-- `ha/firewall-layout.sh` opens port 30200 on the monitoring host for `operator_ip` and `remix_users`.
+- `ha/firewall-layout.sh` opens port 30200 on the monitoring host for `operator_ip` and `remix_ips`.
 
 To add compilers, change `remix_solc_versions` (e.g. `["0.8.24", "0.8.28"]`) and run
 `ansible-playbook 02-images.yml 09-monitoring.yml`. To update Remix, set `remix_commit` to a newer

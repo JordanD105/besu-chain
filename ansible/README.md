@@ -58,7 +58,8 @@ Rules for a new plan:
   with ARP); the VIPs **unused** addresses; `vip_prefix` the subnet's mask length;
 - every host reachable from the others on the ports of
   [`../docs/production-layout.md`](../docs/production-layout.md) section 3;
-- `operator_ip` and `client_ips` (below) in the new network.
+- `operator_ip` and the access lists (`proxy_client_ips`, `chainlens_ips`, `grafana_ips`,
+  `remix_ips`, below) in the new network.
 
 Preflight checks that every host really holds its inventory IP, that all addresses are distinct
 and that no host uses a VIP. Change the plan **before** the first deployment: the Besu node
@@ -79,8 +80,11 @@ Edit `group_vars/all/settings.yml`. Required:
 
 | Setting | Value |
 |---|---|
-| `operator_ip` | the operator's IP as the hosts see it. **The firewall only lets this IP in** (SSH, MPC admin, Grafana): a wrong value locks you out |
-| `client_ips` | the applications calling the proxy (`.151:30000`) and chainlens users |
+| `operator_ip` | the operator's IP as the hosts see it. **The firewall only lets this IP in** (SSH, MPC admin, Besu RPC, and every service below): a wrong value locks you out |
+| `proxy_client_ips` | the applications calling the proxy API (`.151:30000`) |
+| `chainlens_ips` | users of chainlens, the explorer (`.139:30100`) |
+| `grafana_ips` | users of Grafana, the dashboards (`.139:3000`) |
+| `remix_ips` | developers using the Remix IDE (`.139:30200`) |
 | `snapshot_copy_to` | off-site target for the daily chain snapshot (`user@host:/path`, root's SSH key on .137) |
 
 **Image versions** (exact tags, used on every host):
@@ -202,7 +206,7 @@ To change something, edit the setting (or commit the code change) and rerun `sit
   from a node into `state/network/`.
 
 Limits:
-- Firewall rules are only **added** to firewalld: a client IP removed from `client_ips` stays
+- Firewall rules are only **added** to firewalld: an IP removed from one of the access lists stays
   allowed to the host's own ports until you remove its rule (`firewall-cmd --permanent
   --remove-rich-rule=…`, `firewall-cmd --reload`). The allow list for the ports Docker publishes
   (proxy, coordinator, MPC node, Grafana, chainlens; nftables table `inet besu_docker`) is rewritten

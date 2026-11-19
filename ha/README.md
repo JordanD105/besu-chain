@@ -74,7 +74,7 @@ If something is still blocked: `ausearch -m avc -ts recent`.
 Firewall (on every host, see `firewall-layout.sh` for what it opens):
 
 ```bash
-CLIENTS="<application IPs>" ADMIN=<bastion IP> ./firewall-layout.sh 135
+PROXY_CLIENTS="<application IPs>" CHAINLENS_USERS="<explorer users>" GRAFANA_USERS="<dashboard users>" REMIX_USERS="<developers>" ADMIN=<bastion IP> ./firewall-layout.sh 135
 ```
 
 It writes firewalld rules and the same allow list for the ports Docker publishes, which bypass

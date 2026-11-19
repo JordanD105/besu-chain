@@ -79,8 +79,10 @@
       ansible.builtin.command: "{{ repo_dir }}/ha/firewall-layout.sh"
       environment:
         ADMIN: "{{ operator_ip }}"
-        CLIENTS: "{{ client_ips | join(' ') }}"
-        REMIX_USERS: "{{ remix_users | join(' ') }}"
+        PROXY_CLIENTS: "{{ proxy_client_ips | join(' ') }}"
+        CHAINLENS_USERS: "{{ chainlens_ips | join(' ') }}"
+        GRAFANA_USERS: "{{ grafana_ips | join(' ') }}"
+        REMIX_USERS: "{{ remix_ips | join(' ') }}"
         ROLE: >-
           {{ 'app' if inventory_hostname in groups['app_hosts'] else
              ('monitoring' if inventory_hostname in groups['monitoring_hosts'] else 'node') }}

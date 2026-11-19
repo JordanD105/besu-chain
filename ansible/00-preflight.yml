@@ -3,15 +3,34 @@
   hosts: localhost
   gather_facts: false
   tasks:
+    - name: Old access settings (replaced by one list per service)
+      ansible.builtin.assert:
+        that:
+          - client_ips is not defined
+          - remix_users is not defined
+        fail_msg: >-
+          client_ips and remix_users were replaced in group_vars/all/settings.yml: client_ips by
+          proxy_client_ips (proxy API) and chainlens_ips (explorer), remix_users by remix_ips; Grafana
+          users are grafana_ips. Move the IPs there and delete the old lines.
+
     - name: Settings are filled in
       ansible.builtin.assert:
         that:
           - operator_ip is match('^[0-9]+(\.[0-9]+){3}$')
-          - client_ips is sequence and client_ips is not string
           - request_timeout | int > block_period | int
         fail_msg: >-
-          Set operator_ip (this machine's IP, as the hosts see it) and client_ips in
-          group_vars/all/settings.yml. The firewall only lets operator_ip in.
+          Set operator_ip (this machine's IP, as the hosts see it) in group_vars/all/settings.yml.
+          The firewall only lets operator_ip in.
+
+    - name: Access lists are lists of IPv4 addresses
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.vars', item) is sequence and lookup('ansible.builtin.vars', item) is not string
+          - lookup('ansible.builtin.vars', item) | reject('match', '^[0-9]+([.][0-9]+){3}(/[0-9]+)?$') | list | length == 0
+        fail_msg: >-
+          {{ item }} must be a list of IPv4 addresses (or networks like 10.1.2.0/24), e.g.
+          [10.1.2.3, 10.1.2.4]; it is {{ lookup('ansible.builtin.vars', item) }}.
+      loop: [proxy_client_ips, chainlens_ips, grafana_ips, remix_ips]
 
     - name: The IP plan (inventory.yml, settings.yml) is consistent
       ansible.builtin.assert:
