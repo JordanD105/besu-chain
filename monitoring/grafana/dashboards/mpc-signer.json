@@ -1409,7 +1409,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
+      "description": "Each coordinator checks every MPC node, so there is one line per coordinator and node (coord1 \u2192 node 0 ...). 1 = the node answers that coordinator. Node 0 = mpc1 (.135), node 1 = mpc2 (.137), node 2 = mpc3 (.138).",
       "gridPos": {
         "x": 0,
         "y": 52,
@@ -1420,7 +1420,7 @@
         {
           "refId": "A",
           "expr": "mpc_node_up{job=\"mpc-coordinator\",instance=~\"$coordinator\"}",
-          "legendFormat": "node {{node}}",
+          "legendFormat": "{{name}} \u2192 node {{node}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
