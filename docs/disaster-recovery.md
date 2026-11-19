@@ -234,7 +234,10 @@ and the proxy have twins on .135/.136: HAProxy and keepalived switch to the twin
 
 ### 6.7 Whole site lost
 
-Everything down. Work in this order; each step needs the previous one.
+Everything down. With the Ansible deployment, follow
+**[`../ansible/RESTORE.md`](../ansible/RESTORE.md)** (the same steps, with Ansible preparing the
+hosts first and finishing after the restore). By hand, work in this order; each step needs the
+previous one.
 
 1. **Hosts and network:** replacement hosts with the **same IPs** (otherwise follow "New IP" in 6.1
    for each node), the private network, firewalls, Docker.

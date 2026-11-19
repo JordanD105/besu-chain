@@ -126,6 +126,8 @@ its first run):
 
 The GPG key pair (create it, give Ansible only the public half, keep the private half offline,
 decrypt for a restore): **[`GPG-KEY.md`](GPG-KEY.md)**.
+
+Restoring everything from these backups after losing the whole site: **[`RESTORE.md`](RESTORE.md)**.
 - **Failover tests:** [`../docs/production-layout.md`](../docs/production-layout.md) section 6, then go live.
 
 ## 4. The operator's state (`state/`, never committed)
