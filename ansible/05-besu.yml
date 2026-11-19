@@ -1,4 +1,7 @@
 # The 6 Besu nodes: keys (on their hosts), network files (operator, once), validators, then RPC nodes.
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: Besu node keys
   hosts: besu_hosts
   become: true

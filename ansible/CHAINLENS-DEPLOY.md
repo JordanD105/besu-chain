@@ -29,10 +29,11 @@ chainlens_deploy_enabled: true
 chainlens_deployer: "0x…"
 ```
 
-**3. Apply:**
+**3. Apply** (phase 01 first after a `git pull`: it copies the new code, which the image build of
+phase 02 uses):
 
 ```bash
-ansible-playbook 09-monitoring.yml
+ansible-playbook 01-hosts.yml 02-images.yml 09-monitoring.yml
 ```
 
 **4. The token**, on the operator (you type it into the page):
@@ -72,6 +73,9 @@ committed yet. Commit them:
 ```bash
 git add ../contracts/deployments && git commit -m "Contract deployments"
 ```
+
+The next `site.yml` (or `01-hosts.yml`) copies the committed records to the hosts with the rest of
+the code. Until then, phases 02–10 stop and ask for `01-hosts.yml` (the hosts have older code).
 
 ## Turn it off
 

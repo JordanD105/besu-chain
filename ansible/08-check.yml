@@ -1,4 +1,7 @@
 # The application path through the VIPs, from the operator (like an application would).
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: Check through the VIPs
   hosts: localhost
   gather_facts: false

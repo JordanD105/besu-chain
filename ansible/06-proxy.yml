@@ -1,5 +1,8 @@
 # The proxy on .135 and .136: settings only (the image comes from 02-images.yml). keepalived
 # (07-ha.yml) starts it on the host holding the VIP .151; a proxy already running here is updated.
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: Proxy
   hosts: app_hosts
   become: true

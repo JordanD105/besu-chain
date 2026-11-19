@@ -1,6 +1,9 @@
 # HAProxy + keepalived on .135 and .136 (ha/README.md). .135 first: it takes both VIPs and
 # keepalived starts proxy1 there. Config changes later are applied with a reload, which keeps
 # the VIPs where they are.
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: HAProxy and keepalived
   hosts: app_hosts
   become: true

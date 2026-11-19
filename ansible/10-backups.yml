@@ -1,6 +1,9 @@
 # Backups: daily chain snapshot (val3), node key backups (GPG-encrypted, on the operator), and,
 # opt-in, the MPC share backups (the nodes belong to their teams). Each backup script reports to
 # node-exporter, so the backup alerts clear on its first successful run.
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: Daily chain snapshot
   hosts: besu_hosts
   become: true

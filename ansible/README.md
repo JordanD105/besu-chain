@@ -196,6 +196,11 @@ The playbooks are safe to rerun, and a rerun of an unchanged deployment changes 
 Created **once and never again**: node keys, the genesis and network files, `cluster.json`, the
 key ceremony (`SENDER01`), the tokens, the Grafana password, the smoke test.
 
+**Running single phases:** after a `git pull` or a new commit, run `01-hosts.yml` before any other
+phase (or the whole `site.yml`). Phase 01 copies the committed code to the hosts, and the image
+builds of phase 02 use that copy. Phases 02–10 check this and stop with "The hosts have older code"
+if phase 01 didn't run since the last change. A settings-only change needs no phase 01.
+
 To change something, edit the setting (or commit the code change) and rerun `site.yml`:
 - `.env` changes recreate only the affected containers; Besu nodes and coordinators are updated
   one host at a time.

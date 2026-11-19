@@ -5,6 +5,9 @@
 #   3. builds cluster.json (state/cluster.json) and stops until the teams have started their nodes;
 #   4. continues when all three nodes answer.
 # Run the playbook again after each team step: it continues where it stopped.
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: MPC nodes (run by their teams)
   hosts: localhost
   gather_facts: false

@@ -47,6 +47,8 @@ app_images:
   chainlens: localhost/besu-chainlens/chainlens
   remix: localhost/besu-remix/remix
 chainlens_local_registry: /var/lib/chainlens/deployments   # Deploy page records on the monitoring host
+# Directories of the repository that 01-hosts.yml copies to the hosts
+deployed_dirs: [besu-production, ha, monitoring, mpc-signer/deploy, proxy, chainlens, contracts, remix]
 built_apps: "{{ ['proxy', 'chainlens'] + (['remix'] if remix_enabled | bool else []) }}"
 
 # File names of the images built by 02-images.yml in image_archives_dir (save-images.yml)

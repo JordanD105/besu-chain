@@ -6,7 +6,7 @@
     - name: Archive the deployable directories
       ansible.builtin.command: >-
         git -C {{ repo_root }} archive --format=tar.gz -o {{ state_dir }}/repo.tar.gz HEAD
-        besu-production ha monitoring mpc-signer/deploy proxy chainlens contracts remix
+        {{ deployed_dirs | join(' ') }}
       changed_when: false
 
 - name: Prepare the hosts
@@ -123,3 +123,19 @@
         chdir: "{{ repo_dir }}/monitoring/node-exporter"
       register: ne
       changed_when: ne.stderr is search('Started|Recreated|Created')
+
+- name: Record which code the hosts have (checked by phases 02-10, code-current.yml)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Last commit touching the deployed directories
+      ansible.builtin.command: >-
+        git -C {{ repo_root }} log -1 --format=%H -- {{ deployed_dirs | join(' ') }}
+      register: code_head  # noqa: command-instead-of-module
+      changed_when: false
+
+    - name: Recorded
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/repo.commit"
+        content: "{{ code_head.stdout }}\n"
+        mode: "0644"

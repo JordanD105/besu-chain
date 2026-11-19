@@ -1,6 +1,9 @@
 # coord1 (.135) and coord2 (.136), the key ceremony (SENDER01), then the presignature pool.
 # They point at Besu through the VIP .150, which comes up in 07-ha.yml: until then they can't
 # reach Besu, which is fine (nothing to send yet).
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: Coordinators
   hosts: app_hosts
   become: true

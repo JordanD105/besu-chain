@@ -3,6 +3,9 @@
 # and chainlens + Remix (.139). Proxy and chainlens are built from the committed HEAD (state/build/).
 # Third-party images (Besu, redis, Prometheus, Grafana) come from image_archives_dir when set,
 # otherwise from Docker Hub.
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: Build the images on the operator
   hosts: localhost
   gather_facts: false

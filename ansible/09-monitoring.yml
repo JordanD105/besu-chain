@@ -1,4 +1,7 @@
 # Prometheus + Grafana, chainlens and the Remix IDE on .139.
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
 - name: Monitoring and chainlens
   hosts: monitoring_hosts
   become: true
