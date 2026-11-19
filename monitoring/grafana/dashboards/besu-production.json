@@ -1351,7 +1351,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Transactions mined during the time range selected at the top of the dashboard.",
+      "description": "Transactions mined during the time range selected at the top of the dashboard: the exact differences of Besu's transaction counter, minute by minute (may include up to 1 minute before the range). For permanent exact totals, see chainlens.",
       "gridPos": {
         "x": 0,
         "y": 45,
@@ -1361,7 +1361,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[$__range])))",
+          "expr": "round(quantile(0.5, sum_over_time((clamp_min(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} - (besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} offset 1m), 0))[$__range:1m])))",
           "legendFormat": "",
           "instant": true,
           "datasource": {
@@ -1422,7 +1422,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[1h])))",
+          "expr": "round(quantile(0.5, sum_over_time((clamp_min(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} - (besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} offset 1m), 0))[1h:1m])))",
           "legendFormat": "",
           "instant": true,
           "datasource": {
@@ -1483,7 +1483,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[24h])))",
+          "expr": "round(quantile(0.5, sum_over_time((clamp_min(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} - (besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} offset 1m), 0))[24h:1m])))",
           "legendFormat": "",
           "instant": true,
           "datasource": {
@@ -1544,7 +1544,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[$__range])) / $__range_s",
+          "expr": "quantile(0.5, sum_over_time((clamp_min(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} - (besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} offset 1m), 0))[$__range:1m])) / $__range_s",
           "legendFormat": "",
           "instant": true,
           "datasource": {
@@ -1605,7 +1605,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[$__interval])))",
+          "expr": "round(quantile(0.5, clamp_min(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} - (besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} offset $__interval), 0)))",
           "legendFormat": "transactions",
           "datasource": {
             "type": "prometheus",
@@ -1665,7 +1665,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(quantile(0.5, increase(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"}[$__interval])))",
+          "expr": "round(quantile(0.5, clamp_min(besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} - (besu_blockchain_chain_head_transaction_count_counter_total{job=\"besu\"} offset $__interval), 0)))",
           "legendFormat": "transactions",
           "datasource": {
             "type": "prometheus",
