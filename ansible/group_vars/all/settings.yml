@@ -1,6 +1,8 @@
 # ---- Settings to review before the first run -------------------------------------------------
 
 # ---- Who may connect: the firewall opens each service only to these IPs ----------------------
+# Lists take addresses and networks, e.g. [192.168.68.21, 10.1.2.0/24] (192.168.68.* is written
+# 192.168.68.0/24). See ACCESS.md.
 # The operator / bastion running Ansible: SSH, the MPC admin API, Besu RPC, and every service
 # below. REQUIRED: the firewall closes everything else, so a wrong value locks you out.
 operator_ip: ""

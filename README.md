@@ -230,6 +230,7 @@ collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).
 | [`docs/production-layout.md`](docs/production-layout.md) | **Production layout**: the 5 hosts, every setting and port, step-by-step deployment from scratch, failure table, failover tests |
 | [`ansible/README.md`](ansible/README.md) | **Automated deployment**: settings, the three runs and the MPC team steps, the operator state, reruns, security notes |
 | [`ansible/OPERATOR.md`](ansible/OPERATOR.md) | **Running the Ansible deployment** on the operator machine, step by step: tools, SSH access, settings, the three runs, after the deployment |
+| [`ansible/ACCESS.md`](ansible/ACCESS.md) | **Who may connect**: the access lists per service (proxy, chainlens, Grafana, Remix, operator), addresses and networks (`192.168.68.0/24`), applying, removing and checking access |
 | [`ansible/GPG-KEY.md`](ansible/GPG-KEY.md) | **GPG key for the node key backups**: create it (also on a headless server), public half for Ansible, private half offline, check and decrypt backups |
 | [`ansible/RESTORE.md`](ansible/RESTORE.md) | **Restoring everything from the backups** (whole site lost) with Ansible: prepare the hosts, restore node keys, chain snapshot and MPC shares, then `site.yml` |
 | [`mpc-signer/docs/upgrade.md`](mpc-signer/docs/upgrade.md) | **Upgrading the MPC signer** (e.g. to 1.3.0): ship the image, MPC nodes one at a time by their teams, then coordinators and proxy; rollback |

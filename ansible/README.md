@@ -85,6 +85,9 @@ Edit `group_vars/all/settings.yml`. Required:
 | `chainlens_ips` | users of chainlens, the explorer (`.139:30100`) |
 | `grafana_ips` | users of Grafana, the dashboards (`.139:3000`) |
 | `remix_ips` | developers using the Remix IDE (`.139:30200`) |
+
+The access lists take addresses and networks (`192.168.68.0/24`, not `192.168.68.*`); adding,
+removing and checking access: **[`ACCESS.md`](ACCESS.md)**.
 | `snapshot_copy_to` | off-site target for the daily chain snapshot (`user@host:/path`, root's SSH key on .137) |
 
 **Image versions** (exact tags, used on every host):
