@@ -68,6 +68,13 @@ then; moving a deployed node to a new IP follows
 
 ### Other settings
 
+**Time:** `ntp_servers` (a list; empty = the distribution's public servers). Phase 1 writes them
+into their own chrony file (`/etc/chrony/ntp-servers.conf`, RHEL `/etc/chrony-ntp-servers.conf`)
+included from chrony's configuration, comments out the default `pool`/`server` lines, checks the
+configuration (`chronyd -p`) and restarts chrony; an empty list restores the defaults. The alert
+`HostClockNotSynced` (not synchronized, or more than 100 ms off, for 10 min) and the Clock columns
+of the Hosts dashboard watch every host.
+
 Edit `group_vars/all/settings.yml`. Required:
 
 | Setting | Value |

@@ -391,6 +391,26 @@
             "type": "prometheus",
             "uid": "prometheus"
           }
+        },
+        {
+          "refId": "E",
+          "expr": "max by (instance, host) (node_timex_sync_status{job=\"hosts\",instance=~\"$host\"})",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "F",
+          "expr": "max by (instance, host) (abs(node_timex_offset_seconds{job=\"hosts\",instance=~\"$host\"}))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ],
       "transformations": [
@@ -409,6 +429,8 @@
               "Value #B": "CPU",
               "Value #C": "Memory",
               "Value #D": "Fullest disk",
+              "Value #E": "Clock",
+              "Value #F": "Clock offset",
               "instance": "Address",
               "host": "Host"
             },
@@ -418,7 +440,9 @@
               "Value #A": 2,
               "Value #B": 3,
               "Value #C": 4,
-              "Value #D": 5
+              "Value #D": 5,
+              "Value #E": 6,
+              "Value #F": 7
             }
           }
         }
@@ -476,6 +500,18 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Clock offset"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Up"
             },
             "properties": [
@@ -514,6 +550,113 @@
                       "1": {
                         "text": "UP",
                         "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Clock"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "NOT SYNCED",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "SYNCED",
+                        "color": "green"
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "\u2014",
+                        "color": "transparent"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Clock offset"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.05
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "\u2014",
+                        "color": "transparent"
                       }
                     }
                   }

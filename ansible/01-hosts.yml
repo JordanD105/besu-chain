@@ -34,6 +34,9 @@
         - "{{ 'chronyd' if ansible_facts.os_family == 'RedHat' else 'chrony' }}"
         - "{{ 'crond' if ansible_facts.os_family == 'RedHat' else 'cron' }}"
 
+    - name: Time servers (ntp_servers)
+      ansible.builtin.include_tasks: tasks/ntp.yml
+
     - name: firewalld answering
       ansible.builtin.command: firewall-cmd --state
       register: fw_state

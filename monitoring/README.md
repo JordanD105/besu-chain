@@ -59,6 +59,7 @@ Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations]
 | `ProxyNonceRepaired` | info | the proxy repaired a gap (lost transactions or filler transactions): see its log |
 | `ProxySenderCheckFailing` / `ProxyDown` | warning / critical | the proxy can't read Besu for its check / doesn't answer |
 | `HostDown` / `HostDiskFull` / `HostMemoryHigh` | warning | node-exporter down; a disk > 80 %; memory > 90 % |
+| `HostClockNotSynced` | warning | a host's clock not synchronized by chrony, or more than 100 ms off, for 10 min (QBFT rejects blocks with bad timestamps) |
 | `BackupFailed` | warning | the last run of a backup script failed |
 | `ChainSnapshotTooOld` / `ChainSnapshotMissing` | warning | no chain snapshot in 2 days / never |
 | `MpcShareBackupTooOld` / `MpcShareBackupMissing` | warning | an MPC node's share backup older than 2 hours / fewer than 3 nodes backed up |

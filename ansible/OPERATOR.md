@@ -76,6 +76,7 @@ Edit `group_vars/all/settings.yml`:
 | `snapshot_copy_to` | off-site target for the daily chain snapshot, e.g. `backup@offsite:/besu-chain` (optional) |
 | `key_backup_gpg_public_key` | path on the operator to **your GPG public key**, e.g. `/opt/000/backup-pub.asc`: create the key pair as in [`GPG-KEY.md`](GPG-KEY.md). Ansible backs up the 6 Besu node keys encrypted with it. Keep the private key offline. Empty: no key backups |
 | `mpc_backup_cron` | `true` to let Ansible set up the hourly MPC share backups on the 3 MPC hosts (default `false`: each team does it) |
+| `ntp_servers` | your time servers, e.g. `[ntp1.internal.example, 10.0.0.1]`. Empty: the distribution's public servers (needs internet). Hosts without internet access **must** have internal servers here: QBFT rejects blocks with wrong timestamps. The `HostClockNotSynced` alert and the Clock columns of the Hosts dashboard watch it |
 | `vrrp_interface` | leave empty: it's detected automatically |
 
 To create the archives (or keep a copy of every image the deployment uses), on the operator:

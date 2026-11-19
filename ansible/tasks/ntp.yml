@@ -1,0 +1,69 @@
+# Time servers for chrony (ntp_servers). Non-empty: our servers go into their own file, included
+# from chrony's main configuration, and the distribution's default pool/server lines there are
+# commented out ("# disabled by Ansible (ntp_servers): ..."). Empty: our file and include are
+# removed and the defaults restored. The configuration is checked (chronyd -p) before chrony
+# restarts, so a bad entry fails here instead of stopping chrony.
+- name: chrony files
+  ansible.builtin.set_fact:
+    chrony_conf: "{{ '/etc/chrony.conf' if ansible_facts.os_family == 'RedHat' else '/etc/chrony/chrony.conf' }}"
+    chrony_ours: "{{ '/etc/chrony-ntp-servers.conf' if ansible_facts.os_family == 'RedHat' else '/etc/chrony/ntp-servers.conf' }}"
+    chrony_service: "{{ 'chronyd' if ansible_facts.os_family == 'RedHat' else 'chrony' }}"
+
+- name: Our time servers (ntp_servers)
+  ansible.builtin.copy:
+    dest: "{{ chrony_ours }}"
+    content: |
+      # Managed by Ansible (ntp_servers in group_vars/all/settings.yml): edits are overwritten.
+      {% for s in ntp_servers %}
+      server {{ s }} iburst
+      {% endfor %}
+    mode: "0644"
+  register: ntp_file
+  when: ntp_servers | length > 0
+
+- name: Include them from chrony's configuration
+  ansible.builtin.lineinfile:
+    path: "{{ chrony_conf }}"
+    line: "include {{ chrony_ours }}"
+    state: "{{ 'present' if ntp_servers | length > 0 else 'absent' }}"
+  register: ntp_include
+
+- name: Disable the default time servers (ntp_servers is set)
+  ansible.builtin.replace:
+    path: "{{ chrony_conf }}"
+    regexp: '^((?:pool|server)\s.*)$'
+    replace: '# disabled by Ansible (ntp_servers): \1'
+  register: ntp_defaults
+  when: ntp_servers | length > 0
+
+- name: Restore the default time servers (ntp_servers is empty)
+  ansible.builtin.replace:
+    path: "{{ chrony_conf }}"
+    regexp: '^# disabled by Ansible \(ntp_servers\): '
+    replace: ''
+  register: ntp_restore
+  when: ntp_servers | length == 0
+
+- name: Remove our time server file (ntp_servers is empty)
+  ansible.builtin.file:
+    path: "{{ chrony_ours }}"
+    state: absent
+  register: ntp_file_removed
+  when: ntp_servers | length == 0
+
+- name: Check chrony's configuration
+  ansible.builtin.command: chronyd -p -f {{ chrony_conf }}
+  changed_when: false
+  register: chrony_check
+  failed_when: chrony_check.rc != 0
+  when: ntp_changed | bool
+  vars:
+    ntp_changed: >-
+      {{ ntp_file.changed | default(false) or ntp_include.changed or ntp_defaults.changed | default(false)
+         or ntp_restore.changed | default(false) or ntp_file_removed.changed | default(false) }}
+
+- name: Restart chrony after a change of its servers
+  ansible.builtin.systemd_service:
+    name: "{{ chrony_service }}"
+    state: restarted
+  when: chrony_check is not skipped

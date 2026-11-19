@@ -13,6 +13,11 @@ vip_rpc: 192.168.68.150     # HAProxy: Besu RPC :8545 and MPC signer :9100
 vip_proxy: 192.168.68.151   # the active proxy :30000
 vip_prefix: 24
 
+# Time servers for chrony on every host, e.g. [ntp1.internal.example, 10.0.0.1]. Empty: the
+# distribution's default (public pool.ntp.org servers: needs internet access). QBFT rejects blocks
+# whose timestamps are off, so hosts without internet need internal servers here.
+ntp_servers: []
+
 # VRRP network interface on the HA pair: empty = the interface holding the host's IP
 vrrp_interface: ""
 
