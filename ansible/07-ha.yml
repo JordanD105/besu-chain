@@ -118,11 +118,55 @@
       changed_when: false
       when: inventory_hostname == coordinators[0].host and keepalived_started.changed
 
-    - name: Proxy started by keepalived on the VIP holder
+# keepalived starts the proxy only at the moment a host TAKES the VIP .151. If that start failed
+# (e.g. SELinux blocked the script, or the image was missing then), nothing retries it. On every
+# run: exactly one host holds .151, the proxy runs there and answers, and no proxy runs elsewhere.
+- name: Proxy on the host holding the proxy VIP
+  hosts: app_hosts
+  become: true
+  tasks:
+    - name: Addresses on this host
+      ansible.builtin.command: ip -o addr
+      register: addrs
+      changed_when: false
+
+    - name: Does this host hold {{ vip_proxy }}?
+      ansible.builtin.set_fact:
+        holds_proxy_vip: "{{ (' ' ~ vip_proxy ~ '/') in addrs.stdout }}"
+
+    - name: Exactly one host holds {{ vip_proxy }}
+      ansible.builtin.assert:
+        that: holders | length == 1
+        fail_msg: >-
+          {{ vip_proxy }} is held by {{ holders | length }} hosts ({{ holders | join(', ') or 'none' }}).
+          None: keepalived is not MASTER anywhere (journalctl -u keepalived on .135 and .136).
+          Two: the hosts don't see each other's VRRP messages (firewall, auth_pass).
+      vars:
+        holders: "{{ ansible_play_hosts | zip(ansible_play_hosts | map('extract', hostvars, 'holds_proxy_vip')) | selectattr('1') | map(attribute='0') | list }}"
+      run_once: true  # noqa: run-once[task] (linear strategy)
+
+    - name: Proxy running here?
+      ansible.builtin.command: docker compose ps -q --status running proxy
+      args:
+        chdir: "{{ repo_dir }}/proxy"
+      register: proxy_here
+      changed_when: false
+
+    - name: Start the proxy on the VIP holder (as keepalived would)
+      ansible.builtin.command: /etc/keepalived/proxy-start.sh
+      when: holds_proxy_vip | bool and proxy_here.stdout | length == 0
+      changed_when: true
+
+    - name: Stop a proxy on the host without the VIP (only one proxy may run)
+      ansible.builtin.command: /etc/keepalived/proxy-stop.sh
+      when: not holds_proxy_vip | bool and proxy_here.stdout | length > 0
+      changed_when: true
+
+    - name: Proxy answering on the VIP holder
       ansible.builtin.uri:
-        url: "http://{{ vip_proxy }}:30000/status/senders"
-      register: proxy_vip
-      until: proxy_vip.status == 200
+        url: "http://127.0.0.1:30000/status/senders"
+      register: proxy_ok
+      until: proxy_ok.status == 200
       retries: 40
       delay: 3
-      when: inventory_hostname == coordinators[0].host and keepalived_started.changed
+      when: holds_proxy_vip | bool
