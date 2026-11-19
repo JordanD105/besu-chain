@@ -6,6 +6,8 @@
 # Exit code: 0 if every target answers 200, 1 otherwise.
 set -uo pipefail
 cd "$(dirname "$0")"
+# the target files Prometheus uses: PROMETHEUS_TARGETS_DIR from .env (Ansible: targets.generated)
+T=$(sed -n 's/^PROMETHEUS_TARGETS_DIR=//p' .env 2>/dev/null | tail -n1); T="${T:-./prometheus/targets}"
 token=""
 [ -s secrets/mpc-metrics-token ] && token=$(cat secrets/mpc-metrics-token)
 fail=0
@@ -44,10 +46,10 @@ check() { # kind file
     END        { if (t != "") print t "|" n }' "$file")
 }
 
-echo "Besu nodes (targets/besu.yml)";        check besu prometheus/targets/besu.yml
-echo "MPC coordinators (targets/mpc.yml)";   check mpc  prometheus/targets/mpc.yml
-echo "Proxy (targets/proxy.yml)";            check proxy prometheus/targets/proxy.yml
-echo "Hosts / node-exporter (targets/hosts.yml)"; check host prometheus/targets/hosts.yml
+echo "Besu nodes (targets/besu.yml)";        check besu "$T/besu.yml"
+echo "MPC coordinators (targets/mpc.yml)";   check mpc  "$T/mpc.yml"
+echo "Proxy (targets/proxy.yml)";            check proxy "$T/proxy.yml"
+echo "Hosts / node-exporter (targets/hosts.yml)"; check host "$T/hosts.yml"
 
 # What Prometheus itself sees (needs the stack running on this host)
 if curl -s -m 3 http://127.0.0.1:9090/-/ready >/dev/null 2>&1; then

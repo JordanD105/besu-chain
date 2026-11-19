@@ -25,6 +25,19 @@
       changed_when: not mon_env.stat.exists
       no_log: true
 
+    - name: Prometheus targets directory (generated from the IP plan)
+      ansible.builtin.file:
+        path: /opt/monitoring/prometheus/targets.generated
+        state: directory
+        mode: "0755"
+
+    - name: Prometheus targets (generated from the IP plan)
+      ansible.builtin.template:
+        src: templates/targets/{{ item }}.yml.j2
+        dest: /opt/monitoring/prometheus/targets.generated/{{ item }}.yml
+        mode: "0644"
+      loop: [besu, mpc, proxy, hosts]
+
     - name: BIND_IP and image versions
       ansible.builtin.lineinfile:
         path: /opt/monitoring/.env
@@ -34,6 +47,7 @@
         - { key: BIND_IP, value: "{{ ansible_host }}" }
         - { key: PROMETHEUS_IMAGE, value: "{{ prometheus_image }}" }
         - { key: GRAFANA_IMAGE, value: "{{ grafana_image }}" }
+        - { key: PROMETHEUS_TARGETS_DIR, value: ./prometheus/targets.generated }
       loop_control:
         label: "{{ item.key }}"
 

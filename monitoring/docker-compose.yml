@@ -16,7 +16,9 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro
-      - ./prometheus/targets:/etc/prometheus/targets:ro
+      # PROMETHEUS_TARGETS_DIR: the Ansible deployment generates its targets into
+      # ./prometheus/targets.generated (from the IP plan); by hand, edit ./prometheus/targets
+      - ${PROMETHEUS_TARGETS_DIR:-./prometheus/targets}:/etc/prometheus/targets:ro
       - ./secrets:/etc/prometheus/secrets:ro
       - prometheus-data:/prometheus
     ports:

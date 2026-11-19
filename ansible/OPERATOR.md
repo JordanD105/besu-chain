@@ -69,6 +69,7 @@ Edit `group_vars/all/settings.yml`:
 
 | Setting | What to put |
 |---|---|
+| `vip_rpc`, `vip_proxy`, `vip_prefix` | the two floating IPs and their mask: **unused** addresses in the same subnet as the two HA hosts. With the host IPs in `inventory.yml` (`ansible_host`), they are the whole IP plan: Ansible generates HAProxy, keepalived, firewall and Prometheus files from them ([`README.md`](README.md), "The IP plan") |
 | `operator_ip` | **this machine's IP as the hosts see it**. The firewall will only let this IP in, so a wrong value locks you out |
 | `client_ips` | the IPs of the applications calling the proxy (and chainlens users), e.g. `[10.1.2.3, 10.1.2.4]` |
 | `image_archives_dir` | the folder holding the image archives (`besu-26.11.1-docker.tar`, `grafana-13.2-docker.tar`, `node-exporter-v1.12.1-docker.tar`, `prometheus-3.16.0-docker.tar`, `redis-8.10.3-docker.tar`), e.g. `/opt/images`. Leave it empty to download the images from Docker Hub instead |

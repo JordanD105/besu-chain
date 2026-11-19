@@ -13,6 +13,11 @@ own guide has the details:
 
 ## 1. Hosts
 
+The addresses in this document are the reference plan. With the Ansible deployment you can use
+any others: set them in `ansible/inventory.yml` (hosts) and `ansible/group_vars/all/settings.yml`
+(the two VIPs and their mask), and Ansible generates every file that contains addresses
+([`../ansible/README.md`](../ansible/README.md), "The IP plan").
+
 | Host | Runs | Role |
 |---|---|---|
 | **192.168.68.135** | val1, **rpc1**, **coord1**, **proxy1** (active), mpc1, HAProxy + keepalived | primary application host |

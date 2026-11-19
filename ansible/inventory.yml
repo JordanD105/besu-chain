@@ -1,16 +1,18 @@
-# The 5 hosts of the production layout (docs/production-layout.md). The IPs are fixed by the
-# layout (HAProxy, keepalived, firewall and Prometheus files use them): don't change them here
-# without changing those files.
+# The 5 hosts of the production layout (docs/production-layout.md).
+# THE IP PLAN: set each host's ansible_host here, and the two floating IPs (VIPs) and their mask
+# in group_vars/all/settings.yml. Ansible generates every file that contains addresses (HAProxy,
+# keepalived, firewall, Prometheus targets, .env files, team instructions) from them.
+# Host names (h135 ...) are only labels: they don't have to match the IPs.
 # ansible_user: an account with SSH key login and sudo on every host.
 servers:
   vars:
     ansible_user: root
   hosts:
-    h135: { ansible_host: 192.168.68.135, host_no: 135 }   # val1, rpc1, coord1, proxy1, mpc1
-    h136: { ansible_host: 192.168.68.136, host_no: 136 }   # val2, rpc2, coord2, proxy2
-    h137: { ansible_host: 192.168.68.137, host_no: 137 }   # val3, mpc2
-    h138: { ansible_host: 192.168.68.138, host_no: 138 }   # val4, mpc3
-    h139: { ansible_host: 192.168.68.139, host_no: 139 }   # monitoring, chainlens
+    h135: { ansible_host: 192.168.68.135 }   # val1, rpc1, coord1, proxy1, mpc1 (HA pair, primary)
+    h136: { ansible_host: 192.168.68.136 }   # val2, rpc2, coord2, proxy2       (HA pair, standby)
+    h137: { ansible_host: 192.168.68.137 }   # val3, mpc2
+    h138: { ansible_host: 192.168.68.138 }   # val4, mpc3
+    h139: { ansible_host: 192.168.68.139 }   # monitoring, chainlens
   children:
     besu_hosts:   { hosts: { h135: {}, h136: {}, h137: {}, h138: {} } }
     app_hosts:    { hosts: { h135: {}, h136: {} } }        # coordinators, proxies, HAProxy, keepalived

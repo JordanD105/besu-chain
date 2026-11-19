@@ -27,11 +27,10 @@
     - name: SELinux booleans (detected with getenforce)
       ansible.builtin.include_tasks: tasks/selinux-ha.yml
 
-    - name: haproxy.cfg
-      ansible.builtin.copy:
-        src: "{{ repo_dir }}/ha/haproxy.cfg"
+    - name: haproxy.cfg (generated from the IP plan)
+      ansible.builtin.template:
+        src: templates/haproxy.cfg.j2
         dest: /etc/haproxy/haproxy.cfg
-        remote_src: true
         mode: "0644"
         validate: haproxy -c -f %s
       register: haproxy_cfg
@@ -54,11 +53,10 @@
         state: restarted
       when: selinux_active | bool and sebool_set.changed | default(false)  # noqa: no-handler
 
-    - name: keepalived scripts
-      ansible.builtin.copy:
-        src: "{{ repo_dir }}/ha/{{ item }}"
+    - name: keepalived scripts (generated from the IP plan)
+      ansible.builtin.template:
+        src: templates/{{ item }}.j2
         dest: /etc/keepalived/{{ item }}
-        remote_src: true
         mode: "0700"
         owner: root
         group: root
@@ -85,14 +83,10 @@
         that: vrrp_if | default('') | length > 0
         fail_msg: "no interface holds {{ ansible_host }}: set vrrp_interface in settings.yml"
 
-    - name: Keepalived configuration from the file of host {{ host_no }}
-      ansible.builtin.copy:
+    - name: keepalived.conf (generated from the IP plan)
+      ansible.builtin.template:
+        src: templates/keepalived.conf.j2
         dest: /etc/keepalived/keepalived.conf
-        content: >-
-          {{ lookup('ansible.builtin.file', repo_root ~ '/ha/keepalived-' ~ host_no ~ '.conf', rstrip=false)
-             | replace('interface INTERFACE', 'interface ' ~ vrrp_if)
-             | replace('auth_pass CHANGE01', 'auth_pass ' ~ vrrp_pass_rpc)
-             | replace('auth_pass CHANGE02', 'auth_pass ' ~ vrrp_pass_proxy) }}
         mode: "0600"
       register: keepalived_conf
 

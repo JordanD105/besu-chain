@@ -73,10 +73,19 @@
       changed_when: false
 
     - name: Firewall (ha/firewall-layout.sh)
-      ansible.builtin.command: "{{ repo_dir }}/ha/firewall-layout.sh {{ host_no }}"
+      ansible.builtin.command: "{{ repo_dir }}/ha/firewall-layout.sh"
       environment:
         ADMIN: "{{ operator_ip }}"
         CLIENTS: "{{ client_ips | join(' ') }}"
+        ROLE: >-
+          {{ 'app' if inventory_hostname in groups['app_hosts'] else
+             ('monitoring' if inventory_hostname in groups['monitoring_hosts'] else 'node') }}
+        PEER: "{{ ip_of[ha_peer] if inventory_hostname in groups['app_hosts'] else '' }}"
+        HAS_MPC: "{{ '1' if inventory_hostname in groups['mpc_hosts'] else '0' }}"
+        BESU_HOSTS: "{{ groups['besu_hosts'] | map('extract', ip_of) | join(' ') }}"
+        MPC_HOSTS: "{{ groups['mpc_hosts'] | map('extract', ip_of) | join(' ') }}"
+        COORDS: "{{ groups['app_hosts'] | map('extract', ip_of) | join(' ') }}"
+        MON: "{{ groups['monitoring_hosts'] | map('extract', ip_of) | join(' ') }}"
       register: fw
       changed_when: false
 

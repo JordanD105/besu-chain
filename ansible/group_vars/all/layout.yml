@@ -1,7 +1,6 @@
 # ---- The production layout (docs/production-layout.md). Fixed: other repository files use it. ----
 
-vip_rpc: 192.168.68.150     # HAProxy: Besu RPC :8545 (rpc1, rpc2 backup), MPC :9100 (coord1, coord2 backup)
-vip_proxy: 192.168.68.151   # the active proxy :30000
+# vip_rpc / vip_proxy / vip_prefix: in settings.yml. Host IPs: inventory.yml.
 
 besu_nodes:
   - { name: val1, host: h135, role: validator, p2p_port: 30303, metrics_port: 9545, rpc_bind: local, rpc_port: 8645, ws_port: 8646, host_network: true }
@@ -51,3 +50,8 @@ built_image_archives:
   mpc: "mpc-signer-{{ mpc_image.split(':') | last }}-docker.tar"
   proxy: proxy-docker.tar
   chainlens: chainlens-docker.tar
+
+# Derived from the IP plan (inventory.yml + settings.yml): used by the generated configs
+ha_primary: "{{ coordinators[0].host }}"     # holds the VIPs normally (keepalived priority 150)
+ha_peer: "{{ (groups['app_hosts'] | reject('equalto', inventory_hostname) | list + [''])[0] }}"
+rpc_nodes: "{{ besu_nodes | selectattr('role', 'equalto', 'rpc') | list }}"

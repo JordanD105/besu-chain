@@ -132,7 +132,10 @@ published there).
 
 ### 4. List your targets
 
-Edit the four files in `prometheus/targets/`. They are filled in for the production layout:
+With the Ansible deployment this is automatic: it generates them from the IP plan into
+`prometheus/targets.generated/` and sets `PROMETHEUS_TARGETS_DIR` in `.env` (`check-targets.sh`
+reads the same setting). By hand: edit the four files in `prometheus/targets/`. They are filled in
+for the production layout:
 val1 + rpc1 on .135, val2 + rpc2 on .136, val3 on .137, val4 on .138 (validators on metrics port
 9545, RPC nodes on 9546), coord1/coord2 on .135/.136, the proxy on its floating IP `.151`, and
 node-exporter on all five hosts:

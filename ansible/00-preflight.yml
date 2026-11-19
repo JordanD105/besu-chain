@@ -13,6 +13,19 @@
           Set operator_ip (this machine's IP, as the hosts see it) and client_ips in
           group_vars/all/settings.yml. The firewall only lets operator_ip in.
 
+    - name: The IP plan (inventory.yml, settings.yml) is consistent
+      ansible.builtin.assert:
+        that:
+          - (all_ips | unique | length) == (all_ips | length)
+          - vip_prefix | int >= 8 and vip_prefix | int <= 32
+          - groups['app_hosts'] | length == 2
+          - all_ips | select('match', '^[0-9]+([.][0-9]+){3}$') | list | length == all_ips | length
+        fail_msg: >-
+          Every host IP and both VIPs must be distinct IPv4 addresses ({{ all_ips }}), vip_prefix a
+          mask length (8-32), and app_hosts exactly the two HA hosts.
+      vars:
+        all_ips: "{{ groups['servers'] | map('extract', hostvars, 'ansible_host') | list + [vip_rpc, vip_proxy] }}"
+
     - name: Operator tools (docker for the image and genesis, git, curl)
       ansible.builtin.command: "{{ item }}"
       loop: ["docker info --format json", "git --version", "curl --version"]
@@ -50,12 +63,19 @@
   hosts: servers
   gather_facts: true
   tasks:
-    - name: Host matches the layout
+    - name: Host matches the IP plan (inventory.yml)
       ansible.builtin.assert:
         that:
-          - ansible_host == '192.168.68.' ~ host_no
           - ansible_host in ansible_facts.all_ipv4_addresses
           - ansible_facts.os_family in ['RedHat', 'Debian']
         fail_msg: >-
-          {{ inventory_hostname }}: expected IP 192.168.68.{{ host_no }} on this host, and a RHEL-family
-          or Debian/Ubuntu system (found {{ ansible_facts.all_ipv4_addresses }}, {{ ansible_facts.os_family }}).
+          {{ inventory_hostname }}: expected IP {{ ansible_host }} (inventory.yml) on this host, and a
+          RHEL-family or Debian/Ubuntu system (found {{ ansible_facts.all_ipv4_addresses }},
+          {{ ansible_facts.os_family }}).
+
+    - name: VIPs not in use by any host
+      ansible.builtin.assert:
+        that:
+          - vip_rpc not in ansible_facts.all_ipv4_addresses or inventory_hostname in groups['app_hosts']
+          - vip_proxy not in ansible_facts.all_ipv4_addresses or inventory_hostname in groups['app_hosts']
+        fail_msg: "{{ inventory_hostname }} uses a VIP address ({{ vip_rpc }} / {{ vip_proxy }}) as its own IP"

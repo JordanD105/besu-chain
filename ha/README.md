@@ -1,5 +1,11 @@
 # ha: HAProxy + keepalived for the production layout
 
+> **With the Ansible deployment, the files here are not used as they are:** Ansible generates
+> `haproxy.cfg`, `keepalived.conf` and the three scripts from the IP plan (`ansible/inventory.yml`
+> and `ansible/group_vars/all/settings.yml`; see [`../ansible/README.md`](../ansible/README.md),
+> "The IP plan"), and runs `firewall-layout.sh` with the plan's addresses. The files below, with
+> the documented addresses 192.168.68.135–.139, are for a setup by hand.
+
 Two floating IPs on **192.168.68.135** (normally) and **192.168.68.136** (after a failover), so that
 losing .135 doesn't stop payments. Layout and settings: [`../docs/production-layout.md`](../docs/production-layout.md).
 

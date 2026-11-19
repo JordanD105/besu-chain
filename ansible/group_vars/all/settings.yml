@@ -6,7 +6,14 @@ operator_ip: ""
 # applications calling the proxy (VIP .151:30000) and users of chainlens (.139:30100)
 client_ips: []
 
-# VRRP network interface on .135/.136: empty = the interface holding the host's IP
+# Floating IPs (keepalived) on the HA pair (app_hosts). The host IPs are in inventory.yml.
+# Both VIPs must be UNUSED addresses in the same subnet as the two app hosts (keepalived moves
+# them with ARP), and vip_prefix must be that subnet's mask length.
+vip_rpc: 192.168.68.150     # HAProxy: Besu RPC :8545 and MPC signer :9100
+vip_proxy: 192.168.68.151   # the active proxy :30000
+vip_prefix: 24
+
+# VRRP network interface on the HA pair: empty = the interface holding the host's IP
 vrrp_interface: ""
 
 # Chain (genesis): only used when the network files are created, never changed afterwards

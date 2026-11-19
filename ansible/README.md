@@ -37,6 +37,37 @@ images unless you give Ansible those images as archives (`image_archives_dir`, b
 
 ## 2. Settings
 
+### The IP plan
+
+All addresses come from two places:
+
+| Where | What |
+|---|---|
+| `inventory.yml` | each host's IP (`ansible_host`). The host names (`h135` …) are only labels |
+| `group_vars/all/settings.yml` | `vip_rpc` (HAProxy: Besu RPC `:8545`, MPC signer `:9100`), `vip_proxy` (the proxy `:30000`), `vip_prefix` (their mask length) |
+
+Ansible generates every file that contains addresses from them: HAProxy (`haproxy.cfg`),
+keepalived (`keepalived.conf` and its three scripts), the firewall rules on every host, the
+Prometheus targets (`/opt/monitoring/prometheus/targets.generated/`), the Besu, coordinator,
+proxy and chainlens `.env` files and the MPC team instructions (`MPC_BIND_IP`). The fixed files
+in `ha/` and `monitoring/prometheus/targets/` are only for a setup by hand with the documented
+addresses.
+
+Rules for a new plan:
+- the two HA hosts (`app_hosts`) and both VIPs in the **same subnet** (keepalived moves the VIPs
+  with ARP); the VIPs **unused** addresses; `vip_prefix` the subnet's mask length;
+- every host reachable from the others on the ports of
+  [`../docs/production-layout.md`](../docs/production-layout.md) section 3;
+- `operator_ip` and `client_ips` (below) in the new network.
+
+Preflight checks that every host really holds its inventory IP, that all addresses are distinct
+and that no host uses a VIP. Change the plan **before** the first deployment: the Besu node
+addresses (enodes) and the MPC node URLs are written into the genesis files and `cluster.json`
+then; moving a deployed node to a new IP follows
+[`../docs/disaster-recovery.md`](../docs/disaster-recovery.md) 6.1 "New IP".
+
+### Other settings
+
 Edit `group_vars/all/settings.yml`. Required:
 
 | Setting | Value |
@@ -198,6 +229,10 @@ End to end on 5 lab hosts (Ubuntu 24.04 containers with systemd, sshd and Docker
   about 3 minutes of QBFT round changes, VIPs back on .135 with one proxy;
 - upgrade of the running deployment to the image versions above from `docker save` archives,
   with transfers still working afterwards and the next run at `changed=0`.
+
+- a second deployment from scratch on a different subnet (hosts 10.77.0.11–.15, VIPs
+  10.77.0.50/.51) with only `inventory.yml` and the VIP settings changed: every generated file
+  carried the new addresses, all Prometheus targets up, proxy failover, rerun `changed=0`.
 
 Not exercised in the lab: the `dnf` (RHEL family) package path, SELinux, and clock
 synchronisation (the lab has no NTP access).
