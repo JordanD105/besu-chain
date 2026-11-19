@@ -51,7 +51,7 @@ write-once** (ransomware encrypts every backup it can reach).
 |---|---|---|
 | Chain snapshot | on **val3 (.137)**: `./snapshot-chain.sh /backup/chain` with `COPY_TO=user@offsite:/besu-chain` | daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=… ./snapshot-chain.sh /backup/chain` |
 | MPC shares | `./backup.sh /secure/backup` on mpc1 (.135), mpc2 (.137), mpc3 (.138), each by its team | hourly: `0 * * * * /opt/mpc-node/backup.sh /secure/backup` |
-| Node keys | `./backup-key.sh /secure/dir` on all 6 Besu nodes (val1–4, rpc1–2), then `gpg --symmetric` and delete the plain copy | once per key |
+| Node keys | Ansible phase 10 (`key_backup_gpg_public_key`): encrypted to your GPG public key in `ansible/state/key-backups/<node>.key.gpg`. By hand: `./backup-key.sh /secure/dir` on all 6 Besu nodes (val1–4, rpc1–2), then encrypt and delete the plain copy | once per key |
 | Network files | `cp -r network /secure/network-$(date +%F)` (operator) | after every change |
 
 **Which node takes the chain snapshot:** it is **stopped** for a few minutes while its data is
@@ -119,7 +119,10 @@ back.
    Compose, firewall rules (`firewall-example.sh`).
 2. Copy the node package, its `.env` (from the vault: same `NODE_NAME`, ports, `BESU_ROLE`) and the
    4 network files into `network/`.
-3. Restore its key (decrypt the backup first) and start:
+3. Restore its key (decrypt the backup first) and start. A backup made by Ansible
+   (`ansible/state/key-backups/<node>.key.gpg`) is decrypted with your offline GPG private key,
+   e.g. `gpg --decrypt val3.key.gpg > val3.key`; copy the result to the host over SSH, and shred
+   it everywhere once restored (`shred -u val3.key`):
    ```bash
    ./restore-key.sh /secure/validator3.key        # prints the enode; must say "OK: … in static-nodes.json"
    ./start.sh                                     # syncs from the other nodes

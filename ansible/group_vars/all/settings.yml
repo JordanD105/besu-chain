@@ -64,6 +64,21 @@ snapshot_dir: /backup/chain
 snapshot_copy_to: ""      # off-site rsync target, e.g. backup@offsite:/besu-chain (needs root's SSH key)
 snapshot_cron_hour: 3
 snapshot_cron_minute: 17
+snapshot_first_run: true  # take a snapshot now when none exists yet (val3 stops for a few minutes)
+
+# Node key backups (val1-val4, rpc1, rpc2), once per key: encrypted ON THE HOST with this GPG
+# PUBLIC key (armored file on the operator, e.g. made with: gpg --armor --export you@example),
+# the plain copy deleted at once, the encrypted file fetched to state/key-backups/. Keep the
+# matching PRIVATE key offline: it is the only way to read these backups.
+# Empty: skipped (the ValidatorKeyBackupMissing alert stays until the keys are backed up).
+key_backup_gpg_public_key: ""
+
+# MPC share backups (hourly backup.sh on the 3 MPC nodes). The nodes belong to their teams
+# (option B), so this is OFF by default: each team sets up its own. true: Ansible installs the
+# cron and runs it once. The archives are sealed (useless without the team's passphrase) and stay
+# on the node's own host in mpc_backup_dir: each team still copies them off the host.
+mpc_backup_cron: false
+mpc_backup_dir: /secure/mpc-backup
 
 # Test account + transfer through the VIPs after the deployment (once; costs 1 ETH of SENDER01)
 smoke_test: true

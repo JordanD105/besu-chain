@@ -1,0 +1,53 @@
+# Back up one Besu node's key (`node`): backup-key.sh into a private directory, GPG-encrypt it with
+# the operator's public key, shred the plain copy, fetch the encrypted file. Once per key.
+- name: Key backup already on the operator? ({{ node.name }})
+  ansible.builtin.stat:
+    path: "{{ state_dir }}/key-backups/{{ node.name }}.key.gpg"
+  delegate_to: localhost
+  become: false
+  register: have_key_backup
+
+- name: Back up, encrypt and fetch ({{ node.name }})
+  when: not have_key_backup.stat.exists
+  block:
+    - name: Private work directory ({{ node.name }})
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: -keybackup
+      register: kb_dir
+
+    - name: Operator's GPG public key ({{ node.name }})
+      ansible.builtin.copy:
+        src: "{{ key_backup_gpg_public_key }}"
+        dest: "{{ kb_dir.path }}/recipient.asc"
+        mode: "0600"
+
+    - name: Copy the key out of the data volume ({{ node.name }})
+      ansible.builtin.command: ./backup-key.sh {{ kb_dir.path }}/plain
+      args:
+        chdir: /opt/besu-{{ node.name }}
+      changed_when: true
+
+    - name: Encrypt it, then shred the plain copy ({{ node.name }})
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        mkdir -m 700 {{ kb_dir.path }}/gnupg &&
+        GNUPGHOME={{ kb_dir.path }}/gnupg gpg --batch --yes --quiet --trust-model always
+        --recipient-file {{ kb_dir.path }}/recipient.asc
+        --output {{ kb_dir.path }}/{{ node.name }}.key.gpg --encrypt {{ kb_dir.path }}/plain/{{ node.name }}.key;
+        rc=$?; shred -u {{ kb_dir.path }}/plain/{{ node.name }}.key; exit $rc
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Fetch the encrypted key ({{ node.name }})
+      ansible.builtin.fetch:
+        src: "{{ kb_dir.path }}/{{ node.name }}.key.gpg"
+        dest: "{{ state_dir }}/key-backups/{{ node.name }}.key.gpg"
+        flat: true
+  always:
+    - name: Remove the work directory ({{ node.name }})
+      ansible.builtin.file:
+        path: "{{ kb_dir.path }}"
+        state: absent
+      when: kb_dir.path is defined

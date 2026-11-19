@@ -110,10 +110,29 @@ runs `docker compose up -d`. Run `ansible-playbook site.yml` again.
 The third run goes to the end (about 5–10 minutes, plus the MPC image build the first time) and
 prints the URLs and the manual steps:
 
-- **Node key backups:** in each `/opt/besu-<node>`: `./backup-key.sh /secure/dir`, then
-  `gpg --symmetric` (needs a person for the passphrase).
-- **MPC backups:** each team's hourly `backup.sh` cron (step 5 of its instructions).
-- **`state/` to your vault** (below).
+- **`state/` to your vault** (below), including `state/key-backups/`.
+- **MPC backups**, unless `mpc_backup_cron: true`: each team's hourly `backup.sh` cron (step 5
+  of its instructions).
+
+Phase 10 sets up the backups (each script reports to monitoring, so the backup alerts clear on
+its first run):
+
+| Backup | Done by Ansible | Setting |
+|---|---|---|
+| Chain snapshot (val3, .137) | daily cron, and a first snapshot now if none exists. If the script refuses (another node is down: stopping val3 could halt the chain), the run warns and continues; the cron retries | `snapshot_first_run`, `snapshot_dir`, `snapshot_copy_to` |
+| Node keys (val1–4, rpc1–2) | once per key: copied out of the data volume into a private directory on the host, encrypted there with **your GPG public key**, the plain copy shredded, the encrypted file fetched to `state/key-backups/<node>.key.gpg`. Only your offline private key can read them | `key_backup_gpg_public_key` (empty: skipped) |
+| MPC shares (3 nodes) | opt-in (the nodes belong to their teams): hourly cron and a first backup. The archives are sealed (useless without the team's passphrase) and stay on the node's host: each team copies them off it | `mpc_backup_cron` (default `false`), `mpc_backup_dir` |
+
+Make the GPG key pair once, on a machine that stays offline or in a vault, and give Ansible only
+the public half:
+
+```bash
+gpg --quick-gen-key 'besu-chain key backups' rsa4096 encr never
+```
+
+```bash
+gpg --armor --export 'besu-chain key backups' > backup-pub.asc
+```
 - **Failover tests:** [`../docs/production-layout.md`](../docs/production-layout.md) section 6, then go live.
 
 ## 4. The operator's state (`state/`, never committed)
@@ -125,6 +144,7 @@ prints the URLs and the manual steps:
 | `besu/*.json`, `network/` | Besu nodes' public keys, genesis and network files | public, integrity matters |
 | `sender01` | the hot MPC key's address | public |
 | `handoff/` | team instructions | public |
+| `key-backups/*.key.gpg` | Besu node keys, encrypted to your GPG public key | readable only with your offline private key |
 | `images/`, `build/`, `repo.tar.gz` | build artefacts | can be deleted |
 
 `state/` is mode 700. Keep a copy in your vault after every change: without it a rerun can't

@@ -1,4 +1,6 @@
-# Daily chain snapshot on val3 (.137), and what stays manual.
+# Backups: daily chain snapshot (val3), node key backups (GPG-encrypted, on the operator), and,
+# opt-in, the MPC share backups (the nodes belong to their teams). Each backup script reports to
+# node-exporter, so the backup alerts clear on its first successful run.
 - name: Daily chain snapshot
   hosts: besu_hosts
   become: true
@@ -22,18 +24,127 @@
           cd /opt/besu-{{ snapshot_node }} && {{ ('COPY_TO=' ~ snapshot_copy_to) if snapshot_copy_to else '' }}
           ./snapshot-chain.sh {{ snapshot_dir }} >> /var/log/besu-snapshot.log 2>&1
 
+    - name: Snapshots so far
+      ansible.builtin.find:
+        paths: "{{ snapshot_dir }}"
+        patterns: "besu-chain-*.tgz"
+      register: snapshots
+
+    - name: First snapshot now (val3 stops while its data is archived; the chain continues)
+      ansible.builtin.command: ./snapshot-chain.sh {{ snapshot_dir }}
+      args:
+        chdir: /opt/besu-{{ snapshot_node }}
+      environment:
+        COPY_TO: "{{ snapshot_copy_to }}"
+      when: snapshot_first_run | bool and snapshots.matched == 0
+      async: 3600
+      poll: 15
+      register: first_snapshot
+      changed_when: first_snapshot.rc | default(1) == 0
+      # a refusal (e.g. another node is down: stopping val3 could halt the chain) must not stop
+      # the deployment; the daily cron tries again
+      failed_when: false
+
+    - name: First snapshot not taken
+      ansible.builtin.debug:
+        msg: "WARNING: first chain snapshot not taken, the daily cron will retry: {{ first_snapshot.stderr | default('') | trim }}"
+      when: first_snapshot.rc is defined and first_snapshot.rc != 0
+
+- name: Node key backups
+  hosts: besu_hosts
+  become: true
+  serial: 1
+  vars:
+    my_nodes: "{{ besu_nodes | selectattr('host', 'equalto', inventory_hostname) | list }}"
+  tasks:
+    - name: Only with a GPG public key
+      ansible.builtin.meta: end_host
+      when: not key_backup_gpg_public_key
+
+    - name: Key backup directory on the operator
+      ansible.builtin.file:
+        path: "{{ state_dir }}/key-backups"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+      run_once: true  # noqa: run-once[task] (linear strategy)
+
+    - name: GnuPG on the host
+      ansible.builtin.include_tasks: tasks/packages.yml
+      vars:
+        packages: "{{ ['gnupg2'] if ansible_facts.os_family == 'RedHat' else ['gnupg'] }}"
+      when: install_packages | bool
+
+    - name: Back up each node key on this host
+      ansible.builtin.include_tasks: tasks/key-backup.yml
+      loop: "{{ my_nodes }}"
+      loop_control:
+        loop_var: node
+        label: "{{ node.name }}"
+
+- name: MPC share backups (opt-in)
+  hosts: mpc_hosts
+  become: true
+  tasks:
+    - name: Only when mpc_backup_cron is true
+      ansible.builtin.meta: end_host
+      when: not mpc_backup_cron | bool
+
+    - name: MPC node set up by its team?
+      ansible.builtin.stat:
+        path: /opt/mpc-node/backup.sh
+      register: mpc_backup_script
+
+    - name: No MPC node in /opt/mpc-node on this host
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: /opt/mpc-node/backup.sh not found: the team runs its node elsewhere; it sets up its own backups"
+      when: not mpc_backup_script.stat.exists
+
+    - name: Backup directory
+      ansible.builtin.file:
+        path: "{{ mpc_backup_dir }}"
+        state: directory
+        mode: "0700"
+      when: mpc_backup_script.stat.exists
+
+    - name: Hourly cron job
+      ansible.builtin.cron:
+        name: mpc share backup
+        minute: "7"
+        job: /opt/mpc-node/backup.sh {{ mpc_backup_dir }} >> /var/log/mpc-backup.log 2>&1
+      when: mpc_backup_script.stat.exists
+
+    - name: Backups so far
+      ansible.builtin.find:
+        paths: "{{ mpc_backup_dir }}"
+        patterns: "mpc-node*.tgz"
+      register: mpc_backups
+      when: mpc_backup_script.stat.exists
+
+    - name: First backup now (safe while the node runs)
+      ansible.builtin.command: /opt/mpc-node/backup.sh {{ mpc_backup_dir }}
+      when: mpc_backup_script.stat.exists and mpc_backups.matched == 0
+      changed_when: true
+
 - name: Done
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Next steps (manual on purpose)
+    - name: Next steps
       ansible.builtin.debug:
-        msg:
+        msg: "{{ lines | select | list }}"
+      vars:
+        lines:
           - "Deployment complete. Applications: http://{{ vip_proxy }}:30000"
           - "Grafana: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:3000 (admin / state/secrets/grafana_admin_password)"
           - "Chainlens: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:30100"
-          - "1. Node key backups: on each host, in /opt/besu-<node>: ./backup-key.sh /secure/dir, then gpg --symmetric"
-          - "2. MPC teams: hourly backup.sh cron on their node (state/handoff/mpcN.md, step 5)"
-          - "3. Off-site: copy {{ state_dir }}/ (tokens, network files, cluster.json, sender01) to your vault"
-          - "4. Failover tests: docs/production-layout.md section 6, then go live"
+          - "{{ ('Node key backups: GPG-encrypted in ' ~ state_dir ~ '/key-backups/ (readable only with your offline private key)')
+               if key_backup_gpg_public_key else
+               'Node key backups: NOT done. Set key_backup_gpg_public_key in settings.yml and rerun 10-backups.yml' }}"
+          - "{{ ('MPC share backups: hourly cron on the MPC nodes into ' ~ mpc_backup_dir ~ ': each team copies them off its host')
+               if mpc_backup_cron | bool else
+               'MPC share backups: each team runs backup.sh hourly (state/handoff/mpcN.md, step 5)' }}"
+          - "Off-site: copy {{ state_dir }}/ (tokens, network files, cluster.json, sender01, key backups) to your vault"
+          - "Failover tests: docs/production-layout.md section 6, then go live"
           - "{{ '' if snapshot_copy_to else 'WARNING: snapshot_copy_to is empty: chain snapshots stay on .137 only' }}"
