@@ -63,8 +63,17 @@ mpc_image: registry.example.com/mpc-signer:1.3.0
 mpc_image_build: true
 mpc_bigint: bigint-rug    # GMP backend (faster, LGPL); "" for the pure-Rust default
 
-# Extra compose files for building the proxy / chainlens images on the operator, e.g. to set a
-# build proxy or a corporate CA:  { proxy: [/path/override.yml], chainlens: [...] }
+# Self-hosted Remix IDE on the monitoring host (:30200, remix/README.md): compile and test
+# contracts in the browser, with a local compiler mirror (no internet needed by its users).
+# The operator fetches the prebuilt Remix site once (git, github.com) and builds the image.
+remix_enabled: true
+remix_repo: https://github.com/remix-project-org/remix-live.git   # branch gh-pages = Remix builds
+remix_commit: b694f46a0adad6ff2a54bcf0b0a5340e94631a56            # Remix 2.6.15
+remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version is always added)
+remix_users: []                   # IPs allowed to open Remix besides operator_ip (developers)
+
+# Extra compose files for building the proxy / chainlens / remix images on the operator, e.g. to
+# set a build proxy or a corporate CA:  { proxy: [/path/override.yml], chainlens: [...] }
 build_compose_overrides: {}
 
 # Install Docker, firewalld, chrony, HAProxy, keepalived (dnf on RHEL family, apt on Debian/Ubuntu).

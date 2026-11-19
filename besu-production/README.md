@@ -210,7 +210,7 @@ signs, no private key exists anywhere), checks the result and writes a record to
 [`../contracts/deployments/`](../contracts/deployments). Chainlens reads those records: the contract
 gets its name, and its page lists its functions and runs the read-only ones.
 
-**1. Compile** for this chain: Solidity with `evmVersion` **`cancun`** or older (Besu here has no
+**1. Compile** for this chain (the self-hosted Remix IDE, [`../remix/`](../remix/README.md), works offline): Solidity with `evmVersion` **`cancun`** or older (Besu here has no
 Prague opcodes), and keep the compiler version and optimizer settings with the source. Export the
 full compiler artifact (ABI **and** bytecode): Hardhat `artifacts/…/X.json`, Foundry `out/X.sol/X.json`,
 Remix `artifacts/X.json` (Remix: *Solidity compiler → Advanced → EVM version cancun*), or the

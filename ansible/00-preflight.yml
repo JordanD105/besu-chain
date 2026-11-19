@@ -50,7 +50,7 @@
       no_log: true
 
     - name: Uncommitted changes are not deployed (the hosts get the committed HEAD)
-      ansible.builtin.command: git -C {{ repo_root }} status --porcelain -- besu-production ha monitoring mpc-signer/deploy proxy chainlens
+      ansible.builtin.command: git -C {{ repo_root }} status --porcelain -- besu-production ha monitoring mpc-signer/deploy proxy chainlens contracts remix
       register: dirty
       changed_when: false
 

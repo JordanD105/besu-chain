@@ -133,6 +133,7 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 | VRRP (protocol 112) | .135 ↔ .136 | each other |
 | 9101 | node-exporter on every host | .139 |
 | 3000, 30100 | Grafana, chainlens on .139 | admin; clients for chainlens |
+| 30200 | Remix IDE on .139 ([`remix/`](../remix/README.md)) | admin, `remix_users` |
 | 22 | every host | admin / bastion |
 
 **Ports published by Docker bypass firewalld.** The proxy, coordinators, MPC nodes, Grafana,

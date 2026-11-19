@@ -142,6 +142,8 @@
           - "Deployment complete. Applications: http://{{ vip_proxy }}:30000"
           - "Grafana: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:3000 (admin / state/secrets/grafana_admin_password)"
           - "Chainlens: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:30100"
+          - "{{ ('Remix IDE: http://' ~ ip_of[groups['monitoring_hosts'][0]] ~ ':30200 (evmVersion cancun)')
+               if remix_enabled | bool else 'Remix IDE: off (remix_enabled)' }}"
           - "{{ ('Node key backups: GPG-encrypted in ' ~ state_dir ~ '/key-backups/ (readable only with your offline private key)')
                if key_backup_gpg_public_key else
                'Node key backups: NOT done. Set key_backup_gpg_public_key in settings.yml and rerun 10-backups.yml' }}"

@@ -1,6 +1,6 @@
 # Images. Built ONCE on the operator and copied to the hosts (docker save/load), so every host
 # runs the identical image: the MPC signer (coordinators + MPC node hosts), the proxy (.135, .136)
-# and chainlens (.139). Proxy and chainlens are built from the committed HEAD (state/build/).
+# and chainlens + Remix (.139). Proxy and chainlens are built from the committed HEAD (state/build/).
 # Third-party images (Besu, redis, Prometheus, Grafana) come from image_archives_dir when set,
 # otherwise from Docker Hub.
 - name: Build the images on the operator
@@ -51,6 +51,21 @@
         src: "{{ state_dir }}/repo.tar.gz"
         dest: "{{ state_dir }}/build"
 
+    - name: Remix site (remix-live at remix_commit; fetched once per commit)
+      ansible.builtin.shell: |
+        set -e
+        d={{ (state_dir ~ '/build/remix/remix-live') | quote }}
+        if [ "$(git -C "$d" rev-parse HEAD 2>/dev/null)" = {{ remix_commit | quote }} ]; then echo current; exit 0; fi
+        mkdir -p "$d" && cd "$d"
+        [ -d .git ] || git init -q
+        git fetch -q --depth 1 {{ remix_repo | quote }} {{ remix_commit | quote }}
+        git checkout -q --force FETCH_HEAD && git clean -qfdx
+      args:
+        executable: /bin/bash
+      register: remix_src
+      changed_when: "'current' not in remix_src.stdout"
+      when: remix_enabled | bool
+
     - name: Empty .env for the builds (compose reads env_file even when building)
       ansible.builtin.copy:
         dest: "{{ state_dir }}/build/{{ item }}/.env"
@@ -59,7 +74,7 @@
         force: false
       loop: [proxy, chainlens]
 
-    - name: Build the proxy and chainlens images
+    - name: Build the proxy, chainlens (and remix) images
       ansible.builtin.command: >-
         docker compose -f docker-compose.yml
         {% for f in build_compose_overrides[item] | default([]) %}-f {{ f }} {% endfor %}
@@ -68,7 +83,8 @@
         chdir: "{{ state_dir }}/build/{{ item }}"
       environment:
         COMPOSE_BAKE: "false"
-      loop: [proxy, chainlens]
+        SOLC_VERSIONS: "{{ remix_solc_versions | join(' ') }}"
+      loop: "{{ built_apps }}"
       changed_when: false
 
     - name: Image content IDs (layers and config, the same for identical builds on every image store)
@@ -78,7 +94,7 @@
         | sha256sum | cut -d' ' -f1
       args:
         executable: /bin/bash
-      loop: [proxy, chainlens]
+      loop: "{{ built_apps }}"
       register: app_ids
       changed_when: false
 
@@ -94,7 +110,7 @@
 
     - name: Content IDs for the hosts
       ansible.builtin.set_fact:
-        wanted_image_id: "{{ dict(['proxy', 'chainlens'] | zip(app_ids.results | map(attribute='stdout'))) }}"
+        wanted_image_id: "{{ dict(built_apps | zip(app_ids.results | map(attribute='stdout'))) }}"
 
 - name: MPC image on the coordinator and MPC node hosts
   hosts: app_hosts:mpc_hosts
@@ -136,6 +152,12 @@
       ansible.builtin.include_tasks: tasks/ship-image.yml
       vars:
         app: chainlens
+
+    - name: Remix image
+      ansible.builtin.include_tasks: tasks/ship-image.yml
+      vars:
+        app: remix
+      when: remix_enabled | bool
 
 - name: Third-party images where they run
   hosts: servers

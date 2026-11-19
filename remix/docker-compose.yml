@@ -1,0 +1,13 @@
+# Self-hosted Remix IDE (README.md). Built and run by the Ansible deployment (remix_enabled).
+#   docker compose build && docker compose up -d     # remix-live/ must be in this folder
+#   open http://<host>:30200
+services:
+  remix:
+    build:
+      context: .
+      args:
+        SOLC_VERSIONS: ${SOLC_VERSIONS:-0.8.28}
+    image: localhost/besu-remix/remix
+    restart: unless-stopped
+    ports:
+      - "${BIND_IP:-0.0.0.0}:${PORT:-30200}:30200"

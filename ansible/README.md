@@ -9,14 +9,14 @@ says exactly what they must do, and continues where it stopped when you run it a
 |---|---|---|---|
 | 0 | `00-preflight.yml` | operator, all hosts | settings, tools, host IPs; creates `state/` and the shared secrets |
 | 1 | `01-hosts.yml` | all hosts | Docker, firewalld, chrony, cron; repository in `/opt/besu-chain`; firewall (`ha/firewall-layout.sh`); node-exporter |
-| 2 | `02-images.yml` | operator → hosts | builds the MPC, proxy and chainlens images **once** and copies them (identical image on every host) |
+| 2 | `02-images.yml` | operator → hosts | builds the MPC, proxy, chainlens and Remix images **once** and copies them (identical image on every host) |
 | 3 | `03-mpc-nodes.yml` | operator | **stops for the MPC teams** (twice): team instructions, `cluster.json`, nodes answering |
 | 4 | `04-coordinators.yml` | .135, .136 | coord1 + coord2, key ceremony → `SENDER01`, presignature pool |
 | 5 | `05-besu.yml` | .135–.138 | 6 node keys (on their hosts), genesis (once) with `SENDER01` funded, validators, then RPC nodes |
 | 6 | `06-proxy.yml` | .135, .136 | proxy settings (not started) |
 | 7 | `07-ha.yml` | .135, .136 | HAProxy, keepalived: VIPs on .135, proxy1 started |
 | 8 | `08-check.yml` | operator | Besu, MPC and proxy through the VIPs; once: test account + transfer |
-| 9 | `09-monitoring.yml` | .139 | Prometheus, Grafana (all targets checked), chainlens |
+| 9 | `09-monitoring.yml` | .139 | Prometheus, Grafana (all targets checked), chainlens, Remix IDE ([`../remix/`](../remix/README.md)) |
 | 10 | `10-backups.yml` | .137 | daily chain snapshot cron; prints what stays manual |
 
 `site.yml` runs them in order.
@@ -99,8 +99,8 @@ needed, no rate limit), and checks that the archive holds exactly that name and 
 hosts pull the images.
 
 To save **all** the deployment's images into that directory (the five above, plus the MPC signer,
-proxy and chainlens images that `02-images.yml` builds, as `mpc-signer-<tag>-docker.tar`,
-`proxy-docker.tar`, `chainlens-docker.tar`), run on the operator:
+proxy, chainlens and Remix images that `02-images.yml` builds, as `mpc-signer-<tag>-docker.tar`,
+`proxy-docker.tar`, `chainlens-docker.tar`, `remix-docker.tar`), run on the operator:
 
 ```bash
 ansible-playbook save-images.yml

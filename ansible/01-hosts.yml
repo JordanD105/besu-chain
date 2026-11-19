@@ -6,7 +6,7 @@
     - name: Archive the deployable directories
       ansible.builtin.command: >-
         git -C {{ repo_root }} archive --format=tar.gz -o {{ state_dir }}/repo.tar.gz HEAD
-        besu-production ha monitoring mpc-signer/deploy proxy chainlens contracts
+        besu-production ha monitoring mpc-signer/deploy proxy chainlens contracts remix
       changed_when: false
 
 - name: Prepare the hosts
@@ -80,6 +80,7 @@
       environment:
         ADMIN: "{{ operator_ip }}"
         CLIENTS: "{{ client_ips | join(' ') }}"
+        REMIX_USERS: "{{ remix_users | join(' ') }}"
         ROLE: >-
           {{ 'app' if inventory_hostname in groups['app_hosts'] else
              ('monitoring' if inventory_hostname in groups['monitoring_hosts'] else 'node') }}

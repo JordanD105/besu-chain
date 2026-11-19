@@ -9,7 +9,8 @@
 #   HAS_MPC=1                 an MPC node runs on this host (port 7000)
 #   BESU_HOSTS, MPC_HOSTS, COORDS (the HA pair), MON: space-separated IPs
 #   CLIENTS  applications that call the proxy (VIP:30000) and users of chainlens (:30100)
-#   ADMIN    the bastion / operator host (SSH, Grafana, MPC admin API)
+#   ADMIN    the bastion / operator host (SSH, Grafana, MPC admin API, Remix)
+#   REMIX_USERS  developers allowed to open Remix (:30200 on the monitoring host), optional
 # Only the listed sources reach each port; everything else stays closed (firewalld default zone).
 # Review with: firewall-cmd --list-all
 #
@@ -67,6 +68,7 @@ case "$ROLE" in
   monitoring)
     allow_all 3000/tcp "$ADMIN"                    # Grafana
     allow_all 30100/tcp $CLIENTS "$ADMIN"          # chainlens
+    allow_all 30200/tcp "$ADMIN" ${REMIX_USERS:-}  # Remix IDE (remix/)
     ;;
   *) echo "unknown ROLE $ROLE (app, node or monitoring)" >&2; exit 1 ;;
 esac

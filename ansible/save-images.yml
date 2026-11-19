@@ -1,7 +1,7 @@
 # Save ALL the deployment's images as `docker save` archives in image_archives_dir:
 # - third-party (Besu, node-exporter, Prometheus, Grafana, redis): versions and file names from
 #   group_vars/all/settings.yml; pulled first when missing on the operator;
-# - built by 02-images.yml (MPC signer, proxy, chainlens): copied from state/images/, so run
+# - built by 02-images.yml (MPC signer, proxy, chainlens, remix): copied from state/images/, so run
 #   site.yml (or 02-images.yml) first. File names: built_image_archives in layout.yml.
 # Run it on the operator:
 #   ansible-playbook save-images.yml                          uses image_archives_dir from settings.yml
@@ -67,10 +67,12 @@
       when: item.rc != 0
       changed_when: true
 
-    - name: Built images from 02-images.yml (MPC signer, proxy, chainlens)
+    - name: Built images from 02-images.yml (MPC signer, proxy, chainlens, remix)
       ansible.builtin.stat:
         path: "{{ state_dir }}/images/{{ item }}"
-      loop: "{{ ([mpc_image | regex_replace('[/:]', '_') ~ '.tar'] if mpc_image_build | bool else []) + ['proxy.tar', 'chainlens.tar'] }}"
+      loop: >-
+        {{ ([mpc_image | regex_replace('[/:]', '_') ~ '.tar'] if mpc_image_build | bool else [])
+           + built_apps | map('regex_replace', '$', '.tar') | list }}
       register: built
 
     - name: Built images exist
@@ -80,16 +82,19 @@
           Not built yet: {{ built.results | rejectattr('stat.exists') | map(attribute='item') | join(', ') }}.
           Run ansible-playbook 02-images.yml (or site.yml) first: it builds them into state/images/.
 
-    - name: Copy the built images (replaced when their content changed)
+    - name: Copy the built MPC image (replaced when its content changed)
       ansible.builtin.copy:
-        src: "{{ state_dir }}/images/{{ item.src }}"
-        dest: "{{ image_archives_dir }}/{{ item.dest }}"
+        src: "{{ state_dir }}/images/{{ mpc_image | regex_replace('[/:]', '_') }}.tar"
+        dest: "{{ image_archives_dir }}/{{ built_image_archives.mpc }}"
         mode: "0644"
-      loop: >-
-        {{ ([{'src': mpc_image | regex_replace('[/:]', '_') ~ '.tar', 'dest': built_image_archives.mpc}] if mpc_image_build | bool else [])
-           + [{'src': 'proxy.tar', 'dest': built_image_archives.proxy}, {'src': 'chainlens.tar', 'dest': built_image_archives.chainlens}] }}
-      loop_control:
-        label: "{{ item.dest }}"
+      when: mpc_image_build | bool
+
+    - name: Copy the built proxy, chainlens (and remix) images (replaced when their content changed)
+      ansible.builtin.copy:
+        src: "{{ state_dir }}/images/{{ item }}.tar"
+        dest: "{{ image_archives_dir }}/{{ built_image_archives[item] }}"
+        mode: "0644"
+      loop: "{{ built_apps }}"
 
     - name: MPC image from the registry (mpc_image_build false)
       when: not mpc_image_build | bool
@@ -138,3 +143,4 @@
       loop: "{{ sizes.results }}"
       loop_control:
         label: "{{ item.item.file }}"
+      when: item.stat.exists

@@ -77,6 +77,7 @@ Edit `group_vars/all/settings.yml`:
 | `key_backup_gpg_public_key` | path on the operator to **your GPG public key**, e.g. `/opt/000/backup-pub.asc`: create the key pair as in [`GPG-KEY.md`](GPG-KEY.md). Ansible backs up the 6 Besu node keys encrypted with it. Keep the private key offline. Empty: no key backups |
 | `mpc_backup_cron` | `true` to let Ansible set up the hourly MPC share backups on the 3 MPC hosts (default `false`: each team does it) |
 | `ntp_servers` | your time servers, e.g. `[ntp1.internal.example, 10.0.0.1]`. Empty: the distribution's public servers (needs internet). Hosts without internet access **must** have internal servers here: QBFT rejects blocks with wrong timestamps. The `HostClockNotSynced` alert and the Clock columns of the Hosts dashboard watch it |
+| `remix_enabled`, `remix_users` | the self-hosted Remix IDE on the monitoring host (`:30200`, on by default; [`../remix/README.md`](../remix/README.md)): the operator fetches Remix from github.com once. `remix_users`: developers' IPs allowed to open it besides `operator_ip` |
 | `vrrp_interface` | leave empty: it's detected automatically |
 
 To create the archives (or keep a copy of every image the deployment uses), on the operator:
@@ -86,7 +87,7 @@ ansible-playbook save-images.yml -e image_archives_dir=/opt/000
 ```
 
 It saves the five third-party images (pulled first if missing) and, once a deployment run has
-built them, the MPC signer, proxy and chainlens images, all eight in `/opt/000`. Run it again
+built them, the MPC signer, proxy, chainlens and Remix images, all nine in `/opt/000`. Run it again
 after `site.yml` to refresh them.
 
 Everything else (chain id 1337, 1 s blocks, funding of `SENDER01`, image versions) is already
@@ -139,6 +140,7 @@ HAProxy + keepalived, a test transfer, monitoring, backups. At the end it prints
 - Applications: `http://192.168.68.151:30000`
 - Grafana: `http://192.168.68.139:3000`, user `admin`, password in `state/secrets/grafana_admin_password`
 - Chainlens: `http://192.168.68.139:30100`
+- Remix IDE: `http://192.168.68.139:30200` (compile with EVM version `cancun`)
 
 ## 7. After the deployment
 
