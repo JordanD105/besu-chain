@@ -10,7 +10,7 @@ It is **off by default**, and when on it is protected three ways:
 
 | Protection | How |
 |---|---|
-| Who | only from `operator_ip`; for every other address the page and its menu entry don't exist (other chainlens users see nothing) |
+| Who | only from `operator_ip` and `chainlens_deploy_ips`; for every other address the page and its menu entry don't exist (other chainlens users see nothing) |
 | Token | a 48-character token Ansible generates once: `state/secrets/chainlens_deploy_token` |
 | Account | always the one `chainlens_deployer`; SENDER01 is refused |
 
@@ -27,7 +27,12 @@ curl -s -X POST http://192.168.68.151:30000/createaccount -H 'content-type: appl
 ```yaml
 chainlens_deploy_enabled: true
 chainlens_deployer: "0x…"
+chainlens_deploy_ips: [192.168.68.1]   # optional: admin PCs besides operator_ip
 ```
+
+`chainlens_deploy_ips` takes addresses or networks (`192.168.68.0/24`). Everyone listed can deploy
+contracts with the token, so list admin machines only, not a whole office network. Ansible opens
+chainlens's port for them as well (no need to repeat them in `chainlens_ips`).
 
 **3. Apply** (phase 01 first after a `git pull`: it copies the new code, which the image build of
 phase 02 uses):
@@ -47,7 +52,9 @@ cat state/secrets/chainlens_deploy_token
 1. Compile with **EVM version cancun** (Remix: [`../remix/README.md`](../remix/README.md)) and keep
    the compiler artifact (`.json` with ABI and bytecode: Remix `contracts/artifacts/<Name>.json`,
    Hardhat, Foundry or solc output).
-2. On the operator machine, open `http://192.168.68.139:30100/#/deploy`.
+2. On the operator machine or a PC in `chainlens_deploy_ips`, open
+   `http://192.168.68.139:30100/#/deploy`. From any other PC, tunnel through the operator:
+   `ssh -L 30100:192.168.68.139:30100 root@<operator>`, then open `http://localhost:30100/#/deploy`.
 3. **Deploy token:** paste the token. It is kept for this browser tab only.
 4. **Compiler artifact:** choose the file. With several contracts in it, choose the **Contract**.
 5. **Constructor arguments:** one box per argument. Numbers as whole numbers (`1000000`),
@@ -93,7 +100,7 @@ To change the token, delete `state/secrets/chainlens_deploy_token` and run `09-m
 
 | Message | Cause |
 |---|---|
-| (no Deploy entry in the menu) | off, or your browser's address is not `operator_ip` (e.g. through a VPN or another bastion) |
+| (no Deploy entry in the menu) | off, or your browser's address is neither `operator_ip` nor in `chainlens_deploy_ips` (e.g. through a VPN or NAT: chainlens sees the address after it) |
 | wrong deploy token | the token doesn't match `state/secrets/chainlens_deploy_token` |
 | `… is not an MPC key of the coordinator` | `chainlens_deployer` is not an MPC account |
 | `constructor(…) does not take …` | wrong number or type of arguments |

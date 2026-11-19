@@ -82,9 +82,13 @@ remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version i
 # (who may open Remix: remix_ips at the top)
 
 # Deploy page in chainlens (#/deploy, ansible/CHAINLENS-DEPLOY.md): deploy compiled contracts from the
-# browser, signed by ONE MPC account. Only operator_ip can use it, with the token Ansible generates
-# (state/secrets/chainlens_deploy_token). Off by default.
+# browser, signed by ONE MPC account. Only operator_ip and chainlens_deploy_ips can use it, with the
+# token Ansible generates (state/secrets/chainlens_deploy_token). Off by default.
 chainlens_deploy_enabled: false
+# Addresses (or networks) allowed to use the Deploy page besides operator_ip, e.g. an admin PC:
+# [192.168.68.1]. They can deploy contracts (with the token): list admin machines only. The firewall
+# opens chainlens (:30100) for them too, so they need not be in chainlens_ips.
+chainlens_deploy_ips: []
 # The deployer: an MPC account used only for deployments, never SENDER01. Create it once with
 #   curl -s -X POST http://<vip_proxy>:30000/createaccount -H 'content-type: application/json' -d '{"amount":"0","pool":"none"}'
 chainlens_deployer: ""

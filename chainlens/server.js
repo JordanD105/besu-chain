@@ -1483,7 +1483,7 @@ function deployGuard(req, res, next) {
         return res.status(404).json({ error: "the Deploy page is off (chainlens_deploy_enabled)" });
     }
     if (!ipAllowed(req.socket.remoteAddress)) {
-        return res.status(403).json({ error: "deploying is only allowed from the operator's address" });
+        return res.status(403).json({ error: "deploying is only allowed from operator_ip and chainlens_deploy_ips" });
     }
     if (!tokenOk(req)) {
         console.warn("deploy: wrong token from", req.socket.remoteAddress);

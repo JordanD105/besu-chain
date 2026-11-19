@@ -13,8 +13,8 @@ section 3).
 | `grafana_ips` | users of Grafana, the monitoring dashboards | monitoring host `:3000` |
 | `remix_ips` | developers using the Remix IDE | monitoring host `:30200` |
 
-The Deploy page of chainlens, when on, is for `operator_ip` only (not `chainlens_ips`):
-[`CHAINLENS-DEPLOY.md`](CHAINLENS-DEPLOY.md).
+The Deploy page of chainlens, when on, is for `operator_ip` and `chainlens_deploy_ips` only (not
+`chainlens_ips`): [`CHAINLENS-DEPLOY.md`](CHAINLENS-DEPLOY.md).
 
 `operator_ip` is one address, required: the firewall only lets it in for SSH, so a wrong value
 locks you out. The four lists may be empty (then only the operator reaches that service).

@@ -30,7 +30,7 @@
         fail_msg: >-
           {{ item }} must be a list of IPv4 addresses (or networks like 10.1.2.0/24), e.g.
           [10.1.2.3, 10.1.2.4]; it is {{ lookup('ansible.builtin.vars', item) }}.
-      loop: [proxy_client_ips, chainlens_ips, grafana_ips, remix_ips]
+      loop: [proxy_client_ips, chainlens_ips, grafana_ips, remix_ips, chainlens_deploy_ips]
 
     - name: The IP plan (inventory.yml, settings.yml) is consistent
       ansible.builtin.assert:
