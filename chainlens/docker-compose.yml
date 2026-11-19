@@ -18,6 +18,8 @@ services:
       # contract registry (records of besu-production/operator/deploy-contract.js): names and ABIs
       # for the contract pages. Read-only; new records are picked up within 15 s.
       - ${CONTRACT_REGISTRY_DIR:-../contracts/deployments}:/registry:ro
+      # records written by the Deploy page (DEPLOY_ENABLED): writable by the container user (uid 1000)
+      - ${CONTRACT_LOCAL_DIR:-./deployments-local}:/registry-local
     extra_hosts:
       # lets BESU_RPC=http://host.docker.internal:8545 reach a Besu node on this host
       - "host.docker.internal:host-gateway"

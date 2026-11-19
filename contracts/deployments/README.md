@@ -1,7 +1,9 @@
 # Contract registry
 
 One JSON record per deployed contract, `<address>.json`, written by
-[`besu-production/operator/deploy-contract.js`](../../besu-production/operator/deploy-contract.js):
+[`besu-production/operator/deploy-contract.js`](../../besu-production/operator/deploy-contract.js)
+or by chainlens' Deploy page ([`ansible/CHAINLENS-DEPLOY.md`](../../ansible/CHAINLENS-DEPLOY.md):
+copied here by `09-monitoring.yml`):
 name, address, deployer, deployment transaction and block, constructor arguments, the hash of the
 runtime code and the ABI.
 

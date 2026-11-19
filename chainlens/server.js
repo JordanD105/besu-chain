@@ -1,7 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
+const crypto = require("crypto");
 const { ethers } = require("ethers");
+const deployer = require("./deploy.js");
 
 const BESU = process.env.BESU_RPC || "http://192.168.68.130:8545";
 const PORT = Number(process.env.PORT) || 30100;
@@ -61,37 +63,48 @@ const db = {
 // (contracts/deployments/<address>.json, mounted read-only). Gives contracts their name and ABI, so
 // the contract page can list functions and run view/pure ones (eth_call, never a transaction).
 const REGISTRY_DIR = process.env.REGISTRY_DIR || "/registry";
+// records written by the Deploy page (writable; Ansible copies them back to the repository)
+const REGISTRY_LOCAL_DIR = process.env.REGISTRY_LOCAL_DIR || "/registry-local";
 const registry = { byAddress: new Map(), files: "", error: null };
 
-function loadRegistry() {
-    let names;
-    try {
-        names = fs.readdirSync(REGISTRY_DIR).filter((name) => name.endsWith(".json")).sort();
-    } catch (error) {
-        registry.byAddress = new Map();
-        registry.error = error.code === "ENOENT" ? null : error.message;
-        return;
-    }
-    const sig = names.map((name) => {
+function registryFiles() {
+    const files = [];
+    const problems = [];
+    for (const dir of [REGISTRY_DIR, REGISTRY_LOCAL_DIR]) {
         try {
-            const st = fs.statSync(path.join(REGISTRY_DIR, name));
-            return name + ":" + st.mtimeMs + ":" + st.size;
+            for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(".json")).sort()) {
+                files.push(path.join(dir, name));
+            }
         } catch (error) {
-            return name;
+            if (error.code !== "ENOENT") {
+                problems.push(dir + ": " + error.message);
+            }
         }
-    }).join("|");
+    }
+    return { files, problems };
+}
+
+function loadRegistry() {
+    const { files, problems } = registryFiles();
+    const sig = files.map((file) => {
+        try {
+            const st = fs.statSync(file);
+            return file + ":" + st.mtimeMs + ":" + st.size;
+        } catch (error) {
+            return file;
+        }
+    }).join("|") + "|" + problems.join("|");
     if (sig === registry.files) {
         return;
     }
     const next = new Map();
-    const problems = [];
-    for (const name of names) {
+    for (const file of files) {
         try {
-            const record = JSON.parse(fs.readFileSync(path.join(REGISTRY_DIR, name), "utf8"));
+            const record = JSON.parse(fs.readFileSync(file, "utf8"));
             const iface = new ethers.Interface(record.abi || []);
             next.set(ethers.getAddress(record.address).toLowerCase(), { record, iface });
         } catch (error) {
-            problems.push(name + ": " + error.message);
+            problems.push(path.basename(file) + ": " + error.message);
         }
     }
     registry.byAddress = next;
@@ -1416,6 +1429,158 @@ app.post("/api/contracts/:address/call", express.json({ limit: "64kb" }), async 
     }
 });
 
+// ---- Deploy page (off unless DEPLOY_ENABLED=true). Deploys a contract signed by ONE fixed MPC
+// account (DEPLOYER) through the coordinator, with the checks of deploy.js. Allowed only from the
+// operator's IP (DEPLOY_ALLOWED_IPS) and with the token (DEPLOY_TOKEN). The record goes to
+// REGISTRY_LOCAL_DIR; the Ansible deployment copies it back to the repository.
+const DEPLOY = {
+    enabled: String(process.env.DEPLOY_ENABLED || "").toLowerCase() === "true",
+    token: process.env.DEPLOY_TOKEN || "",
+    from: process.env.DEPLOYER || "",
+    coordinator: process.env.COORDINATOR_URL || "",
+    rpc: process.env.DEPLOY_RPC || BESU,
+    sender01: process.env.SENDER01 || "",
+    maxGas: process.env.MAX_GAS || "30000000",
+    allowed: (process.env.DEPLOY_ALLOWED_IPS || "").split(/[\s,]+/).filter(Boolean),
+    busy: false
+};
+if (DEPLOY.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !ethers.isAddress(DEPLOY.from) || !DEPLOY.coordinator || !DEPLOY.allowed.length)) {
+    console.error("Deploy page: DEPLOY_TOKEN (16+ characters), DEPLOYER, COORDINATOR_URL and DEPLOY_ALLOWED_IPS are required; the page stays off");
+    DEPLOY.enabled = false;
+}
+
+function ipv4ToInt(ip) {
+    const parts = ip.split(".").map(Number);
+    return parts.length === 4 && parts.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)
+        ? ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0 : null;
+}
+
+function ipAllowed(ip) {
+    const addr = ipv4ToInt(String(ip || "").replace(/^::ffff:/, ""));
+    if (addr === null) {
+        return false;
+    }
+    return DEPLOY.allowed.some((entry) => {
+        const [net, bits = "32"] = entry.split("/");
+        const base = ipv4ToInt(net);
+        const n = Number(bits);
+        if (base === null || !(n >= 0 && n <= 32)) {
+            return false;
+        }
+        const mask = n === 0 ? 0 : (0xffffffff << (32 - n)) >>> 0;
+        return ((addr & mask) >>> 0) === ((base & mask) >>> 0);
+    });
+}
+
+function tokenOk(req) {
+    const given = Buffer.from(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
+    const want = Buffer.from(DEPLOY.token);
+    return given.length === want.length && crypto.timingSafeEqual(given, want);
+}
+
+function deployGuard(req, res, next) {
+    if (!DEPLOY.enabled) {
+        return res.status(404).json({ error: "the Deploy page is off (chainlens_deploy_enabled)" });
+    }
+    if (!ipAllowed(req.socket.remoteAddress)) {
+        return res.status(403).json({ error: "deploying is only allowed from the operator's address" });
+    }
+    if (!tokenOk(req)) {
+        console.warn("deploy: wrong token from", req.socket.remoteAddress);
+        return setTimeout(() => res.status(401).json({ error: "wrong deploy token" }), 1000);
+    }
+    next();
+}
+
+// The contract to deploy and its typed arguments, from a request body
+function deployInput(body) {
+    const json = body && body.artifact;
+    if (!json || typeof json !== "object") {
+        throw new Error("no artifact: choose the compiler's JSON file");
+    }
+    const art = deployer.loadArtifact(json, body.contract || "", String(body.artifactName || "Contract").replace(/\.json$/i, ""));
+    let args;
+    try {
+        args = deployer.coerceArgs(art.abi, Array.isArray(body.args) ? body.args : []);
+    } catch (error) {
+        throw new Error("constructor arguments: arrays and tuples are written as JSON (" + error.message + ")");
+    }
+    const name = String(body.name || "").trim().slice(0, 80) || art.name;
+    return { art, args, name };
+}
+
+async function deployPlan(input) {
+    return deployer.prepare({
+        art: input.art, args: input.args, name: input.name, from: DEPLOY.from, rpcUrl: DEPLOY.rpc,
+        coordinatorUrl: DEPLOY.coordinator, maxGas: DEPLOY.maxGas, sender01: DEPLOY.sender01
+    });
+}
+
+app.get("/api/deploy/status", (req, res) => {
+    if (!DEPLOY.enabled || !ipAllowed(req.socket.remoteAddress)) {
+        return res.json({ enabled: false });
+    }
+    res.json({ enabled: true, deployer: ethers.getAddress(DEPLOY.from), busy: DEPLOY.busy });
+});
+
+const deployJson = express.json({ limit: "25mb" });
+
+// The contracts in an artifact and their constructor arguments
+app.post("/api/deploy/inspect", deployJson, deployGuard, (req, res) => {
+    try {
+        const json = req.body && req.body.artifact;
+        const contracts = deployer.listContracts(json, String(req.body.artifactName || "Contract").replace(/\.json$/i, ""));
+        if (!contracts.length) {
+            throw new Error("no abi + bytecode found: export the full compiler artifact, not only the ABI");
+        }
+        res.json({ contracts: contracts.map((c) => ({ name: c.name, ...deployer.constructorInputs(c.abi), size: ethers.dataLength(c.bytecode), runtimeCheck: Boolean(c.deployedBytecode) })) });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Dry run: every check, nothing signed or sent
+app.post("/api/deploy/check", deployJson, deployGuard, async (req, res) => {
+    try {
+        const plan = await deployPlan(deployInput(req.body));
+        res.json(deployer.planSummary(plan));
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Deploy: the same checks again; the address must be the one the check showed (nothing changed)
+app.post("/api/deploy/send", deployJson, deployGuard, async (req, res) => {
+    if (DEPLOY.busy) {
+        return res.status(409).json({ error: "another deployment is running: try again when it is done" });
+    }
+    DEPLOY.busy = true;
+    try {
+        const input = deployInput(req.body);
+        const plan = await deployPlan(input);
+        if (!req.body.expectAddress || plan.address.toLowerCase() !== String(req.body.expectAddress).toLowerCase()) {
+            return res.status(409).json({ error: "the deployer's state changed since the check (address " + plan.address + "): check again" });
+        }
+        console.log("deploy:", plan.name, "->", plan.address, "from", req.socket.remoteAddress);
+        const record = await deployer.send(plan, input.art, { rpcUrl: DEPLOY.rpc, coordinatorUrl: DEPLOY.coordinator, artifactName: String(req.body.artifactName || "") });
+        let saved = true;
+        try {
+            fs.mkdirSync(REGISTRY_LOCAL_DIR, { recursive: true });
+            fs.writeFileSync(path.join(REGISTRY_LOCAL_DIR, record.address.toLowerCase() + ".json"), JSON.stringify(record, null, 2) + "\n");
+            loadRegistry();
+        } catch (error) {
+            saved = false;
+            console.error("deploy: record not saved:", error.message);
+        }
+        const { abi, ...rest } = record;
+        res.json({ ...rest, saved });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    } finally {
+        DEPLOY.busy = false;
+    }
+});
+
 app.get("/api/transactions", (req, res) => {
     let rows = db.txs.slice().reverse();
 
@@ -1561,5 +1726,6 @@ app.get("/api/search", (req, res) => {
 app.listen(PORT, HOST, () => {
     console.log(`Chainlens http://${HOST}:${PORT}`);
     console.log(`Besu ${BESU}`);
+    console.log(DEPLOY.enabled ? `Deploy page on: deployer ${DEPLOY.from}, from ${DEPLOY.allowed.join(" ")}` : "Deploy page off");
     loop();
 });

@@ -81,6 +81,14 @@ remix_commit: b694f46a0adad6ff2a54bcf0b0a5340e94631a56            # Remix 2.6.15
 remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version is always added)
 # (who may open Remix: remix_ips at the top)
 
+# Deploy page in chainlens (#/deploy, ansible/CHAINLENS-DEPLOY.md): deploy compiled contracts from the
+# browser, signed by ONE MPC account. Only operator_ip can use it, with the token Ansible generates
+# (state/secrets/chainlens_deploy_token). Off by default.
+chainlens_deploy_enabled: false
+# The deployer: an MPC account used only for deployments, never SENDER01. Create it once with
+#   curl -s -X POST http://<vip_proxy>:30000/createaccount -H 'content-type: application/json' -d '{"amount":"0","pool":"none"}'
+chainlens_deployer: ""
+
 # Extra compose files for building the proxy / chainlens / remix images on the operator, e.g. to
 # set a build proxy or a corporate CA:  { proxy: [/path/override.yml], chainlens: [...] }
 build_compose_overrides: {}

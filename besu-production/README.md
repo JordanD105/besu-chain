@@ -249,8 +249,12 @@ the code on chain with the artifact's runtime bytecode (exit code 3 if it differ
 `site.yml`) copies it to the hosts. Chainlens picks it up within 15 s:
 `http://192.168.68.139:30100/#/contracts/<address>`.
 
-Chainlens only **reads** (`eth_call` of view/pure functions). Calls that change state go through the
-proxy or a script like this one, signed by an MPC account.
+**From the browser instead:** chainlens has a Deploy page doing the same with the same checks
+(`chainlens/deploy.js` is shared), for the operator only, off by default:
+[`../ansible/CHAINLENS-DEPLOY.md`](../ansible/CHAINLENS-DEPLOY.md).
+
+Otherwise chainlens only **reads** (`eth_call` of view/pure functions). Calls that change state go
+through the proxy or a script like this one, signed by an MPC account.
 
 ## Operations
 

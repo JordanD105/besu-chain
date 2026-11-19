@@ -658,7 +658,7 @@ function noteStatus(status) {
 }
 
 function skipRefresh() {
-    if (document.hidden || /^#\/contracts\/0x/.test(location.hash)) {
+    if (document.hidden || /^#\/(contracts\/0x|deploy)/.test(location.hash)) {
         return true;
     }
 
@@ -771,6 +771,10 @@ async function render(options) {
 
         if (path === "#/contracts") {
             return showContracts(page, params.get("type") || "all", status);
+        }
+
+        if (path === "#/deploy") {
+            return showDeploy();
         }
 
         const contract = path.match(/^#\/contracts\/(0x[0-9a-fA-F]{40})$/);
@@ -1419,6 +1423,232 @@ async function showContract(address) {
     show(el("div", {}, parts));
 }
 
+// ---- Deploy page: only shown to the operator's address when the server has it on
+// (chainlens_deploy_enabled). The token stays in this browser tab (sessionStorage).
+const deployState = { file: null, name: "", artifact: null, contracts: [], contract: "", args: {}, label: "", plan: null, result: null, error: "" };
+
+function deployToken() {
+    try {
+        return sessionStorage.getItem("chainlens.deployToken") || "";
+    } catch (error) {
+        return deployState.token || "";
+    }
+}
+
+function setDeployToken(value) {
+    deployState.token = value;
+    try {
+        sessionStorage.setItem("chainlens.deployToken", value);
+    } catch (error) {
+        // memory only
+    }
+}
+
+async function deployPost(path, body) {
+    const response = await fetch(path, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer " + deployToken() },
+        body: JSON.stringify(body)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(data.error || ("HTTP " + response.status));
+    }
+    return data;
+}
+
+function deployBody(extra) {
+    const c = deployState.contracts.find((x) => x.name === deployState.contract);
+    return {
+        artifact: deployState.artifact,
+        artifactName: deployState.file,
+        contract: deployState.contract,
+        name: deployState.label,
+        args: c ? c.inputs.map((p, i) => deployState.args[i] || "") : [],
+        ...extra
+    };
+}
+
+async function showDeploy() {
+    const token = showToken;
+    const status = await api("/api/deploy/status");
+
+    if (token !== showToken) {
+        return;
+    }
+    if (!status.enabled) {
+        return show(el("section", { class: "card" }, [el("h2", {}, t("deploy.title")), el("div", { class: "empty" }, t("deploy.off"))]));
+    }
+
+    const planBox = el("div");
+    const resultBox = el("div");
+    const errorBox = el("div", { class: "bad-text deploy-error" });
+    const argsBox = el("div", { class: "fn-args" });
+    const contractSelect = el("select", { class: "deploy-contract" });
+    const contractRow = el("label", {}, [el("span", { class: "muted" }, t("deploy.contract")), contractSelect]);
+    const checkButton = el("button", { type: "button", class: "fn-run" }, t("deploy.check"));
+    const deployButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("deploy.deploy"));
+
+    const invalidate = () => {
+        deployState.plan = null;
+        deployState.result = null;
+        paint();
+    };
+
+    function paintArgs() {
+        argsBox.replaceChildren();
+        const c = deployState.contracts.find((x) => x.name === deployState.contract);
+        if (!c) {
+            return;
+        }
+        if (!c.inputs.length) {
+            argsBox.append(el("div", { class: "muted" }, t("deploy.noArgs")));
+        }
+        c.inputs.forEach((p, i) => {
+            const input = el("input", {
+                class: "table-search fn-arg",
+                placeholder: (p.name || "arg" + i) + " (" + p.type + ")",
+                "aria-label": (p.name || "arg" + i) + " " + p.type,
+                value: deployState.args[i] || ""
+            });
+            input.addEventListener("input", () => { deployState.args[i] = input.value; invalidate(); });
+            argsBox.append(input);
+        });
+    }
+
+    function paint() {
+        errorBox.textContent = deployState.error || "";
+        contractSelect.replaceChildren(...deployState.contracts.map((c) => el("option", { value: c.name }, c.name + " (" + c.size + " bytes)")));
+        contractSelect.value = deployState.contract;
+        contractRow.hidden = deployState.contracts.length < 2;
+        checkButton.disabled = !deployState.artifact || !deployState.contract;
+        deployButton.disabled = !deployState.plan;
+        planBox.replaceChildren();
+        const plan = deployState.plan;
+        if (plan) {
+            const kv = (label, value) => [el("span", { class: "muted" }, label), el("span", { style: "word-break:break-all" }, value)];
+            planBox.append(el("div", { class: "kv deploy-plan" }, [
+                ...kv(t("deploy.contract"), plan.name + " (" + plan.creationSize + " bytes)"),
+                ...kv(t("contract.args"), plan.args.length ? JSON.stringify(plan.args) : "—"),
+                ...kv(t("contract.deployer"), plan.from + "  (nonce " + plan.nonce + ")"),
+                ...kv(t("deploy.gas"), plan.gas + " (estimate " + plan.estimate + ", MAX_GAS " + plan.maxGas + ")"),
+                ...kv(t("deploy.address"), plan.address)
+            ]), el("div", { class: "muted", style: "margin-top:8px" }, t("deploy.ready")));
+        }
+        resultBox.replaceChildren();
+        const r = deployState.result;
+        if (r) {
+            resultBox.append(el("div", { class: "deploy-done" }, [
+                el("h3", {}, t("deploy.done")),
+                el("div", { class: "kv" }, [
+                    el("span", { class: "muted" }, t("deploy.address")), el("a", { href: "#/contracts/" + r.address }, r.address),
+                    el("span", { class: "muted" }, t("contract.deployTx")), ident(r.txHash, "#/transactions/" + r.txHash),
+                    el("span", { class: "muted" }, t("tx.block")), el("a", { href: "#/blocks/" + r.blockNumber }, "#" + r.blockNumber),
+                    el("span", { class: "muted" }, t("contract.code")), el("span", {}, r.codeCheck)
+                ]),
+                el("div", { class: "muted", style: "margin-top:8px" }, r.saved ? t("deploy.saved") : t("deploy.notSaved"))
+            ]));
+        }
+    }
+
+    const tokenInput = el("input", { class: "table-search", type: "password", placeholder: t("deploy.token"), "aria-label": t("deploy.token"), autocomplete: "off", value: deployToken() });
+    tokenInput.addEventListener("input", () => setDeployToken(tokenInput.value.trim()));
+
+    const fileInput = el("input", { type: "file", accept: ".json,application/json", class: "deploy-file" });
+    fileInput.addEventListener("change", async () => {
+        const file = fileInput.files && fileInput.files[0];
+        Object.assign(deployState, { file: null, artifact: null, contracts: [], contract: "", args: {}, label: "", plan: null, result: null, error: "" });
+        if (!file) {
+            paintArgs();
+            return paint();
+        }
+        try {
+            const artifact = JSON.parse(await file.text());
+            deployState.file = file.name;
+            deployState.artifact = artifact;
+            const info = await deployPost("/api/deploy/inspect", { artifact, artifactName: file.name });
+            deployState.contracts = info.contracts;
+            deployState.contract = info.contracts[0].name;
+        } catch (error) {
+            deployState.error = error instanceof SyntaxError ? t("deploy.notJson") : error.message;
+        }
+        paintArgs();
+        paint();
+    });
+
+    contractSelect.addEventListener("change", () => {
+        deployState.contract = contractSelect.value;
+        deployState.args = {};
+        paintArgs();
+        invalidate();
+    });
+
+    const labelInput = el("input", { class: "table-search", placeholder: t("deploy.name"), "aria-label": t("deploy.name"), value: deployState.label });
+    labelInput.addEventListener("input", () => { deployState.label = labelInput.value; invalidate(); });
+
+    checkButton.addEventListener("click", async () => {
+        deployState.error = "";
+        deployState.plan = null;
+        deployState.result = null;
+        checkButton.disabled = true;
+        errorBox.textContent = "…";
+        try {
+            deployState.plan = await deployPost("/api/deploy/check", deployBody());
+        } catch (error) {
+            deployState.error = error.message;
+        }
+        paint();
+    });
+
+    deployButton.addEventListener("click", async () => {
+        const plan = deployState.plan;
+        if (!plan || !window.confirm(t("deploy.confirm").replace("{name}", plan.name).replace("{address}", plan.address))) {
+            return;
+        }
+        deployState.error = "";
+        checkButton.disabled = true;
+        deployButton.disabled = true;
+        errorBox.replaceChildren(el("span", { class: "muted" }, t("deploy.signing")));
+        try {
+            deployState.result = await deployPost("/api/deploy/send", deployBody({ expectAddress: plan.address }));
+            deployState.plan = null;
+        } catch (error) {
+            deployState.error = error.message;
+            deployState.plan = null;
+        }
+        paint();
+    });
+
+    paintArgs();
+    paint();
+    show(el("div", {}, [
+        el("section", { class: "card" }, [
+            el("h2", {}, t("deploy.title")),
+            el("div", { class: "muted", style: "margin-bottom:12px" }, t("deploy.intro").replace("{deployer}", status.deployer)),
+            el("div", { class: "deploy-form" }, [
+                el("label", {}, [el("span", { class: "muted" }, t("deploy.token")), tokenInput]),
+                el("label", {}, [el("span", { class: "muted" }, t("deploy.artifact")), fileInput]),
+                contractRow,
+                el("div", {}, [el("span", { class: "muted" }, t("contract.args")), argsBox]),
+                el("label", {}, [el("span", { class: "muted" }, t("deploy.name")), labelInput]),
+                el("div", { class: "deploy-buttons" }, [checkButton, deployButton])
+            ]),
+            errorBox,
+            planBox,
+            resultBox
+        ])
+    ]));
+}
+
+async function showDeployNav() {
+    try {
+        const status = await api("/api/deploy/status");
+        document.querySelector("#nav-deploy").hidden = !status.enabled;
+    } catch (error) {
+        // stays hidden
+    }
+}
+
 const TX_TYPES = ["call", "transfer", "create"];
 
 function readTxFilter(params) {
@@ -1765,6 +1995,7 @@ function showApi() {
         ["GET", "/api/accounts/:address", t("api.account")],
         ["GET", "/api/contracts/:address", t("api.contract")],
         ["POST", "/api/contracts/:address/call", t("api.contractCall")],
+        ["POST", "/api/deploy/inspect, /check, /send", t("api.deploy")],
         ["GET", "/api/nfts", t("api.nfts")],
         ["GET", "/api/transactions", t("api.transactions")],
         ["GET", "/api/blocks", t("api.blocks")],
@@ -1779,6 +2010,7 @@ function showApi() {
 }
 
 window.addEventListener("hashchange", render);
+showDeployNav();
 document.addEventListener("localechange", () => {
     themeButton.setAttribute("aria-label", t(document.body.classList.contains("light") ? "theme.dark" : "theme.light"));
     render({ refresh: true });

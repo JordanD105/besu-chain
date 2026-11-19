@@ -32,6 +32,7 @@ mpc_node_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/mpc
 mpc_admin_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/mpc_admin_token', chars=['hexdigits'], length=64) }}"
 mpc_metrics_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/mpc_metrics_token', chars=['hexdigits'], length=64) }}"
 vrrp_pass_rpc: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_rpc', chars=['ascii_letters', 'digits'], length=8) }}"
+chainlens_deploy_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/chainlens_deploy_token', chars=['hexdigits'], length=48) }}"
 vrrp_pass_proxy: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_proxy', chars=['ascii_letters', 'digits'], length=8) }}"
 
 # SENDER01: written by 04-coordinators.yml after the key ceremony
@@ -45,6 +46,7 @@ app_images:
   proxy: localhost/besu-proxy/besu-proxy
   chainlens: localhost/besu-chainlens/chainlens
   remix: localhost/besu-remix/remix
+chainlens_local_registry: /var/lib/chainlens/deployments   # Deploy page records on the monitoring host
 built_apps: "{{ ['proxy', 'chainlens'] + (['remix'] if remix_enabled | bool else []) }}"
 
 # File names of the images built by 02-images.yml in image_archives_dir (save-images.yml)
