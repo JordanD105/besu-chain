@@ -58,7 +58,21 @@ Edit `group_vars/all/settings.yml`. Required:
 Set `image_archives_dir` to a directory on the operator holding these `docker save` archives:
 Ansible copies each one only to the hosts that run it and loads it there (no Docker Hub access
 needed, no rate limit), and checks that the archive holds exactly that name and tag. Empty: the
-hosts pull the images. To change a version, set the new tag (and archive file name) and rerun
+hosts pull the images.
+
+To save **all** the deployment's images into that directory (the five above, plus the MPC signer,
+proxy and chainlens images that `02-images.yml` builds, as `mpc-signer-<tag>-docker.tar`,
+`proxy-docker.tar`, `chainlens-docker.tar`), run on the operator:
+
+```bash
+ansible-playbook save-images.yml
+```
+
+It pulls missing third-party images, keeps archives that already hold the right image, and
+rewrites missing or different ones. The built images are copied from `state/images/`, so run
+`site.yml` (or `02-images.yml`) first; a rebuilt proxy or chainlens replaces its archive.
+
+To change a version, set the new tag (and archive file name) and rerun
 `site.yml`: Besu nodes are recreated one at a time, each back in sync before the next.
 
 Review the rest: chain id, block period, `SENDER01` funding, MPC policy, image names,

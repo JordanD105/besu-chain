@@ -1,0 +1,140 @@
+# Save ALL the deployment's images as `docker save` archives in image_archives_dir:
+# - third-party (Besu, node-exporter, Prometheus, Grafana, redis): versions and file names from
+#   group_vars/all/settings.yml; pulled first when missing on the operator;
+# - built by 02-images.yml (MPC signer, proxy, chainlens): copied from state/images/, so run
+#   site.yml (or 02-images.yml) first. File names: built_image_archives in layout.yml.
+# Run it on the operator:
+#   ansible-playbook save-images.yml                          uses image_archives_dir from settings.yml
+#   ansible-playbook save-images.yml -e image_archives_dir=/opt/000
+# An archive that already holds the right image is kept; a missing or different one is (re)written.
+- name: Save all images as archives
+  hosts: localhost
+  gather_facts: false
+  vars:
+    images: "{{ image_archives | dict2items(key_name='key', value_name='file') }}"
+  tasks:
+    - name: Archive directory set
+      ansible.builtin.assert:
+        that: image_archives_dir | length > 0
+        fail_msg: "Set image_archives_dir in settings.yml, or run with -e image_archives_dir=/opt/000"
+
+    - name: Archive directory
+      ansible.builtin.file:
+        path: "{{ image_archives_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Images present locally?
+      ansible.builtin.command: docker image inspect {{ lookup('ansible.builtin.vars', item.key ~ '_image') }}
+      loop: "{{ images }}"
+      loop_control:
+        label: "{{ lookup('ansible.builtin.vars', item.key ~ '_image') }}"
+      register: local_img
+      changed_when: false
+      failed_when: false
+
+    - name: Pull the missing images
+      ansible.builtin.command: docker pull --quiet {{ lookup('ansible.builtin.vars', item.item.key ~ '_image') }}
+      loop: "{{ local_img.results }}"
+      loop_control:
+        label: "{{ lookup('ansible.builtin.vars', item.item.key ~ '_image') }}"
+      when: item.rc != 0
+      changed_when: true
+
+    - name: Archives already holding the right image?
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        tar -xOf {{ (image_archives_dir ~ '/' ~ item.file) | quote }} manifest.json 2>/dev/null
+        | grep -qF '"{{ lookup('ansible.builtin.vars', item.key ~ '_image') }}"'
+      args:
+        executable: /bin/bash
+      loop: "{{ images }}"
+      loop_control:
+        label: "{{ item.file }}"
+      register: archive_ok
+      changed_when: false
+      failed_when: false
+
+    - name: Save the missing or different archives
+      ansible.builtin.shell: >-
+        docker save -o {{ (image_archives_dir ~ '/' ~ item.item.file ~ '.tmp') | quote }}
+        {{ lookup('ansible.builtin.vars', item.item.key ~ '_image') }}
+        && mv {{ (image_archives_dir ~ '/' ~ item.item.file ~ '.tmp') | quote }}
+        {{ (image_archives_dir ~ '/' ~ item.item.file) | quote }}
+      loop: "{{ archive_ok.results }}"
+      loop_control:
+        label: "{{ item.item.file }}"
+      when: item.rc != 0
+      changed_when: true
+
+    - name: Built images from 02-images.yml (MPC signer, proxy, chainlens)
+      ansible.builtin.stat:
+        path: "{{ state_dir }}/images/{{ item }}"
+      loop: "{{ ([mpc_image | regex_replace('[/:]', '_') ~ '.tar'] if mpc_image_build | bool else []) + ['proxy.tar', 'chainlens.tar'] }}"
+      register: built
+
+    - name: Built images exist
+      ansible.builtin.assert:
+        that: built.results | rejectattr('stat.exists') | list | length == 0
+        fail_msg: >-
+          Not built yet: {{ built.results | rejectattr('stat.exists') | map(attribute='item') | join(', ') }}.
+          Run ansible-playbook 02-images.yml (or site.yml) first: it builds them into state/images/.
+
+    - name: Copy the built images (replaced when their content changed)
+      ansible.builtin.copy:
+        src: "{{ state_dir }}/images/{{ item.src }}"
+        dest: "{{ image_archives_dir }}/{{ item.dest }}"
+        mode: "0644"
+      loop: >-
+        {{ ([{'src': mpc_image | regex_replace('[/:]', '_') ~ '.tar', 'dest': built_image_archives.mpc}] if mpc_image_build | bool else [])
+           + [{'src': 'proxy.tar', 'dest': built_image_archives.proxy}, {'src': 'chainlens.tar', 'dest': built_image_archives.chainlens}] }}
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: MPC image from the registry (mpc_image_build false)
+      when: not mpc_image_build | bool
+      block:
+        - name: MPC image present locally?
+          ansible.builtin.command: docker image inspect {{ mpc_image }}
+          register: mpc_local
+          changed_when: false
+          failed_when: false
+
+        - name: Pull the MPC image
+          ansible.builtin.command: docker pull --quiet {{ mpc_image }}
+          when: mpc_local.rc != 0
+          changed_when: true
+
+        - name: MPC archive already holding it?
+          ansible.builtin.shell: >-
+            set -o pipefail;
+            tar -xOf {{ (image_archives_dir ~ '/' ~ built_image_archives.mpc) | quote }} manifest.json 2>/dev/null
+            | grep -qF '"{{ mpc_image }}"'
+          args:
+            executable: /bin/bash
+          register: mpc_archive
+          changed_when: false
+          failed_when: false
+
+        - name: Save the MPC image
+          ansible.builtin.shell: >-
+            docker save -o {{ (image_archives_dir ~ '/' ~ built_image_archives.mpc ~ '.tmp') | quote }} {{ mpc_image }}
+            && mv {{ (image_archives_dir ~ '/' ~ built_image_archives.mpc ~ '.tmp') | quote }}
+            {{ (image_archives_dir ~ '/' ~ built_image_archives.mpc) | quote }}
+          when: mpc_archive.rc != 0
+          changed_when: true
+
+    - name: Archive sizes
+      ansible.builtin.stat:
+        path: "{{ image_archives_dir }}/{{ item.file }}"
+      loop: "{{ images + (built_image_archives | dict2items(key_name='key', value_name='file')) }}"
+      loop_control:
+        label: "{{ item.file }}"
+      register: sizes
+
+    - name: Archives
+      ansible.builtin.debug:
+        msg: "{{ item.stat.path }}  {{ (item.stat.size / 1048576) | round | int }} MB"
+      loop: "{{ sizes.results }}"
+      loop_control:
+        label: "{{ item.item.file }}"

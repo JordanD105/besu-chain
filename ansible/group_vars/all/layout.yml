@@ -45,3 +45,9 @@ coord1_url: "http://{{ hostvars[coordinators[0].host].ansible_host }}:9100"
 app_images:
   proxy: localhost/besu-proxy/besu-proxy
   chainlens: localhost/besu-chainlens/chainlens
+
+# File names of the images built by 02-images.yml in image_archives_dir (save-images.yml)
+built_image_archives:
+  mpc: "mpc-signer-{{ mpc_image.split(':') | last }}-docker.tar"
+  proxy: proxy-docker.tar
+  chainlens: chainlens-docker.tar

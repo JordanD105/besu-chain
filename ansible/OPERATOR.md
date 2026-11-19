@@ -75,6 +75,16 @@ Edit `group_vars/all/settings.yml`:
 | `snapshot_copy_to` | off-site target for the daily chain snapshot, e.g. `backup@offsite:/besu-chain` (optional) |
 | `vrrp_interface` | leave empty: it's detected automatically |
 
+To create the archives (or keep a copy of every image the deployment uses), on the operator:
+
+```bash
+ansible-playbook save-images.yml -e image_archives_dir=/opt/000
+```
+
+It saves the five third-party images (pulled first if missing) and, once a deployment run has
+built them, the MPC signer, proxy and chainlens images, all eight in `/opt/000`. Run it again
+after `site.yml` to refresh them.
+
 Everything else (chain id 1337, 1 s blocks, funding of `SENDER01`, image versions) is already
 set. Change it only if you want different values. The chain settings can't be changed after the
 first run.
