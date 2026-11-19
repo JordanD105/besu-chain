@@ -21,6 +21,9 @@ says exactly what they must do, and continues where it stopped when you run it a
 
 `site.yml` runs them in order.
 
+**Step-by-step guide for the operator (install, SSH, settings, the three runs):
+[`OPERATOR.md`](OPERATOR.md).**
+
 ## 1. Requirements
 
 **Operator machine** (the bastion): Ansible (`ansible-core`; tested with 2.22), Docker, git, curl,
