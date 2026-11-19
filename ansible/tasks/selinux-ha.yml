@@ -1,0 +1,47 @@
+# SELinux for HAProxy and keepalived (RHEL family). Detected with getenforce, which works without
+# the python3-libselinux package that Ansible's own SELinux facts need.
+#   haproxy_connect_any    HAProxy binds 8404/8545/9100 and connects to rpc :8555, coordinators :9100
+#   keepalived_connect_any keepalived's checks curl HAProxy :8404 and the proxy :30000
+#   the 3 keepalived scripts run as unconfined keepalived scripts (they run docker compose)
+- name: SELinux mode
+  ansible.builtin.command: getenforce
+  register: selinux_mode
+  changed_when: false
+  failed_when: false
+
+- name: SELinux active?
+  ansible.builtin.set_fact:
+    selinux_active: "{{ selinux_mode.rc == 0 and selinux_mode.stdout | trim in ['Enforcing', 'Permissive'] }}"
+
+- name: SELinux settings for HAProxy and keepalived
+  when: selinux_active | bool
+  block:
+    - name: semanage (policycoreutils-python-utils)
+      ansible.builtin.include_tasks: tasks/packages.yml
+      vars:
+        packages: [policycoreutils-python-utils]
+      when: install_packages | bool and ansible_facts.os_family == 'RedHat'
+
+    - name: Booleans now
+      ansible.builtin.command: getsebool {{ item }}
+      loop: [haproxy_connect_any, keepalived_connect_any]
+      register: sebool
+      changed_when: false
+      failed_when: false
+
+    - name: Turn the booleans on
+      ansible.builtin.command: setsebool -P {{ item.item }} 1
+      loop: "{{ sebool.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.rc == 0 and item.stdout is search('--> off')
+      register: sebool_set
+      changed_when: true
+
+    - name: Boolean missing from this SELinux policy
+      ansible.builtin.debug:
+        msg: "{{ item.item }} does not exist in this SELinux policy: check denials with: ausearch -m avc -ts recent"
+      loop: "{{ sebool.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.rc != 0

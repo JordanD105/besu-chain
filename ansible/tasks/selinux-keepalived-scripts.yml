@@ -1,0 +1,24 @@
+# Label the keepalived scripts as unconfined keepalived scripts, so they may run docker compose.
+- name: Label rule for the keepalived scripts
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    semanage fcontext -l -C | grep -q '/etc/keepalived/(check-proxy|proxy-start|proxy-stop)\\.sh'
+    || { semanage fcontext -a -t keepalived_unconfined_script_exec_t '/etc/keepalived/(check-proxy|proxy-start|proxy-stop)\.sh' && echo added; }
+  args:
+    executable: /bin/bash
+  register: fcontext
+  changed_when: "'added' in fcontext.stdout"
+  failed_when: false
+
+- name: Label rule could not be added
+  ansible.builtin.debug:
+    msg: >-
+      semanage could not label the keepalived scripts ({{ fcontext.stderr | trim }}): keepalived may be
+      unable to start/stop the proxy. Check denials with: ausearch -m avc -ts recent
+  when: fcontext.rc != 0
+
+- name: Apply the labels
+  ansible.builtin.command: restorecon -v /etc/keepalived/check-proxy.sh /etc/keepalived/proxy-start.sh /etc/keepalived/proxy-stop.sh
+  register: relabel
+  changed_when: relabel.stdout | length > 0
+  when: fcontext.rc == 0

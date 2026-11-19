@@ -39,12 +39,31 @@ dnf install -y keepalived haproxy
 echo 'net.ipv4.ip_nonlocal_bind = 1' > /etc/sysctl.d/90-vip.conf && sysctl --system
 ```
 
+The sysctl lets HAProxy bind the VIP on the host that doesn't hold it.
+
+With SELinux (check with `getenforce`: `Enforcing` or `Permissive`):
+
 ```bash
-setsebool -P haproxy_connect_any 1
+setsebool -P haproxy_connect_any 1 && setsebool -P keepalived_connect_any 1
 ```
 
-The first lets HAProxy bind the VIP on the host that doesn't hold it; the second lets HAProxy
-(SELinux) connect to ports 8545 and 9100.
+- `haproxy_connect_any`: HAProxy binds 8404/8545/9100 and connects to rpc1/rpc2 `:8555` and the
+  coordinators `:9100`.
+- `keepalived_connect_any`: keepalived's checks reach HAProxy's health page (`:8404`) and the
+  proxy (`:30000`). Without it the HAProxy check fails and `.150` never comes up.
+
+After copying the keepalived scripts (section 4), label them so they may run `docker compose`
+(`semanage` is in `policycoreutils-python-utils`):
+
+```bash
+semanage fcontext -a -t keepalived_unconfined_script_exec_t '/etc/keepalived/(check-proxy|proxy-start|proxy-stop)\.sh'
+```
+
+```bash
+restorecon -v /etc/keepalived/*.sh
+```
+
+If something is still blocked: `ausearch -m avc -ts recent`.
 
 Firewall (on every host, see `firewall-layout.sh` for what it opens):
 
