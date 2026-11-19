@@ -743,7 +743,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Reachability of each MPC node from each coordinator (GET /health every 10 s).",
+      "description": "Reachability of each MPC node from each coordinator (GET /health every 10 s). Down from one coordinator only: the network path between those two hosts.",
       "gridPos": {
         "x": 0,
         "y": 12,
@@ -753,7 +753,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (node, instance) (mpc_node_up{job=\"mpc-coordinator\",instance=~\"$coordinator\"})",
+          "expr": "max by (node) (mpc_node_up{job=\"mpc-coordinator\",instance=~\"$coordinator\",name=\"coord1\"})",
           "format": "table",
           "instant": true,
           "datasource": {
@@ -763,7 +763,27 @@
         },
         {
           "refId": "B",
-          "expr": "max by (node, instance) (mpc_node_probe_seconds{job=\"mpc-coordinator\",instance=~\"$coordinator\"})",
+          "expr": "max by (node) (mpc_node_up{job=\"mpc-coordinator\",instance=~\"$coordinator\",name=\"coord2\"})",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "max by (node) (mpc_node_probe_seconds{job=\"mpc-coordinator\",instance=~\"$coordinator\",name=\"coord1\"})",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "D",
+          "expr": "max by (node) (mpc_node_probe_seconds{job=\"mpc-coordinator\",instance=~\"$coordinator\",name=\"coord2\"})",
           "format": "table",
           "instant": true,
           "datasource": {
@@ -784,16 +804,18 @@
               "Time": true
             },
             "renameByName": {
-              "Value #A": "Up",
-              "Value #B": "Health probe",
-              "node": "MPC node",
-              "instance": "Coordinator"
+              "Value #A": "Up (coord1)",
+              "Value #B": "Up (coord2)",
+              "Value #C": "Probe (coord1)",
+              "Value #D": "Probe (coord2)",
+              "node": "MPC node"
             },
             "indexByName": {
               "node": 0,
-              "instance": 1,
-              "Value #A": 2,
-              "Value #B": 3
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4
             }
           }
         }
@@ -815,7 +837,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Health probe"
+              "options": "Probe (coord1)"
             },
             "properties": [
               {
@@ -827,7 +849,19 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Up"
+              "options": "Probe (coord2)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Up (coord1)"
             },
             "properties": [
               {
@@ -865,6 +899,81 @@
                       "1": {
                         "text": "UP",
                         "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Up (coord2)"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "DOWN",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "UP",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MPC node"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "mpc1 (.135)"
+                      },
+                      "1": {
+                        "text": "mpc2 (.137)"
+                      },
+                      "2": {
+                        "text": "mpc3 (.138)"
                       }
                     }
                   }
