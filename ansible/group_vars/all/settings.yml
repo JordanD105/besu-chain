@@ -81,6 +81,11 @@ remix_commit: b694f46a0adad6ff2a54bcf0b0a5340e94631a56            # Remix 2.6.15
 remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version is always added)
 # (who may open Remix: remix_ips at the top)
 
+# Sections (docs/sections.md): applications call /createaccount and /transfer with their section's
+# X-Section-Key. false: calls without a key still use SENDER01 (for applications not moved yet);
+# true: such calls are refused.
+sections_required: false
+
 # Deploy page in chainlens (#/deploy, ansible/CHAINLENS-DEPLOY.md): deploy compiled contracts from the
 # browser, signed by ONE MPC account. Only operator_ip and chainlens_deploy_ips can use it, with the
 # token Ansible generates (state/secrets/chainlens_deploy_token). Off by default.

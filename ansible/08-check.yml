@@ -45,7 +45,7 @@
       register: smoke_done
 
     - name: Smoke test, once (new MPC account funded with 1 ETH, then a transfer from SENDER01)
-      when: smoke_test | bool and not smoke_done.stat.exists
+      when: smoke_test | bool and not smoke_done.stat.exists and not sections_required | bool  # keyless calls are refused then
       block:
         - name: Create an account
           ansible.builtin.uri:

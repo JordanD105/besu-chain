@@ -117,6 +117,23 @@ POST /admin/sections/1/active
 { "active": false }
 
 # ---------------------------------------------------------------
+# Section calls (docs/sections.md): header X-Section-Key: sk_... from an allowed address of the section
+# ---------------------------------------------------------------
+# Account of the section, funded from the section's upfront account (not SENDER01)
+POST /createaccount        X-Section-Key: sk_...
+{ "amount": "2", "pool": "none" }
+-> { "success": true, "section": { "id": 1, "name": "Section 1" }, "address": "0x...", "from": "<upfront_1>", "amount": "2", "txHash": "0x...", "registryTxHash": "0x..." }
+
+# +amount: account -> the section's consumption account; -amount: the section's upfront account -> account
+POST /transfer             X-Section-Key: sk_...
+{ "account": "0x...", "amount": "1", "memo": "optional" }
+{ "account": "0x...", "amount": "-0.5" }
+-> { "success": true, "section": {...}, "direction": "account -> consumption", "from": "0x...", "to": "0x...", "amount": "1", "txHash": "0x..." }
+
+# Without X-Section-Key: SENDER01 behaviour (unless SECTION_KEY_REQUIRED=true), but a section's
+# accounts can't be moved that way (403).
+
+# ---------------------------------------------------------------
 # Sender state (nonces, value in flight, corrections by the periodic chain check)
 # ---------------------------------------------------------------
 GET /status/senders

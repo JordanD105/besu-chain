@@ -13,6 +13,9 @@ section 3).
 | `grafana_ips` | users of Grafana, the monitoring dashboards | monitoring host `:3000` |
 | `remix_ips` | developers using the Remix IDE | monitoring host `:30200` |
 
+**Sections** ([`../docs/sections.md`](../docs/sections.md)) have their own allowed IPs, checked by the
+proxy on top of the firewall: a section's application addresses must also be in `proxy_client_ips`.
+
 The Deploy page of chainlens, when on, is for `operator_ip` and `chainlens_deploy_ips` only (not
 `chainlens_ips`): [`CHAINLENS-DEPLOY.md`](CHAINLENS-DEPLOY.md).
 

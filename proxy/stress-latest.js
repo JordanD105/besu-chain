@@ -45,6 +45,8 @@ const CONFIG = {
     // Admin API (/admin/*): bearer token and the source addresses allowed to use it
     ADMIN_TOKEN: (process.env.ADMIN_TOKEN || "").trim(),
     ADMIN_ALLOWED_IPS: (process.env.ADMIN_ALLOWED_IPS || "").split(/[\s,]+/).filter(Boolean),
+    // true: /createaccount and /transfer need a section's X-Section-Key (no SENDER01 fallback)
+    SECTION_KEY_REQUIRED: String(process.env.SECTION_KEY_REQUIRED || "").toLowerCase() === "true",
     REDIS: {
         host: process.env.REDIS_IP || process.env.IP || BESU_IP,
         port: Number(process.env.REDIS_PORT) || 36379
@@ -965,7 +967,10 @@ app.post("/createaccount", async (req, res) => {
         }
 
         const pool = poolClass(req.body.pool);
-        const result = await withAccountLock(() => createAccount(amountText, pool));
+        const section = await sectionFromRequest(req);
+        const result = section
+            ? await createSectionAccount(section, amountText, pool)
+            : await withAccountLock(() => createAccount(amountText, pool));
         res.json(result);
     } catch (error) {
         console.error(error);
@@ -1019,6 +1024,12 @@ app.post("/account/pool", async (req, res) => {
 
 app.post("/transfer", async (req, res) => {
     try {
+        const section = await sectionFromRequest(req);
+
+        if (section) {
+            return res.json(await sectionTransfer(section, req.body));
+        }
+
         const { from, to, amount, memo } = req.body;
 
         if (!from || !to || !amount) {
@@ -1059,6 +1070,9 @@ app.post("/transfer", async (req, res) => {
 
         const sender = negative ? to : from;
         const recipient = negative ? from : to;
+
+        // accounts of a section only move through that section's key (and never the registry admin)
+        await assertNotSectionAccount(sender);
         const ownedBySigner = await signerOwns(sender);
 
         if (!ownedBySigner && !await readPrivateKey(accountName(sender))) {
@@ -2726,6 +2740,175 @@ app.post("/admin/sections/:id/active", adminGuard, adminRoute(async (req) => {
     return { success: true, id: section.id, active: req.body.active, txHash: written.txHash };
 }));
 
+// ---- Section calls (step 2): X-Section-Key + source IP -> section_i
+
+const ACCOUNT_USER = 1;
+const accountSectionCache = new Map(); // address (lower) -> { id, kind }: never changes once registered
+
+// The section of a request, or null for a call without X-Section-Key (SENDER01 behaviour, unless
+// SECTION_KEY_REQUIRED). Both the key and the source address must match an active section.
+async function sectionFromRequest(req) {
+    const key = String(req.headers["x-section-key"] || "").trim();
+
+    if (!key) {
+        if (CONFIG.SECTION_KEY_REQUIRED) {
+            throw httpError(401, "X-Section-Key is required");
+        }
+
+        return null;
+    }
+
+    requireSections();
+    const hash = ethers.keccak256(ethers.toUtf8Bytes(key));
+    let section = (await listSections()).find((s) => s.keyHash === hash);
+
+    if (!section) {
+        // a key created or rotated a moment ago (by the other proxy, or before the cache refresh)
+        section = (await listSections(true)).find((s) => s.keyHash === hash);
+    }
+
+    if (!section) {
+        console.warn(`section call with an unknown key from ${req.socket.remoteAddress}`);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        throw httpError(401, "unknown section key");
+    }
+
+    if (!ipMatches(req.socket.remoteAddress, section.allowedIps)) {
+        console.warn(`section ${section.id}: call from ${req.socket.remoteAddress}, not in its allowed IPs`);
+        throw httpError(403, `section "${section.name}" is not allowed from this address`);
+    }
+
+    if (!section.active) {
+        throw httpError(403, `section "${section.name}" is disabled`);
+    }
+
+    return section;
+}
+
+async function accountSection(address) {
+    const key = address.toLowerCase();
+
+    if (accountSectionCache.has(key)) {
+        return accountSectionCache.get(key);
+    }
+
+    const [id] = await registryCall("sectionOfAccount", [address]);
+    const [kind] = await registryCall("accountKind", [address]);
+    const result = { id: Number(id), kind: Number(kind) };
+
+    if (result.kind !== 0) {
+        accountSectionCache.set(key, result);
+    }
+
+    return result;
+}
+
+// Calls without a section key must not move a section's money (or send from the registry admin)
+async function assertNotSectionAccount(address) {
+    if (!sectionsConfigured() || !isAddress(address)) {
+        return;
+    }
+
+    if (ethers.getAddress(address) === ethers.getAddress(CONFIG.REGISTRY_ADMIN)) {
+        throw httpError(403, "the registry admin account can't be used here");
+    }
+
+    const owner = await accountSection(address);
+
+    if (owner.kind !== 0) {
+        throw httpError(403, `${ethers.getAddress(address)} belongs to section ${owner.id}: call with that section's X-Section-Key`);
+    }
+}
+
+async function assertSectionUser(section, address) {
+    const owner = await accountSection(address);
+
+    if (owner.kind !== ACCOUNT_USER || owner.id !== section.id) {
+        throw httpError(403, `${ethers.getAddress(address)} is not an account of section "${section.name}"`);
+    }
+}
+
+// /createaccount for a section: the account is registered under the section, then funded from the
+// section's upfront account (instead of SENDER01).
+async function createSectionAccount(section, amount, pool) {
+    if (!CONFIG.MPC_ADMIN_URL) {
+        throw httpError(503, "sections need the MPC signer (MPC_ADMIN_URL)");
+    }
+
+    const funder = section.accounts.upfront;
+    await assertCanPay(funder, amount);
+    const address = await createMpcAccount(pool);
+    const registered = await registryWrite("addAccount", [section.id, address]);
+    accountSectionCache.set(address.toLowerCase(), { id: section.id, kind: ACCOUNT_USER });
+    const payment = await withSenderLock(funder, async () => {
+        await assertCanPay(funder, amount);
+        return pay(funder, address, amount, true);
+    });
+
+    return {
+        success: true,
+        section: { id: section.id, name: section.name },
+        address,
+        from: funder,
+        amount,
+        pool,
+        txHash: payment.txHash,
+        nonce: payment.nonce,
+        registryTxHash: registered.txHash
+    };
+}
+
+// /transfer for a section: { account, amount, memo }
+//   +x  account -> the section's consumption account
+//   -x  the section's upfront account -> account
+async function sectionTransfer(section, body) {
+    const { account, amount, memo } = body || {};
+
+    if (body && (body.from !== undefined || body.to !== undefined)) {
+        throw httpError(400, "with X-Section-Key, send { \"account\": \"0x...\", \"amount\": \"5\" | \"-5\" }: +amount account -> consumption, -amount upfront -> account");
+    }
+
+    if (!account || !isAddress(account) || amount === undefined || amount === null || amount === "") {
+        throw httpError(400, "missing parameters: account, amount");
+    }
+
+    if (memo !== undefined && typeof memo !== "string") {
+        throw httpError(400, "invalid memo");
+    }
+
+    const memoText = memo === undefined ? "" : memo;
+
+    if (memoBytes(memoText).length > MEMO_LIMIT) {
+        throw httpError(400, "memo is too long");
+    }
+
+    const amountText = String(amount).trim();
+    const negative = amountText.startsWith("-");
+    const value = negative ? amountText.slice(1) : amountText;
+
+    if (!/^\d+(\.\d+)?$/.test(value) || ethToWei(value) === 0n) {
+        throw httpError(400, "invalid amount");
+    }
+
+    const user = ethers.getAddress(account);
+    await assertSectionUser(section, user);
+    const sender = negative ? section.accounts.upfront : user;
+    const recipient = negative ? user : section.accounts.consumption;
+    const { txHash, nonce } = await withSenderLock(sender, () => pay(sender, recipient, value, true, memoText));
+
+    return {
+        success: true,
+        section: { id: section.id, name: section.name },
+        direction: negative ? "upfront -> account" : "account -> consumption",
+        txHash,
+        from: sender,
+        to: recipient,
+        amount: value,
+        memo: memoText,
+        nonce
+    };
+}
+
 // Startup check: the configured registry answers and its admin is REGISTRY_ADMIN
 async function checkRegistryAtStart() {
     if (!CONFIG.REGISTRY_CONTRACT && !CONFIG.REGISTRY_ADMIN) {
@@ -2746,7 +2929,9 @@ async function checkRegistryAtStart() {
         senderState(CONFIG.REGISTRY_ADMIN).pinned = true;
         console.log(`sections: registry ${CONFIG.REGISTRY_CONTRACT} v${version}, ${count} section(s), admin API ${CONFIG.ADMIN_TOKEN ? "on" : "off"}`);
     } catch (error) {
-        console.error(`sections: registry ${CONFIG.REGISTRY_CONTRACT} not usable: ${error.message}`);
+        // e.g. Besu behind HAProxy not answering yet right after a restart: try again
+        console.error(`sections: registry ${CONFIG.REGISTRY_CONTRACT} not usable yet (${error.message}); retrying in 15 s`);
+        setTimeout(checkRegistryAtStart, 15000).unref();
     }
 }
 

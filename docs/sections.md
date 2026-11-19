@@ -4,8 +4,9 @@ A **section** is a group of applications (section_1 … section_n) with its own 
 key and its own allowed source addresses. Money for a section's users comes from the section's own
 accounts instead of SENDER01.
 
-**Status:** step 1 of 6 is built (the registry and the proxy admin API to create and manage
-sections). The application-side behaviour below (flows marked *planned*) comes in the next steps.
+**Status:** steps 1 and 2 of 6 are built: the registry, the proxy admin API to create and manage
+sections, and section-scoped `/createaccount` and `/transfer`. The rest (marked with their step in
+the flow table) comes next.
 
 ## Accounts
 
@@ -77,6 +78,36 @@ On the proxy (`http://<vip_proxy>:30000/admin/...`), with `Authorization: Bearer
 
 Names are unique (case-insensitive), 1 to 64 characters.
 
+## Application API (built): section calls
+
+An application of section_i sends its key in the header **`X-Section-Key: sk_…`**. The proxy
+accepts the call only when the key's hash belongs to a section, the **source address** is in that
+section's allowed IPs, and the section is **active**.
+
+| Request | Section call does |
+|---|---|
+| `POST /createaccount {amount, pool}` | new MPC account, **registered under section_i** on chain, funded **from `upfront_account_i`** |
+| `POST /transfer {account, amount: "x"}` | `account` → `consumption_account_i` |
+| `POST /transfer {account, amount: "-x"}` | `upfront_account_i` → `account` |
+
+`account` must be a user account of section_i (created by that section's `/createaccount`). The
+answer names the section, the direction, `from`, `to` and the transaction. `memo` works as before.
+
+**Calls without a key** keep the SENDER01 behaviour while `sections_required: false` (settings.yml),
+for applications not moved yet, with one guard: **they can't move any section's money** — a
+section account (user, upfront, consumption, payment) or the registry admin as sender is refused.
+With `sections_required: true` they are refused altogether (`X-Section-Key is required`).
+
+| Error | Cause |
+|---|---|
+| 401 `unknown section key` | no section has this key (rotated?) |
+| 403 `section "…" is not allowed from this address` | the caller's address is not in the section's allowed IPs |
+| 403 `section "…" is disabled` | the section is switched off |
+| 403 `0x… is not an account of section "…"` | the account belongs to another section, or isn't a user account |
+| 403 `0x… belongs to section N: call with that section's X-Section-Key` | a keyless call tried to move a section's money |
+| 400 `insufficient balance` | `upfront_account_i` (or the account for `+x`) can't pay: top up / wait for a pending transfer to be mined |
+| 401 `X-Section-Key is required` | `sections_required: true` and no key |
+
 ## Flows
 
 | Action | Who | Signed by / what happens | Step |
@@ -86,9 +117,9 @@ Names are unique (case-insensitive), 1 to 64 characters.
 | **Top up** (UI, amount) | proxy admin API | SENDER01 → `upfront_account_i`, manual only | 3 |
 | **Sweep** (UI, amount or all) | proxy admin API | `consumption_account_i` → `payment_account_i` | 3 |
 | **Pay back** (UI, amount or all) | proxy admin API | `payment_account_i` → SENDER01 | 3 |
-| `/createaccount` (section_i) | proxy | `upfront_account_i` → new user account; registry: account → section_i | 2 |
-| `/transfer +x` (section_i) | proxy | user account → `consumption_account_i` | 2 |
-| `/transfer -x` (section_i) | proxy | `upfront_account_i` → user account | 2 |
+| `/createaccount` (section_i) | proxy | `upfront_account_i` → new user account; registry: account → section_i | **2 (built)** |
+| `/transfer +x` (section_i) | proxy | user account → `consumption_account_i` | **2 (built)** |
+| `/transfer -x` (section_i) | proxy | `upfront_account_i` → user account | **2 (built)** |
 | **Deploy contract** (UI) | proxy admin API → registry | `contract_account_center`; not tied to a section | 4 |
 | **Deploy NFT collection** (UI) | proxy admin API → registry | `contract_account_center` (the minter); shared by all sections | 4–5 |
 | `/contract/call` | proxy | none (read); any registered contract | 4 |
@@ -97,14 +128,14 @@ Names are unique (case-insensitive), 1 to 64 characters.
 | `/nft/transfer`, first sale (section_i) | → `/contract/send` | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` | 5 |
 | `/nft/transfer`, resale (section_i) | → `/contract/send` | the seller approves; the buyer `buy(tokenId)` at the same mint price; NFT → buyer, price → seller | 5 |
 
-A section call (step 2 on) is accepted only when **both** the `X-Section-Key` hash and the source IP
+A section call is accepted only when **both** the `X-Section-Key` hash and the source IP
 match the section, and the section is active. The proxy port itself still opens only to
 `proxy_client_ips`, so a section's addresses must be in that list too.
 
 ## Build steps
 
 1. **Registry contract and proxy admin API** (create, list, key, IPs, active) — built.
-2. Section-scoped `/createaccount` and `/transfer` (+x to consumption, -x from upfront).
+2. **Section-scoped `/createaccount` and `/transfer`** (+x to consumption, -x from upfront) — built.
 3. Chainlens Sections page: create, top up, sweep, pay back, keys, IPs, history.
 4. `/contract/call`, `/contract/send`, and Deploy through the proxy as `contract_account_center`.
 5. NftCollection v3, and `/nft/mint` / `/nft/transfer` on `/contract/send`.
