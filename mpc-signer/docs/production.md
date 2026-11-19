@@ -69,14 +69,14 @@ signing with a node stopped, and a backup → data loss → restore → signing 
 
 ```bash
 cd mpc-signer
-docker build --build-arg BIGINT=bigint-rug -t registry.example.com/mpc-signer:1.0.0 .
-docker push registry.example.com/mpc-signer:1.0.0
+docker build --build-arg BIGINT=bigint-rug -t registry.example.com/mpc-signer:1.2.0 .
+docker push registry.example.com/mpc-signer:1.2.0
 ```
 
 - `BIGINT=bigint-rug` uses the GMP backend: presigning is several times faster, but it adds an
   LGPL dependency. Omit it for the pure-Rust default.
 - **Without a registry**, copy the image to each host:
-  `docker save registry.example.com/mpc-signer:1.0.0 | ssh HOST docker load`.
+  `docker save registry.example.com/mpc-signer:1.2.0 | ssh HOST docker load`.
 - Use an exact version tag, never `latest`. Record the image digest
   (`docker inspect --format '{{index .RepoDigests 0}}' …`) and have each team confirm it runs
   the same one.
