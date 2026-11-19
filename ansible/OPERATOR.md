@@ -73,7 +73,7 @@ Edit `group_vars/all/settings.yml`:
 | `client_ips` | the IPs of the applications calling the proxy (and chainlens users), e.g. `[10.1.2.3, 10.1.2.4]` |
 | `image_archives_dir` | the folder holding the image archives (`besu-26.11.1-docker.tar`, `grafana-13.2-docker.tar`, `node-exporter-v1.12.1-docker.tar`, `prometheus-3.16.0-docker.tar`, `redis-8.10.3-docker.tar`), e.g. `/opt/images`. Leave it empty to download the images from Docker Hub instead |
 | `snapshot_copy_to` | off-site target for the daily chain snapshot, e.g. `backup@offsite:/besu-chain` (optional) |
-| `key_backup_gpg_public_key` | path on the operator to **your GPG public key** (`gpg --armor --export … > backup-pub.asc`). Ansible backs up the 6 Besu node keys encrypted with it. Keep the private key offline. Empty: no key backups |
+| `key_backup_gpg_public_key` | path on the operator to **your GPG public key**, e.g. `/opt/000/backup-pub.asc`: create the key pair as in [`GPG-KEY.md`](GPG-KEY.md). Ansible backs up the 6 Besu node keys encrypted with it. Keep the private key offline. Empty: no key backups |
 | `mpc_backup_cron` | `true` to let Ansible set up the hourly MPC share backups on the 3 MPC hosts (default `false`: each team does it) |
 | `vrrp_interface` | leave empty: it's detected automatically |
 

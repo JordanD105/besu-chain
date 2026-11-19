@@ -123,16 +123,8 @@ its first run):
 | Node keys (val1–4, rpc1–2) | once per key: copied out of the data volume into a private directory on the host, encrypted there with **your GPG public key**, the plain copy shredded, the encrypted file fetched to `state/key-backups/<node>.key.gpg`. Only your offline private key can read them | `key_backup_gpg_public_key` (empty: skipped) |
 | MPC shares (3 nodes) | opt-in (the nodes belong to their teams): hourly cron and a first backup. The archives are sealed (useless without the team's passphrase) and stay on the node's host: each team copies them off it | `mpc_backup_cron` (default `false`), `mpc_backup_dir` |
 
-Make the GPG key pair once, on a machine that stays offline or in a vault, and give Ansible only
-the public half:
-
-```bash
-gpg --quick-gen-key 'besu-chain key backups' rsa4096 encr never
-```
-
-```bash
-gpg --armor --export 'besu-chain key backups' > backup-pub.asc
-```
+The GPG key pair (create it, give Ansible only the public half, keep the private half offline,
+decrypt for a restore): **[`GPG-KEY.md`](GPG-KEY.md)**.
 - **Failover tests:** [`../docs/production-layout.md`](../docs/production-layout.md) section 6, then go live.
 
 ## 4. The operator's state (`state/`, never committed)

@@ -121,8 +121,9 @@ back.
    4 network files into `network/`.
 3. Restore its key (decrypt the backup first) and start. A backup made by Ansible
    (`ansible/state/key-backups/<node>.key.gpg`) is decrypted with your offline GPG private key,
-   e.g. `gpg --decrypt val3.key.gpg > val3.key`; copy the result to the host over SSH, and shred
-   it everywhere once restored (`shred -u val3.key`):
+   e.g. `gpg --decrypt val3.key.gpg > val3.key` ([`../ansible/GPG-KEY.md`](../ansible/GPG-KEY.md),
+   step 5); copy the result to the host over SSH, and shred it everywhere once restored
+   (`shred -u val3.key`):
    ```bash
    ./restore-key.sh /secure/validator3.key        # prints the enode; must say "OK: … in static-nodes.json"
    ./start.sh                                     # syncs from the other nodes
