@@ -91,10 +91,15 @@
         state: directory
         mode: "0755"
 
+    - name: node-exporter image
+      ansible.builtin.include_tasks: tasks/ensure-image.yml
+      vars:
+        key: node_exporter
+
     - name: node-exporter settings
       ansible.builtin.copy:
         dest: "{{ repo_dir }}/monitoring/node-exporter/.env"
-        content: "BIND_IP={{ ansible_host }}\n"
+        content: "BIND_IP={{ ansible_host }}\nNODE_EXPORTER_IMAGE={{ node_exporter_image }}\n"
         mode: "0644"
 
     - name: node-exporter

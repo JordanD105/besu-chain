@@ -12,7 +12,7 @@
 #   p2p + metrics -> BIND_IP     JSON-RPC/WS -> RPC_BIND_IP (validators 127.0.0.1, RPC nodes private IP)
 services:
   besu:
-    image: ${BESU_IMAGE:?set BESU_IMAGE, e.g. hyperledger/besu:26.11.0}
+    image: ${BESU_IMAGE:?set BESU_IMAGE, e.g. hyperledger/besu:26.11.1}
     restart: unless-stopped
     network_mode: host
     # Besu checks the Host header of JSON-RPC AND metrics requests against BESU_HOST_ALLOWLIST.

@@ -22,8 +22,24 @@ mpc_max_gas: 30000000
 mpc_allowed_to: ""        # leave empty for the proxy (see mpc-signer/docs/production.md)
 mpc_pool_target: 500
 
-# Images
-besu_image: hyperledger/besu:26.11.0
+# Third-party images (exact versions)
+besu_image: hyperledger/besu:26.11.1
+node_exporter_image: prom/node-exporter:v1.12.1
+prometheus_image: prom/prometheus:v3.16.0
+grafana_image: grafana/grafana:13.2
+redis_image: redis:8.10.3
+
+# Optional: load the images above from `docker save` archives instead of pulling them from Docker
+# Hub (hosts without Docker Hub access, or to avoid its rate limit). A directory on the operator
+# holding these files; each must contain the image above with the same name and tag.
+image_archives_dir: ""
+image_archives:
+  besu: besu-26.11.1-docker.tar
+  node_exporter: node-exporter-v1.12.1-docker.tar
+  prometheus: prometheus-3.16.0-docker.tar
+  grafana: grafana-13.2-docker.tar
+  redis: redis-8.10.3-docker.tar
+
 besu_java_opts: -Xmx4g
 mpc_image: registry.example.com/mpc-signer:1.2.0
 # true: build mpc_image on the operator and copy it to the hosts (docker save/load).

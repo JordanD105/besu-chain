@@ -1,6 +1,8 @@
-# Images, built ONCE on the operator and copied to the hosts (docker save/load), so every host
+# Images. Built ONCE on the operator and copied to the hosts (docker save/load), so every host
 # runs the identical image: the MPC signer (coordinators + MPC node hosts), the proxy (.135, .136)
 # and chainlens (.139). Proxy and chainlens are built from the committed HEAD (state/build/).
+# Third-party images (Besu, redis, Prometheus, Grafana) come from image_archives_dir when set,
+# otherwise from Docker Hub.
 - name: Build the images on the operator
   hosts: localhost
   gather_facts: false
@@ -26,6 +28,17 @@
       args:
         creates: "{{ mpc_tar }}"
       when: mpc_image_build | bool
+
+    - name: Besu image on the operator (make-network.sh uses it)
+      ansible.builtin.command: docker image inspect {{ besu_image }}
+      register: op_besu
+      changed_when: false
+      failed_when: false
+
+    - name: Load the Besu archive on the operator
+      ansible.builtin.command: docker load -i {{ image_archives_dir }}/{{ image_archives.besu }}
+      when: op_besu.rc != 0 and image_archives_dir | length > 0
+      changed_when: true
 
     - name: Build directory
       ansible.builtin.file:
@@ -123,3 +136,16 @@
       ansible.builtin.include_tasks: tasks/ship-image.yml
       vars:
         app: chainlens
+
+- name: Third-party images where they run
+  hosts: servers
+  become: true
+  tasks:
+    - name: Images for this host
+      ansible.builtin.include_tasks: tasks/ensure-image.yml
+      loop: >-
+        {{ (['besu'] if inventory_hostname in groups['besu_hosts'] else [])
+           + (['redis'] if inventory_hostname in groups['app_hosts'] else [])
+           + (['prometheus', 'grafana'] if inventory_hostname in groups['monitoring_hosts'] else []) }}
+      loop_control:
+        loop_var: key

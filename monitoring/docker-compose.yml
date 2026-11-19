@@ -5,7 +5,7 @@
 #   docker compose up -d          -> Grafana on http://<BIND_IP>:3000
 services:
   prometheus:
-    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.10.0}
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.16.0}
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -27,7 +27,7 @@ services:
       options: { max-size: "50m", max-file: "3" }
 
   grafana:
-    image: ${GRAFANA_IMAGE:-grafana/grafana:12.3}
+    image: ${GRAFANA_IMAGE:-grafana/grafana:13.2}
     restart: unless-stopped
     depends_on: [prometheus]
     environment:

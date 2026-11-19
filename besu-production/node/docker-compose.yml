@@ -3,7 +3,7 @@
 #   docker compose up -d
 services:
   besu:
-    image: ${BESU_IMAGE:?set BESU_IMAGE, e.g. hyperledger/besu:26.11.0}
+    image: ${BESU_IMAGE:?set BESU_IMAGE, e.g. hyperledger/besu:26.11.1}
     restart: unless-stopped
     # Besu checks the Host header of JSON-RPC AND metrics requests against BESU_HOST_ALLOWLIST.
     # Add this node's BIND_IP to it (unless it is * / all) so Prometheus can scrape

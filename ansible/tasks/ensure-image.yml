@@ -1,0 +1,43 @@
+# Make sure the third-party image `key` (besu, node_exporter, prometheus, grafana, redis) is on this
+# host: loaded from image_archives_dir when set, otherwise pulled.
+- name: Image present? ({{ key }})
+  ansible.builtin.command: docker image inspect {{ lookup('ansible.builtin.vars', key ~ '_image') }}
+  register: ext_img
+  changed_when: false
+  failed_when: false
+
+- name: Load from the archive ({{ key }})
+  when: ext_img.rc != 0 and image_archives_dir | length > 0
+  block:
+    - name: Copy the archive ({{ image_archives[key] }})
+      ansible.builtin.copy:
+        src: "{{ image_archives_dir }}/{{ image_archives[key] }}"
+        dest: /var/tmp/ansible-{{ key }}.tar
+        mode: "0600"
+
+    - name: Load the archive ({{ key }})
+      ansible.builtin.command: docker load -i /var/tmp/ansible-{{ key }}.tar
+      changed_when: true
+
+    - name: Remove the archive copy ({{ key }})
+      ansible.builtin.file:
+        path: /var/tmp/ansible-{{ key }}.tar
+        state: absent
+
+    - name: The archive held the expected image ({{ key }})
+      ansible.builtin.command: docker image inspect {{ lookup('ansible.builtin.vars', key ~ '_image') }}
+      changed_when: false
+      register: ext_loaded
+      failed_when: false
+
+    - name: Archive check ({{ key }})
+      ansible.builtin.assert:
+        that: ext_loaded.rc == 0
+        fail_msg: >-
+          {{ image_archives[key] }} does not contain {{ lookup('ansible.builtin.vars', key ~ '_image') }}:
+          check {{ key }}_image in settings.yml (name and tag must match the archive).
+
+- name: Pull ({{ key }})
+  ansible.builtin.command: docker pull --quiet {{ lookup('ansible.builtin.vars', key ~ '_image') }}
+  when: ext_img.rc != 0 and image_archives_dir | length == 0
+  changed_when: true

@@ -16,19 +16,6 @@
         mode: "0600"
       register: proxy_env
 
-    - name: Redis image present? (started with the proxy)
-      ansible.builtin.command: docker image inspect redis
-      register: redis_img
-      changed_when: false
-      failed_when: false
-
-    - name: Pull redis when missing
-      ansible.builtin.command: docker compose pull --quiet --ignore-buildable redis
-      args:
-        chdir: "{{ repo_dir }}/proxy"
-      when: redis_img.rc != 0
-      changed_when: true
-
     - name: Proxy running on this host?
       ansible.builtin.command: docker compose ps -q --status running proxy
       args:
@@ -43,3 +30,19 @@
       when: proxy_running.stdout | length > 0
       register: proxy_up
       changed_when: proxy_up.stderr is search('Recreated|Started')
+
+    - name: Redis running here without the proxy? (left from an earlier failover)
+      ansible.builtin.command: docker compose ps -q --status running redis
+      args:
+        chdir: "{{ repo_dir }}/proxy"
+      register: redis_running
+      changed_when: false
+      when: proxy_running.stdout | length == 0
+
+    - name: Update that redis (new image or settings)
+      ansible.builtin.command: docker compose up -d redis
+      args:
+        chdir: "{{ repo_dir }}/proxy"
+      when: proxy_running.stdout | length == 0 and redis_running.stdout | default('') | length > 0
+      register: redis_up
+      changed_when: redis_up.stderr is search('Recreated|Started')

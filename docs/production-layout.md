@@ -322,7 +322,7 @@ cp .env.example .env && chmod 600 .env
 `.env` of **val1** (.135):
 
 ```bash
-BESU_IMAGE=hyperledger/besu:26.11.0
+BESU_IMAGE=hyperledger/besu:26.11.1
 BESU_ROLE=validator
 NODE_NAME=val1
 P2P_HOST=192.168.68.135
@@ -339,7 +339,7 @@ COMPOSE_FILE=docker-compose.host.yml
 `.env` of **rpc1** (.135):
 
 ```bash
-BESU_IMAGE=hyperledger/besu:26.11.0
+BESU_IMAGE=hyperledger/besu:26.11.1
 BESU_ROLE=rpc
 NODE_NAME=rpc1
 P2P_HOST=192.168.68.135

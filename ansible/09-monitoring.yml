@@ -24,11 +24,17 @@
       changed_when: not mon_env.stat.exists
       no_log: true
 
-    - name: BIND_IP
+    - name: BIND_IP and image versions
       ansible.builtin.lineinfile:
         path: /opt/monitoring/.env
-        regexp: '^BIND_IP='
-        line: "BIND_IP={{ ansible_host }}"
+        regexp: '^{{ item.key }}='
+        line: "{{ item.key }}={{ item.value }}"
+      loop:
+        - { key: BIND_IP, value: "{{ ansible_host }}" }
+        - { key: PROMETHEUS_IMAGE, value: "{{ prometheus_image }}" }
+        - { key: GRAFANA_IMAGE, value: "{{ grafana_image }}" }
+      loop_control:
+        label: "{{ item.key }}"
 
     - name: Read the Grafana password
       ansible.builtin.slurp:

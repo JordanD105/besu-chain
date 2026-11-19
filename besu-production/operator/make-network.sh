@@ -12,7 +12,7 @@ set -Eeuo pipefail
 out="${1:?output dir}"; shift
 [ $# -ge 1 ] || { echo "usage: $0 OUTDIR node1.json [node2.json ...]" >&2; exit 1; }
 CHAIN_ID="${CHAIN_ID:?set CHAIN_ID}"
-BESU_IMAGE="${BESU_IMAGE:-hyperledger/besu:26.11.0}"
+BESU_IMAGE="${BESU_IMAGE:-hyperledger/besu:26.11.1}"
 BLOCK_PERIOD="${BLOCK_PERIOD:-2}"; REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-4}"
 GAS_LIMIT="${GAS_LIMIT:-0x1c9c380}"
 mkdir -p "$out"; out="$(cd "$out" && pwd)"

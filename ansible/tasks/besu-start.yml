@@ -25,3 +25,14 @@
   until: rpc_up.status == 200
   retries: 40
   delay: 3
+
+- name: In sync before the next node is touched, {{ node.name }}
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host if node.rpc_bind == 'host' else '127.0.0.1' }}:{{ node.rpc_port }}"
+    method: POST
+    body_format: json
+    body: { jsonrpc: "2.0", id: 1, method: eth_syncing, params: [] }
+  register: node_sync
+  until: node_sync.json is defined and node_sync.json.result == false
+  retries: 60
+  delay: 5

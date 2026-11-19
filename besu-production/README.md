@@ -98,7 +98,7 @@ The exact values of every node are in [`../docs/production-layout.md`](../docs/p
 
 | Variable | Value |
 |---|---|
-| `BESU_IMAGE` | an exact version, e.g. `hyperledger/besu:26.11.0` |
+| `BESU_IMAGE` | an exact version, e.g. `hyperledger/besu:26.11.1` |
 | `BESU_ROLE` | `validator` or `rpc` |
 | `NODE_NAME` | a unique name: `val1` … `val4`, `rpc1`, `rpc2` |
 | `P2P_HOST`, `BIND_IP` | this host's IP, e.g. `192.168.68.135` |

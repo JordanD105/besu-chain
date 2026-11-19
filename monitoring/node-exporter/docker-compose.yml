@@ -8,7 +8,7 @@
 # Prometheus alerts when a backup is too old, missing or failed.
 services:
   node-exporter:
-    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.9.1}
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.12.1}
     restart: unless-stopped
     network_mode: host
     pid: host

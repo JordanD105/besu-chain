@@ -1,6 +1,6 @@
 services:
   redis:
-    image: redis
+    image: ${REDIS_IMAGE:-redis:8.10.3}
     restart: unless-stopped
     ports:
       - "${REDIS_PORT:-36379}:6379"

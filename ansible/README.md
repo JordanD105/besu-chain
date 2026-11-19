@@ -29,7 +29,8 @@ SSH key login to the 5 hosts, and a clone of this repository. The hosts get the 
 
 **Hosts:** RHEL family (dnf) or Debian/Ubuntu (apt), with the layout's IPs (192.168.68.135–.139),
 an account with sudo (`ansible_user` in `inventory.yml`, default `root`) and Python 3. They need
-the package repositories and Docker Hub (Besu, node-exporter, Prometheus, Grafana and redis images).
+the package repositories, and Docker Hub for the Besu, node-exporter, Prometheus, Grafana and redis
+images unless you give Ansible those images as archives (`image_archives_dir`, below).
 
 ## 2. Settings
 
@@ -40,6 +41,22 @@ Edit `group_vars/all/settings.yml`. Required:
 | `operator_ip` | the operator's IP as the hosts see it. **The firewall only lets this IP in** (SSH, MPC admin, Grafana): a wrong value locks you out |
 | `client_ips` | the applications calling the proxy (`.151:30000`) and chainlens users |
 | `snapshot_copy_to` | off-site target for the daily chain snapshot (`user@host:/path`, root's SSH key on .137) |
+
+**Image versions** (exact tags, used on every host):
+
+| Setting | Version | Archive file in `image_archives_dir` |
+|---|---|---|
+| `besu_image` | `hyperledger/besu:26.11.1` | `besu-26.11.1-docker.tar` |
+| `node_exporter_image` | `prom/node-exporter:v1.12.1` | `node-exporter-v1.12.1-docker.tar` |
+| `prometheus_image` | `prom/prometheus:v3.16.0` | `prometheus-3.16.0-docker.tar` |
+| `grafana_image` | `grafana/grafana:13.2` | `grafana-13.2-docker.tar` |
+| `redis_image` | `redis:8.10.3` | `redis-8.10.3-docker.tar` |
+
+Set `image_archives_dir` to a directory on the operator holding these `docker save` archives:
+Ansible copies each one only to the hosts that run it and loads it there (no Docker Hub access
+needed, no rate limit), and checks that the archive holds exactly that name and tag. Empty: the
+hosts pull the images. To change a version, set the new tag (and archive file name) and rerun
+`site.yml`: Besu nodes are recreated one at a time, each back in sync before the next.
 
 Review the rest: chain id, block period, `SENDER01` funding, MPC policy, image names,
 `mpc_image_build` (build on the operator, or pull from your registry), `install_packages`.
@@ -101,6 +118,9 @@ To change something, edit the setting (or commit the code change) and rerun `sit
 - HAProxy and keepalived are **reloaded**, not restarted, so the VIPs stay where they are.
 - New proxy / chainlens code: rebuilt on the operator, copied only when the image content changed;
   the running proxy is recreated (seconds).
+- New image versions: Besu nodes are replaced one at a time (validators, then RPC nodes), each in
+  sync before the next; in the lab, the chain kept producing blocks during the upgrade (longest
+  pause about 16 s, when the restarting validator's turn to propose came up).
 - If `state/network` is lost while the nodes have network files, phase 5 stops: copy `network/`
   from a node into `state/network/`.
 
@@ -129,7 +149,11 @@ End to end on 5 lab hosts (Ubuntu 24.04 containers with systemd, sshd and Docker
   mpc2 + mpc3 and sent through rpc2;
 - .135 and then .136 rebooted: RPC nodes back in sync on their own, never two proxies running,
   transfers continue with the right nonces;
-- `state/network` removed: phase 5 refuses to create a new genesis.
+- `state/network` removed: phase 5 refuses to create a new genesis;
+- all 5 hosts powered off at once and on again: no action needed, blocks resumed at 1/s after
+  about 3 minutes of QBFT round changes, VIPs back on .135 with one proxy;
+- upgrade of the running deployment to the image versions above from `docker save` archives,
+  with transfers still working afterwards and the next run at `changed=0`.
 
 Not exercised in the lab: the `dnf` (RHEL family) package path, SELinux, and clock
 synchronisation (the lab has no NTP access).
