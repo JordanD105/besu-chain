@@ -79,6 +79,10 @@ key_backup_gpg_public_key: ""
 # on the node's own host in mpc_backup_dir: each team still copies them off the host.
 mpc_backup_cron: false
 mpc_backup_dir: /secure/mpc-backup
+# Where the MPC nodes run on their hosts (their docker-compose.yml, .env, backup.sh): the node
+# package inside the repository. Ansible refreshes the repository's tracked files there but never
+# touches the team's .env, cluster.json or node<ID>.json.
+mpc_node_dir: /opt/besu-chain/mpc-signer/deploy/node
 
 # Test account + transfer through the VIPs after the deployment (once; costs 1 ETH of SENDER01)
 smoke_test: true

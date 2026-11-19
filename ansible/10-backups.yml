@@ -91,14 +91,17 @@
       ansible.builtin.meta: end_host
       when: not mpc_backup_cron | bool
 
-    - name: MPC node set up by its team?
+    # the team's .env exists only where a node was set up (backup.sh is in every repository copy)
+    - name: MPC node set up by its team in mpc_node_dir?
       ansible.builtin.stat:
-        path: /opt/mpc-node/backup.sh
+        path: "{{ mpc_node_dir }}/.env"
       register: mpc_backup_script
 
-    - name: No MPC node in /opt/mpc-node on this host
+    - name: No MPC node in mpc_node_dir on this host
       ansible.builtin.debug:
-        msg: "{{ inventory_hostname }}: /opt/mpc-node/backup.sh not found: the team runs its node elsewhere; it sets up its own backups"
+        msg: >-
+          {{ inventory_hostname }}: no MPC node in {{ mpc_node_dir }} (no .env): the team runs its
+          node elsewhere (set mpc_node_dir), or sets up its own backups
       when: not mpc_backup_script.stat.exists
 
     - name: Backup directory
@@ -112,7 +115,7 @@
       ansible.builtin.cron:
         name: mpc share backup
         minute: "7"
-        job: /opt/mpc-node/backup.sh {{ mpc_backup_dir }} >> /var/log/mpc-backup.log 2>&1
+        job: "{{ mpc_node_dir }}/backup.sh {{ mpc_backup_dir }} >> /var/log/mpc-backup.log 2>&1"
       when: mpc_backup_script.stat.exists
 
     - name: Backups so far
@@ -123,7 +126,7 @@
       when: mpc_backup_script.stat.exists
 
     - name: First backup now (safe while the node runs)
-      ansible.builtin.command: /opt/mpc-node/backup.sh {{ mpc_backup_dir }}
+      ansible.builtin.command: "{{ mpc_node_dir }}/backup.sh {{ mpc_backup_dir }}"
       when: mpc_backup_script.stat.exists and mpc_backups.matched == 0
       changed_when: true
 

@@ -123,7 +123,8 @@ ansible-playbook site.yml
 ```
 
 **Run 2** creates `state/cluster.json`, prints its sha256 and stops. Send `cluster.json` to the
-three teams. Each team checks the sha256, copies the file to `/opt/mpc-node/` and runs
+three teams. Each team checks the sha256, copies the file to its node folder (`mpc_node_dir`,
+default `/opt/besu-chain/mpc-signer/deploy/node`) and runs
 `docker compose up -d`. Then:
 
 ```bash

@@ -88,7 +88,7 @@
           STOPPED: waiting for the MPC teams to start their nodes. Not answering: {{ down | join(', ') }}
           Send {{ state_dir }}/cluster.json to the three teams.
           sha256: {{ cluster.stat.checksum }}  (each team compares it over a second channel)
-          Each team copies it to /opt/mpc-node/ and runs: docker compose up -d
+          Each team copies it to {{ mpc_node_dir }}/ and runs: docker compose up -d
           Then run the playbook again.
       vars:
         down: "{{ health.results | rejectattr('content', 'defined') | map(attribute='item.name') | list

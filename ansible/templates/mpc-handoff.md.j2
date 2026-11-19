@@ -7,7 +7,11 @@ this node's passphrase or share.
 2. On {{ ip_of[n.host] }} (the image `{{ mpc_image }}` is already loaded there):
 
    ```bash
-   cp -r {{ repo_dir }}/mpc-signer/deploy/node /opt/mpc-node && cd /opt/mpc-node
+{% if mpc_node_dir != repo_dir ~ '/mpc-signer/deploy/node' %}
+   cp -r {{ repo_dir }}/mpc-signer/deploy/node {{ mpc_node_dir }} && cd {{ mpc_node_dir }}
+{% else %}
+   cd {{ mpc_node_dir }}
+{% endif %}
    cp .env.example .env && chmod 600 .env
    ```
 
@@ -29,11 +33,11 @@ this node's passphrase or share.
 3. Send `node{{ n.id }}.json` (public keys only) to the operator, who puts it in
    `ansible/state/mpc/node{{ n.id }}.json`.
 4. When the operator sends `cluster.json`: compare its `sha256sum` with the operator's
-   (second channel), copy it to `/opt/mpc-node/`, then:
+   (second channel), copy it to `{{ mpc_node_dir }}/`, then:
 
    ```bash
    docker compose up -d && docker compose logs --tail 5    # "node loaded", "node API listening"
    ```
 
 5. Backups (hourly, this team's own location):
-   `0 * * * * /opt/mpc-node/backup.sh /secure/backup`
+   `0 * * * * {{ mpc_node_dir }}/backup.sh /secure/backup`

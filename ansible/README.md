@@ -104,7 +104,8 @@ ansible-playbook site.yml
 3. Put the three files in `state/mpc/` and run `ansible-playbook site.yml` again.
 
 **Second stop:** the playbook built `state/cluster.json` and prints its sha256. Send it to the
-three teams; each compares the checksum over a second channel, copies it to `/opt/mpc-node/` and
+three teams; each compares the checksum over a second channel, copies it to its node folder
+(`mpc_node_dir`, default `/opt/besu-chain/mpc-signer/deploy/node`) and
 runs `docker compose up -d`. Run `ansible-playbook site.yml` again.
 
 The third run goes to the end (about 5–10 minutes, plus the MPC image build the first time) and
@@ -167,11 +168,16 @@ Limits:
 
 ## 6. Security notes
 
-- The MPC nodes are never touched by Ansible: no task reads or writes `/opt/mpc-node`, and the
-  passphrases never reach the operator. But in this layout the MPC nodes share their hosts with
-  operator-managed components (mpc1 with val1 on .135, mpc2 with val3, mpc3 with val4), and root
-  on a host can read anything on it. For real separation, the operator account needs no root on
-  .135/.137/.138 beyond what Docker requires, or each MPC team gets its own host.
+- The MPC nodes are never started, stopped or configured by Ansible, and the teams' passphrases
+  never reach the operator: no task reads or writes the team's `.env`, `cluster.json` or
+  `node<ID>.json`. Two exceptions to know: the node folder (`mpc_node_dir`) is inside the
+  repository copy that phase 1 refreshes, so a new `docker-compose.yml` or script from the
+  repository arrives there with an Ansible run (it takes effect at the team's next
+  `docker compose up -d`); and with `mpc_backup_cron: true`, phase 10 runs `backup.sh` there. But
+  in this layout the MPC nodes share their hosts with operator-managed components (mpc1 with val1
+  on .135, mpc2 with val3, mpc3 with val4), and root on a host can read anything on it. For real
+  separation, the operator account needs no root on .135/.137/.138 beyond what Docker requires,
+  or each MPC team gets its own host.
 - `state/secrets` and the hosts' `.env` files hold the tokens: mode 600, root only.
 - The Grafana password is in `state/secrets/grafana_admin_password` (not printed).
 
