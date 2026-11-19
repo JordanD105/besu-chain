@@ -1516,7 +1516,7 @@ async function resolveCollection(input) {
     const matches = await collectionsByLabel(input);
 
     if (matches.length === 0) {
-        throw httpError(404, `no NFT collection named "${input.trim()}" (see GET /nft/collections)`);
+        throw httpError(404, `no NFT collection named "${input.trim()}": list the collections with GET /nft/collections, or create one with POST /nft/deploy {"name": "...", "symbol": "..."}`);
     }
 
     if (matches.length > 1) {
