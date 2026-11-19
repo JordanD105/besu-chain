@@ -77,6 +77,11 @@ Firewall (on every host, see `firewall-layout.sh` for what it opens):
 CLIENTS="<application IPs>" ADMIN=<bastion IP> ./firewall-layout.sh 135
 ```
 
+It writes firewalld rules and the same allow list for the ports Docker publishes, which bypass
+firewalld: nftables table `inet besu_docker` (`/etc/besu-docker-firewall.rules`, applied at boot by
+`besu-docker-firewall.service`). See [`docs/production-layout.md`](../docs/production-layout.md),
+section 3.
+
 Network interface name, for the keepalived files (the one with `192.168.68.13x`):
 
 ```bash

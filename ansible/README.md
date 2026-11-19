@@ -202,8 +202,11 @@ To change something, edit the setting (or commit the code change) and rerun `sit
   from a node into `state/network/`.
 
 Limits:
-- Firewall rules are only **added**: a client IP removed from `client_ips` stays allowed until you
-  remove its rule (`firewall-cmd --permanent --remove-rich-rule=…`, `firewall-cmd --reload`).
+- Firewall rules are only **added** to firewalld: a client IP removed from `client_ips` stays
+  allowed to the host's own ports until you remove its rule (`firewall-cmd --permanent
+  --remove-rich-rule=…`, `firewall-cmd --reload`). The allow list for the ports Docker publishes
+  (proxy, coordinator, MPC node, Grafana, chainlens; nftables table `inet besu_docker`) is rewritten
+  completely on every run, so there the IP is removed at once.
 - Changing the chain settings after the first run has no effect (the genesis is never recreated).
 
 ## 6. Security notes

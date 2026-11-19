@@ -17,7 +17,7 @@
       ansible.builtin.include_tasks: tasks/packages.yml
       vars:
         packages: >-
-          {{ ['docker-ce', 'docker-ce-cli', 'containerd.io', 'docker-compose-plugin', 'chrony', 'firewalld',
+          {{ ['docker-ce', 'docker-ce-cli', 'containerd.io', 'docker-compose-plugin', 'chrony', 'firewalld', 'nftables',
               'curl', 'tar', 'gzip', 'rsync']
              + (['cronie'] if ansible_facts.os_family == 'RedHat' else ['cron']) }}
         docker_repo: true

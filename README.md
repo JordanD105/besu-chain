@@ -99,7 +99,9 @@ deployment from scratch, the failover tests): **[`docs/production-layout.md`](do
 | **Chain** | val1–val4 (p2p only, RPC on localhost), rpc1/rpc2 | coordinators and proxies via HAProxy; chainlens → rpc2 |
 | **Ops** | Prometheus, Grafana (.139), node-exporter everywhere, backups | scrapes metrics; cannot call signing APIs |
 
-`ha/firewall-layout.sh` applies exactly these rules with firewalld on each host.
+`ha/firewall-layout.sh` applies exactly these rules with firewalld on each host, and the same allow
+list to the ports Docker publishes, which firewalld alone does not filter (nftables table
+`inet besu_docker`, see [`docs/production-layout.md`](docs/production-layout.md), section 3).
 
 ### Deployment order
 

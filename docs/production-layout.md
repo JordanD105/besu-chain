@@ -135,6 +135,24 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 | 3000, 30100 | Grafana, chainlens on .139 | admin; clients for chainlens |
 | 22 | every host | admin / bastion |
 
+**Ports published by Docker bypass firewalld.** The proxy, coordinators, MPC nodes, Grafana,
+chainlens, Redis and the Besu nodes without host networking are reached through Docker's port
+forwarding (DNAT, then the FORWARD chain), which firewalld's zone rules never see: without more, any
+host on the network could connect to them. `firewall-layout.sh` therefore applies the same allow list
+to forwarded connections as well, in an nftables table of its own (`inet besu_docker`, installed with
+the systemd unit `besu-docker-firewall`, applied at every boot): the listed sources reach the
+listed ports, every other new connection to a published port is dropped. Docker and firewalld never
+touch that table, so neither a Docker restart nor `firewall-cmd --reload` opens a gap (Docker's own
+`DOCKER-USER` chain is not used because Docker re-orders its jumps for a few seconds on every
+firewalld reload). Check it:
+
+```bash
+nft list table inet besu_docker
+```
+
+From a host that is **not** in the list, every published port must time out, e.g.
+`timeout 3 bash -c '</dev/tcp/<host>/9100' || echo blocked`.
+
 ## 4. Deploying from scratch
 
 A new chain and a new MPC cluster on five empty hosts. **Automated:** [`ansible/`](../ansible/README.md)
