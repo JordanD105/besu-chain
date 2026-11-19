@@ -762,7 +762,21 @@ async function storePrivateKey(name, privateKey) {
     }
 }
 
+// The message for a sender that no configured signer holds. Without Vault (MPC deployments) the
+// only signer is the MPC cluster, so say so instead of reporting a missing VAULT_TOKEN.
+function notManaged(address) {
+    const signer = CONFIG.MPC_ADMIN_URL ? "the MPC signer" : "Web3Signer";
+    return CONFIG.VAULT_TOKEN
+        ? `sender not managed by ${signer} or Vault: ${address}`
+        : `sender not managed by ${signer}: ${address} (create it with POST /createaccount)`;
+}
+
 async function readPrivateKey(name) {
+    // no Vault configured: no locally stored keys, so the account is simply not managed here
+    if (!CONFIG.VAULT_TOKEN) {
+        return null;
+    }
+
     const response = await fetch(vaultDataUrl(name), {
         headers: {
             "X-Vault-Token": await vaultToken()
@@ -792,7 +806,7 @@ async function vaultWallet(from) {
     const privateKey = await readPrivateKey(accountName(from));
 
     if (!privateKey) {
-        throw new Error("sender not managed by Web3Signer or Vault");
+        throw httpError(400, notManaged(from));
     }
 
     const wallet = new ethers.Wallet(privateKey);
@@ -976,7 +990,7 @@ app.post("/transfer", async (req, res) => {
 
         if (!ownedBySigner && !await readPrivateKey(accountName(sender))) {
             return res.status(400).json({
-                error: "sender not managed by Web3Signer or Vault"
+                error: notManaged(sender)
             });
         }
 
