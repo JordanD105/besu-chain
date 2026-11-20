@@ -604,7 +604,7 @@ body.light { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s0: #868b95; }
 .col-track { display: flex; align-items: flex-end; justify-content: center; min-height: 0; }
 .col-bar { display: block; width: min(28px, 70%); background: var(--s1); border-radius: 4px 4px 0 0; opacity: .7; }
 .col.on .col-bar { opacity: 1; }
-.col-stack { display: flex; flex-direction: column-reverse; gap: 2px; width: min(28px, 70%); height: 100%; justify-content: flex-start; }
+.col-stack { display: flex; flex-direction: column-reverse; gap: 2px; width: min(28px, 70%); }
 .col-seg { display: block; width: 100%; min-height: 2px; opacity: .8; }
 .col-seg:last-child { border-radius: 4px 4px 0 0; }
 .col.on .col-seg { opacity: 1; }

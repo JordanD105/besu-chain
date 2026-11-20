@@ -1095,11 +1095,14 @@ function statSum(stats, metric, index) {
 
 // one stacked column (bottom to top: upfront, consumption, payment, users), as the balance bars
 function balanceColumn(stats, i, max) {
+    // the stack's height is the total (like a single bar); the segments share it by value
+    let total = 0;
     const segments = BALANCE_SLOTS.map(([role, slot]) => {
         const v = statSum(stats, "bal:" + role, i);
-        return v > 0 && max > 0 ? el("i", { class: "col-seg " + slot, style: "height:" + (v / max * 100) + "%" }) : null;
+        total += v > 0 ? v : 0;
+        return v > 0 ? el("i", { class: "col-seg " + slot, style: "flex:" + v + " 0 0" }) : null;
     }).filter(Boolean);
-    return el("span", { class: "col-stack" }, segments);
+    return el("span", { class: "col-stack", style: "height:" + (max > 0 ? total / max * 100 : 0) + "%" }, segments);
 }
 
 function statsCard() {
