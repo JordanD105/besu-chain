@@ -1,0 +1,350 @@
+# Grafana dashboards
+
+> **What:** every Grafana dashboard and every panel on it: what it shows, what healthy looks like,
+> and what to do when it isn't.
+>
+> **For:** operators on duty, and anyone reading the dashboards.
+>
+> **Related:** [alerts](alerts.md) · [troubleshooting](troubleshooting.md) ·
+> [monitoring](../components/monitoring.md) (how the stack is built) · [glossary](../glossary.md)
+
+**Contents**
+
+- [Reading any dashboard](#reading-any-dashboard)
+- [Besu production (QBFT)](#besu-production-qbft)
+- [MPC signer](#mpc-signer)
+- [Proxy & Redis](#proxy--redis)
+- [Sections](#sections)
+- [Hosts](#hosts)
+- [Which dashboard for which question](#which-dashboard-for-which-question)
+
+---
+
+## Reading any dashboard
+
+**Where:** Grafana on the monitoring host, `http://192.168.68.139:3000` (user `admin`, password in
+`ansible/state/secrets/grafana_admin_password`), folder **Production**. Who may open it:
+`grafana_ips` in `settings.yml`.
+
+| You see | It means |
+|---|---|
+| **Alerts row** at the top (Besu, MPC, Hosts) | *Critical firing* and *Warnings firing* count every alert of the whole platform, not only this dashboard's. The *Firing alerts* table lists them, critical first, with the node, sender or host and *Firing for* (counted from when the condition started, including the rule's wait time). Every alert is explained in [alerts](alerts.md) |
+| **Orange shaded bands with dashed lines** on time charts | periods when an alert was firing: the dashed lines are its start and end. Hover a line to see the alert's name |
+| **Variables** at the top (`node`, `coordinator`, `host`, `section`, `period`) | filters: *All* by default; pick one or several to narrow every panel |
+| **Times** | your browser's local time. Logs on the hosts (`docker logs`, `journalctl`) may be in UTC |
+| **Small differences between nodes** | Prometheus reads each target every 15 s, at slightly different moments; with 1 s blocks two healthy nodes can differ by 10–15 blocks in one reading |
+| **"No data"** | nothing has happened yet (a counter that never moved), the time range is too short for the query (Sections periods), or the target is down |
+
+Dashboards are provisioned from `monitoring/grafana/dashboards/*.json` and can't be saved from
+the browser. To change one, edit the file (or the generator for Sections and Proxy & Redis,
+`monitoring/grafana/tools/`), commit, and run `01-hosts.yml 09-monitoring.yml`.
+
+---
+
+## Besu production (QBFT)
+
+The chain: is it making blocks, is every node current, how busy is it, and are the proxy's
+transactions being mined. File: `besu-production.json`. Variable: **node** (val1–val4, rpc1, rpc2).
+
+### Alerts
+
+The platform-wide alert counters and table (see [Reading any dashboard](#reading-any-dashboard)).
+
+### Network
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Chain height** | the highest block number of any node | rising every second | flat: see *Seconds since last block* |
+| **Seconds since last block** | age of the newest block on the most up-to-date node | under 1 s (the block period) | red after 3 × the block period: fewer validators than the quorum. Alerts `BesuNoNewBlocks`, `BesuValidatorQuorumLost` |
+| **Validators up** | validators whose metrics answer | 4 | 3 still makes blocks, with no spare; 2 or fewer: the chain stops |
+| **Validators expected** | validators Prometheus knows about | 4 | compare with *Validators up* |
+| **Nodes up** | all Besu nodes answering (4 validators + 2 RPC nodes) | 6 | `BesuNodeDown` names the node |
+| **Block period** | the QBFT block time from the genesis | 1 s | fixed setting |
+
+**Nodes** table, one row per node:
+
+| Column | Meaning | Colours |
+|---|---|---|
+| Node, Role, Metrics address | name, `validator` or `rpc`, where Prometheus reads it | |
+| Up | metrics answer | UP green, DOWN red |
+| Height | the node's newest block | |
+| Behind | blocks below the highest node | green up to 30, orange from 31, red from 300. Up to ~15 is normal (reading skew) |
+| Peers | connected nodes | should be (number of nodes − 1) = 5 |
+| Sync | computed from measurements, not only the node's own report | **IN SYNC** green; **SYNCING** orange (the node says so); **STALLED** red (says in sync, but its newest block is over 60 s old while other nodes are current: it stopped importing); **BEHIND** orange (more than 30 blocks below and its newest block over 30 s old) |
+| Last block age | age of the node's newest block when read | green under 30 s, orange from 30 s, red from 60 s |
+| Tx pool | transactions waiting in the node's pool | about 0 when idle |
+
+A **STALLED** RPC node is taken out of the RPC VIP within seconds and restarted after 5 minutes by
+`besu-rpc-health` ([high availability](../deployment/high-availability.md)); a stalled validator
+needs a restart by hand. Alert `BesuNodeStalled`.
+
+### Blocks and transactions
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Block height** | each node's height over time | all lines on one steady diagonal | a line that goes flat: that node stopped importing |
+| **Seconds since last block** | each node's newest-block age at each reading | flat lines between 0 and 1 s (each node is read at its own moment in the second, so each sits at its own level) | a line climbing steadily: that node is stuck |
+| **Transactions per second (in blocks)** | transactions included in blocks per second | follows your traffic | 0 while applications are sending: check *Proxy senders* below |
+| **Gas used per block** | gas used (green) against the block gas limit (yellow, 30 M) | far below the limit | near the limit: blocks are full, transactions queue |
+| **Transaction pool** | pending transactions per node | back to ~0 after bursts | steady growth: blocks can't keep up or nonces have gaps (`BesuTxPoolGrowing` above 1,000) |
+| **Blocks behind** | the node's own estimate of how far it is behind the head it knows | 0 | stays up: it is catching up. A stalled node can show 0 here (it doesn't know): trust the Nodes table |
+
+### Transaction volume
+
+Counted exactly from Besu's transaction counter, minute by minute (no estimation).
+
+| Panel | Shows |
+|---|---|
+| **Transactions in selected range** | transactions mined in the time range at the top right |
+| **Last 1 hour** / **Last 24 hours** | the same over fixed windows (24 h needs 24 h of history) |
+| **Average tx/s in range** | transactions ÷ seconds of the range |
+| **Transactions per interval** | bars: transactions per interval (1 minute when zoomed in, wider for long ranges) |
+| **Cumulative transactions in range** | running total from the start of the range |
+
+### Peers and RPC
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Peers** | connected peers per node | 5 for every node | lower: a node or the network between hosts is down (`BesuPeersMissing`); under 2: `BesuPeersLow`, the node is close to isolation |
+| **Refused connections (node allowlist)** | connections refused because the peer isn't in `permissions_config.toml` | 0 | an unknown machine, or one of your nodes with a changed key or address (`BesuUnpermittedPeers`) |
+| **JSON-RPC requests per second** | RPC calls answered per node | traffic on rpc1 (or rpc2 after a failover); validators near 0 | spikes after restarts are chainlens or the proxy catching up |
+| **JSON-RPC latency p95 (slowest method)** | 95th-percentile answer time of each node's slowest method | a few ms | sustained hundreds of ms: the node is overloaded (CPU, disk) |
+| **P2P traffic in / out** | bytes per second between Besu nodes (blocks, consensus) | steady, a few kB/s per node when idle | a spike when a node catches up after a restart is normal |
+
+### JVM and process
+
+Besu runs on Java.
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **CPU (cores)** | CPU per node (1.0 = one full core) | low when idle | sustained high: load or a stuck task |
+| **JVM heap used** | Java memory in use; the green line is the maximum (`-Xmx`, `besu_java_opts`) | a sawtooth well below the maximum (memory fills, garbage collection frees it) | close to the maximum: long pauses come next (`BesuHeapHigh` above 90 %) |
+| **GC time (share of wall time)** | share of time spent collecting garbage | under 1 % | above ~5 %: the heap is too small or under pressure |
+| **Resident memory** | real memory of each Besu process (heap + RocksDB caches + threads): what counts against the host's RAM | grows slowly, then levels off | keeps climbing: watch the host's memory (`HostMemoryHigh`) |
+
+### Proxy senders
+
+The proxy sends from a few MPC accounts (senders), each with its own nonce sequence.
+
+**Senders (proxy)** table:
+
+| Column | Meaning | Colours / action |
+|---|---|---|
+| Sender | the sending account | |
+| Mined | are its transactions being mined? | **OK** green; **STALLED** red: transactions are ready in the RPC node's pool but blocks come without them. Restart **one** validator (`ProxySenderStalled`) |
+| In flight | sent, not yet mined | back to ~0 after bursts |
+| Waiting since | how long ready transactions have waited with nothing confirmed | 0 |
+| Nonce gap since | how long a nonce has been missing (later transactions wait) | green, orange from 30 s, red from 120 s (`ProxyNonceGap`); the proxy normally repairs it in ~30 s |
+| Waiting above gap | transactions held back behind a gap | 0 |
+| Repairs / Fillers | gaps repaired, empty filler transactions sent | read the proxy log when they rise |
+
+**Transactions in flight (proxy)** and **Not mined / gap (seconds)**: the same values over time.
+
+---
+
+## MPC signer
+
+Signing: are enough MPC nodes up, how fast is signing, and are the presignature pools full. File:
+`mpc-signer.json`. Variable: **coordinator** (coord1, coord2).
+
+### Cluster
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Coordinator** | a coordinator answers | UP | `MpcCoordinatorDown`; the other coordinator takes over through the VIP |
+| **MPC nodes up** | MPC nodes reachable (most reachable from any coordinator) | 3 | 2: signing works, **new keys** (accounts, sections) can't be created; below 2: **no signatures** (`MpcBelowThreshold`) |
+| **Threshold** | nodes needed to sign | 2 | fixed by the key ceremony |
+| **Keys** | MPC keys (accounts) the cluster holds | grows with `/createaccount` | |
+| **Presignatures ready** | ready presignatures across the hot keys | near the pools' targets | 0 while signing: signing falls back to the slow path |
+| **Signatures / s** | signatures per second | follows traffic | |
+
+**MPC nodes** table: each MPC node (mpc1 .135, mpc2 .137, mpc3 .138) as seen from each
+coordinator: *Up (coord1)*, *Up (coord2)* and the health probe's answer time. Down from **one**
+coordinator only: the network between those two hosts. Down from both: the node itself
+(`MpcNodeDown`).
+
+### Signing
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Signatures per second** | by path: **hot** (from a ready presignature, milliseconds) and **cold** (full interactive protocol, ~0.6 s) | hot for SENDER01 and other big keys; cold is normal for rarely used keys | cold for a hot sender: its pool ran empty |
+| **Signing latency** | p50 and p95 per path | hot: milliseconds; cold: under ~1 s | rising: CPU on the MPC nodes or network between them |
+| **Failures** | signing failures, and policy refusals separately | 0 | refusals: a transaction outside a node's policy (value, gas, chain id, destination: `MpcPolicyRefusals`); other failures: coordinator log (`MpcSignErrors`) |
+| **Open relay sessions** | protocol sessions passing through the coordinator's relay | small, back to 0 | stuck high: a node stopped answering mid-session |
+
+### Presignature pool
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Pools of big keys** | ready presignatures per big key (SENDER01, upfront accounts, other hot senders), with the target line | near the target | stays low while signing: signing is faster than presigning; refill by itself after bursts (`MpcPoolEmpty`) |
+| **Pools of small keys** | ready presignatures of all small keys (accounts from `/createaccount`), summed, with the total target | near the total | many small pools empty for long: `MpcSmallPoolsEmpty` |
+| **Presignatures generated per second** | presigning rate | — | **this is the sustained capacity**: signing faster than this drains the pools |
+| **Average presign duration** | seconds per presignature | stable | rising: CPU on the MPC nodes |
+| **Presign sessions running** | presigning in progress | below the refill concurrency | |
+| **Keys per pool class** | how many keys are `big`, `small`, `none` | | change a key's class: `POST /account/pool` ([proxy API](../reference/proxy-api.md)) |
+| **MPC node reachability** | one line per coordinator and node (1 = answers) | all at 1 | dips: restarts or network |
+
+After an MPC node restart, *Pools* empty and *Failures* may show a few presign failures for some
+minutes (`MpcPoolEmpty`, `MpcPresignFailing`): they clear by themselves.
+
+---
+
+## Proxy & Redis
+
+The application API and its nonce cache. Prometheus reads both **through the proxy VIP**, so this
+dashboard always shows the **active** proxy. File: `proxy-redis.json` (generated by
+`monitoring/grafana/tools/gen_proxy_dashboard.py`).
+
+### Proxy
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Proxy** | the active proxy answers | UP | `ProxyDown`: keepalived should move the VIP |
+| **Requests / s** | all requests per second | follows traffic | |
+| **5xx errors** | share of answers with status 5xx (the proxy failed); 4xx (caller's mistakes) are not counted | 0 % | orange from 1 %, red from 5 % (`ProxyHttpErrors`) |
+| **Latency p95** | 95th-percentile answer time, without `/createaccount` and `/admin` (key generation is slow by design) | under 1 s | orange from 2 s, red from 5 s (`ProxySlow`) |
+| **In flight** | requests being answered now | small | growing: the proxy or what it waits for (signer, Besu) is slow |
+| **Redis link** | the proxy's connection to its Redis | CONNECTED | NO REDIS: the proxy keeps working (memory + chain) but loses its nonce cache on a restart (`ProxyRedisDisconnected`) |
+| **Uptime** | since the proxy started | grows | a reset: a restart or a failover to the other host |
+
+### Requests
+
+| Panel | Shows |
+|---|---|
+| **Requests per second by route** | stacked by route pattern (`/nft/:tokenId`, not each token) |
+| **Errors per second (4xx and 5xx)** | per route and status: **5xx** the proxy failed; **4xx** refused (bad input, wrong key, not allowed); **aborted** the client hung up first |
+| **Answer time** | p50, p95, p99 of all routes except `/createaccount` and `/admin` |
+| **95th percentile by route** | every route, including the slow-by-design ones |
+| **Routes in the selected time range** | per route: requests, 5xx + aborted, 4xx, p95, average (estimates from Prometheus `increase()`) |
+
+### Senders and nonces
+
+| Panel | Shows | Healthy |
+|---|---|---|
+| **Transactions in flight per sender** | sent, not yet mined | back to ~0 after bursts |
+| **Nonce gaps (seconds missing)** | how long a nonce has been missing | 0; alert above 120 s |
+| **Stalls and repairs** | ready transactions not mined (stalls) and gaps the proxy repaired | 0; read the proxy log when they appear |
+
+### Proxy process
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Memory** | resident memory and V8 heap of the proxy | stable | steady growth: a leak; restart and report |
+| **Event-loop delay** | how long a ready callback waited for the single Node.js thread (p99 and max) | under ~0.1 s | above: every request waits (`ProxyEventLoopBlocked` above 1 s) |
+| **Requests in flight** | the same as the stat, over time | | |
+
+### Redis
+
+| Panel | Shows | Healthy |
+|---|---|---|
+| **Redis** | the active proxy's Redis answers | UP (`RedisDown` otherwise) |
+| **Clients** | connections (the proxy and the exporter) | 2 or more |
+| **Memory used** / **Keys** | size of the cache | small, stable |
+| **Hit ratio** | reads that found their key | depends on traffic; 0 % on an idle proxy is normal |
+| **Last save** | since Redis last wrote its snapshot | green under 1 h, orange to 1 day, red after |
+| **Uptime** | since Redis started | |
+| **Commands per second (the proxy's)** | commands by type, without the exporter's own polling | follows traffic |
+| **Average command time** | per command | microseconds |
+| **Memory and keys** | memory used, with the `maxmemory` line when one is set | below the line (`RedisMemoryHigh` above 90 %) |
+
+---
+
+## Sections
+
+Money and activity per section ([sections](../features/sections.md)). File: `sections.json`
+(generated by `monitoring/grafana/tools/gen_sections_dashboard.py`). Variables: **section** (one,
+several or all) and **Period** (Day, Week, Month = 30 days, Quarter = 90 days, Year = 365 days).
+The default time range is the last 30 days.
+
+### Overview
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **Active sections** | enabled sections | your count | |
+| **Upfront below threshold** | enabled sections whose upfront account is below `upfront_low_balance_eth` | 0 | top them up on the chainlens Sections page (`SectionUpfrontLow`; at 0: `SectionUpfrontEmpty`) |
+| **Low-balance threshold** | `upfront_low_balance_eth` (0 = alert off) | | |
+| **SENDER01** | SENDER01's balance: it funds every top-up | above `sender01_low_balance_eth` | refill, or pay back from the payment accounts (`Sender01Low`) |
+| **All upfront** | ETH in every upfront account | | |
+| **All consumption + payment** | ETH collected by every section | | |
+
+### Balances (ETH)
+
+| Panel | Shows | What to do |
+|---|---|---|
+| **Balances by section** | each section's upfront, consumption and payment balances | |
+| **Upfront accounts** | upfront balances over time, with the threshold as a dashed red line | top up before a line reaches the threshold |
+| **Consumption accounts** | money received (+x transfers, first NFT sales) | sweep to the payment account |
+| **Payment accounts** | swept money | pay back to SENDER01 |
+
+### Activity per period
+
+Counted by the proxy since it started; Prometheus carries the counts over proxy restarts. Totals are
+estimates from `increase()`: amounts can be slightly off, counts are rounded.
+
+| Panel | Shows |
+|---|---|
+| **New accounts, last period** | accounts created by the selected sections in the last day / week / … |
+| **+x from users, last period (ETH)** | paid by users into the consumption accounts |
+| **NFT first sales, last period (ETH)** | first NFT sales, paid into the consumption accounts |
+| **Top-ups, last period (ETH)** | SENDER01 → upfront accounts |
+| **Operations per period** | bars per period and section: `create_account`, `transfer_in` (+x), `transfer_out` (−x), `nft_first_sale`, `nft_resale`, `topup`, `sweep`, `payback`. Each bar counts the period that **starts** at its date (today's bar = today so far) |
+| **ETH moved per period** | the same in ETH, per kind of operation |
+| **ETH moved in the last period** / **Operations in the last period** | tables per section and operation |
+| **ETH moved in the selected time range** | per section and operation over the dashboard's whole time range |
+
+Choose a time range that holds several periods (Day: the last 14–30 days; Year: several years).
+Prometheus keeps `prometheus_retention` (default 400 days). The chainlens dashboard has the same
+kind of statistics computed from the chain itself, with exact calendar periods
+([chainlens](../components/chainlens.md)).
+
+---
+
+## Hosts
+
+The machines and the backups. File: `hosts.json`. Variable: **host**.
+
+**Hosts** table:
+
+| Column | Meaning | Colours |
+|---|---|---|
+| Host, Address | the machine and its node-exporter | |
+| Up | node-exporter answers | DOWN red: the host is off or unreachable (`HostDown`) |
+| CPU, Memory, Fullest disk | use in % | memory above 90 % (`HostMemoryHigh`), a disk above 80 % (`HostDiskFull`) |
+| Clock, Clock offset | NTP synchronized, offset from the time source | NOT SYNCED red; offset orange from 50 ms, red from 100 ms (`HostClockNotSynced`) |
+
+| Panel | Shows | Healthy | If not |
+|---|---|---|---|
+| **CPU used** | % per host | headroom left | sustained near 100 %: find the process (`docker stats`) |
+| **Memory used** | % per host (memory really in use, not cache) | under 90 % | `free -m`, `docker stats --no-stream`, `ps aux --sort=-rss` |
+| **Disk used** | fullest filesystem per host | under 80 % | `df -h`, `docker system df`; a full disk stops Besu |
+| **Disk I/O time** | share of time the disks are busy | low | near 1 (100 %): the disk is the bottleneck |
+| **Network in / out** | bytes per second per host (without Docker's virtual interfaces) | steady | |
+
+**Backups (last result per backup)** table, one row per backup and host:
+
+| Column | Meaning |
+|---|---|
+| Backup, Node | `chain` (daily snapshot on val3), `validator-key` / `node-key` (Besu keys), `mpc-share` (hourly per MPC node) |
+| Last success | how long ago it last succeeded |
+| Last run | **OK**, or **FAILED** (red): run it by hand and read its error (`BackupFailed`) |
+| Size, Block | archive size, and the chain block of a snapshot |
+
+Each backup reports to the node-exporter of its own host: while a host is down its backups look
+missing, and they come back with the host (`…BackupMissing`, `…TooOld`).
+
+---
+
+## Which dashboard for which question
+
+| Question | Dashboard → panel |
+|---|---|
+| Is the chain making blocks? | Besu production → *Seconds since last block* |
+| Is a node stuck or behind? | Besu production → *Nodes* (Sync, Behind, Last block age) |
+| Why are transactions not mined? | Besu production → *Proxy senders*; Proxy & Redis → *Senders and nonces* |
+| Can we sign? Create accounts? | MPC signer → *MPC nodes up*, *Threshold* |
+| Why is signing slow? | MPC signer → *Signatures per second* (cold path), *Pools* |
+| Is the API failing or slow? | Proxy & Redis → *5xx errors*, *Latency p95*, *Errors per second* |
+| Which section needs a top-up? | Sections → *Upfront below threshold*, *Upfront accounts* |
+| How much did each section earn this week? | Sections, Period = Week → *ETH moved per period* |
+| Is a host running out of memory or disk? | Hosts → *Hosts* table |
+| Are the backups running? | Hosts → *Backups* |

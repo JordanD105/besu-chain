@@ -14,7 +14,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 |---|---|
 | **New to the project** | [introduction](overview/introduction.md) · [architecture](overview/architecture.md) · [glossary](glossary.md) |
 | **Application developer** (calling the API) | [proxy API](reference/proxy-api.md) · [sections](features/sections.md) · [NFT workflow](features/nft-workflow.md) · [development environment](getting-started/development.md) |
-| **Operator** (deploying, running production) | [operator guide](deployment/operator-guide.md) · [Ansible](deployment/ansible.md) · [access control](deployment/access-control.md) · [alerts](operations/alerts.md) · [troubleshooting](operations/troubleshooting.md) |
+| **Operator** (deploying, running production) | [operator guide](deployment/operator-guide.md) · [Ansible](deployment/ansible.md) · [access control](deployment/access-control.md) · [alerts](operations/alerts.md) · [dashboards](operations/dashboards.md) · [troubleshooting](operations/troubleshooting.md) |
 | **MPC node team** (one of the three) | [MPC signer](components/mpc-signer.md) · [MPC production](deployment/mpc-signer-production.md) · [MPC upgrade](operations/mpc-signer-upgrade.md) |
 | **Business admin** (sections, money, NFTs) | [sections](features/sections.md) · [chainlens](components/chainlens.md) · [NFT workflow](features/nft-workflow.md) |
 | **Contract developer** | [Remix](components/remix.md) · [contract deployment](features/contract-deployment.md) · [contract records](features/contract-records.md) |
@@ -31,6 +31,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | deploy a contract from the browser | [contract deployment](features/contract-deployment.md) |
 | go from Solidity to an NFT sale | [NFT workflow](features/nft-workflow.md) |
 | understand an alert | [alerts](operations/alerts.md) |
+| read a Grafana dashboard | [Grafana dashboards](operations/dashboards.md) |
 | recover a lost host or site | [disaster recovery](operations/disaster-recovery.md) · [restore with Ansible](operations/restore.md) |
 | upgrade the MPC signer | [MPC upgrade](operations/mpc-signer-upgrade.md) |
 | run everything on one machine | [development environment](getting-started/development.md) |
@@ -85,6 +86,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | Document | Contents |
 |---|---|
 | [Alerts](operations/alerts.md) | every alert: when, meaning, what to do |
+| [Grafana dashboards](operations/dashboards.md) | every dashboard and panel: what it shows, healthy values, what to do |
 | [Troubleshooting](operations/troubleshooting.md) | symptoms → cause → check → fix |
 | [Disaster recovery](operations/disaster-recovery.md) | backups, schedule, recovery per scenario, drills |
 | [Restore with Ansible](operations/restore.md) | rebuilding the whole site from the backups |

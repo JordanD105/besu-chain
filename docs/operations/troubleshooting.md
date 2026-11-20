@@ -4,7 +4,7 @@
 >
 > **For:** operators on duty.
 >
-> **Related:** [alerts](alerts.md) · [disaster recovery](disaster-recovery.md) · [architecture](../overview/architecture.md)
+> **Related:** [alerts](alerts.md) · [Grafana dashboards](dashboards.md) · [disaster recovery](disaster-recovery.md) · [architecture](../overview/architecture.md)
 
 **Contents**
 

@@ -4,7 +4,7 @@
 >
 > **For:** operators on duty.
 >
-> **Related:** [troubleshooting](troubleshooting.md) · [monitoring](../components/monitoring.md) · [disaster recovery](disaster-recovery.md)
+> **Related:** [troubleshooting](troubleshooting.md) · [Grafana dashboards](dashboards.md) · [monitoring](../components/monitoring.md) · [disaster recovery](disaster-recovery.md)
 
 **Contents**
 
