@@ -32,7 +32,66 @@ theme:
     - content.code.copy
 
 plugins:
-  - search
+  # English and Korean pages and search, all built into the image (no internet when serving)
+  - search:
+      lang: [en, ko]
+  # English at /, Korean at /ko/ from the *.ko.md file next to each page (English when missing)
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: ko
+          name: 한국어
+          build: true
+          site_name: besu-chain 문서
+          nav_translations:
+            Home: 홈
+            Overview: 개요
+            Introduction: 소개
+            Architecture: 아키텍처
+            Production layout: 운영 환경 구성
+            Glossary: 용어집
+            Getting started: 시작하기
+            Development environment: 개발 환경
+            Deployment: 배포
+            Operator guide: 운영자 가이드
+            Ansible: Ansible
+            Access control: 접근 제어
+            High availability: 고가용성
+            Besu manual setup: Besu 수동 설정
+            MPC signer in production: 운영 환경의 MPC 서명기
+            GPG key: GPG 키
+            Components: 구성 요소
+            Proxy: 프록시
+            MPC signer: MPC 서명기
+            Chainlens: Chainlens
+            Remix: Remix
+            Monitoring: 모니터링
+            Documentation website: 문서 웹사이트
+            Features: 기능
+            Sections: 섹션
+            Contract deployment: 컨트랙트 배포
+            Contract records: 컨트랙트 기록
+            NFT workflow: NFT 워크플로
+            Operations: 운영
+            Alerts: 알림
+            Alert runbook: 알림 런북
+            Grafana dashboards: Grafana 대시보드
+            Troubleshooting: 문제 해결
+            Disaster recovery: 재해 복구
+            Restore with Ansible: Ansible로 복원
+            MPC signer upgrade: MPC 서명기 업그레이드
+            Reference: 참조
+            Proxy API: 프록시 API
+            Development: 개발
+            MPC benchmarks: MPC 벤치마크
+            Paladin: Paladin
 
 hooks:
   - hooks.py
