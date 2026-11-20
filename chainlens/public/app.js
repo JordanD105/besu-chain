@@ -1079,6 +1079,22 @@ function stat(value, label) {
     return el("div", { class: "stat" }, [el("b", {}, String(value)), el("span", {}, label)]);
 }
 
+// The section of an account (docs/sections.md): its name and role, or a special account's role
+function sectionCell(row) {
+    if (!row.role) {
+        return el("span", { class: "muted" }, "—");
+    }
+    const badge = el("span", { class: "badge role role-" + row.role.replace(/\s+/g, "-"), title: t("role.help." + row.role) }, t("role." + row.role));
+    if (!row.section) {
+        return badge;
+    }
+    return el("span", { class: "section-cell" }, [
+        el("span", { class: row.sectionArchived ? "muted" : "" }, row.section + (row.sectionArchived ? " (" + t("sections.archivedBadge") + ")" : "")),
+        " ",
+        badge
+    ]);
+}
+
 async function showAccounts(page, status) {
     const token = showToken;
     const data = await api("/api/accounts?limit=20000");
@@ -1086,16 +1102,36 @@ async function showAccounts(page, status) {
     if (token !== showToken) {
         return;
     }
+    // section filter: all, one section, no section, system accounts
+    const { params } = parseHash();
+    const filter = params.get("section") || "";
+    const names = [...new Set(data.items.filter((row) => row.section).map((row) => row.section))].sort();
+    const select = el("select", { "aria-label": t("col.section"), onchange: (event) => {
+        location.hash = "#/accounts" + (event.target.value ? "?section=" + encodeURIComponent(event.target.value) : "");
+    } }, [
+        el("option", { value: "" }, t("accounts.allSections")),
+        ...names.map((name) => el("option", { value: "s:" + name }, name)),
+        el("option", { value: "none" }, t("accounts.noSection")),
+        el("option", { value: "system" }, t("accounts.system"))
+    ]);
+    select.value = filter;
+    const items = data.items.filter((row) => {
+        if (!filter) return true;
+        if (filter === "none") return !row.role;
+        if (filter === "system") return row.role && !row.section;
+        return filter.startsWith("s:") && row.section === filter.slice(2);
+    });
     const table = dataTable([
         { label: "col.address", sort: (row) => row.address, cell: (row) => addr(row.address) },
+        { label: "col.section", sort: (row) => (row.section || "") + " " + (row.role || ""), search: (row) => (row.section || "") + " " + (row.role ? t("role." + row.role) : ""), cell: sectionCell },
         { label: "col.balance", sort: (row) => BigInt(row.balanceWei || 0), search: (row) => row.balance, cell: (row) => row.balance },
         { label: "col.totalTokens", sort: (row) => row.tokens || 0, cell: (row) => String(row.tokens) },
         { label: "col.totalNfts", sort: (row) => row.nfts || 0, cell: (row) => String(row.nfts) },
         { label: "col.transactions", sort: (row) => row.transactions || 0, cell: (row) => String(row.transactions) }
-    ], data.items, { sort: 1, dir: "desc", page, key: "accounts" });
+    ], items, { sort: 2, dir: "desc", page, key: "accounts" + filter });
     show(el("section", { class: "card" }, [
         notice(status),
-        el("h2", {}, t("accounts.title")),
+        el("div", { class: "card-head" }, [el("h2", {}, t("accounts.title")), select]),
         table
     ]));
 }
@@ -1138,7 +1174,12 @@ async function showAccount(address) {
             el("section", { class: "card" }, [
                 el("h2", {}, t("account.details")),
                 el("div", {}, addr(data.address, "#/accounts/" + data.address)),
-                el("div", { style: "margin-top:8px" }, copyValue(data.address))
+                el("div", { style: "margin-top:8px" }, copyValue(data.address)),
+                data.role ? el("div", { class: "account-section" }, [
+                    el("span", { class: "muted" }, t("col.section") + " "),
+                    sectionCell(data),
+                    el("div", { class: "muted", style: "margin-top:4px" }, t("role.help." + data.role))
+                ]) : null
             ]),
             el("aside", { class: "side-stat" }, [el("div", {}, t("account.balance")), el("b", {}, data.balance), "ETH"])
         ]),

@@ -122,8 +122,83 @@ setInterval(loadRegistry, 15000).unref();
 // Contracts registered on chain (SectionRegistry ContractRegistered events: deployed through the proxy)
 const REGISTRY_CONTRACT = (process.env.REGISTRY_CONTRACT || "").trim();
 const REGISTRY_FROM_BLOCK = Math.max(0, parseInt(process.env.REGISTRY_FROM_BLOCK || "0", 10) || 0);
-const registryEvents = new ethers.Interface(["event ContractRegistered(address indexed contractAddress, uint8 kind, string name, string abiJson)"]);
+const registryEvents = new ethers.Interface([
+    "event ContractRegistered(address indexed contractAddress, uint8 kind, string name, string abiJson)",
+    "event AdminChanged(address indexed previous, address indexed admin)",
+    "event SectionCreated(uint256 indexed id, string name, address upfront, address consumption, address payment)",
+    "event SectionRenamed(uint256 indexed id, string name)",
+    "event SectionActiveChanged(uint256 indexed id, bool active)",
+    "event SectionAccountReplaced(uint256 indexed id, uint8 role, address previous, address account)",
+    "event SectionArchived(uint256 indexed id)",
+    "event AccountAdded(uint256 indexed id, address indexed account)"
+]);
 const chainRegistry = { byAddress: new Map(), scannedTo: -1, running: null };
+// Sections (docs/sections.md), from the same registry: id -> { name, active, archived }, and
+// address -> { id, role } for every section account (user, upfront, consumption, payment, retired)
+const sectionBook = { sections: new Map(), accounts: new Map(), admin: null };
+const SECTION_ROLE_NAMES = { 2: "upfront", 3: "consumption", 4: "payment" };
+const CONTRACT_CENTER = (process.env.CONTRACT_CENTER || "").trim();
+
+function applySectionEvent(parsed) {
+    const a = parsed.args;
+    const setAccount = (address, id, role) => sectionBook.accounts.set(ethers.getAddress(address).toLowerCase(), { id: Number(id), role });
+    switch (parsed.name) {
+        case "AdminChanged":
+            sectionBook.admin = ethers.getAddress(a.admin);
+            break;
+        case "SectionCreated":
+            sectionBook.sections.set(Number(a.id), { name: a.name, active: true, archived: false });
+            setAccount(a.upfront, a.id, "upfront");
+            setAccount(a.consumption, a.id, "consumption");
+            setAccount(a.payment, a.id, "payment");
+            break;
+        case "SectionRenamed": {
+            const s = sectionBook.sections.get(Number(a.id));
+            if (s) {
+                s.name = a.name;
+            }
+            break;
+        }
+        case "SectionActiveChanged": {
+            const s = sectionBook.sections.get(Number(a.id));
+            if (s) {
+                s.active = a.active;
+            }
+            break;
+        }
+        case "SectionArchived": {
+            const s = sectionBook.sections.get(Number(a.id));
+            if (s) {
+                s.archived = true;
+                s.active = false;
+            }
+            break;
+        }
+        case "SectionAccountReplaced":
+            setAccount(a.previous, a.id, "retired");
+            setAccount(a.account, a.id, SECTION_ROLE_NAMES[Number(a.role)] || "retired");
+            break;
+        case "AccountAdded":
+            setAccount(a.account, a.id, "user");
+            break;
+        default:
+            break;
+    }
+}
+
+// The section information of an address (null when it belongs to none), or a special account
+function sectionOf(address) {
+    const key = String(address || "").toLowerCase();
+    const entry = sectionBook.accounts.get(key);
+    if (entry) {
+        const s = sectionBook.sections.get(entry.id) || { name: "#" + entry.id, active: false, archived: false };
+        return { sectionId: entry.id, section: s.name, role: entry.role, sectionActive: s.active, sectionArchived: s.archived };
+    }
+    const special = (process.env.SENDER01 && key === process.env.SENDER01.toLowerCase()) ? "sender01"
+        : (CONTRACT_CENTER && key === CONTRACT_CENTER.toLowerCase()) ? "contract center"
+            : (sectionBook.admin && key === sectionBook.admin.toLowerCase()) ? "registry admin" : null;
+    return special ? { sectionId: null, section: null, role: special } : null;
+}
 
 function chainRegistryScan() {
     if (!ethers.isAddress(REGISTRY_CONTRACT)) {
@@ -132,13 +207,17 @@ function chainRegistryScan() {
     if (!chainRegistry.running) {
         chainRegistry.running = (async () => {
             const head = parseInt(await rpc("eth_blockNumber", []), 16);
-            const topic = registryEvents.getEvent("ContractRegistered").topicHash;
+            const topics = [registryEvents.fragments.filter((f) => f.type === "event").map((f) => f.topicHash)];
             for (let start = chainRegistry.scannedTo >= 0 ? chainRegistry.scannedTo + 1 : REGISTRY_FROM_BLOCK; start <= head; start += 1000) {
                 const end = Math.min(start + 999, head);
-                const logs = await rpc("eth_getLogs", [{ address: REGISTRY_CONTRACT, fromBlock: ethers.toQuantity(start), toBlock: ethers.toQuantity(end), topics: [topic] }]);
+                const logs = await rpc("eth_getLogs", [{ address: REGISTRY_CONTRACT, fromBlock: ethers.toQuantity(start), toBlock: ethers.toQuantity(end), topics }]);
                 for (const log of logs) {
                     try {
                         const parsed = registryEvents.parseLog(log);
+                        if (parsed.name !== "ContractRegistered") {
+                            applySectionEvent(parsed);
+                            continue;
+                        }
                         const abi = JSON.parse(parsed.args.abiJson);
                         const address = ethers.getAddress(parsed.args.contractAddress);
                         chainRegistry.byAddress.set(address.toLowerCase(), {
@@ -1130,7 +1209,8 @@ function publicAccount(row) {
         balanceWei: row.balanceWei.toString(),
         tokens: row.erc20.size,
         nfts: nftsOf(row.address).length,
-        transactions: txCountFor(row.address)
+        transactions: txCountFor(row.address),
+        ...(sectionOf(row.address) || {})
     };
 }
 

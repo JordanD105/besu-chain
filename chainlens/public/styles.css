@@ -545,3 +545,13 @@ tr:last-child td { border-bottom: 0; }
 .section-inputs .table-search { flex: 1 1 220px; width: auto; }
 .fn-run.danger { border-color: var(--bad, #e5484d); color: var(--bad, #e5484d); }
 .info-key { flex: 0 1 160px !important; }
+
+/* section of an account */
+.badge.role { margin-left: 2px; }
+.badge.role-user { background: var(--transfer); }
+.badge.role-upfront { background: var(--create); }
+.badge.role-consumption, .badge.role-payment { background: var(--call); }
+.badge.role-retired { background: var(--line); color: var(--text); }
+.section-cell { white-space: nowrap; }
+.account-section { margin-top: 10px; }
+.badge.role-sender01, .badge.role-contract-center, .badge.role-registry-admin { background: var(--type); }

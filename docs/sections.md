@@ -168,6 +168,15 @@ transaction sent around the proxy can't redirect it. A version-3 sale without a 
 refused. **Version-2 collections** (minted by SENDER01, e.g. those made before) keep working as
 before, without a key.
 
+## Sections in the chainlens Accounts page
+
+Visible to every chainlens user (the information is public on chain): the **Accounts** list has a
+**Section** column (the section's name and the account's role: `user`, `upfront`, `consumption`,
+`payment`, `retired`; system accounts are marked `SENDER01`, `contract center`, `registry admin`)
+and a filter (one section, no section, system accounts); an account's page shows its section, role
+and what the role does. Chainlens reads the section events of the SectionRegistry (new accounts,
+renames, replaced accounts, archives) every 15 s.
+
 ## Application API: section calls
 
 An application of section_i sends its key in the header **`X-Section-Key: sk_…`**. The proxy
