@@ -166,9 +166,26 @@ Besu는 Java에서 실행됩니다.
 
 ### 사전 서명 풀 (Presignature pool) {#presignature-pool}
 
+풀이 있는 모든 MPC 키(클래스 `big`, `small`)는 **각** 코디네이터마다 자기 풀을 가집니다. 키가 많을 때는
+개수와 **Keys needing attention**을 먼저 보십시오. 나머지는 키 하나를 찾아보기 위한 것입니다. 키의 **이름**은
+프록시에서 옵니다(`proxy_account_info`, 레이블 `account`): SENDER01, registry admin, contract center,
+`<섹션> · upfront` / `consumption` / `payment`. 이름이 없는 키는 주소로 표시됩니다. 상단 변수: **Class**(big,
+small), **Section**, **Search**(이름이나 주소의 일부). 이름이 없는 키에는 Section 필터가 적용되지 않습니다.
+
+![MPC signer의 사전 서명 풀(랩): 개수, 주의가 필요한 키(없음), 이름으로 표시된 모든 풀 키](../images/screenshots/grafana-mpc-keys.png)
+
 | 패널 | 표시 내용 | 정상 | 정상이 아닐 때 |
 |---|---|---|---|
-| **Pools of big keys** (큰 키 풀) | 큰 키(SENDER01, 선지급 계정, 기타 핫 발신자)별 준비된 사전 서명과 목표선 | 목표치에 근접 | 서명 중 계속 낮음: 서명이 사전 서명 생성보다 빠릅니다. 급증 후에는 저절로 다시 채워집니다(`MpcPoolEmpty`) |
+| **Pooled keys** (풀이 있는 키) | 필터에 맞는 풀이 있는 키 | | |
+| **Empty pools** (빈 풀) | 사전 서명이 없는 풀: 그 키는 느린 경로(~0.6–1.5 s)로 서명합니다 | 0 | 급증이나 노드 재시작 후 저절로 다시 채워집니다(`MpcPoolEmpty`) |
+| **Below half** (절반 미만) | 목표의 절반 미만인 풀 | 0 | 서명이 사전 서명 생성보다 빠릅니다 |
+| **Presignatures ready** / **Pool fill** | 이 풀들에 준비된 사전 서명 / 준비 ÷ 목표 | ~100 % | |
+| **Presigning now** | 이 키들에 대해 실행 중인 사전 서명 세션 | | |
+| **Keys needing attention** | 문제가 있는 풀만: **EMPTY** 빨강, **LOW** 주황(절반 미만), 키와 코디네이터마다 한 행. 없으면 *all pools OK* | 비어 있음 | |
+| **All pooled keys** | 모든 키와 코디네이터, 가장 빈 것부터, 아래에 페이지: Key, State, Class, Coordinator, Kind, Section, Ready, Target, Fill(게이지), Presigning, Address | | |
+| **Lowest pools: 10 keys** | 채움 비율이 가장 낮은 10개와 그 코디네이터 | 100 % | |
+| **Pool fill by class** | 클래스별 준비 ÷ 목표, 코디네이터별, 시간에 따라 | 100 % 근처 | |
+| **Big keys: the 10 lowest pools** | 각 시점에 사전 서명이 가장 적은 big 키(SENDER01, 선지급 계정, 기타 핫 발신자) 10개, 이름으로, 목표선과 함께 | 목표치에 근접 | 서명 중 계속 낮음: 서명이 사전 서명 생성보다 빠릅니다. 급증 후에는 저절로 다시 채워집니다(`MpcPoolEmpty`) |
 | **Pools of small keys** (작은 키 풀) | 모든 작은 키(`/createaccount`로 만든 계정)의 준비된 사전 서명 합계와 전체 목표 | 전체 목표에 근접 | 많은 작은 풀이 오랫동안 비어 있음: `MpcSmallPoolsEmpty` |
 | **Presignatures generated per second** (초당 생성된 사전 서명) | 사전 서명 생성 속도 | — | **이것이 지속 가능한 용량입니다**: 이보다 빠르게 서명하면 풀이 고갈됩니다 |
 | **Average presign duration** (평균 사전 서명 시간) | 사전 서명당 초 | 안정적 | 증가: MPC 노드의 CPU |
@@ -449,7 +466,7 @@ Prometheus는 `prometheus_retention`(기본값 400일) 동안 보관합니다. c
 | 트랜잭션이 왜 채굴되지 않습니까? | Proxy & Redis → *Senders needing attention* |
 | 어느 섹션의 자금이 가장 먼저 바닥납니까? | Sections → *Sections needing attention*, *Fewest days left* |
 | 서명할 수 있습니까? 계정을 생성할 수 있습니까? | MPC signer → *MPC nodes up*, *Threshold* |
-| 서명이 왜 느립니까? | MPC signer → *Signatures per second* (콜드 경로), *Pools* |
+| 서명이 왜 느립니까? | MPC signer → *Signatures per second* (콜드 경로), *Keys needing attention* |
 | API가 실패하거나 느립니까? | Proxy & Redis → *5xx errors*, *Latency p95*, *Errors per second* |
 | 어느 섹션에 충전이 필요합니까? | Sections → *Upfront below threshold*, *Upfront accounts* |
 | 이번 주 각 섹션은 얼마를 벌었습니까? | Sections, Period = Week → *ETH moved per period* |

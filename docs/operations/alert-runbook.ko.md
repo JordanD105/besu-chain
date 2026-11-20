@@ -260,7 +260,7 @@ docker logs --since 30m <container> 2>&1 | grep -iE "error|fail|exception|warn" 
 **Warning.** 큰(핫) 키에 준비된 사전 서명이 2분 동안 없습니다: 서명이 느린 경로로 전환됩니다
 (서명당 ~0.6 s).
 
-1. **확인:** *Pools of big keys*, *Presignatures generated per second*. MPC 노드나
+1. **확인:** MPC signer → *Keys needing attention*(어느 키, 어느 코디네이터), *Big keys: the 10 lowest pools*, *Presignatures generated per second*. MPC 노드나
    코디네이터를 재시작한 후 몇 분 동안은 정상입니다.
 2. **조치:** 계속되는 경우:
    - 3개 노드 중 하나가 다운되면 사전 서명 생성이 느려집니다: [MpcNodeDown](#mpcnodedown).
