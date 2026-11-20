@@ -67,6 +67,7 @@ plugins:
             Besu manual setup: Besu 수동 설정
             MPC signer in production: 운영 환경의 MPC 서명기
             GPG key: GPG 키
+            Offline build: 오프라인 빌드
             Components: 구성 요소
             Hyperledger Besu chain: Hyperledger Besu 체인
             Proxy: 프록시
@@ -134,6 +135,7 @@ nav:
       - Besu manual setup: deployment/besu-manual.md
       - MPC signer in production: deployment/mpc-signer-production.md
       - GPG key: deployment/gpg-key.md
+      - Offline build: deployment/offline-build.md
   - Components:
       - Hyperledger Besu chain: components/besu.md
       - Proxy: components/proxy.md

@@ -27,7 +27,7 @@ Ansible does it all when `remix_enabled: true` (the default):
 
 - `02-images.yml` fetches the pinned Remix site on the operator **once per commit** (`git fetch
   --depth 1`, about 400 MB, into `state/build/remix/remix-live`; the operator needs github.com for
-  this) and builds `localhost/besu-remix/remix`. Like the other images it is built once and copied to
+  this, or the site's archive in `image_archives_dir`: [offline build](../deployment/offline-build.md)) and builds `localhost/besu-remix/remix`. Like the other images it is built once and copied to
   the host, and `save-images.yml` saves it as `remix-docker.tar`.
 - `12-remix.yml` starts it on the monitoring host and checks the compiler list.
 - `ha/firewall-layout.sh` opens port 30200 on the monitoring host for `operator_ip` and `remix_ips`.

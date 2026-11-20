@@ -10,6 +10,7 @@
 # Run it on the operator:
 #   ansible-playbook save-images.yml                          uses image_archives_dir from settings.yml
 #   ansible-playbook save-images.yml -e image_archives_dir=/opt/000
+#   ansible-playbook save-images.yml --tags base-images       only the base images of the builds
 # An archive that already holds the right image is kept; a missing or different one is (re)written.
 - name: Save all images as archives
   hosts: localhost
@@ -21,12 +22,14 @@
       ansible.builtin.assert:
         that: image_archives_dir | length > 0
         fail_msg: "Set image_archives_dir in settings.yml, or run with -e image_archives_dir=/opt/000"
+      tags: [always]
 
     - name: Archive directory
       ansible.builtin.file:
         path: "{{ image_archives_dir }}"
         state: directory
         mode: "0755"
+      tags: [always]
 
     - name: Images present locally?
       ansible.builtin.command: docker image inspect {{ lookup('ansible.builtin.vars', item.key ~ '_image') }}
@@ -80,20 +83,22 @@
         executable: /bin/bash
       register: base_images
       changed_when: false
+      tags: [base-images]
 
-    - name: Save the base images (base-<image>.tar; pulled first when missing, kept when unchanged)
+    - name: Save the base images (base-<image>.tar and its image id in .id; pulled first when missing, kept when unchanged)
       ansible.builtin.shell: |
         set -eo pipefail
         f={{ (image_archives_dir ~ '/base-' ~ (item | regex_replace('[/:]', '_')) ~ '.tar') | quote }}
         docker image inspect {{ item | quote }} >/dev/null 2>&1 || docker pull --quiet {{ item | quote }} >/dev/null
         id=$(docker image inspect -f '{% raw %}{{.Id}}{% endraw %}' {{ item | quote }})
-        if [ -f "$f" ] && tar -xOf "$f" manifest.json | grep -qF "${id#sha256:}"; then echo "kept $(du -h "$f" | cut -f1)"; exit 0; fi
-        docker save -o "$f.tmp" {{ item | quote }} && mv "$f.tmp" "$f" && echo "saved $(du -h "$f" | cut -f1)"
+        if [ -f "$f" ] && [ "$(cat "$f.id" 2>/dev/null)" = "$id" ]; then echo "kept $(du -h "$f" | cut -f1)"; exit 0; fi
+        docker save -o "$f.tmp" {{ item | quote }} && mv "$f.tmp" "$f" && printf '%s' "$id" > "$f.id" && echo "saved $(du -h "$f" | cut -f1)"
       args:
         executable: /bin/bash
       loop: "{{ base_images.stdout_lines }}"
       register: base_saved
       changed_when: "'saved' in base_saved.stdout"
+      tags: [base-images]
 
     - name: Built images from 02-images.yml (MPC signer, proxy, chainlens, remix)
       ansible.builtin.stat:

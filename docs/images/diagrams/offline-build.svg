@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="600" viewBox="0 0 1500 600" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker><filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter></defs>
+<rect width="1500" height="600" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" font-weight="700" fill="#0f172a">Building the images without internet</text>
+<text x="40" y="72" font-size="15" fill="#475569">The archives are made once where there is internet, carried to the site, and 02-images.yml builds every image with no network (offline_build: true).</text>
+<rect x="30" y="95" width="560" height="470" rx="16" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="48" y="121" font-size="14" font-weight="700" fill="#2563eb">WITH INTERNET (once, and after a dependency change)</text>
+<rect x="55" y="135" width="510" height="120" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="75" y="165" font-size="16" font-weight="700" fill="#1e3a8a">offline/make-offline.sh</text>
+<text x="75" y="191" font-size="12.5" font-family="'JetBrains Mono', 'DejaVu Sans Mono', Consolas, monospace" fill="#334155">→ chainlens/, proxy/offline/npm-cache.tgz</text>
+<text x="75" y="212" font-size="12.5" font-family="'JetBrains Mono', 'DejaVu Sans Mono', Consolas, monospace" fill="#334155">→ docs-site/offline/wheels.tgz</text>
+<text x="75" y="233" font-size="12.5" font-family="'JetBrains Mono', 'DejaVu Sans Mono', Consolas, monospace" fill="#334155">→ mpc-signer/offline/cargo-vendor.tgz</text>
+<rect x="55" y="275" width="510" height="98" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="75" y="305" font-size="16" font-weight="700" fill="#1e3a8a">offline/make-offline.sh --remix DIR</text>
+<text x="75" y="331" font-size="12.5" font-family="'JetBrains Mono', 'DejaVu Sans Mono', Consolas, monospace" fill="#334155">→ remix-live-&lt;commit&gt;.tgz</text>
+<text x="75" y="352" font-size="12.5" font-family="'JetBrains Mono', 'DejaVu Sans Mono', Consolas, monospace" fill="#334155">→ remix-solc-npm-cache.tgz</text>
+<rect x="55" y="393" width="510" height="98" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="75" y="423" font-size="16" font-weight="700" fill="#1e3a8a">ansible-playbook save-images.yml</text>
+<text x="75" y="449" font-size="12.5" font-family="'JetBrains Mono', 'DejaVu Sans Mono', Consolas, monospace" fill="#334155">→ base-&lt;image&gt;.tar  (node, python, nginx, rust, debian)</text>
+<text x="75" y="470" font-size="12.5" font-family="'JetBrains Mono', 'DejaVu Sans Mono', Consolas, monospace" fill="#334155">→ Besu, Prometheus, Grafana, redis … (as before)</text>
+<text x="55" y="530" font-size="13" fill="#1e3a8a">first block: commit to git (≈ 75 MB) · the other two: into image_archives_dir</text>
+<rect x="640" y="215" width="220" height="190" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="2" filter="url(#sh)"/>
+<text x="750" y="247" font-size="16" font-weight="700" fill="#92400e" text-anchor="middle">Carry to the site</text>
+<text x="750" y="277" font-size="13.5" fill="#334155" text-anchor="middle">the repository</text>
+<text x="750" y="295" font-size="13.5" fill="#334155" text-anchor="middle">(archives committed)</text>
+<text x="750" y="313" font-size="13.5" fill="#334155" text-anchor="middle"></text>
+<text x="750" y="331" font-size="13.5" fill="#334155" text-anchor="middle">image_archives_dir</text>
+<text x="750" y="349" font-size="13.5" fill="#334155" text-anchor="middle">(base images, Remix)</text>
+<text x="750" y="367" font-size="13.5" fill="#334155" text-anchor="middle"></text>
+<text x="750" y="385" font-family="'JetBrains Mono', 'DejaVu Sans Mono', Consolas, monospace" font-size="11.5" fill="#334155" text-anchor="middle">sha256sum -c offline/SHA256SUMS</text>
+<line x1="594" y1="310" x2="634" y2="310" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="864" y1="310" x2="904" y2="310" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="910" y="95" width="560" height="470" rx="16" fill="#ecfdf5" stroke="#059669" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="928" y="121" font-size="14" font-weight="700" fill="#059669">OFFLINE OPERATOR (no internet)</text>
+<rect x="935" y="135" width="510" height="140" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="955" y="165" font-size="16" font-weight="700" fill="#065f46">02-images.yml with offline_build: true</text>
+<text x="955" y="191" font-size="13.5" fill="#334155">1. package archives there, checksums match</text>
+<text x="955" y="212" font-size="13.5" fill="#334155">2. base images: missing ones loaded from base-*.tar</text>
+<text x="955" y="233" font-size="13.5" fill="#334155">3. Remix site from its archive (no git fetch)</text>
+<text x="955" y="254" font-size="13.5" fill="#334155">4. every build with --network none</text>
+<rect x="935" y="295" width="510" height="140" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="955" y="325" font-size="16" font-weight="700" fill="#065f46">Dockerfiles use the archives</text>
+<text x="955" y="351" font-size="13.5" fill="#334155">MPC signer: cargo build --offline (vendored crates)</text>
+<text x="955" y="372" font-size="13.5" fill="#334155">proxy, chainlens: npm ci --offline (npm cache)</text>
+<text x="955" y="393" font-size="13.5" fill="#334155">docs site: pip install --no-index (wheels)</text>
+<text x="955" y="414" font-size="13.5" fill="#334155">Remix: npm install solc --offline</text>
+<rect x="935" y="455" width="510" height="80" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="955" y="485" font-size="16" font-weight="700" fill="#065f46">Images → hosts (docker save / load)</text>
+<text x="955" y="511" font-size="13.5" fill="#334155">the hosts never need internet</text>
+<line x1="1190" y1="279" x2="1190" y2="291" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="1190" y1="439" x2="1190" y2="451" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="40" y="588" font-size="13" fill="#64748b">Missing or stale archive: the build stops and says which archive to make; nothing is downloaded.</text>
+</svg>

@@ -40,6 +40,7 @@ served as a website with search ([documentation website](docs/components/docs-si
 | `besu-test-network/` | one-host test chain (development) | [Development environment](docs/getting-started/development.md) |
 | `docs/` | all documentation | [map](docs/README.md) |
 | `docs-site/` | the documentation as a self-hosted website (Docker, :30300) | [Documentation website](docs/components/docs-site.md) |
+| `offline/` | building the images without internet: `make-offline.sh`, checksums (archives in each `*/offline/`) | [Offline build](docs/deployment/offline-build.md) |
 
 ## Quick start (development, one host)
 

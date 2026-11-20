@@ -36,6 +36,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | add a Besu validator, remove one, move an MPC node | [adding and removing nodes](operations/adding-nodes.md) |
 | recover a lost host or site | [disaster recovery](operations/disaster-recovery.md) · [restore with Ansible](operations/restore.md) |
 | upgrade the MPC signer | [MPC upgrade](operations/mpc-signer-upgrade.md) |
+| build the images on a site without internet | [offline build](deployment/offline-build.md) |
 | run everything on one machine | [development environment](getting-started/development.md) |
 
 ---
@@ -65,6 +66,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | [Besu manual setup](deployment/besu-manual.md) | Besu packages by hand: network files, start, add / remove validators |
 | [MPC signer production](deployment/mpc-signer-production.md) | the three teams, tokens, key ceremony, backups, operations |
 | [GPG key](deployment/gpg-key.md) | the key that encrypts node-key backups |
+| [Offline build](deployment/offline-build.md) | building every image without internet: package archives, base images, `offline_build` |
 
 ### Components
 | Document | Contents |

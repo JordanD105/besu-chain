@@ -75,8 +75,10 @@ docker compose -f docs-site/docker-compose.yml up -d --build
 
 The numbers match the steps below.
 
-1. **Build stage** (`python:3.12.8-slim`): installs `mkdocs 1.6.1` and `mkdocs-material 9.5.49`
-   (from PyPI, at build time only), copies the repository (secrets, state and large files are
+1. **Build stage** (`python:3.12.8-slim`): installs `mkdocs 1.6.1`, `mkdocs-material 9.5.49`,
+   `mkdocs-static-i18n 1.2.3` and their dependencies, all pinned in `docs-site/requirements.txt`
+   (from PyPI at build time only, or without network from `docs-site/offline/wheels.tgz`:
+   [offline build](../deployment/offline-build.md)), copies the repository (secrets, state and large files are
    excluded by `Dockerfile.dockerignore`) and runs `mkdocs build`.
 2. **Links to source files:** the documents link to files outside `docs/` (contracts, playbooks,
    alert rules…). `hooks.py` points those links at `/_source/<path>` and copies the files there, so
@@ -96,6 +98,6 @@ Heading anchors follow GitHub's rules, so the same links work on GitHub and on t
 - Check the build locally (warnings list broken links and anchors):
 
 ```bash
-pip install mkdocs==1.6.1 mkdocs-material==9.5.49
+pip install -r docs-site/requirements.txt
 mkdocs build -f docs-site/mkdocs.yml -d /tmp/site
 ```

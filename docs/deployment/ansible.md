@@ -166,6 +166,12 @@ With `mpc_image_build: false` the MPC image is pulled from your registry and sav
 To change a version, set the new tag (and archive file name in `image_archives`) and rerun
 `site.yml`: Besu nodes are recreated one at a time, each back in sync before the next.
 
+**Building without internet.** `save-images.yml` also saves the **base images** of the builds
+(the `FROM` lines of the Dockerfiles: node, python, nginx, rust, debian) as `base-<image>.tar`
+(only those: `--tags base-images`), and `02-images.yml` loads a missing one from there. With
+`offline_build: true` every build runs without network, from the package archives committed in
+the repository and Remix's archives: [offline build](offline-build.md).
+
 ### Presignature pools
 
 `mpc_pool_target` (big keys such as `SENDER01`), `mpc_pool_target_small` (small keys) and

@@ -129,13 +129,13 @@
     - name: Remix compilers from image_archives_dir (remix/Dockerfile installs solc from this npm cache)
       ansible.builtin.copy:
         src: "{{ image_archives_dir }}/{{ remix_solc_archive }}"
-        dest: "{{ state_dir }}/build/remix/offline/{{ remix_solc_archive }}"
+        dest: "{{ state_dir }}/build/remix/offline/solc-npm-cache.tgz"
         mode: "0644"
       when: remix_enabled | bool and image_archives_dir | length > 0 and (image_archives_dir ~ '/' ~ remix_solc_archive) is file
 
     - name: Offline build, Remix's compilers are there
       ansible.builtin.assert:
-        that: (state_dir ~ '/build/remix/offline/' ~ remix_solc_archive) is file
+        that: (state_dir ~ '/build/remix/offline/solc-npm-cache.tgz') is file
         fail_msg: >-
           {{ image_archives_dir }}/{{ remix_solc_archive }} is missing: run offline/make-offline.sh --remix
           <image_archives_dir> on a machine with internet (docs/deployment/offline-build.md).
