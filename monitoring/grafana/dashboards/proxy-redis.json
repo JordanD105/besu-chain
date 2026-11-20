@@ -32,7 +32,74 @@
   "timezone": "",
   "graphTooltip": 1,
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "kind",
+        "label": "Kind",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(proxy_sender_info, kind)",
+          "refId": "kind"
+        },
+        "definition": "label_values(proxy_sender_info, kind)",
+        "refresh": 2,
+        "sort": 1,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "section",
+        "label": "Section",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(proxy_sender_info, section)",
+          "refId": "section"
+        },
+        "definition": "label_values(proxy_sender_info, section)",
+        "refresh": 2,
+        "sort": 1,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "search",
+        "label": "Search (name or address)",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
   },
   "annotations": {
     "list": [
@@ -68,7 +135,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Proxy (the active one, through the proxy VIP)",
+      "title": "Alerts",
       "id": 1,
       "collapsed": false,
       "gridPos": {
@@ -81,8 +148,311 @@
     },
     {
       "type": "stat",
-      "title": "Proxy",
+      "title": "Critical firing",
       "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Critical alerts firing now (all components). Details in the table and on Prometheus's Alerts page.",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\",severity=\"critical\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings firing",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Warning alerts firing now (all components).",
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\",severity=\"warning\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Firing alerts",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Every alert firing now, critical first. 'Firing for' counts from when the condition started (including the rule's wait time). History: the Alert log dashboard.",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 16,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (alertname, severity, subject) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace((ALERTS{alertstate=\"firing\",severity=\"critical\"} * 3 or ALERTS{alertstate=\"firing\",severity=\"warning\"} * 2 or ALERTS{alertstate=\"firing\"}), \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"), \"subject\", \"$1\", \"section\", \"(.+)\"))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "max by (alertname, severity, subject) ((time() - label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS_FOR_STATE, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"), \"subject\", \"$1\", \"section\", \"(.+)\")) and on(alertname, severity, subject) label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS{alertstate=\"firing\"}, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"), \"subject\", \"$1\", \"section\", \"(.+)\"))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "severity": "Severity",
+              "alertname": "Alert",
+              "subject": "Subject",
+              "Value #A": "rank",
+              "Value #B": "Firing for"
+            },
+            "indexByName": {
+              "severity": 0,
+              "alertname": 1,
+              "subject": 2,
+              "Value #B": 3,
+              "Value #A": 4
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "rank",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "none firing"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rank"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Firing for"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "CRITICAL",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warning": {
+                        "text": "WARNING",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "info": {
+                        "text": "INFO",
+                        "color": "blue",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Proxy (the active one, through the proxy VIP)",
+      "id": 5,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Proxy",
+      "id": 6,
       "description": "Prometheus reaches the proxy through the proxy VIP",
       "datasource": {
         "type": "prometheus",
@@ -90,7 +460,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 8,
         "w": 3,
         "h": 5
       },
@@ -162,7 +532,7 @@
     {
       "type": "stat",
       "title": "Requests / s",
-      "id": 3,
+      "id": 7,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -170,7 +540,7 @@
       },
       "gridPos": {
         "x": 3,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 5
       },
@@ -224,7 +594,7 @@
     {
       "type": "stat",
       "title": "5xx errors",
-      "id": 4,
+      "id": 8,
       "description": "Share of answers with status 5xx (the proxy failed). 4xx are the caller's mistakes and are not counted here",
       "datasource": {
         "type": "prometheus",
@@ -232,7 +602,7 @@
       },
       "gridPos": {
         "x": 7,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 5
       },
@@ -294,7 +664,7 @@
     {
       "type": "stat",
       "title": "Latency p95",
-      "id": 5,
+      "id": 9,
       "description": "95th percentile answer time, without /createaccount and /admin (MPC key generation is slow by design)",
       "datasource": {
         "type": "prometheus",
@@ -302,7 +672,7 @@
       },
       "gridPos": {
         "x": 11,
-        "y": 1,
+        "y": 8,
         "w": 4,
         "h": 5
       },
@@ -364,7 +734,7 @@
     {
       "type": "stat",
       "title": "In flight",
-      "id": 6,
+      "id": 10,
       "description": "Requests being answered now",
       "datasource": {
         "type": "prometheus",
@@ -372,7 +742,7 @@
       },
       "gridPos": {
         "x": 15,
-        "y": 1,
+        "y": 8,
         "w": 3,
         "h": 5
       },
@@ -434,7 +804,7 @@
     {
       "type": "stat",
       "title": "Redis link",
-      "id": 7,
+      "id": 11,
       "description": "The proxy's connection to its Redis (nonce cache). Without it the proxy continues with memory + chain",
       "datasource": {
         "type": "prometheus",
@@ -442,7 +812,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 1,
+        "y": 8,
         "w": 3,
         "h": 5
       },
@@ -514,7 +884,7 @@
     {
       "type": "stat",
       "title": "Uptime",
-      "id": 8,
+      "id": 12,
       "description": "Since the proxy started: a reset means a restart or a failover to the other host",
       "datasource": {
         "type": "prometheus",
@@ -522,7 +892,7 @@
       },
       "gridPos": {
         "x": 21,
-        "y": 1,
+        "y": 8,
         "w": 3,
         "h": 5
       },
@@ -576,11 +946,11 @@
     {
       "type": "row",
       "title": "Requests",
-      "id": 9,
+      "id": 13,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 6,
+        "y": 13,
         "w": 24,
         "h": 1
       },
@@ -589,7 +959,7 @@
     {
       "type": "timeseries",
       "title": "Requests per second by route",
-      "id": 10,
+      "id": 14,
       "description": "Route patterns (e.g. /nft/:tokenId), all methods and status codes",
       "datasource": {
         "type": "prometheus",
@@ -597,7 +967,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 7,
+        "y": 14,
         "w": 12,
         "h": 8
       },
@@ -649,7 +1019,7 @@
     {
       "type": "timeseries",
       "title": "Errors per second (4xx and 5xx)",
-      "id": 11,
+      "id": 15,
       "description": "5xx: the proxy failed. 4xx: refused (bad input, wrong key, not allowed). aborted: the client hung up before the answer",
       "datasource": {
         "type": "prometheus",
@@ -657,7 +1027,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 7,
+        "y": 14,
         "w": 12,
         "h": 8
       },
@@ -718,7 +1088,7 @@
     {
       "type": "timeseries",
       "title": "Answer time (all routes except /createaccount and /admin)",
-      "id": 12,
+      "id": 16,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -726,7 +1096,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 22,
         "w": 12,
         "h": 8
       },
@@ -796,7 +1166,7 @@
     {
       "type": "timeseries",
       "title": "95th percentile by route",
-      "id": 13,
+      "id": 17,
       "description": "Includes /createaccount and /admin routes (MPC key generation)",
       "datasource": {
         "type": "prometheus",
@@ -804,7 +1174,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 15,
+        "y": 22,
         "w": 12,
         "h": 8
       },
@@ -856,7 +1226,7 @@
     {
       "type": "table",
       "title": "Routes in the selected time range",
-      "id": 14,
+      "id": 18,
       "description": "Per route over the dashboard's time range (counts are estimates from Prometheus increase())",
       "datasource": {
         "type": "prometheus",
@@ -864,7 +1234,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 30,
         "w": 24,
         "h": 9
       },
@@ -1054,37 +1424,1159 @@
     },
     {
       "type": "row",
-      "title": "Senders and nonces",
-      "id": 15,
+      "title": "Senders (every account the proxy sends from; filter with Kind, Section and Search above)",
+      "id": 19,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 39,
         "w": 24,
         "h": 1
       },
       "panels": []
     },
     {
-      "type": "timeseries",
-      "title": "Transactions in flight per sender",
-      "id": 16,
-      "description": "Sent by the proxy, not yet mined",
+      "type": "stat",
+      "title": "Senders",
+      "id": 20,
+      "description": "Accounts the proxy sends from and watches (SENDER01, contract center, registry admin, section accounts, user accounts used in the last few minutes), matching the filters",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "x": 0,
-        "y": 33,
-        "w": 8,
+        "y": 40,
+        "w": 3,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count((max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Stalled",
+      "id": 21,
+      "description": "Ready transactions not mined while blocks are produced (alert ProxySenderStalled)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 3,
+        "y": 40,
+        "w": 3,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count((max by (sender) (proxy_sender_stalled) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Nonce gaps",
+      "id": 22,
+      "description": "A nonce is missing: later transactions wait (alert ProxyNonceGap after 120 s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 40,
+        "w": 3,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Check failing",
+      "id": 23,
+      "description": "The proxy's chain check of the sender failed (alert ProxySenderCheckFailing)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 40,
+        "w": 3,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count((max by (sender) (proxy_sender_check_error) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "purple",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "In flight",
+      "id": 24,
+      "description": "Transactions sent and not mined yet, all matching senders",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 3,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Waiting above gap",
+      "id": 25,
+      "description": "Transactions in Besu's pool waiting for a missing nonce",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 40,
+        "w": 3,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Repairs (range)",
+      "id": 26,
+      "description": "Nonce gaps the proxy repaired in the selected time range",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 40,
+        "w": 3,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "round(sum((sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Fillers (range)",
+      "id": 27,
+      "description": "0-value filler transactions sent to close gaps in the selected time range",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 21,
+        "y": 40,
+        "w": 3,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "round(sum((sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Senders needing attention",
+      "id": 28,
+      "description": "Only the senders with a problem now: STALLED (ready transactions not mined), CHECK FAILING, NONCE GAP, WAITING (transactions above a gap). Empty = all senders OK. Times: how long it has lasted. Repairs, fillers, stalls: in the selected time range. Each column can be filtered (funnel) or sorted.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((max by (sender) (proxy_sender_stalled) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 4 or ((max by (sender) (proxy_sender_check_error) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 3 or ((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 2 or ((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 1",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "(max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "(max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "(max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "expr": "(max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "expr": "(sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "G",
+          "expr": "(sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "H",
+          "expr": "(sum by (sender) (increase(proxy_sender_stalls_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "State",
+              "Value #B": "In flight",
+              "Value #C": "Not mined for",
+              "Value #D": "Nonce gap for",
+              "Value #E": "Waiting above gap",
+              "Value #F": "Repairs",
+              "Value #G": "Fillers",
+              "Value #H": "Stalls",
+              "name": "Sender",
+              "kind": "Kind",
+              "section": "Section",
+              "sender": "Address"
+            },
+            "indexByName": {
+              "Value #A": 1,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #F": 9,
+              "Value #G": 10,
+              "Value #H": 8,
+              "name": 0,
+              "kind": 2,
+              "section": 3,
+              "sender": 11
+            }
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "State",
+                "config": {
+                  "id": "isNotNull",
+                  "options": {}
+                }
+              }
+            ],
+            "type": "include",
+            "match": "any"
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false,
+          "enablePagination": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          },
+          "noValue": "all senders OK"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "4": {
+                        "text": "STALLED",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "3": {
+                        "text": "CHECK FAILING",
+                        "color": "purple",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "NONCE GAP",
+                        "color": "orange",
+                        "index": 2
+                      },
+                      "1": {
+                        "text": "WAITING",
+                        "color": "yellow",
+                        "index": 3
+                      },
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sender"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 260
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Not mined for|Nonce gap for"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 30
+                    },
+                    {
+                      "color": "red",
+                      "value": 120
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "In flight|Waiting above gap|Repairs|Fillers|Stalls"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "All senders",
+      "id": 29,
+      "description": "Every sender matching the filters, problems first; pages at the bottom. Use Search above for a name, section or address part.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((max by (sender) (proxy_sender_stalled) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 4 or ((max by (sender) (proxy_sender_check_error) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 3 or ((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 2 or ((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 1 or (max by (sender) (proxy_sender_stalled) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) * 0",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "(max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "(max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "(max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "expr": "(max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "expr": "(sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "G",
+          "expr": "(sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "H",
+          "expr": "(sum by (sender) (increase(proxy_sender_stalls_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "State",
+              "Value #B": "In flight",
+              "Value #C": "Not mined for",
+              "Value #D": "Nonce gap for",
+              "Value #E": "Waiting above gap",
+              "Value #F": "Repairs",
+              "Value #G": "Fillers",
+              "Value #H": "Stalls",
+              "name": "Sender",
+              "kind": "Kind",
+              "section": "Section",
+              "sender": "Address"
+            },
+            "indexByName": {
+              "Value #A": 1,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #F": 9,
+              "Value #G": 10,
+              "Value #H": 8,
+              "name": 0,
+              "kind": 2,
+              "section": 3,
+              "sender": 11
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false,
+          "enablePagination": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "4": {
+                        "text": "STALLED",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "3": {
+                        "text": "CHECK FAILING",
+                        "color": "purple",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "NONCE GAP",
+                        "color": "orange",
+                        "index": 2
+                      },
+                      "1": {
+                        "text": "WAITING",
+                        "color": "yellow",
+                        "index": 3
+                      },
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sender"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 260
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Not mined for|Nonce gap for"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 30
+                    },
+                    {
+                      "color": "red",
+                      "value": 120
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "In flight|Waiting above gap|Repairs|Fillers|Stalls"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "In flight: top 10 senders",
+      "id": 30,
+      "description": "The 10 senders with the most transactions not mined yet, at each moment",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 62,
+        "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "proxy_sender_inflight_transactions",
-          "legendFormat": "{{sender}}",
+          "expr": "topk(10, (max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
+          "legendFormat": "{{name}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1127,24 +2619,93 @@
     },
     {
       "type": "timeseries",
-      "title": "Nonce gaps (seconds missing)",
-      "id": 17,
-      "description": "How long a nonce has been missing; later transactions wait (alert ProxyNonceGap above 120 s)",
+      "title": "In flight by kind",
+      "id": 31,
+      "description": "Platform accounts, section accounts and users, added up",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 8,
-        "y": 33,
-        "w": 8,
+        "x": 12,
+        "y": 62,
+        "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "proxy_sender_gap_seconds",
-          "legendFormat": "{{sender}}",
+          "expr": "sum by (kind) ((max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))",
+          "legendFormat": "{{kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Not mined / nonce gap: top 10 (seconds)",
+      "id": 32,
+      "description": "Only senders where it is happening; the longest 10 (alert ProxyNonceGap above 120 s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 70,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, (max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
+          "legendFormat": "not mined {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "topk(10, (max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
+          "legendFormat": "gap {{name}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1187,24 +2748,24 @@
     },
     {
       "type": "timeseries",
-      "title": "Stalls and repairs",
-      "id": 18,
-      "description": "Ready transactions not mined (stalls) and nonce gaps the proxy repaired",
+      "title": "Stalls, repairs and fillers per hour, by kind",
+      "id": 33,
+      "description": "Counted over the hour before each point",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 16,
-        "y": 33,
-        "w": 8,
+        "x": 12,
+        "y": 70,
+        "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (sender) (increase(proxy_sender_stalls_total[$__rate_interval]))",
-          "legendFormat": "stall {{sender}}",
+          "expr": "sum by (kind) (increase(proxy_sender_stalls_total[1h]) * on(sender) group_left(kind) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "stalls {{kind}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1212,8 +2773,17 @@
         },
         {
           "refId": "B",
-          "expr": "sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__rate_interval]))",
-          "legendFormat": "repair {{sender}}",
+          "expr": "sum by (kind) (increase(proxy_sender_nonce_repairs_total[1h]) * on(sender) group_left(kind) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "repairs {{kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (kind) (increase(proxy_sender_filler_transactions_total[1h]) * on(sender) group_left(kind) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "legendFormat": "fillers {{kind}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1237,7 +2807,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "none",
-          "decimals": 0,
+          "decimals": 1,
           "custom": {
             "drawStyle": "line",
             "lineWidth": 2,
@@ -1257,11 +2827,11 @@
     {
       "type": "row",
       "title": "Proxy process",
-      "id": 19,
+      "id": 34,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 41,
+        "y": 78,
         "w": 24,
         "h": 1
       },
@@ -1270,7 +2840,7 @@
     {
       "type": "timeseries",
       "title": "Memory",
-      "id": 20,
+      "id": 35,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1278,7 +2848,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 42,
+        "y": 79,
         "w": 8,
         "h": 8
       },
@@ -1339,7 +2909,7 @@
     {
       "type": "timeseries",
       "title": "Event-loop delay",
-      "id": 21,
+      "id": 36,
       "description": "Time a ready callback waited for the single Node.js thread. Above ~0.1 s every request is delayed (alert above 1 s)",
       "datasource": {
         "type": "prometheus",
@@ -1347,7 +2917,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 42,
+        "y": 79,
         "w": 8,
         "h": 8
       },
@@ -1408,7 +2978,7 @@
     {
       "type": "timeseries",
       "title": "Requests in flight",
-      "id": 22,
+      "id": 37,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1416,7 +2986,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 42,
+        "y": 79,
         "w": 8,
         "h": 8
       },
@@ -1468,11 +3038,11 @@
     {
       "type": "row",
       "title": "Redis (the active proxy's nonce cache)",
-      "id": 23,
+      "id": 38,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 50,
+        "y": 87,
         "w": 24,
         "h": 1
       },
@@ -1481,7 +3051,7 @@
     {
       "type": "stat",
       "title": "Redis",
-      "id": 24,
+      "id": 39,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1489,7 +3059,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 88,
         "w": 3,
         "h": 5
       },
@@ -1561,7 +3131,7 @@
     {
       "type": "stat",
       "title": "Clients",
-      "id": 25,
+      "id": 40,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1569,7 +3139,7 @@
       },
       "gridPos": {
         "x": 3,
-        "y": 51,
+        "y": 88,
         "w": 3,
         "h": 5
       },
@@ -1623,7 +3193,7 @@
     {
       "type": "stat",
       "title": "Memory used",
-      "id": 26,
+      "id": 41,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1631,7 +3201,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 51,
+        "y": 88,
         "w": 4,
         "h": 5
       },
@@ -1685,7 +3255,7 @@
     {
       "type": "stat",
       "title": "Keys",
-      "id": 27,
+      "id": 42,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1693,7 +3263,7 @@
       },
       "gridPos": {
         "x": 10,
-        "y": 51,
+        "y": 88,
         "w": 3,
         "h": 5
       },
@@ -1747,7 +3317,7 @@
     {
       "type": "stat",
       "title": "Hit ratio",
-      "id": 28,
+      "id": 43,
       "description": "Reads that found their key (nonces, pending transactions)",
       "datasource": {
         "type": "prometheus",
@@ -1755,7 +3325,7 @@
       },
       "gridPos": {
         "x": 13,
-        "y": 51,
+        "y": 88,
         "w": 4,
         "h": 5
       },
@@ -1809,7 +3379,7 @@
     {
       "type": "stat",
       "title": "Last save",
-      "id": 29,
+      "id": 44,
       "description": "Since Redis last wrote its snapshot to disk",
       "datasource": {
         "type": "prometheus",
@@ -1817,7 +3387,7 @@
       },
       "gridPos": {
         "x": 17,
-        "y": 51,
+        "y": 88,
         "w": 4,
         "h": 5
       },
@@ -1879,7 +3449,7 @@
     {
       "type": "stat",
       "title": "Uptime",
-      "id": 30,
+      "id": 45,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1887,7 +3457,7 @@
       },
       "gridPos": {
         "x": 21,
-        "y": 51,
+        "y": 88,
         "w": 3,
         "h": 5
       },
@@ -1941,7 +3511,7 @@
     {
       "type": "timeseries",
       "title": "Commands per second (the proxy's)",
-      "id": 31,
+      "id": 46,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1949,7 +3519,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 56,
+        "y": 93,
         "w": 8,
         "h": 8
       },
@@ -2001,7 +3571,7 @@
     {
       "type": "timeseries",
       "title": "Average command time",
-      "id": 32,
+      "id": 47,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -2009,7 +3579,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 56,
+        "y": 93,
         "w": 8,
         "h": 8
       },
@@ -2061,7 +3631,7 @@
     {
       "type": "timeseries",
       "title": "Memory and keys",
-      "id": 33,
+      "id": 48,
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -2069,7 +3639,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 56,
+        "y": 93,
         "w": 8,
         "h": 8
       },

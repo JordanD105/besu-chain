@@ -1115,6 +1115,11 @@ app.get("/metrics", (req, res) => {
         [["", redis.status === "ready" ? 1 : 0]]);
     lines.push(...httpMetricLines());
     metric("proxy_senders_tracked", "gauge", "Senders watched by the background chain check.", [["", senders.size]]);
+    metric("proxy_sender_info", "gauge", "What a sender is (always 1): name, kind (platform, upfront, consumption, payment, user, retired, other) and section.",
+        all.filter(([sender]) => senderInfo.has(sender)).map(([sender]) => {
+            const info = senderInfo.get(sender);
+            return [`sender="${sender}",name="${labelValue(info.name)}",kind="${info.kind}",section="${labelValue(info.section)}",section_id="${info.sectionId}"`, 1];
+        }));
     metric("proxy_sender_next_nonce", "gauge", "Next nonce the proxy will use (absent until first use).",
         all.filter(([sender]) => memNonce.has(sender)).map(([sender]) => [`sender="${sender}"`, memNonce.get(sender)]));
     metric("proxy_sender_pending_nonce", "gauge", "Besu's pending nonce (eth_getTransactionCount pending).", per((_, st) => st.chainPending));
@@ -3690,6 +3695,55 @@ async function refreshSectionMetrics() {
 
 setInterval(refreshSectionMetrics, 15000).unref();
 setTimeout(refreshSectionMetrics, 5000).unref();
+
+// What each tracked sender is, for the dashboards (proxy_sender_info): the platform accounts by name,
+// section accounts by section and role, user accounts by section. Resolved in the background (the
+// registry is read once per address; a section's name is current at every refresh).
+const SENDER_KINDS = { 1: "user", 2: "upfront", 3: "consumption", 4: "payment", 5: "retired" };
+const senderInfo = new Map(); // sender (lowercase) -> { name, kind, section, sectionId }
+
+function shortAddress(address) {
+    return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+async function refreshSenderInfo() {
+    const platform = new Map([[CONFIG.SENDER01, "SENDER01"], [CONFIG.REGISTRY_ADMIN, "registry admin"], [CONFIG.CONTRACT_CENTER, "contract center"]]
+        .filter(([address]) => isAddress(address)).map(([address, name]) => [address.toLowerCase(), name]));
+    let names = new Map();
+
+    try {
+        names = sectionsConfigured() ? new Map((await listSections()).map((s) => [s.id, s.name])) : names;
+    } catch (error) {
+        // registry not readable now: keep the previous names
+    }
+
+    for (const sender of senders.keys()) {
+        try {
+            if (platform.has(sender)) {
+                senderInfo.set(sender, { name: platform.get(sender), kind: "platform", section: "", sectionId: "" });
+                continue;
+            }
+
+            const owner = sectionsConfigured() ? await accountSection(sender) : { id: 0, kind: 0 };
+            const kind = SENDER_KINDS[owner.kind] || "other";
+            const section = owner.kind ? names.get(owner.id) || `section ${owner.id}` : "";
+            const name = !section ? shortAddress(sender) : kind === "user" ? `${section} · user ${shortAddress(sender)}` : `${section} · ${kind}`;
+
+            senderInfo.set(sender, { name, kind, section, sectionId: owner.kind ? String(owner.id) : "" });
+        } catch (error) {
+            // try again at the next refresh
+        }
+    }
+
+    for (const sender of senderInfo.keys()) {
+        if (!senders.has(sender)) {
+            senderInfo.delete(sender);
+        }
+    }
+}
+
+setInterval(refreshSenderInfo, 15000).unref();
+setTimeout(refreshSenderInfo, 3000).unref();
 
 function labelValue(text) {
     return String(text).replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, " ");

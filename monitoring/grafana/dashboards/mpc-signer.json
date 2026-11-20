@@ -168,7 +168,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Every alert firing now, critical first. 'Firing for' counts from when the condition started (including the rule's wait time). Full text: Prometheus -> Alerts.",
+      "description": "Every alert firing now, critical first. 'Firing for' counts from when the condition started (including the rule's wait time). History: the Alert log dashboard.",
       "gridPos": {
         "x": 8,
         "y": 1,
@@ -178,7 +178,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (alertname, severity, subject) (label_replace(label_replace(label_replace(label_replace(label_replace((ALERTS{alertstate=\"firing\",severity=\"critical\"} * 3 or ALERTS{alertstate=\"firing\",severity=\"warning\"} * 2 or ALERTS{alertstate=\"firing\"}), \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"))",
+          "expr": "max by (alertname, severity, subject) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace((ALERTS{alertstate=\"firing\",severity=\"critical\"} * 3 or ALERTS{alertstate=\"firing\",severity=\"warning\"} * 2 or ALERTS{alertstate=\"firing\"}), \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"), \"subject\", \"$1\", \"section\", \"(.+)\"))",
           "format": "table",
           "instant": true,
           "datasource": {
@@ -188,7 +188,7 @@
         },
         {
           "refId": "B",
-          "expr": "max by (alertname, severity, subject) ((time() - label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS_FOR_STATE, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\")) and on(alertname, severity, subject) label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS{alertstate=\"firing\"}, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"))",
+          "expr": "max by (alertname, severity, subject) ((time() - label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS_FOR_STATE, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"), \"subject\", \"$1\", \"section\", \"(.+)\")) and on(alertname, severity, subject) label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(ALERTS{alertstate=\"firing\"}, \"subject\", \"$1\", \"instance\", \"(.+)\"), \"subject\", \"$1\", \"host\", \"(.+)\"), \"subject\", \"$1\", \"address\", \"(.+)\"), \"subject\", \"$1\", \"sender\", \"(.+)\"), \"subject\", \"$1\", \"node\", \"(.+)\"), \"subject\", \"$1\", \"section\", \"(.+)\"))",
           "format": "table",
           "instant": true,
           "datasource": {
@@ -211,7 +211,7 @@
             "renameByName": {
               "severity": "Severity",
               "alertname": "Alert",
-              "subject": "Node / sender / host",
+              "subject": "Subject",
               "Value #A": "rank",
               "Value #B": "Firing for"
             },
@@ -246,7 +246,7 @@
               "type": "auto"
             }
           },
-          "noValue": "\u2014"
+          "noValue": "none firing"
         },
         "overrides": [
           {
@@ -270,10 +270,6 @@
               {
                 "id": "unit",
                 "value": "s"
-              },
-              {
-                "id": "decimals",
-                "value": 0
               }
             ]
           },
@@ -283,6 +279,17 @@
               "options": "Severity"
             },
             "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
               {
                 "id": "mappings",
                 "value": [
@@ -307,16 +314,6 @@
                     }
                   }
                 ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 110
               }
             ]
           }
