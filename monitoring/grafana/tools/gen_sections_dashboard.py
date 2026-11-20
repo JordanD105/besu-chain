@@ -60,16 +60,17 @@ def timeseries(title, targets, x, y, w=12, h=8, unit="none", desc="", overrides=
                         "overrides": overrides or []}})
 
 
-def bargauge(title, expr, x, y, w, h, unit="none", decimals=2, desc="", steps=None):
+def bargauge(title, expr, x, y, w, h, unit="none", decimals=2, desc="", steps=None, no_value="none"):
     """one horizontal bar per section (top / bottom N), the section name on the left"""
     panels.append({
         "type": "bargauge", "title": title, "id": nid(), "description": desc, "datasource": DS,
         "gridPos": {"x": x, "y": y, "w": w, "h": h},
         "targets": [target(expr, "{{section}}", instant=True)],
         "options": {"orientation": "horizontal", "displayMode": "basic", "showUnfilled": True, "valueMode": "color",
-                    "namePlacement": "left", "sizing": "auto", "minVizHeight": 16, "maxVizHeight": 24,
+                    "namePlacement": "left", "sizing": "manual", "minVizHeight": 18, "maxVizHeight": 26,
+                    "text": {"titleSize": 13, "valueSize": 14},
                     "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}},
-        "fieldConfig": {"defaults": {"unit": unit, "decimals": decimals, "min": 0, "color": {"mode": "thresholds"},
+        "fieldConfig": {"defaults": {"unit": unit, "decimals": decimals, "min": 0, "color": {"mode": "thresholds"}, "noValue": no_value,
                                      "thresholds": {"mode": "absolute", "steps": steps or [{"color": "blue", "value": None}]}},
                         "overrides": []}})
 
@@ -147,9 +148,9 @@ def section_table(title, state_expr, y, h, desc, only_problems):
     transformations = [{"id": "merge", "options": {}},
                        {"id": "organize", "options": {"excludeByName": {"Time": True, "Value #H": True}, "renameByName": names,
                                                       "indexByName": {k: order.index(v) for k, v in names.items() if v in order}}}]
-    if only_problems:
-        transformations.append({"id": "filterByValue", "options": {
-            "filters": [{"fieldName": "State", "config": {"id": "isNotNull", "options": {}}}], "type": "include", "match": "any"}})
+    transformations.append({"id": "filterByValue", "options": {
+        "filters": [{"fieldName": "State" if only_problems else "Status", "config": {"id": "isNotNull", "options": {}}}],
+        "type": "include", "match": "any"}})
     panels.append({
         "type": "table", "title": title, "id": nid(), "description": desc, "datasource": DS,
         "gridPos": {"x": 0, "y": y, "w": 24, "h": h},
@@ -171,6 +172,7 @@ def section_table(title, state_expr, y, h, desc, only_problems):
                             {"matcher": {"id": "byName", "options": "Section"}, "properties": [{"id": "custom.width", "value": 200}]},
                             {"matcher": {"id": "byName", "options": "Days left"}, "properties": [
                                 {"id": "decimals", "value": 1}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+                                {"id": "noValue", "value": "no spending"},
                                 {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                                     {"color": "red", "value": None}, {"color": "orange", "value": 3}, {"color": "green", "value": 7}]}}]},
                             {"matcher": {"id": "byName", "options": "New accounts ($period)"}, "properties": [{"id": "decimals", "value": 0}]}]}})
@@ -194,7 +196,8 @@ bargauge("Lowest upfront: 10 sections", f'bottomk(10, max by (section) ({BAL[:-1
          steps=[{"color": "red", "value": None}, {"color": "orange", "value": 0.000001}, {"color": "green", "value": 100}])
 bargauge("Fewest days left: 10 sections", f'bottomk(10, {DAYS_LEFT})', 8, y, 8, 10, decimals=1,
          desc="Days the upfront account lasts at the last 7 days' spending (sections that spend nothing are not listed)",
-         steps=[{"color": "red", "value": None}, {"color": "orange", "value": 3}, {"color": "green", "value": 7}])
+         steps=[{"color": "red", "value": None}, {"color": "orange", "value": 3}, {"color": "green", "value": 7}],
+         no_value="no section spent from its upfront account in the last 7 days")
 bargauge("Most collected: 10 sections", f'topk(10, sum by (section) ({BAL[:-1]},role=~"consumption|payment"}}))', 16, y, 8, 10,
          desc="ETH in each section's consumption + payment accounts (earned, not paid back yet)")
 y += 10

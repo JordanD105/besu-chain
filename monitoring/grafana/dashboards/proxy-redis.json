@@ -2612,7 +2612,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "noValue": "nothing in flight"
         },
         "overrides": []
       }
@@ -2741,7 +2742,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "noValue": "no sender waiting or with a gap"
         },
         "overrides": []
       }

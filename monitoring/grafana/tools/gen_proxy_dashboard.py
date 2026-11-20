@@ -227,6 +227,7 @@ sender_table("All senders", f'{STATE} or {j("proxy_sender_stalled")} * 0', 0, y,
 y += 10
 timeseries("In flight: top 10 senders", [target(f'topk(10, {j("proxy_sender_inflight_transactions")} > 0)', "{{account}}")],
            0, y, w=12, decimals=0, desc="The 10 senders with the most transactions not mined yet, at each moment")
+panels[-1]["fieldConfig"]["defaults"]["noValue"] = "nothing in flight"
 timeseries("In flight by kind", [target(f'sum by (kind) ({j("proxy_sender_inflight_transactions")})', "{{kind}}")],
            12, y, w=12, decimals=0, stack=True, desc="Platform accounts, section accounts and users, added up")
 y += 8
@@ -234,6 +235,7 @@ timeseries("Not mined / nonce gap: top 10 (seconds)", [
     target(f'topk(10, {j("proxy_sender_stall_seconds")} > 0)', "not mined {{account}}"),
     target(f'topk(10, {j("proxy_sender_gap_seconds")} > 0)', "gap {{account}}", ref="B")],
     0, y, w=12, unit="s", desc="Only senders where it is happening; the longest 10 (alert ProxyNonceGap above 120 s)")
+panels[-1]["fieldConfig"]["defaults"]["noValue"] = "no sender waiting or with a gap"
 timeseries("Stalls, repairs and fillers per hour, by kind", [
     target(f'sum by (kind) (increase(proxy_sender_stalls_total[1h]) * on(sender) group_left(kind) {SEL})', "stalls {{kind}}"),
     target(f'sum by (kind) (increase(proxy_sender_nonce_repairs_total[1h]) * on(sender) group_left(kind) {SEL})', "repairs {{kind}}", ref="B"),

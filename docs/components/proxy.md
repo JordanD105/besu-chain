@@ -460,8 +460,8 @@ job `redis`), so it always reads the active proxy's Redis. The firewall opens 91
 monitoring host only.
 
 Grafana: the **Proxy & Redis** dashboard (requests, errors and latency per route, senders and
-nonces, memory and event-loop delay, Redis clients, memory, keys, hit ratio and commands), the
-*Proxy senders* row of **Besu production (QBFT)**, and **Sections**. Alerts (`ProxyDown`,
+every sender by name with what needs attention, memory and event-loop delay, Redis clients, memory,
+keys, hit ratio and commands) and **Sections**. Alerts (`ProxyDown`,
 `ProxySenderStalled`, `ProxyNonceGap`, `ProxyNonceRepaired`, `ProxySenderCheckFailing`,
 `ProxyHttpErrors`, `ProxySlow`, `ProxyEventLoopBlocked`, `ProxyRedisDisconnected`, `RedisDown`,
 `RedisMemoryHigh`) are in `monitoring/prometheus/rules/proxy.yml`; what each means and what to do:

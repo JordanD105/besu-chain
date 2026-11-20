@@ -168,7 +168,7 @@ and can stall.
 
 **Warning.** More than 1,000 pending transactions on a node for 10 minutes.
 
-1. **Confirm:** *Transaction pool* chart; Besu production → *Proxy senders* (STALLED, nonce gaps).
+1. **Confirm:** *Transaction pool* chart; Proxy & Redis → *Senders needing attention* (STALLED, NONCE GAP).
 2. **Fix:**
    - A sender STALLED: [ProxySenderStalled](#proxysenderstalled).
    - A nonce gap: [ProxyNonceGap](#proxynoncegap).
@@ -350,7 +350,7 @@ slow path (~0.6 s per signature).
 **Critical.** A sender's transactions are ready in the RPC node's pool, but blocks keep coming
 without them: the validators don't have them.
 
-1. **Confirm:** Besu production → *Proxy senders*: Mined **STALLED** for that sender.
+1. **Confirm:** Proxy & Redis → *Senders needing attention*: that sender is **STALLED**.
 2. **Fix:** restart **one** validator (it fetches the pool again and includes them), for example on
    h137:
    ```bash
@@ -391,7 +391,7 @@ without them: the validators don't have them.
    ```
 2. **Fix:** no answer: HAProxy and the RPC nodes (`curl -s http://127.0.0.1:8410/` on h135 / h136;
    [BesuNodeDown](#besunodedown)).
-3. **Check:** the alert clears; *Proxy senders* updates again.
+3. **Check:** the alert clears; the sender is back to OK in Proxy & Redis → *All senders*.
 
 ### ProxyHttpErrors
 

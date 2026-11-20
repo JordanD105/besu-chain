@@ -1285,6 +1285,10 @@
                 }
               },
               {
+                "id": "noValue",
+                "value": "no spending"
+              },
+              {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
@@ -1565,6 +1569,22 @@
               "Value #O": 14
             }
           }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "Status",
+                "config": {
+                  "id": "isNotNull",
+                  "options": {}
+                }
+              }
+            ],
+            "type": "include",
+            "match": "any"
+          }
         }
       ],
       "options": {
@@ -1707,6 +1727,10 @@
                 }
               },
               {
+                "id": "noValue",
+                "value": "no spending"
+              },
+              {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
@@ -1790,9 +1814,13 @@
         "showUnfilled": true,
         "valueMode": "color",
         "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 16,
-        "maxVizHeight": 24,
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 14
+        },
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -1809,6 +1837,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1864,9 +1893,13 @@
         "showUnfilled": true,
         "valueMode": "color",
         "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 16,
-        "maxVizHeight": 24,
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 14
+        },
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -1883,6 +1916,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "no section spent from its upfront account in the last 7 days",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1938,9 +1972,13 @@
         "showUnfilled": true,
         "valueMode": "color",
         "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 16,
-        "maxVizHeight": 24,
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 14
+        },
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -1957,6 +1995,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2416,9 +2455,13 @@
         "showUnfilled": true,
         "valueMode": "color",
         "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 16,
-        "maxVizHeight": 24,
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 14
+        },
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -2435,6 +2478,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2482,9 +2526,13 @@
         "showUnfilled": true,
         "valueMode": "color",
         "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 16,
-        "maxVizHeight": 24,
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 14
+        },
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -2501,6 +2549,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2548,9 +2597,13 @@
         "showUnfilled": true,
         "valueMode": "color",
         "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 16,
-        "maxVizHeight": 24,
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 14
+        },
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -2567,6 +2620,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [

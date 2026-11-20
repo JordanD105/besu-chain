@@ -61,7 +61,7 @@
 |---|---|---|---|
 | Applications get connection errors | proxy down, VIP .151 moving | `ProxyDown`; `docker ps` on the VIP host | keepalived starts the other proxy; check `journalctl -u keepalived` |
 | A proxy container on the **standby** host shows `Exited (137)` | expected: keepalived stops any proxy on the host without the VIP (Docker restarts it at boot) | `journalctl -u keepalived` ("proxy running without the proxy VIP") | nothing |
-| Transactions sent but never mined (`ProxySenderStalled`) | the validators don't have them in their pool | Proxy senders panel | restart **one** validator |
+| Transactions sent but never mined (`ProxySenderStalled`) | the validators don't have them in their pool | Proxy & Redis → *Senders needing attention* | restart **one** validator |
 | A sender's transactions wait (`ProxyNonceGap`) | a missing nonce | `GET /status/senders`; proxy log | the proxy repairs it within ~30 s; otherwise read the log |
 | `redis unavailable` in the proxy log | Redis not ready at start, or down | `ProxyRedisDisconnected` | harmless for correctness; restart Redis |
 

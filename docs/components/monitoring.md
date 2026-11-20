@@ -67,19 +67,19 @@ Prometheus scrapes every 15 s, over the private network. One job per row
 
 All dashboards are in the Grafana folder **Production**. Grafana opens on **Besu production**.
 Every panel of every dashboard, with healthy values and what to do: [Grafana dashboards](../operations/dashboards.md).
-Every dashboard starts with an **Alerts** row: the number of critical and warning alerts firing,
+Every dashboard (Besu, MPC, Proxy & Redis, Sections, Hosts) starts with an **Alerts** row: the number of critical and warning alerts firing,
 and a table of every firing alert (critical first, with "Firing for").
 
 ![The Besu production dashboard](../images/screenshots/grafana-besu-production.png)
 
 | Dashboard | File | Shows |
 |---|---|---|
-| **Besu production (QBFT)** | `besu-production.json` | chain height, seconds since last block, validators up vs expected, nodes up, block period; the **Nodes** table (below); block height, block time, tx/s, gas per block, tx pool, blocks behind; transaction volume (in range, last hour, last 24 h, average tx/s); peers, refused connections, JSON-RPC rate and p95 latency, P2P traffic; CPU, JVM heap, GC, resident memory; **Proxy senders**: per sender mined OK / STALLED, in flight, waiting, nonce gap, repairs, fillers |
+| **Besu production (QBFT)** | `besu-production.json` | chain height, seconds since last block, validators up vs expected, nodes up, block period; the **Nodes** table (below); block height, block time, tx/s, gas per block, tx pool, blocks behind; transaction volume (in range, last hour, last 24 h, average tx/s); peers, refused connections, JSON-RPC rate and p95 latency, P2P traffic; CPU, JVM heap, GC, resident memory |
 | **MPC signer** | `mpc-signer.json` | coordinator up, MPC nodes up vs threshold, keys, presignatures ready, signatures/s; an **MPC nodes** table; signatures/s (hot/cold), signing latency, failures and policy refusals, open relay sessions; pools of big keys (one by one) and of small keys (totals), presign rate, duration and sessions running, keys per pool class, node reachability |
-| **Proxy & Redis** | `proxy-redis.json` | the active proxy: up, requests/s, 5xx share, latency p95, in flight, Redis link, uptime; requests and errors (4xx / 5xx) per route, answer time p50/p95/p99 (without `/createaccount` and `/admin`) and p95 per route, a table per route; transactions in flight, nonce gaps, stalls and repairs per sender; memory, event-loop delay, requests in flight; **Redis**: up, clients, memory, keys, hit ratio, last save, uptime, commands/s and average command time |
+| **Proxy & Redis** | `proxy-redis.json` | the active proxy: up, requests/s, 5xx share, latency p95, in flight, Redis link, uptime; requests and errors (4xx / 5xx) per route, answer time p50/p95/p99 (without `/createaccount` and `/admin`) and p95 per route, a table per route; **Senders** by name (SENDER01, `Shop B · upfront`, `Shop B · user 0x…`) with Kind / Section / Search filters: counts, the senders needing attention, all senders (paged), top 10 charts; memory, event-loop delay, requests in flight; **Redis**: up, clients, memory, keys, hit ratio, last save, uptime, commands/s and average command time |
 | **Hosts** | `hosts.json` | a table per host, CPU, memory, disk used, disk I/O, network in/out; **Backups**: per backup and node, last success, last run, size and (chain snapshot) block |
 | **Alert log** | `alert-log.json` | every alert that fired since the deployment: firing now, alerts and episodes in the range, firing alerts per severity over time, a timeline per alert, and the log table (severity, alert, subject, now, last started, last seen firing, times fired, time firing). [Panel by panel](../operations/dashboards.md#alert-log) |
-| **Sections** | `sections.json` | ([Sections](../features/sections.md)) active sections, upfront accounts below the threshold, the threshold, SENDER01, all upfront, all consumption + payment; balances of every section's upfront / consumption / payment account (table and over time); operations and ETH moved per section and kind, per **Period** |
+| **Sections** | `sections.json` | ([Sections](../features/sections.md)) built for many sections, with Section / Search / Period filters: counts (active, disabled, upfront empty / low, running out within 7 days, SENDER01, totals); the sections needing attention; all sections in one paged table (balances, days left, spend per day, the period's activity); lowest / fewest days left / most collected / most income: top 10; operations and ETH moved per **Period** |
 
 **Nodes table (Besu production).** One row per node: Node, Role, Metrics address, Up, Height,
 Behind, Peers, Sync, Last block age, Tx pool.
