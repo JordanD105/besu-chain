@@ -74,11 +74,25 @@
       when: mpc_image_build | bool and img.rc != 0
       changed_when: true
 
-    - name: Save the MPC image for the hosts
-      ansible.builtin.command: docker save -o {{ mpc_tar }} {{ mpc_image }}
+    - name: MPC image content ID (layers and config, the same for identical builds on every image store)
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        docker image inspect -f '{% raw %}{{json .RootFS.Layers}}{{json .Config}}{% endraw %}' {{ mpc_image }}
+        | sha256sum | cut -d' ' -f1
       args:
-        creates: "{{ mpc_tar }}"
+        executable: /bin/bash
+      register: mpc_id
+      changed_when: false
       when: mpc_image_build | bool
+
+    - name: Save the MPC image for the hosts (again after a rebuild)
+      ansible.builtin.shell: >-
+        docker save -o {{ mpc_tar }}.tmp {{ mpc_image }} && mv {{ mpc_tar }}.tmp {{ mpc_tar }}
+        && printf '%s' '{{ mpc_id.stdout }}' > {{ mpc_tar }}.id
+      when: >-
+        mpc_image_build | bool
+        and (lookup('ansible.builtin.file', mpc_tar ~ '.id') if (mpc_tar ~ '.id') is file else '') != mpc_id.stdout
+      changed_when: true
 
     - name: Besu image on the operator (make-network.sh uses it)
       ansible.builtin.command: docker image inspect {{ besu_image }}
@@ -202,6 +216,7 @@
     - name: Content IDs for the hosts
       ansible.builtin.set_fact:
         wanted_image_id: "{{ dict(built_apps | zip(app_ids.results | map(attribute='stdout'))) }}"
+        wanted_mpc_id: "{{ mpc_id.stdout | default('') }}"
 
 - name: MPC image on the coordinator and MPC node hosts
   hosts: app_hosts:mpc_hosts
@@ -215,11 +230,26 @@
       changed_when: false
       failed_when: false
 
-    - name: Copy and load the MPC image
+    - name: MPC image content ID on this host
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        docker image inspect -f '{% raw %}{{json .RootFS.Layers}}{{json .Config}}{% endraw %}' {{ mpc_image }}
+        | sha256sum | cut -d' ' -f1
+      args:
+        executable: /bin/bash
+      register: host_mpc_id
+      changed_when: false
+      when: img.rc == 0 and mpc_image_build | bool
+
+    # Also after a rebuild on the operator (same tag, new content). Running coordinators switch to it
+    # on the next 04-coordinators.yml; the MPC node teams restart their nodes (docs/operations/mpc-signer-upgrade.md).
+    - name: Copy and load the MPC image (missing, or different from the operator's build)
       ansible.builtin.include_tasks: tasks/load-image.yml
       vars:
         tar: "{{ mpc_tar }}"
-      when: img.rc != 0 and mpc_image_build | bool
+      when: >-
+        mpc_image_build | bool
+        and (img.rc != 0 or host_mpc_id.stdout != hostvars['localhost'].wanted_mpc_id)
 
     - name: Pull the MPC image from the registry
       ansible.builtin.command: docker pull {{ mpc_image }}
