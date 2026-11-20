@@ -1,4 +1,18 @@
-# GPG key for the node key backups
+# GPG key for the node-key backups
+
+> **What:** The GPG key that encrypts the node-key backups: create it, give Ansible the public half, keep the private half offline, check and decrypt backups.
+> **For:** operators.
+> **Related:** [Ansible](ansible.md) · [disaster recovery](../operations/disaster-recovery.md) · [restore](../operations/restore.md)
+
+**Contents**
+- [1. Create the key pair](#1-create-the-key-pair)
+- [2. Export the public key for Ansible](#2-export-the-public-key-for-ansible)
+- [3. Move the private key off the operator (if you created it there)](#3-move-the-private-key-off-the-operator-if-you-created-it-there)
+- [4. Run the backups and check them](#4-run-the-backups-and-check-them)
+- [5. Decrypt a key for a restore](#5-decrypt-a-key-for-a-restore)
+- [Notes](#notes)
+
+---
 
 Phase 10 (`10-backups.yml`) backs up the 6 Besu node keys (val1–val4, rpc1, rpc2). Each key is
 encrypted **on its own host** with your GPG **public** key, and only the encrypted file is kept,
@@ -112,7 +126,7 @@ gpg --pinentry-mode loopback --decrypt val3.key.gpg > val3.key
 ```
 
 Copy `val3.key` to the node's host over SSH, restore it there with `./restore-key.sh` in that
-node's folder (see [`../docs/disaster-recovery.md`](../docs/disaster-recovery.md), 6.1), then
+node's folder (see [Disaster recovery](../operations/disaster-recovery.md), 6.1), then
 shred every plain copy:
 
 ```bash

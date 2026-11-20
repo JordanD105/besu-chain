@@ -1,181 +1,281 @@
-POST /nft/mint
-{
-  "to": "0xRecipient",
-  "amount": "3000",
-  "name": "Badge 1",
-  "image": "https://example/badge.png"
-}
+# Proxy API reference
 
-{
-  "to": "0xRecipient",
-  "name": "Badge 1",
-  "description": "First badge",
-  "image": "https://example/badge.png",
-  "attributes": [{ "trait_type": "level", "value": "gold" }],
-  "properties": { "series": "2026" }
-}
+> **What:** every endpoint of the proxy (`proxy/stress-latest.js`), with request bodies and answers.
+> **For:** application developers and operators.
+> **Related:** [proxy component](../components/proxy.md) · [sections](../features/sections.md) ·
+> [NFT workflow](../features/nft-workflow.md) · [glossary](../glossary.md)
 
+**Contents**
+- [Conventions](#conventions)
+- [Accounts and transfers](#accounts-and-transfers)
+- [Section calls (`X-Section-Key`)](#section-calls-x-section-key)
+- [NFT collections](#nft-collections)
+- [Registered contracts](#registered-contracts)
+- [Admin API: sections](#admin-api-sections)
+- [Admin API: contracts and registry](#admin-api-contracts-and-registry)
+- [Status and metrics](#status-and-metrics)
+- [Errors](#errors)
 
-POST /nft/transfer
-{
-    "from": "0xB4BD95fee77755E6Eecbd0d2E85893Fb066e095f",
-    "to": "0xCF8a11F9524c2786651C70db963f8d9652204e49",
-    "tokenId": "1"
-}
+---
 
+## Conventions
 
-POST /nft/deploy
-{ "name": "Proxy NFT", "symbol": "PNFT" }
-curl -s http://192.168.68.130:30000/nft/deploy -H "Content-Type: application/json" --data "{\"name\":\"Proxy NFT\",\"symbol\":\"PNFT\"}"
+| | |
+|---|---|
+| **Base URL** | `http://<proxy VIP>:30000` — production `http://192.168.68.151:30000` (the active proxy). Development: `http://localhost:30000` |
+| **Body** | JSON, header `Content-Type: application/json` (limit 1 MB) |
+| **Amounts** | ETH as a decimal string (`"1.5"`), never wei |
+| **Addresses** | `0x…` (any letter case) |
+| **Answers** | JSON. Success: `{ "success": true, … }`. Failure: an HTTP status and `{ "error": "…" }` |
+| **Who may call** | the firewall's `proxy_client_ips` ([access control](../deployment/access-control.md)); the admin API also needs the admin token and an admin address |
 
-GET /nft/1
+Three kinds of callers:
 
-GET /nft/1/metadata
+| Caller | Header | Can use |
+|---|---|---|
+| Application **without** a section | none | the SENDER01 endpoints (unless `sections_required: true`) |
+| Application **of a section** | `X-Section-Key: sk_…` | section calls: its own accounts, +x / −x transfers, NFT purchases, contract calls |
+| **Operator / chainlens** | `Authorization: Bearer <ADMIN_TOKEN>`, from `ADMIN_ALLOWED_IPS` | the `/admin/*` API |
 
-GET /nft/contract
+```bash
+# example
+curl -s -X POST http://192.168.68.151:30000/createaccount \
+  -H 'Content-Type: application/json' -H 'X-Section-Key: sk_…' \
+  -d '{"amount":"2","pool":"none"}'
+```
 
-GET /nft/owner/0xB4BD95fee77755E6Eecbd0d2E85893Fb066e095f
+---
 
-# ---------------------------------------------------------------
-# Multiple NFT collections
-# ---------------------------------------------------------------
-# VERSION 3 (docs/sections.md, step 5), when the sections are configured: /nft/deploy makes a
-# version-3 collection, deployed and minted by the contract account center, registered on chain.
-# /nft/transfer of a version-3 NFT needs X-Section-Key: the buyer "to" is a user account of that
-# section; a first sale pays the section's consumption account, a resale (within the section) pays
-# the seller. Version-2 collections keep the behaviour below (SENDER01). The chainlens contract page
-# has Mint / Sell forms (admin): chainlens calls with the admin token, the section is the buyer's.
-POST /nft/transfer         X-Section-Key: sk_...
-{ "collection": "DRG", "to": "0xSectionUser", "tokenId": "1" }
--> { "success": true, "sale": "first sale", "paidTo": "<consumption account>", "price": "3", "txHash": "0x...", ... }
+## Accounts and transfers
 
-# POST /nft/deploy always deploys a NEW collection (minter = SENDER01).
-# The first collection is the default (also NFT_CONTRACT if set).
-# Names and symbols must be unique across collections (409 otherwise).
-#
-# Choose the collection with "collection" (body) or ?collection= (query):
-# its NAME, its SYMBOL (case-insensitive) or its ADDRESS. Omit it to use the default.
-# ("contract" / ?contract= is still accepted and works the same way.)
+### `POST /createaccount` — new account (new MPC key)
 
-POST /nft/deploy
-{ "name": "Dragons", "symbol": "DRG" }
--> { "success": true, "contract": "0x...", "default": false, ... }
+The 3 MPC nodes run distributed key generation: the private key never exists. **Needs all 3 MPC
+nodes online.**
 
-GET /nft/collections
--> { "collections": [ { "contract": "0x...", "name": "Avatar-ID", "symbol": "AVA", "default": true }, ... ] }
+| Field | | |
+|---|---|---|
+| `amount` | ETH | funding of the new account |
+| `pool` | optional | presignature pool class: `big`, `small` (default, `MPC_NEW_ACCOUNT_POOL`) or `none`. `big` = fast signing for busy accounts |
 
-# Collections are NftCollection VERSION 2 (contracts/NftCollection.sol): price stored on chain at
-# mint, atomic buy(). Older collections are ignored and rejected: deploy new ones.
+- **With `X-Section-Key`:** the account is registered under the section on chain and funded from
+  the section's **upfront** account.
+- **Without a key:** funded by `SENDER01`.
 
-# Mint: always to SENDER01, nothing is paid. "amount" = the NFT's PRICE in ETH (optional, default 0),
-# stored in the collection (priceOf).
-POST /nft/mint
+```json
+→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "address": "0x…",
+    "from": "<upfront account>", "amount": "2", "txHash": "0x…", "registryTxHash": "0x…" }
+```
+
+### `POST /account/pool` — change an account's pool class
+
+`{ "address": "0x…", "pool": "big" | "small" | "none" }`
+
+### `POST /transfer` — move ETH
+
+**Section call** (`X-Section-Key`): the sign of `amount` sets the direction.
+
+| Body | Direction |
+|---|---|
+| `{ "account": "0x…", "amount": "1", "memo": "optional" }` | **+x**: the user account → the section's **consumption** account |
+| `{ "account": "0x…", "amount": "-0.5" }` | **−x**: the section's **upfront** account → the user account |
+
+`account` must be a user account of that section.
+
+```json
+→ { "success": true, "section": {…}, "direction": "account -> consumption",
+    "from": "0x…", "to": "0x…", "amount": "1", "txHash": "0x…" }
+```
+
+**Without a key** (SENDER01 mode): `{ "from": "0x…", "to": "0x…", "amount": "1", "memo": "optional" }`.
+A section's accounts can't be moved this way (403).
+
+### `GET /transfer/:txHash` — status of a transfer
+
+Status (pending, mined, failed) and the memo.
+
+---
+
+## Section calls (`X-Section-Key`)
+
+The key identifies the section; the section must be **active**. Without a key, calls use SENDER01
+unless `sections_required: true` (then 401). See [sections](../features/sections.md).
+
+| Endpoint | With the section key |
+|---|---|
+| `POST /createaccount` | account of the section, funded from its upfront account |
+| `POST /transfer` | +x / −x (above) |
+| `POST /nft/transfer` | sale of a version-3 NFT to a user account of the section (below) |
+| `POST /contract/send` | a contract transaction signed by a user account of the section (below) |
+
+---
+
+## NFT collections
+
+Two versions exist:
+
+| | Version 3 (with sections) | Version 2 (legacy) |
+|---|---|---|
+| Deployed and minted by | the **contract account center** | SENDER01 |
+| First sale pays | the buyer's section's **consumption** account (checked by the contract) | SENDER01 |
+| Resale pays | the seller | the seller |
+| `/nft/transfer` | needs `X-Section-Key` (or the admin token, as chainlens does) | no key |
+
+**Choosing a collection:** `collection` in the body, or `?collection=` in the query: its **name**,
+**symbol** (case-insensitive) or **address**. Without it, the default (first) collection is used.
+(`contract` / `?contract=` is accepted the same way.)
+
+### `POST /nft/deploy` — new collection
+
+`{ "name": "Dragons", "symbol": "DRG" }` — names and symbols must be unique (409 otherwise).
+Collections can also be deployed from chainlens ([contract deployment](../features/contract-deployment.md)).
+
+```json
+→ { "success": true, "contract": "0x…", "default": false, … }
+```
+
+### `GET /nft/collections`
+
+```json
+→ { "collections": [ { "contract": "0x…", "name": "Dragons", "symbol": "DRG", "default": true }, … ] }
+```
+
+### `POST /nft/mint` — mint for sale
+
+Minted to the collection's minter (the center for v3, SENDER01 for v2); nothing is paid. `amount`
+is the **price** in ETH, stored on chain and fixed for every later sale.
+
+```json
 {
   "collection": "DRG",
-  "name": "Dragon",
-  "description": "Dragon",
-  "image": "https://example/dragon.svg",
-  "attributes": [{ "trait_type": "level", "value": "gold" }],
+  "name": "Red dragon",
+  "description": "Level 1",
+  "image": "https://example.com/red.png",
+  "attributes": [{ "trait_type": "level", "value": "1" }],
   "properties": { "series": "2026" },
-  "amount": 3
+  "amount": "3"
 }
--> { "success": true, "tokenId": "1", "contract": "0x...", "owner": "<SENDER01>", "price": "3", ... }
+→ { "success": true, "tokenId": "1", "contract": "0x…", "owner": "<minter>", "price": "3", "txHash": "0x…" }
+```
 
-# Transfer = sale with the collection's buy(): ONE transaction signed by the buyer "to", value = price.
-# The NFT moves to the buyer and the ETH goes to SENDER01 atomically (all or nothing).
-# No amount, no SENDER01 parameter; "from" is optional (default: current owner).
-# Resale (owner is not SENDER01): the owner first approves the collection (approveTxHash).
-POST /nft/transfer
-{ "collection": "DRG", "to": "0xBuyer", "tokenId": "1" }
--> { "success": true, "txHash": "<buy tx>", "from": "<owner>", "to": "0xBuyer", "price": "3", "approveTxHash": null, ... }
+`name` and `image` are required. Token ids start at 1 in each collection.
 
-GET /nft/1?collection=DRG
-GET /nft/1/metadata?collection=Dragons
-GET /nft/owner/0xOwner                       (all collections, plus default-collection fields)
-GET /nft/owner/0xOwner?collection=DRG        (one collection)
+### `POST /nft/transfer` — sale
 
-# Token ids start at 1 in each collection.
+The buyer `to` signs **one** `buy` transaction with exactly the price: the NFT and the ETH move
+together or not at all.
 
-# ---------------------------------------------------------------
-# Admin API: sections (docs/sections.md)
-# ---------------------------------------------------------------
-# Header Authorization: Bearer <ADMIN_TOKEN> (Ansible: state/secrets/proxy_admin_token), and only from
-# ADMIN_ALLOWED_IPS (the operator and the monitoring host). Sections live in the on-chain
-# SectionRegistry v2 (REGISTRY_CONTRACT), written by REGISTRY_ADMIN through this proxy.
+```bash
+curl -s -X POST http://192.168.68.151:30000/nft/transfer -H 'Content-Type: application/json' \
+  -H 'X-Section-Key: sk_…' -d '{"collection":"DRG","to":"0xBuyer…","tokenId":"1"}'
+```
+```json
+→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "sale": "first sale",
+    "price": "3", "paidTo": "<consumption account>", "txHash": "0x…", "approveTxHash": null }
+```
 
-GET /admin/sections                 (?fresh=1 skips the 10 s cache, ?archived=1 includes archived ones)
--> { "success": true, "registry": "0x...", "sections": [ { "id": 1, "name": "Section 1", "active": true, "archived": false,
-     "accounts": { "upfront": "0x...", "consumption": "0x...", "payment": "0x..." },
-     "balances": { "upfront": "97.5", "consumption": "1.0", "payment": "0.0" },
-     "info": { "description": "..." }, "createdAt": 1795129062 } ] }
+- **Version 3:** `to` must be a user account of the key's section; a resale must stay within the
+  section; the seller's approval is sent automatically when needed.
+- **Version 2:** no key; `from` is optional (default: current owner).
 
-GET /admin/sections/1
+### Reading
 
-# Create: 3 MPC keys (upfront: big pool, consumption + payment: none), needs all MPC nodes online.
-# The API key is in this answer only. No funding (top up the upfront account).
-POST /admin/sections
-{ "name": "Section 1", "info": { "description": "Shop A" } }
--> { "success": true, "section": { "id": 1, ... }, "apiKey": "sk_...", "txHash": "0x..." }
+| Endpoint | Answer |
+|---|---|
+| `GET /nft/:tokenId?collection=DRG` | token, owner, price, metadata |
+| `GET /nft/:tokenId/metadata?collection=DRG` | the metadata JSON |
+| `GET /nft/owner/:address` | tokens owned, per collection (`?collection=` for one) |
+| `GET /nft/contract` | the default collection |
 
-POST /admin/sections/1/name      { "name": "Shop A" }
-POST /admin/sections/1/info      { "key": "contact", "value": "ops@example" }      (value "" removes the field)
-POST /admin/sections/1/key       -> { "apiKey": "sk_..." }   (the old key stops working at once)
-POST /admin/sections/1/active    { "active": false }
+Step by step from Remix to a sale: [NFT workflow](../features/nft-workflow.md).
 
-# Money (each transfer carries a memo naming the operation)
-POST /admin/sections/1/topup     { "amount": "100" }          SENDER01 -> upfront
-POST /admin/sections/1/sweep     { "amount": "all" }          consumption -> payment ("all" or ETH)
-POST /admin/sections/1/payback   { "amount": "all" }          payment -> SENDER01 ("all" or ETH)
+---
 
-# A new MPC key for a role; the old account's whole balance moves to it
-POST /admin/sections/1/account   { "role": "payment" }        (upfront | consumption | payment)
+## Registered contracts
 
-# Archive: all money of the 3 accounts back to SENDER01, then closed for good (history stays)
-POST /admin/sections/1/archive   { "confirm": "Shop A" }
+Only contracts registered in the SectionRegistry (deployed by the contract account center), and only
+functions of their ABI.
 
-# Migration from a version-1 registry (run by Ansible 08-check.yml after an upgrade)
-POST /admin/registry/migrate     { "from": "0xOldRegistry" }
+### `POST /contract/call` — read (view / pure)
 
-# ---------------------------------------------------------------
-# Contracts (docs/sections.md, step 4): registered contracts only, functions of their ABI only
-# ---------------------------------------------------------------
-# Read: a view/pure function
-POST /contract/call
-{ "contract": "0x...", "function": "balanceOf", "args": ["0xOwner"] }
--> { "success": true, "function": "balanceOf(address)", "outputs": [ { "name": "0", "type": "uint256", "value": "3" } ] }
+```json
+{ "contract": "0x…", "function": "balanceOf", "args": ["0xOwner"] }
+→ { "success": true, "function": "balanceOf(address)", "outputs": [ { "name": "0", "type": "uint256", "value": "3" } ] }
+```
 
-# Write: signed by "from", a user account of the caller's section (X-Section-Key required)
-POST /contract/send        X-Section-Key: sk_...
-{ "contract": "0x...", "function": "transfer(address,uint256)", "args": ["0xTo", "5"], "from": "0xSectionUser", "value": "0" }
--> { "success": true, "txHash": "0x...", "blockNumber": 123, "events": [ { "name": "Transfer", "args": { ... } } ] }
+### `POST /contract/send` — write (`X-Section-Key` required)
 
-# Admin (ADMIN_TOKEN): deploy as the contract account center, then register on chain with the ABI
-GET  /admin/contracts
-POST /admin/contracts/check    { "kind": "common" | "nft", "name": "...", "abi": [...], "bytecode": "0x...", "deployedBytecode": "0x...", "args": [...] }
-POST /admin/contracts/deploy   (same body)
--> { "success": true, "address": "0x...", "txHash": "0x...", "codeCheck": "matches the artifact", "registryTxHash": "0x..." }
+Signed by `from`, a user account of the caller's section. `value` in ETH, only for payable functions.
 
-# ---------------------------------------------------------------
-# Section calls (docs/sections.md): header X-Section-Key: sk_... (the section must be active)
-# ---------------------------------------------------------------
-# Account of the section, funded from the section's upfront account (not SENDER01)
-POST /createaccount        X-Section-Key: sk_...
-{ "amount": "2", "pool": "none" }
--> { "success": true, "section": { "id": 1, "name": "Section 1" }, "address": "0x...", "from": "<upfront_1>", "amount": "2", "txHash": "0x...", "registryTxHash": "0x..." }
+```json
+{ "contract": "0x…", "function": "transfer(address,uint256)", "args": ["0xTo", "5"], "from": "0xSectionUser", "value": "0" }
+→ { "success": true, "txHash": "0x…", "blockNumber": 123, "gasUsed": 51234, "events": [ { "name": "Transfer", "args": {…} } ] }
+```
 
-# +amount: account -> the section's consumption account; -amount: the section's upfront account -> account
-POST /transfer             X-Section-Key: sk_...
-{ "account": "0x...", "amount": "1", "memo": "optional" }
-{ "account": "0x...", "amount": "-0.5" }
--> { "success": true, "section": {...}, "direction": "account -> consumption", "from": "0x...", "to": "0x...", "amount": "1", "txHash": "0x..." }
+`function` is a name or a full signature (needed when the name is overloaded). `NftCollection.mint`
+can't be called this way (only the center mints): use `/nft/mint`.
 
-# Without X-Section-Key: SENDER01 behaviour (unless SECTION_KEY_REQUIRED=true), but a section's
-# accounts can't be moved that way (403).
+---
 
-# ---------------------------------------------------------------
-# Sender state (nonces, value in flight, corrections by the periodic chain check)
-# ---------------------------------------------------------------
-GET /status/senders
+## Admin API: sections
 
-# Same values in Prometheus format (monitoring/: job "proxy"). Optional: METRICS_TOKEN -> Bearer
-GET /metrics
+`Authorization: Bearer <ADMIN_TOKEN>` (Ansible: `state/secrets/proxy_admin_token`) from
+`ADMIN_ALLOWED_IPS` (operator and the chainlens host). Usually used through the chainlens
+**Sections** page. Writes go to the on-chain SectionRegistry, signed by the registry admin key.
+
+| Endpoint | Body | Does |
+|---|---|---|
+| `GET /admin/sections` | `?fresh=1` (skip the 10 s cache), `?archived=1` | all sections, accounts, balances, info |
+| `GET /admin/sections/:id` | | one section |
+| `POST /admin/sections` | `{ "name": "…", "info": {…} }` | create: 3 MPC keys (**all 3 MPC nodes** needed), registry entry. The API key `sk_…` is in this answer **only**. No funding |
+| `POST /admin/sections/:id/name` | `{ "name": "Shop A" }` | rename |
+| `POST /admin/sections/:id/info` | `{ "key": "contact", "value": "…" }` | set an info field (`""` removes it) |
+| `POST /admin/sections/:id/key` | | new API key; the old one stops at once |
+| `POST /admin/sections/:id/active` | `{ "active": false }` | disable / enable (a disabled section's calls are refused) |
+| `POST /admin/sections/:id/topup` | `{ "amount": "100" }` | SENDER01 → upfront |
+| `POST /admin/sections/:id/sweep` | `{ "amount": "all" }` | consumption → payment (`"all"` or ETH) |
+| `POST /admin/sections/:id/payback` | `{ "amount": "all" }` | payment → SENDER01 |
+| `POST /admin/sections/:id/account` | `{ "role": "payment" }` | replace a role's account with a new MPC key; the balance moves to it |
+| `POST /admin/sections/:id/archive` | `{ "confirm": "<name>" }` | all money back to SENDER01, section closed for good (history stays) |
+| `GET /admin/sections/:id/accounts` | | the section's user accounts |
+| `POST /admin/sections/:id/accounts` | `{ "amount": "5", "pool": "small" }` | create a user account (as `/createaccount`) |
+| `POST /admin/sections/:id/transfer` | `{ "account", "amount", "memo" }` | +x / −x for a user account (as `/transfer`) |
+
+Every money movement carries a memo naming the operation.
+
+---
+
+## Admin API: contracts and registry
+
+| Endpoint | Body | Does |
+|---|---|---|
+| `GET /admin/contracts` | | registered contracts |
+| `POST /admin/contracts/check` | `{ "kind": "common" \| "nft", "name", "abi", "bytecode", "deployedBytecode", "args" }` | dry run: arguments, gas, the future address; nothing signed |
+| `POST /admin/contracts/deploy` | same | deploy as the contract account center, compare the code, register with the ABI |
+| `POST /admin/registry/migrate` | `{ "from": "0xOldRegistry" }` | copy sections from a version-1 registry (Ansible `08-check.yml` runs it) |
+
+```json
+→ { "success": true, "address": "0x…", "txHash": "0x…", "codeCheck": "matches the artifact", "registryTxHash": "0x…" }
+```
+
+---
+
+## Status and metrics
+
+| Endpoint | Answer |
+|---|---|
+| `GET /status/senders` | per sender: next nonce vs Besu, value in flight, nonce gaps and stalls, corrections by the background chain check |
+| `GET /metrics` | Prometheus format: senders, sections, HTTP requests and latency per route, process, Redis link. Optional `METRICS_TOKEN` (Bearer). Scraped by [monitoring](../components/monitoring.md) |
+
+---
+
+## Errors
+
+| Status | Typical cause |
+|---|---|
+| 400 | bad input: missing field, bad amount or address, function not in the ABI, "the transaction would revert: …" |
+| 401 | `X-Section-Key is required`, unknown section key, wrong admin token |
+| 403 | the account is not a user of that section, disabled section, admin API from a non-admin address |
+| 404 | unknown collection, token, contract or section |
+| 409 | collection name or symbol already used |
+| 500 / 502 / 503 | the signer, Besu or the registry did not answer; see the proxy log and [troubleshooting](../operations/troubleshooting.md) |

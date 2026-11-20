@@ -9,7 +9,7 @@
 //     localhost/besu-proxy/besu-proxy node besu-production/operator/deploy-contract.js \
 //     --artifact build/MyToken.json --from 0xDeployer... --args '["My token", "MTK", 1000000]'
 //
-// Without --yes it only checks and prints what it would send (dry run). See besu-production/README.md,
+// Without --yes it only checks and prints what it would send (dry run). See docs/deployment/besu-manual.md,
 // "Deploying a contract".
 //
 // The deployer must be an MPC key of the coordinator (create one with the proxy's POST /createaccount)

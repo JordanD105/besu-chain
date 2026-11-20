@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Restore a chain snapshot (from snapshot-chain.sh, possibly taken on ANOTHER node) into THIS
 # node's data volume, keeping this node's own key. Used to rebuild the chain after a disaster
-# (see docs/disaster-recovery.md), or to bring a new node up without syncing from block 0.
+# (see docs/operations/disaster-recovery.md), or to bring a new node up without syncing from block 0.
 #   ./restore-chain.sh /backup/chain/besu-chain-rpc1-<time>-b<block>.tgz          (asks first)
 #   ./restore-chain.sh --yes <archive>
 # Checks: the .json next to the archive exists, the archive's sha256 matches it, and the snapshot

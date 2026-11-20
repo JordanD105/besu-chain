@@ -133,7 +133,7 @@ const registryEvents = new ethers.Interface([
     "event AccountAdded(uint256 indexed id, address indexed account)"
 ]);
 const chainRegistry = { byAddress: new Map(), scannedTo: -1, running: null };
-// Sections (docs/sections.md), from the same registry: id -> { name, active, archived }, and
+// Sections (docs/features/sections.md), from the same registry: id -> { name, active, archived }, and
 // address -> { id, role } for every section account (user, upfront, consumption, payment, retired)
 const sectionBook = { sections: new Map(), accounts: new Map(), admin: null, added: [] };
 const SECTION_ROLE_NAMES = { 2: "upfront", 3: "consumption", 4: "payment" };
@@ -2015,7 +2015,7 @@ async function centerAddress() {
     return deployCenter.address;
 }
 
-// ---- Sections page (docs/sections.md): the operator's and chainlens_deploy_ips' browsers, with the
+// ---- Sections page (docs/features/sections.md): the operator's and chainlens_deploy_ips' browsers, with the
 // admin token. Every action is forwarded to the proxy's admin API.
 function sectionsGuard(req, res, next) {
     if (!SECTIONS.enabled) {

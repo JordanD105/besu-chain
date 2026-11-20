@@ -1,6 +1,6 @@
 # Self-hosted Remix IDE with a local Solidity compiler mirror: works without internet access.
 # The build context needs remix-live/ (the prebuilt Remix site, branch gh-pages of
-# github.com/remix-project-org/remix-live at a pinned commit; Ansible fetches it, see README.md).
+# github.com/remix-project-org/remix-live at a pinned commit; Ansible fetches it, see docs/components/remix.md).
 FROM node:22-alpine AS solc
 # Compiler versions offered by Remix (space-separated, each an npm "solc" version)
 ARG SOLC_VERSIONS=0.8.28

@@ -3,7 +3,7 @@
 # permissions_config.toml and SHA256SUMS. genesis.json never changes on a live chain.
 #   ./add-node.sh network/ validator5.json
 # Then: copy the 4 files to EVERY node (incl. the new one), restart nodes one at a time
-# (./start.sh), start the new node; for a validator, vote it in with qbft.sh (see README).
+# (./start.sh), start the new node; for a validator, vote it in with qbft.sh (see docs/deployment/besu-manual.md).
 set -Eeuo pipefail
 dir="$(cd "${1:?network dir}" && pwd)"; f="${2:?node json}"
 enode=$(sed -E 's/.*"enode": *"([^"]*)".*/\1/' "$f")

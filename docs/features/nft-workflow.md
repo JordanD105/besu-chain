@@ -1,8 +1,24 @@
-# NFT workflow: Remix → chainlens Deploy → mint → sell
+# NFT workflow
+
+> **What:** From Solidity to an NFT sale: compile in Remix, deploy in chainlens, mint, create a buyer, sell.
+> **For:** contract developers, business admins.
+> **Related:** [sections](sections.md) · [proxy API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md)
+
+**Contents**
+- [0. Before you start](#0-before-you-start)
+- [1. Compile in Remix](#1-compile-in-remix)
+- [2. Deploy in chainlens](#2-deploy-in-chainlens)
+- [3. Mint](#3-mint)
+- [4. A buyer: a section's user account](#4-a-buyer-a-sections-user-account)
+- [5. Sell](#5-sell)
+- [6. Check](#6-check)
+- [Errors](#errors)
+
+---
 
 This guide takes an NFT collection from source code to a first sale and a resale. It uses
-[`proxy/contracts/NftCollection.sol`](../proxy/contracts/NftCollection.sol) (version 3; the rules
-are in [sections.md](sections.md#nft-collections)).
+[`proxy/contracts/NftCollection.sol`](../../proxy/contracts/NftCollection.sol) (version 3; the rules
+are in [sections.md](sections.md#nft-collections-step-5)).
 
 | Step | Where | Signed by |
 |---|---|---|
@@ -14,7 +30,7 @@ are in [sections.md](sections.md#nft-collections)).
 
 The addresses below are the production ones (proxy VIP `192.168.68.151:30000`, chainlens and Remix
 on h139). Run steps 2, 3 and 5 in the browser from the operator machine or a PC in
-`chainlens_deploy_ips` ([`../ansible/CHAINLENS-DEPLOY.md`](../ansible/CHAINLENS-DEPLOY.md)).
+`chainlens_deploy_ips` ([Contract deployment (chainlens Deploy page)](contract-deployment.md)).
 
 ## 0. Before you start
 
@@ -32,7 +48,7 @@ on h139). Run steps 2, 3 and 5 in the browser from the operator machine or a PC 
 ## 1. Compile in Remix
 
 1. Open `http://192.168.68.139:30200`. Create `NftCollection.sol` and paste the contents of
-   [`proxy/contracts/NftCollection.sol`](../proxy/contracts/NftCollection.sol).
+   [`proxy/contracts/NftCollection.sol`](../../proxy/contracts/NftCollection.sol).
 2. **Solidity compiler:** version `0.8.28`, **Advanced → EVM version `cancun`**, optimizer on
    (200 runs). Compile.
 3. **Settings → Generate contract metadata** on. Remix writes

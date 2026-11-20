@@ -1,4 +1,4 @@
-# ---- The production layout (docs/production-layout.md). Fixed: other repository files use it. ----
+# ---- The production layout (docs/overview/production-layout.md). Fixed: other repository files use it. ----
 
 # vip_rpc / vip_proxy / vip_prefix: in settings.yml. Host IPs: inventory.yml.
 

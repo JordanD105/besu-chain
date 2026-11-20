@@ -1,4 +1,4 @@
-# ONE Besu node (validator or RPC) on its own host. Steps: besu-production/README.md
+# ONE Besu node (validator or RPC) on its own host. Steps: docs/deployment/besu-manual.md
 #   cp .env.example .env && edit      ./init.sh        (copy the operator's network files to ./network/)
 #   docker compose up -d
 services:

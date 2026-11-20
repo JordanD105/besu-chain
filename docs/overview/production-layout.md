@@ -1,22 +1,36 @@
-# Production layout: 5 hosts, high availability
+# Production layout
+
+> **What:** The production layout in full: every host, port and setting, the manual deployment from scratch, the failure table and failover tests.
+> **For:** operators, reviewers.
+> **Related:** [architecture](architecture.md) · [Ansible](../deployment/ansible.md) · [high availability](../deployment/high-availability.md)
+
+**Contents**
+- [1. Hosts](#1-hosts)
+- [2. Settings per component](#2-settings-per-component)
+- [3. Ports and firewall](#3-ports-and-firewall)
+- [4. Deploying from scratch](#4-deploying-from-scratch)
+- [5. What survives a failure](#5-what-survives-a-failure)
+- [6. Failover tests (before going live, then twice a year)](#6-failover-tests-before-going-live-then-twice-a-year)
+
+---
 
 The production deployment of this repository, host by host: what runs where, the exact settings,
 the ports, the full deployment from scratch, and what survives which failure. Each component's
 own guide has the details:
-[`besu-production/README.md`](../besu-production/README.md),
-[`mpc-signer/docs/production.md`](../mpc-signer/docs/production.md),
-[`docs/proxy-with-mpc-signer.md`](proxy-with-mpc-signer.md), [`ha/README.md`](../ha/README.md),
-[`monitoring/README.md`](../monitoring/README.md),
-[`docs/disaster-recovery.md`](disaster-recovery.md).
+[Besu production packages (manual setup)](../deployment/besu-manual.md),
+[MPC signer in production](../deployment/mpc-signer-production.md),
+[Proxy (application API)](../components/proxy.md), [High availability (HAProxy and keepalived)](../deployment/high-availability.md),
+[Monitoring (Prometheus and Grafana)](../components/monitoring.md),
+[Disaster recovery](../operations/disaster-recovery.md).
 
-![production architecture](architecture-production.png)
+![production architecture](../images/architecture-production.png)
 
 ## 1. Hosts
 
 The addresses in this document are the reference plan. With the Ansible deployment you can use
 any others: set them in `ansible/inventory.yml` (hosts) and `ansible/group_vars/all/settings.yml`
 (the two VIPs and their mask), and Ansible generates every file that contains addresses
-([`../ansible/README.md`](../ansible/README.md), "The IP plan").
+([Ansible deployment](../deployment/ansible.md), "The IP plan").
 
 | Host | Runs | Role |
 |---|---|---|
@@ -108,7 +122,7 @@ host holding `192.168.68.151` runs it: keepalived starts and stops it (`ha/proxy
 ### HAProxy and keepalived (.135, .136)
 
 `ha/haproxy.cfg` (identical on both), `ha/keepalived-135.conf` / `ha/keepalived-136.conf`, and the
-three scripts. Steps: [`ha/README.md`](../ha/README.md).
+three scripts. Steps: [High availability (HAProxy and keepalived)](../deployment/high-availability.md).
 
 ### Chainlens and monitoring (.139)
 
@@ -135,7 +149,7 @@ three scripts. Steps: [`ha/README.md`](../ha/README.md).
 | 9101 | node-exporter on every host | .139 |
 | 3000 | Grafana on .139 | admin, `grafana_ips` |
 | 30100 | chainlens on .139 | admin, `chainlens_ips` |
-| 30200 | Remix IDE on .139 ([`remix/`](../remix/README.md)) | admin, `remix_ips` |
+| 30200 | Remix IDE on .139 ([Remix IDE (self-hosted)](../components/remix.md)) | admin, `remix_ips` |
 | 22 | every host | admin / bastion (`operator_ip`) |
 
 **Ports published by Docker bypass firewalld.** The proxy, coordinators, MPC nodes, Grafana,
@@ -158,7 +172,7 @@ From a host that is **not** in the list, every published port must time out, e.g
 
 ## 4. Deploying from scratch
 
-A new chain and a new MPC cluster on five empty hosts. **Automated:** [`ansible/`](../ansible/README.md)
+A new chain and a new MPC cluster on five empty hosts. **Automated:** [Ansible deployment](../deployment/ansible.md)
 runs all of this except the MPC nodes, which their teams run (it stops and tells you when). By hand,
 do the steps **in this order**: the genesis
 needs `SENDER01` (MPC key ceremony), HAProxy needs the RPC nodes, and keepalived needs the proxy.
@@ -170,9 +184,9 @@ needs `SENDER01` (MPC key ceremony), HAProxy needs the RPC nodes, and keepalived
 | [4.3](#43-mpc-nodes-135-137-138) | .135, .137, .138 | mpc1, mpc2, mpc3 (each by its own team) |
 | [4.4](#44-clusterjson-operator) | operator | `cluster.json`, then start the 3 MPC nodes |
 | [4.5](#45-coordinators-and-key-ceremony-135-136) | .135, .136 | coord1, coord2, key ceremony → `SENDER01` |
-| [4.6](#46-besu-node-keys-135-138) | .135–.138 | the 6 Besu nodes: keys |
+| [4.6](#46-besu-node-keys-135138) | .135–.138 | the 6 Besu nodes: keys |
 | [4.7](#47-besu-network-files-operator) | operator | genesis and network files (`SENDER01` funded) |
-| [4.8](#48-start-besu-135-138) | .135–.138 | validators, then the RPC nodes |
+| [4.8](#48-start-besu-135138) | .135–.138 | validators, then the RPC nodes |
 | [4.9](#49-proxy-135-136) | .135, .136 | build the proxy (not started) |
 | [4.10](#410-haproxy-and-keepalived-135-136) | .135, .136 | HAProxy, keepalived: VIPs up, proxy1 starts |
 | [4.11](#411-check-the-application-path) | any | test account and transfer through the VIPs |
@@ -459,7 +473,7 @@ docker compose build
 
 ### 4.10 HAProxy and keepalived (.135, .136)
 
-Follow [`ha/README.md`](../ha/README.md), sections 1, 3 and 4: `ip_nonlocal_bind`, SELinux,
+Follow [High availability (HAProxy and keepalived)](../deployment/high-availability.md), sections 1, 3 and 4: `ip_nonlocal_bind`, SELinux,
 `haproxy.cfg`, then keepalived (`INTERFACE`, the two `auth_pass` values, `PROXY_DIR=/opt/besu-chain/proxy`).
 Start keepalived on **.135 first**, then on .136. Check on .135:
 
@@ -482,7 +496,7 @@ curl -s -X POST http://192.168.68.151:30000/createaccount -H 'content-type: appl
 
 The last call creates an MPC account and funds it from `SENDER01`. Then send a transfer with
 `POST /transfer` (`from`, `to`, `amount`) and the NFT calls you use
-([`proxy/api.txt`](../proxy/api.txt), [`docs/proxy-with-mpc-signer.md`](proxy-with-mpc-signer.md)).
+([Proxy API reference](../reference/proxy-api.md), [Proxy (application API)](../components/proxy.md)).
 
 ### 4.12 Monitoring and chainlens (.139)
 
@@ -517,7 +531,7 @@ Explorer: `http://192.168.68.139:30100`.
 | Network files, `cluster.json`, tokens | operator | after every change, to the vault |
 
 Prometheus alerts when a backup is too old or failed. Details and restore steps:
-[`docs/disaster-recovery.md`](disaster-recovery.md).
+[Disaster recovery](../operations/disaster-recovery.md).
 
 ### 4.14 Failover tests, then go live
 
@@ -533,7 +547,7 @@ applications at `http://192.168.68.151:30000`.
 | **.137** | ✅ | ✅ mpc1 + mpc3 | ✅ | none; the daily snapshot moves to another validator meanwhile |
 | **.138** | ✅ | ✅ mpc1 + mpc2 | ✅ | none |
 | **.139** | ✅ | ✅ | ✅ | no monitoring, no explorer |
-| **two of .135–.138** | ❌ halts (2 of 4) | ❌ if both had MPC nodes | — | [`docs/disaster-recovery.md`](disaster-recovery.md) |
+| **two of .135–.138** | ❌ halts (2 of 4) | ❌ if both had MPC nodes | — | [Disaster recovery](../operations/disaster-recovery.md) |
 | .135 **and** .136 | ❌ halts (val3 + val4 = 2 of 4) | ❌ mpc2 + mpc3 alive, but no coordinator | ❌ | DR runbook |
 
 Planned maintenance: never take two of .135–.138 down at once.

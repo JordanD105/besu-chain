@@ -1,4 +1,4 @@
-# The 5 hosts of the production layout (docs/production-layout.md).
+# The 5 hosts of the production layout (docs/overview/production-layout.md).
 # THE IP PLAN: set each host's ansible_host here, and the two floating IPs (VIPs) and their mask
 # in group_vars/all/settings.yml. Ansible generates every file that contains addresses (HAProxy,
 # keepalived, firewall, Prometheus targets, .env files, team instructions) from them.

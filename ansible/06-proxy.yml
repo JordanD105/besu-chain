@@ -3,7 +3,7 @@
 - name: Hosts have the current code
   ansible.builtin.import_playbook: code-current.yml
 
-# The SectionRegistry (docs/sections.md), once: an MPC admin key, then the contract deployed from
+# The SectionRegistry (docs/features/sections.md), once: an MPC admin key, then the contract deployed from
 # it with deploy-contract.js (operator, proxy image), straight to coord1 and rpc1 (the VIPs come up
 # in 07-ha.yml). The address and admin go to state/registry.json, then into the proxy settings.
 # A registry of an older version (v1) is replaced by a new one (same admin); 08-check.yml then

@@ -1,5 +1,26 @@
 # Sections
 
+> **What:** Sections: business units with their own API key, accounts and money flow, recorded in the on-chain SectionRegistry; plus registered contracts, NFT collections v3 and section monitoring.
+> **For:** architects, developers, business admins.
+> **Related:** [proxy API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md) · [NFT workflow](nft-workflow.md)
+
+**Contents**
+- [Accounts](#accounts)
+- [Architecture](#architecture)
+- [The SectionRegistry (on chain, version 2)](#the-sectionregistry-on-chain-version-2)
+- [Admin API](#admin-api)
+- [Chainlens Sections page](#chainlens-sections-page)
+- [Contracts (step 4)](#contracts-step-4)
+- [NFT collections (step 5)](#nft-collections-step-5)
+- [Sections in the chainlens Accounts page](#sections-in-the-chainlens-accounts-page)
+- [Platform overview on the chainlens Dashboard](#platform-overview-on-the-chainlens-dashboard)
+- [Application API: section calls](#application-api-section-calls)
+- [Flows](#flows)
+- [Monitoring (step 6)](#monitoring-step-6)
+- [Build steps](#build-steps)
+
+---
+
 A **section** is a group of applications (section_1 … section_n) with its own accounts and its own
 API key. Money for a section's users comes from the section's own accounts instead of SENDER01.
 
@@ -44,8 +65,8 @@ ordered nonces); chainlens is the UI and calls the proxy's admin API.
 
 ## The SectionRegistry (on chain, version 2)
 
-[`proxy/contracts/SectionRegistry.sol`](../proxy/contracts/SectionRegistry.sol), compiled to
-[`proxy/section-registry.json`](../proxy/section-registry.json) (solc 0.8.28, EVM cancun;
+[`proxy/contracts/SectionRegistry.sol`](../../proxy/contracts/SectionRegistry.sol), compiled to
+[`proxy/section-registry.json`](../../proxy/section-registry.json) (solc 0.8.28, EVM cancun;
 `proxy/scripts/compile-contract.js`). Both proxies and chainlens read it; nothing else stores
 sections, so there is no database to replicate or back up (the chain is), every change is a signed
 transaction, and contracts can check it (NftCollection v3, step 5).
@@ -76,7 +97,7 @@ working. Version 1's allowed IPs are dropped (sections are identified by their k
 
 On the proxy (`http://<vip_proxy>:30000/admin/...`), with `Authorization: Bearer <token>`
 (`ansible/state/secrets/proxy_admin_token`), from `operator_ip` or the monitoring host only
-(chainlens calls it there). Details: [`proxy/api.txt`](../proxy/api.txt).
+(chainlens calls it there). Details: [Proxy API reference](../reference/proxy-api.md).
 
 | Request | Does |
 |---|---|
@@ -152,7 +173,7 @@ would revert: …`).
 
 ## NFT collections (step 5)
 
-New collections are **NftCollection version 3** ([`proxy/contracts/NftCollection.sol`](../proxy/contracts/NftCollection.sol),
+New collections are **NftCollection version 3** ([`proxy/contracts/NftCollection.sol`](../../proxy/contracts/NftCollection.sol),
 `proxy/nft-collection-v3.json`): deployed and minted by the **contract account center**, registered
 in the SectionRegistry, shared by all sections.
 
@@ -278,7 +299,7 @@ The proxy's `/metrics` (scraped by Prometheus through the proxy VIP) adds:
 Settings (`ansible/group_vars/all/settings.yml`): **`upfront_low_balance_eth`** (default 100; 0 =
 off) and **`sender01_low_balance_eth`** (default 10000). Alerts `SectionUpfrontLow` (warning),
 `SectionUpfrontEmpty` (critical), `Sender01Low`, `SectionMetricsFailing`
-([`../monitoring/prometheus/rules/sections.yml`](../monitoring/prometheus/rules/sections.yml)); the
+([`monitoring/prometheus/rules/sections.yml`](../../monitoring/prometheus/rules/sections.yml)); the
 **Sections** dashboard in Grafana shows balances, the threshold line and the activity per section.
 Disabled and archived sections don't raise the upfront alerts.
 

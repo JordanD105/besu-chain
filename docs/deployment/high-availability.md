@@ -1,13 +1,29 @@
-# ha: HAProxy + keepalived for the production layout
+# High availability (HAProxy and keepalived)
+
+> **What:** High availability on h135 / h136: HAProxy, keepalived, the floating IPs, the RPC health check, the firewall and failover tests.
+> **For:** operators.
+> **Related:** [architecture](../overview/architecture.md) · [troubleshooting](../operations/troubleshooting.md) · [production layout](../overview/production-layout.md)
+
+**Contents**
+- [1. Prepare both hosts (.135 and .136)](#1-prepare-both-hosts-135-and-136)
+- [2. Settings that must point at the VIPs](#2-settings-that-must-point-at-the-vips)
+- [3. HAProxy (both hosts)](#3-haproxy-both-hosts)
+- [4. keepalived (both hosts)](#4-keepalived-both-hosts)
+- [5. Operations](#5-operations)
+- [6. Failover tests](#6-failover-tests)
+- [7. Risks](#7-risks)
+- [RPC health (besu-rpc-health)](#rpc-health-besu-rpc-health)
+
+---
 
 > **With the Ansible deployment, the files here are not used as they are:** Ansible generates
 > `haproxy.cfg`, `keepalived.conf` and the three scripts from the IP plan (`ansible/inventory.yml`
-> and `ansible/group_vars/all/settings.yml`; see [`../ansible/README.md`](../ansible/README.md),
+> and `ansible/group_vars/all/settings.yml`; see [Ansible deployment](ansible.md),
 > "The IP plan"), and runs `firewall-layout.sh` with the plan's addresses. The files below, with
 > the documented addresses 192.168.68.135–.139, are for a setup by hand.
 
 Two floating IPs on **192.168.68.135** (normally) and **192.168.68.136** (after a failover), so that
-losing .135 doesn't stop payments. Layout and settings: [`../docs/production-layout.md`](../docs/production-layout.md).
+losing .135 doesn't stop payments. Layout and settings: [Production layout](../overview/production-layout.md).
 
 | VIP | What | Failover |
 |---|---|---|
@@ -79,7 +95,7 @@ PROXY_CLIENTS="<application IPs>" CHAINLENS_USERS="<explorer users>" GRAFANA_USE
 
 It writes firewalld rules and the same allow list for the ports Docker publishes, which bypass
 firewalld: nftables table `inet besu_docker` (`/etc/besu-docker-firewall.rules`, applied at boot by
-`besu-docker-firewall.service`). See [`docs/production-layout.md`](../docs/production-layout.md),
+`besu-docker-firewall.service`). See [Production layout](../overview/production-layout.md),
 section 3.
 
 Network interface name, for the keepalived files (the one with `192.168.68.13x`):
@@ -183,7 +199,7 @@ Start everything again after each test and check Grafana before the next one.
 
 HAProxy does not trust `eth_syncing` alone: a Besu node that stops importing blocks (for example
 after losing its peers) still answers `false` and would keep the RPC VIP while serving an old chain.
-`besu-rpc-health` ([`rpc-health.py`](rpc-health.py), a systemd service on both HAProxy hosts,
+`besu-rpc-health` ([`ha/rpc-health.py`](../../ha/rpc-health.py), a systemd service on both HAProxy hosts,
 installed by `ansible/07-ha.yml`) checks every RPC node every 2 s and answers HAProxy on
 `127.0.0.1:8410+N` (node N). A node is healthy when it is not syncing, is within
 `rpc_max_blocks_behind` (10) blocks of the best head (the RPC nodes and the host's own validator)

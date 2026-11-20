@@ -1,7 +1,23 @@
-# Alerts guide
+# Alerts
 
-Every alert of the monitoring stack: when it fires, what it means and what to do. The rules are in
-[`../monitoring/prometheus/rules/`](../monitoring/prometheus/rules/) (six files: Besu, MPC, proxy
+> **What:** Every alert of the monitoring stack: when it fires, what it means and what to do.
+> **For:** operators on duty.
+> **Related:** [troubleshooting](troubleshooting.md) · [monitoring](../components/monitoring.md) · [disaster recovery](disaster-recovery.md)
+
+**Contents**
+- [How alerts work here](#how-alerts-work-here)
+- [1. Besu: the chain (`besu.yml`)](#1-besu-the-chain-besuyml)
+- [2. MPC signing (`mpc.yml`)](#2-mpc-signing-mpcyml)
+- [3. Proxy and Redis (`proxy.yml`)](#3-proxy-and-redis-proxyyml)
+- [4. Sections (`sections.yml`)](#4-sections-sectionsyml)
+- [5. Hosts (`hosts.yml`)](#5-hosts-hostsyml)
+- [6. Backups (`backups.yml`)](#6-backups-backupsyml)
+- [Reading an incident](#reading-an-incident)
+
+---
+
+The rules are in
+[`monitoring/prometheus/rules/`](../../monitoring/prometheus/rules/) (six files: Besu, MPC, proxy
 and Redis, sections, hosts, backups).
 
 ## How alerts work here
@@ -10,7 +26,7 @@ and Redis, sections, hosts, backups).
   warning counts, then one row per firing alert), the orange shaded bands with dashed lines on the
   charts (when an alert fired and cleared), and the Prometheus *Alerts* page.
 - **Notifications:** none by default. For mail, Slack or PagerDuty, add an Alertmanager or use
-  Grafana *Alerting → Contact points* ([`../monitoring/README.md`](../monitoring/README.md)).
+  Grafana *Alerting → Contact points* ([Monitoring (Prometheus and Grafana)](../components/monitoring.md)).
 - **Severity:**
   - **critical**: the service is stopped or about to stop (no blocks, no signatures, no proxy). Act now.
   - **warning**: degraded, or one failure away from an outage. Act soon.
@@ -25,9 +41,9 @@ and Redis, sections, hosts, backups).
 | Alert | Severity | Wait | Fires when | What it means / what to do |
 |---|---|---|---|---|
 | **BesuValidatorQuorumLost** | critical | 30 s | Fewer validators online than QBFT needs: ceil(2n/3), so 3 of 4 | The chain **cannot make blocks**. Bring validators back first; look for `BesuNodeDown` / `HostDown` |
-| **BesuNoNewBlocks** | critical | 1 min | Even the most current node's newest block is older than 3 × the block period + 5 s (8 s with 1 s blocks) | The chain is **halted**. If it keeps firing after the quorum is back, restart all validators together (*Chain halted* in [`../besu-production/README.md`](../besu-production/README.md)) |
+| **BesuNoNewBlocks** | critical | 1 min | Even the most current node's newest block is older than 3 × the block period + 5 s (8 s with 1 s blocks) | The chain is **halted**. If it keeps firing after the quorum is back, restart all validators together (*Chain halted* in [Besu production packages (manual setup)](../deployment/besu-manual.md)) |
 | **BesuNodeDown** | warning | 1 min | A node's metrics don't answer | Container stopped or crashed, or the host is down: `docker ps -a`, `docker logs` on that host. One validator down leaves 3 of 4, with no spare |
-| **BesuNodeStalled** | warning | 1 min | A node's newest block is over 60 s old while the chain is current | The node **stopped importing** (its own sync status may still say "in sync"). RPC nodes leave the RPC VIP and are restarted after 5 min by `besu-rpc-health` ([`../ha/README.md`](../ha/README.md)); restart a validator by hand |
+| **BesuNodeStalled** | warning | 1 min | A node's newest block is over 60 s old while the chain is current | The node **stopped importing** (its own sync status may still say "in sync"). RPC nodes leave the RPC VIP and are restarted after 5 min by `besu-rpc-health` ([High availability (HAProxy and keepalived)](../deployment/high-availability.md)); restart a validator by hand |
 | **BesuNotInSync** | warning | 5 min | The node says it is syncing, or is more than 10 blocks behind the best block it knows | Catching up after a restart is normal for a few minutes. If it lasts, check its peers and log |
 | **BesuPeersMissing** | warning | 5 min | A node has fewer peers than (nodes up − 1) | Every node should connect to all the others: firewall, `static-nodes.json` or `permissions_config.toml` |
 | **BesuPeersLow** | warning | 2 min | A node has fewer than 2 peers | One connection away from isolation; a node with one peer can stall when that peer stops sending blocks. Check the network and firewall to the other hosts |
@@ -64,7 +80,9 @@ and Redis, sections, hosts, backups).
 | **RedisDown** | warning | 2 min | The active proxy's Redis (or its exporter) doesn't answer | Same impact as above |
 | **RedisMemoryHigh** | warning | 10 min | Redis above 90 % of its `maxmemory` (only when a maximum is set) | Keys will be evicted or writes refused: raise the maximum or find the growth |
 
-## 4. Sections (`sections.yml`, [`sections.md`](sections.md))
+## 4. Sections (`sections.yml`)
+
+The money accounts of each section ([sections](../features/sections.md)).
 
 | Alert | Severity | Wait | Fires when | What it means / what to do |
 |---|---|---|---|---|

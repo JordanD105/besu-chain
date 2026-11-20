@@ -1,4 +1,4 @@
-# Self-hosted Remix IDE (README.md). Built and run by the Ansible deployment (remix_enabled).
+# Self-hosted Remix IDE (docs/components/remix.md). Built and run by the Ansible deployment (remix_enabled).
 #   docker compose build && docker compose up -d     # remix-live/ must be in this folder
 #   open http://<host>:30200
 services:

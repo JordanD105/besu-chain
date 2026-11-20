@@ -1,9 +1,22 @@
-# Deploying contracts from chainlens (the Deploy page)
+# Contract deployment (chainlens Deploy page)
+
+> **What:** Deploying compiled contracts from the chainlens Deploy page, signed by the contract account center and registered on chain.
+> **For:** operators, contract developers.
+> **Related:** [Remix](../components/remix.md) · [NFT workflow](nft-workflow.md) · [contract records](contract-records.md)
+
+**Contents**
+- [Turn it on](#turn-it-on)
+- [Deploy](#deploy)
+- [The records](#the-records)
+- [Turn it off](#turn-it-off)
+- [If something fails](#if-something-fails)
+
+---
 
 Chainlens can deploy a compiled contract from the browser: **Blockchain → Deploy**
 (`http://<monitoring host>:30100/#/deploy`). Chainlens hands it to the proxy, which deploys it
 signed by the **contract account center** (an MPC key, 2 of the 3 MPC nodes) and registers it on
-chain in the SectionRegistry with its kind and ABI ([`../docs/sections.md`](../docs/sections.md),
+chain in the SectionRegistry with its kind and ABI ([Sections](sections.md),
 "Contracts"). The contract is then visible in chainlens and usable by applications
 (`/contract/call`, `/contract/send`) at once.
 
@@ -44,7 +57,7 @@ cat state/secrets/chainlens_deploy_token
 
 ## Deploy
 
-1. Compile with **EVM version cancun** (Remix: [`../remix/README.md`](../remix/README.md)) and keep
+1. Compile with **EVM version cancun** (Remix: [Remix IDE (self-hosted)](../components/remix.md)) and keep
    the compiler artifact (`.json` with ABI and bytecode: Remix `contracts/artifacts/<Name>.json`,
    Hardhat, Foundry or solc output).
 2. On the operator machine or a PC in `chainlens_deploy_ips`, open

@@ -1,11 +1,25 @@
-# Benchmark results: Vault + Web3Signer vs MPC signer
+# MPC signer benchmarks
+
+> **What:** Throughput and latency of the MPC signer compared with Vault + Web3Signer, and how to size the MPC nodes.
+> **For:** developers, capacity planning.
+> **Related:** [MPC signer](../components/mpc-signer.md) · [development environment](../getting-started/development.md)
+
+**Contents**
+- [Reading the numbers](#reading-the-numbers)
+- [A. Presignature generation capacity](#a-presignature-generation-capacity)
+- [B. Signing throughput (`eth_signTransaction`; MPC pool pre-filled, refill paused)](#b-signing-throughput-ethsigntransaction-mpc-pool-pre-filled-refill-paused)
+- [C. End-to-end (sign + submit to Besu, then wait until all mined)](#c-end-to-end-sign--submit-to-besu-then-wait-until-all-mined)
+- [D. MPC cold path (pool empty → full interactive 3+1-round signing)](#d-mpc-cold-path-pool-empty--full-interactive-31-round-signing)
+- [E. MPC sustained (pool empty at start, refill running during load)](#e-mpc-sustained-pool-empty-at-start-refill-running-during-load)
+
+---
 
 Two runs on the same 4-vCPU VM, with identical phases:
 
 | Run | MPC cluster | Report | Raw data |
 |---|---|---|---|
-| **Latest (Docker)** | `quickstart/` containers, GMP backend | [report](results/20261111T214737Z.md) | [jsonl](results/20261111T214737Z.jsonl) |
-| Earlier (host processes) | `scripts/local-cluster.sh`, GMP backend | [report](results/20261111T192227Z.md) | [jsonl](results/20261111T192227Z.jsonl) |
+| **Latest (Docker)** | `quickstart/` containers, GMP backend | [report](../../mpc-signer/bench/results/20261111T214737Z.md) | [jsonl](../../mpc-signer/bench/results/20261111T214737Z.jsonl) |
+| Earlier (host processes) | `scripts/local-cluster.sh`, GMP backend | [report](../../mpc-signer/bench/results/20261111T192227Z.md) | [jsonl](../../mpc-signer/bench/results/20261111T192227Z.jsonl) |
 
 Rerun with `bench/run-bench.sh`. It needs only Docker; see the README.
 

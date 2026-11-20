@@ -1,10 +1,33 @@
-# MPC signer: production deployment guide
+# MPC signer in production
+
+> **What:** The MPC signer in production: three teams, tokens, the key ceremony, backups and restore, operations.
+> **For:** MPC node teams, operators.
+> **Related:** [MPC signer](../components/mpc-signer.md) · [MPC upgrade](../operations/mpc-signer-upgrade.md) · [disaster recovery](../operations/disaster-recovery.md)
+
+**Contents**
+- [1. Prerequisites](#1-prerequisites)
+- [2. Build and distribute the image (once per release, e.g. in CI)](#2-build-and-distribute-the-image-once-per-release-eg-in-ci)
+- [3. Generate the shared tokens (operator)](#3-generate-the-shared-tokens-operator)
+- [4. Initialise each node (on each node host, by that node's team)](#4-initialise-each-node-on-each-node-host-by-that-nodes-team)
+- [5. Build `cluster.json` (operator)](#5-build-clusterjson-operator)
+- [6. Start the nodes (each node team)](#6-start-the-nodes-each-node-team)
+- [7. Start the coordinator(s)](#7-start-the-coordinators)
+- [8. Key ceremony (operator, all 3 nodes up)](#8-key-ceremony-operator-all-3-nodes-up)
+- [9. Fund SENDER01 and connect the proxy](#9-fund-sender01-and-connect-the-proxy)
+- [10. Verify before going live](#10-verify-before-going-live)
+- [11. Backups (each node team, separately)](#11-backups-each-node-team-separately)
+- [12. Restore a node (same node id, same passphrase)](#12-restore-a-node-same-node-id-same-passphrase)
+- [13. Day-2 operations](#13-day-2-operations)
+- [14. If a share is lost for good](#14-if-a-share-is-lost-for-good)
+- [15. Security checklist](#15-security-checklist)
+
+---
 
 This guide deploys the 2-of-3 MPC signer for production:
 - **three MPC nodes** on three hosts, run by **three different admin teams**;
 - **two coordinators**, behind HAProxy on a floating IP.
 
-In the production layout ([`../../docs/production-layout.md`](../../docs/production-layout.md)):
+In the production layout ([Production layout](../overview/production-layout.md)):
 mpc1 (`MPC_NODE_ID=0`) on 192.168.68.135, mpc2 (1) on .137, mpc3 (2) on .138; coord1 on .135,
 coord2 on .136; clients reach the coordinators at `192.168.68.150:9100` (coord1, coord2 as backup).
 
@@ -39,7 +62,7 @@ signing with a node stopped, and a backup → data loss → restore → signing 
 - **3 node hosts** (Linux + Docker Engine + Compose v2), one per team: .135, .137, .138 (each
   also runs a Besu validator).
   - **CPU:** presigning costs about 0.6 CPU-seconds per signature per node. Plan for about
-    **0.4 cores per sustained transaction/s** (see `bench/RESULTS.md`), plus 2 cores of headroom.
+    **0.4 cores per sustained transaction/s** (see [MPC signer benchmarks](../development/mpc-benchmarks.md)), plus 2 cores of headroom.
   - **RAM:** 2–4 GB.
   - **Disk:** under 1 GB (shares are a few KB per key).
 - **2 coordinator hosts:** 2 cores and 1 GB each are enough: .135 and .136, next to the proxies.
@@ -54,7 +77,7 @@ signing with a node stopped, and a backup → data loss → restore → signing 
   - MPC protocol messages are already end-to-end signed and encrypted, but transaction intents
     and the token are not.
 - **Firewall:** default-deny, then open only these ports
-  ([`../../ha/firewall-layout.sh`](../../ha/firewall-layout.sh) applies them with firewalld for the
+  ([`ha/firewall-layout.sh`](../../ha/firewall-layout.sh) applies them with firewalld for the
   layout; `deploy/firewall-example.sh` has generic ufw rules):
 
 | From | To | Port | Purpose |
@@ -178,7 +201,7 @@ docker compose logs --tail 5     # expect: "keys loaded from nodes keys=0"
 ```
 
 Do the same on .136 for **coord2**, with its own `MPC_BIND_IP` and `MPC_RELAY_URL`. Clients reach
-both through HAProxy on `192.168.68.150:9100` ([`../../ha/README.md`](../../ha/README.md)):
+both through HAProxy on `192.168.68.150:9100` ([High availability (HAProxy and keepalived)](high-availability.md)):
 coord1 normally, coord2 when coord1 is down. coord2 runs all the time and fills its own
 presignature pool, so it takes over warm.
 
@@ -254,7 +277,7 @@ coordinators see it):
 | `MPC_ADMIN_TOKEN` | from step 3 |
 
   The same `.env` on both proxy hosts (`proxy/.env.example`). Remove every `VAULT_*` line. See
-  [`../../docs/proxy-with-mpc-signer.md`](../../docs/proxy-with-mpc-signer.md).
+  [Proxy (application API)](../components/proxy.md).
 - **Collections:** deploy your NFT collections with `/nft/deploy`. Their minter is `SENDER01`.
 
 ## 10. Verify before going live
@@ -285,7 +308,7 @@ The archive holds the node's sealed identity, aux info and **all key shares**.
 - **Monitoring:** each run records its result for node-exporter (`/var/lib/node_exporter/textfile`,
   see `monitoring/node-exporter`). Prometheus alerts when a node's backup is older than 2 hours,
   missing, or failed (`MpcShareBackupTooOld`, `MpcShareBackupMissing`, `BackupFailed`).
-- **Disaster recovery:** [`../../docs/disaster-recovery.md`](../../docs/disaster-recovery.md).
+- **Disaster recovery:** [Disaster recovery](../operations/disaster-recovery.md).
 
 ## 12. Restore a node (same node id, same passphrase)
 
@@ -307,11 +330,11 @@ holds an identity.
 |---|---|
 | **Upgrade** | new image tag in `.env`, then `docker compose up -d`. **One node at a time:** signing continues on the other two. Then the coordinators: **coord2 first**, then coord1 (HAProxy uses coord2 meanwhile). Run `/admin/pool/clear` on both coordinators after each node restart. |
 | **A node is down** | signing continues with 2 of 3, slower while the pool refills. `/createaccount` **fails** until all 3 are up, because key generation needs all three. Alert on it. |
-| **Monitoring** | Set `MPC_METRICS_TOKEN` on each coordinator and add it to [`../../monitoring/`](../../monitoring) (`prometheus/targets/mpc.yml`). The coordinator serves Prometheus metrics on `GET /metrics` (signatures hot/cold, latency, failures, policy refusals, pool per hot key, presign rate) and probes every MPC node, so `mpc_node_up` shows a node down before a signature needs it. The MPC signer dashboard and alerts (below threshold, node down, pool empty, policy refusals) come with it. `GET /admin/pool` still gives the same numbers as JSON. |
+| **Monitoring** | Set `MPC_METRICS_TOKEN` on each coordinator and add it to [`monitoring/`](../../monitoring) (`prometheus/targets/mpc.yml`). The coordinator serves Prometheus metrics on `GET /metrics` (signatures hot/cold, latency, failures, policy refusals, pool per hot key, presign rate) and probes every MPC node, so `mpc_node_up` shows a node down before a signature needs it. The MPC signer dashboard and alerts (below threshold, node down, pool empty, policy refusals) come with it. `GET /admin/pool` still gives the same numbers as JSON. |
 | **Change the policy** | edit `cluster.json`, compare `sha256sum` across all teams, copy it everywhere, restart the nodes one by one, then the coordinators |
 | **Rotate `MPC_NODE_TOKEN`** | set the new value on all nodes and coordinators, then restart them |
 | **Rotate `MPC_ADMIN_TOKEN`** | update the coordinators, the proxy and the operator, then restart |
-| **Upgrade to 1.3.0 (pool classes)** | step by step: [`upgrade.md`](upgrade.md). The **MPC nodes first** (each team: `MPC_IMAGE` in `.env`, `docker compose up -d`, one at a time), then the coordinators and the proxy. Coordinators on 1.3.0 with older nodes can't store pool classes: new accounts would get no pool and `POST /admin/keys/<address>/pool` fails |
+| **Upgrade to 1.3.0 (pool classes)** | step by step: [MPC signer upgrade](../operations/mpc-signer-upgrade.md). The **MPC nodes first** (each team: `MPC_IMAGE` in `.env`, `docker compose up -d`, one at a time), then the coordinators and the proxy. Coordinators on 1.3.0 with older nodes can't store pool classes: new accounts would get no pool and `POST /admin/keys/<address>/pool` fails |
 | **Pool class of an account** | `POST /account/pool {"address", "pool"}` on the proxy; see "Presignature pools" in section 8 |
 | **Throughput** | sustained signing is limited by presigning CPU. Give the nodes more cores and raise `MPC_COMPUTE_THREADS` and `MPC_REFILL_CONCURRENCY`. Bursts are covered by `MPC_POOL_TARGET`. |
 

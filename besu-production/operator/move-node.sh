@@ -6,7 +6,7 @@
 # Then: copy the 4 files to EVERY node, restart the other nodes one at a time
 # (./start.sh && docker compose restart), stop the node on its old host, and start it on the new
 # host with its key (restore-key.sh) and the new P2P_HOST / P2P_PORT in its .env.
-# docs/disaster-recovery.md, 6.1 "New IP".
+# docs/operations/disaster-recovery.md, 6.1 "New IP".
 set -Eeuo pipefail
 dir="$(cd "${1:?network dir}" && pwd)"; f="${2:?node json}"; new="${3:?new IP:port}"
 [[ "$new" =~ ^[0-9.]+:[0-9]+$ ]] || { echo "new address must be IP:port, e.g. 192.168.68.136:30303" >&2; exit 1; }

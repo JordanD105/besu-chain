@@ -159,5 +159,5 @@
                if mpc_backup_cron | bool else
                'MPC share backups: each team runs backup.sh hourly (state/handoff/mpcN.md, step 5)' }}"
           - "Off-site: copy {{ state_dir }}/ (tokens, network files, cluster.json, sender01, key backups) to your vault"
-          - "Failover tests: docs/production-layout.md section 6, then go live"
+          - "Failover tests: docs/overview/production-layout.md section 6, then go live"
           - "{{ '' if snapshot_copy_to else 'WARNING: snapshot_copy_to is empty: chain snapshots stay on .137 only' }}"

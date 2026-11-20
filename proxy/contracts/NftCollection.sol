@@ -5,7 +5,7 @@ interface ISectionRegistry {
     function isConsumptionAccount(address account) external view returns (bool);
 }
 
-/// @notice ERC-721 collection (version 3, docs/sections.md). Only the deployer (the contract
+/// @notice ERC-721 collection (version 3, docs/features/sections.md). Only the deployer (the contract
 /// account center) can mint. Every token has a price set at mint, fixed for good. `buy` sells a
 /// token in ONE atomic transaction: the buyer sends exactly the price and receives the token;
 /// the ETH goes to

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// @title SectionRegistry (version 2)
-/// @notice The on-chain record of the sections (docs/sections.md), read by both proxies and chainlens.
+/// @notice The on-chain record of the sections (docs/features/sections.md), read by both proxies and chainlens.
 /// Each section has three MPC accounts:
 ///   - upfront:     pays out (funds new accounts, /transfer -x); topped up manually from SENDER01
 ///   - consumption: receives (/transfer +x, first NFT sales); swept to payment

@@ -1,8 +1,21 @@
-# Upgrading the MPC signer (example: 1.3.0)
+# MPC signer upgrade
+
+> **What:** Upgrading the MPC signer: ship the image, MPC nodes one at a time by their teams, then coordinators and proxy; rollback.
+> **For:** MPC node teams, operators.
+> **Related:** [MPC production](../deployment/mpc-signer-production.md) · [MPC signer](../components/mpc-signer.md)
+
+**Contents**
+- [1. Operator: build and ship the image (phases 0–2 only)](#1-operator-build-and-ship-the-image-phases-02-only)
+- [2. Each MPC team: upgrade its node, one node at a time](#2-each-mpc-team-upgrade-its-node-one-node-at-a-time)
+- [3. Operator: upgrade everything else](#3-operator-upgrade-everything-else)
+- [Rollback (if a node misbehaves on the new version)](#rollback-if-a-node-misbehaves-on-the-new-version)
+- [Notes](#notes)
+
+---
 
 The order: **ship the image, upgrade the three MPC nodes one at a time (each by its own team),
 then the coordinators and the proxy.** The commands use 1.3.0 and the Ansible deployment
-([`../../ansible/`](../../ansible/README.md)); for another version, change the tag in
+([Ansible deployment](../deployment/ansible.md)); for another version, change the tag in
 `ansible/group_vars/all/settings.yml` (`mpc_image`) first.
 
 Why nodes first: a newer coordinator may use node features an older node doesn't have. For 1.3.0,
@@ -104,8 +117,8 @@ node runs the old version, keep the coordinators on it too: don't run `site.yml`
 - A node that still runs from the repository folder (`/opt/besu-chain/mpc-signer/deploy/node`)
   instead of `/opt/mpc-node`: do step 2 in that folder, and move it to `/opt/mpc-node` afterwards.
 - Without Ansible: build and distribute the image as in
-  [`production.md`](production.md) section 2, upgrade the nodes as in step 2 here, then the
+  [MPC signer in production](../deployment/mpc-signer-production.md) section 2, upgrade the nodes as in step 2 here, then the
   coordinators (coord2 first, then coord1) with the new `MPC_IMAGE` in their `.env` and
   `docker compose up -d`.
 - What's new in 1.3.0: presignature pool classes per account (big, small, none): "Presignature
-  pools" in [`production.md`](production.md).
+  pools" in [MPC signer in production](../deployment/mpc-signer-production.md).

@@ -1,8 +1,20 @@
-# Who may connect: the access lists
+# Access control
+
+> **What:** Who may connect to each service (proxy, chainlens, Grafana, Remix, the operator), how to allow addresses or networks, and how to check it.
+> **For:** operators.
+> **Related:** [Ansible](../deployment/ansible.md) · [high availability](high-availability.md) · [production layout](../overview/production-layout.md)
+
+**Contents**
+- [Single addresses and networks](#single-addresses-and-networks)
+- [Apply a change](#apply-a-change)
+- [Check](#check)
+- [Upgrading from client_ips / remix_users](#upgrading-from-clientips--remixusers)
+
+---
 
 The firewall on every host (`ha/firewall-layout.sh`, applied by `01-hosts.yml`) opens each service
 only to the IPs in its list in `group_vars/all/settings.yml`. Everyone else is blocked, including
-for the ports Docker publishes (see [`../docs/production-layout.md`](../docs/production-layout.md),
+for the ports Docker publishes (see [Production layout](../overview/production-layout.md),
 section 3).
 
 | Setting | Service | Port |
@@ -13,11 +25,11 @@ section 3).
 | `grafana_ips` | users of Grafana, the monitoring dashboards | monitoring host `:3000` |
 | `remix_ips` | developers using the Remix IDE | monitoring host `:30200` |
 
-**Sections** ([`../docs/sections.md`](../docs/sections.md)) are identified by their API key: a
+**Sections** ([Sections](../features/sections.md)) are identified by their API key: a
 section's applications need their addresses in `proxy_client_ips` to reach the proxy at all.
 
 The Deploy page of chainlens, when on, is for `operator_ip` and `chainlens_deploy_ips` only (not
-`chainlens_ips`): [`CHAINLENS-DEPLOY.md`](CHAINLENS-DEPLOY.md).
+`chainlens_ips`): [Contract deployment (chainlens Deploy page)](../features/contract-deployment.md).
 
 `operator_ip` is one address, required: the firewall only lets it in for SSH, so a wrong value
 locks you out. The four lists may be empty (then only the operator reaches that service).

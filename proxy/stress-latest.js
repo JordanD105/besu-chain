@@ -103,7 +103,7 @@ const CONFIG = {
     // big (MPC_POOL_TARGET presignatures, like SENDER01), small (MPC_POOL_TARGET_SMALL), none (cold)
     MPC_NEW_ACCOUNT_POOL: (process.env.MPC_NEW_ACCOUNT_POOL || "small").trim().toLowerCase(),
     NFT_BASE_URL: (process.env.NFT_BASE_URL || "").trim().replace(/\/$/, ""),
-    // Sections (docs/sections.md): the on-chain SectionRegistry and the MPC account that writes it
+    // Sections (docs/features/sections.md): the on-chain SectionRegistry and the MPC account that writes it
     REGISTRY_CONTRACT: (process.env.REGISTRY_CONTRACT || "").trim(),
     REGISTRY_ADMIN: (process.env.REGISTRY_ADMIN || "").trim(),
     // Admin API (/admin/*): bearer token and the source addresses allowed to use it
@@ -1307,7 +1307,7 @@ app.get("/transfer/:txHash", async (req, res) => {
 // =======================
 
 const nftInterface = new ethers.Interface(nftArtifact.abi);
-// version 3 (docs/sections.md): minted by the contract account center; buy(tokenId, payee)
+// version 3 (docs/features/sections.md): minted by the contract account center; buy(tokenId, payee)
 const nftV3Interface = new ethers.Interface(nftV3Artifact.abi);
 const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 const NFT_META_LIMIT = 512 * 1024;
@@ -2707,7 +2707,7 @@ app.get("/nft/:tokenId", async (req, res) => {
 });
 
 // =======================
-// Sections (docs/sections.md)
+// Sections (docs/features/sections.md)
 // =======================
 // The SectionRegistry contract (v2) on chain holds the sections: name, three MPC accounts (upfront
 // pays out, consumption receives, payment collects), the API-key hash, active / archived, and
@@ -3301,7 +3301,7 @@ app.post("/admin/registry/migrate", adminGuard, adminRoute(async (req) => {
 }));
 
 // =======================
-// Contracts (docs/sections.md, step 4)
+// Contracts (docs/features/sections.md, step 4)
 // =======================
 // Contracts are deployed by CONTRACT_CENTER (an MPC key, through this proxy's send queue) and
 // registered in the SectionRegistry with their ABI (ContractRegistered event). Applications read

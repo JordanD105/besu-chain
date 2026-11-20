@@ -1,4 +1,17 @@
-# mpc-signer: non-exportable signer for Besu (replaces Vault + Web3Signer)
+# MPC signer
+
+> **What:** The 2-of-3 MPC signer: design, protocol, quick start and security notes.
+> **For:** MPC node teams, developers, reviewers.
+> **Related:** [MPC production](../deployment/mpc-signer-production.md) · [MPC upgrade](../operations/mpc-signer-upgrade.md) · [benchmarks](../development/mpc-benchmarks.md)
+
+**Contents**
+- [How signing works](#how-signing-works)
+- [Layout](#layout)
+- [Quick start (Docker)](#quick-start-docker)
+- [Production deployment](#production-deployment)
+- [Benchmark](#benchmark)
+
+---
 
 A 2-of-3 threshold ECDSA (secp256k1) signer built on **CGGMP24 / LFDT Lockness**. This is the
 patched successor of the `cggmp21` crate, published as `cggmp24`.
@@ -11,9 +24,9 @@ It speaks the same JSON-RPC as Web3Signer (`eth_accounts`, `eth_signTransaction`
 `eth_sendTransaction`; everything else is proxied to Besu). Existing clients such as `../proxy`
 switch to it by changing the signer URL.
 
-![mpc-signer architecture](docs/architecture.png)
+![mpc-signer architecture](../images/mpc-signer-architecture.png)
 
-<sub>Source: [`docs/architecture.svg`](docs/architecture.svg)</sub>
+<sub>Source: [`docs/images/mpc-signer-architecture.svg`](../images/mpc-signer-architecture.svg)</sub>
 
 ## How signing works
 
@@ -84,7 +97,7 @@ Options in `.env`:
 - `MPC_PUBLISH=0.0.0.0:9100` exposes the coordinator beyond localhost.
 - `MPC_METRICS_TOKEN` protects the coordinator's Prometheus endpoint `GET /metrics` (signatures
   hot/cold, latency, failures, policy refusals, pool per hot key, presign rate, and whether each
-  node answers). Dashboards and alerts: [`../monitoring/`](../monitoring).
+  node answers). Dashboards and alerts: [`monitoring/`](../../monitoring).
 - `MPC_POOL_TARGET`, `MPC_REFILL_CONCURRENCY` and `MPC_COMPUTE_THREADS` tune the presignature pool.
 
 All three nodes run on one host here, which is fine for evaluation but gives no threshold
@@ -99,7 +112,7 @@ curl -s localhost:9100 -H 'content-type: application/json' --data \
  '{"jsonrpc":"2.0","id":1,"method":"eth_sendTransaction","params":[{"from":"0x<mpc address>","to":"0x…","gas":"0x5208","gasPrice":"0x0","value":"0x1"}]}'
 ```
 
-For `../proxy`: follow [docs/proxy-with-mpc-signer.md](../docs/proxy-with-mpc-signer.md).
+For `../proxy`: follow [docs/components/proxy.md](proxy.md).
 In short: set `WEB3SIGNER_IP` / `WEB3SIGNER_PORT` to the coordinator (port 9100), use the MPC address
 as `SENDER01`, set `MPC_ADMIN_URL` / `MPC_ADMIN_TOKEN` so `/createaccount` creates MPC keys, and
 set `MPC_POOL_KEYS` on the coordinator to the hot sender(s). The proxy's `sendFromVault` path (per-user keys read from Vault)
@@ -108,7 +121,7 @@ rather than a Vault secret.
 
 ## Production deployment
 
-Follow **[docs/production.md](docs/production.md)**, a step-by-step guide that was dry-run end
+Follow **[docs/production.md](../deployment/mpc-signer-production.md)**, a step-by-step guide that was dry-run end
 to end. It uses the per-role packages in `deploy/`:
 
 | Path | Used by | Contents |
@@ -121,7 +134,7 @@ to end. It uses the per-role packages in `deploy/`:
 
 Three nodes on **three hosts, run by three different teams**, over a private network. If one
 person or machine can reach two nodes, the threshold protects nothing. In the production layout
-([`../docs/production-layout.md`](../docs/production-layout.md)) the nodes are on 192.168.68.135,
+([Production layout](../overview/production-layout.md)) the nodes are on 192.168.68.135,
 .137 and .138, and two coordinators (.135, .136) sit behind HAProxy on `192.168.68.150:9100`.
 
 **Several coordinators:** a coordinator re-reads the key list from the nodes at start (2 of 3
@@ -191,4 +204,4 @@ To change the defaults, prefix the command with any of these variables:
 Proxy settings (`HTTPS_PROXY`, `NO_PROXY`) and `NODE_EXTRA_CA_CERTS` are passed into the Node
 container.
 
-See [`bench/RESULTS.md`](bench/RESULTS.md) for the latest results and how to read them.
+See [MPC signer benchmarks](../development/mpc-benchmarks.md) for the latest results and how to read them.

@@ -1,7 +1,21 @@
-# Restoring everything from the backups (whole site lost)
+# Restore with Ansible
+
+> **What:** Rebuilding the whole site from the backups with Ansible: prepare the hosts, restore node keys, chain snapshot and MPC shares, then deploy.
+> **For:** operators.
+> **Related:** [disaster recovery](disaster-recovery.md) · [GPG key](../deployment/gpg-key.md) · [operator guide](../deployment/operator-guide.md)
+
+**Contents**
+- [What you need](#what-you-need)
+- [1. Operator machine and hosts](#1-operator-machine-and-hosts)
+- [2. Besu nodes: key and chain, before anything starts them](#2-besu-nodes-key-and-chain-before-anything-starts-them)
+- [3. MPC nodes: each team, on its own host](#3-mpc-nodes-each-team-on-its-own-host)
+- [4. Everything else: Ansible](#4-everything-else-ansible)
+- [5. Check, then reconcile](#5-check-then-reconcile)
+
+---
 
 Every host is rebuilt and the deployment comes back from the backups. This is section 6.7 of
-[`../docs/disaster-recovery.md`](../docs/disaster-recovery.md), adapted to the Ansible deployment.
+[Disaster recovery](disaster-recovery.md), adapted to the Ansible deployment.
 For a single lost host or node, use the runbook's other sections instead.
 
 > **The one trap:** don't run `site.yml` on empty hosts before the node keys and the chain
@@ -14,7 +28,7 @@ For a single lost host or node, use the runbook's other sections instead.
 | Backup | From |
 |---|---|
 | `ansible/state/` (tokens, `network/`, `cluster.json`, `sender01`, `key-backups/*.key.gpg`) | operator vault |
-| GPG **private** key + passphrase (decrypts the node keys, [`GPG-KEY.md`](GPG-KEY.md)) | offline vault |
+| GPG **private** key + passphrase (decrypts the node keys, [GPG key for the node-key backups](../deployment/gpg-key.md)) | offline vault |
 | Latest chain snapshot `besu-chain-val3-<time>-b<block>.tgz` **and its `.json`** | `/backup/chain` copy or off-site (`snapshot_copy_to`) |
 | Each MPC node's `mpc-node<N>-<time>.tgz` + its `.env` (with `MPC_NODE_PASSPHRASE`) | each team's own vault |
 
@@ -42,7 +56,7 @@ example is val1.
    cp -r /opt/besu-chain/besu-production/node /opt/besu-val1
    ```
 
-2. Its `.env`: exactly the values of [`../docs/production-layout.md`](../docs/production-layout.md)
+2. Its `.env`: exactly the values of [Production layout](../overview/production-layout.md)
    section 4.6 for that node (`chmod 600 .env`). The `.env` Ansible writes in step 4 is the same.
 
 3. Network files, from the operator:
@@ -51,7 +65,7 @@ example is val1.
    scp ansible/state/network/* root@192.168.68.135:/opt/besu-val1/network/
    ```
 
-4. Its key: decrypt it on the machine holding the GPG private key ([`GPG-KEY.md`](GPG-KEY.md)
+4. Its key: decrypt it on the machine holding the GPG private key ([GPG key for the node-key backups](../deployment/gpg-key.md)
    step 5), copy it to the host over SSH, restore it, then shred every plain copy:
 
    ```bash

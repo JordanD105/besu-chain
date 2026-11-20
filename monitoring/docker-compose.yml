@@ -1,5 +1,5 @@
 # Monitoring for production: Prometheus + Grafana for besu-production and mpc-signer.
-# Steps: monitoring/README.md
+# Steps: docs/components/monitoring.md
 #   cp .env.example .env          (set GRAFANA_ADMIN_PASSWORD, BIND_IP)
 #   edit prometheus/targets/*.yml (your node IPs)
 #   docker compose up -d          -> Grafana on http://<BIND_IP>:3000

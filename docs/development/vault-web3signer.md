@@ -1,4 +1,20 @@
-# On-premise Vault + Web3Signer for Hyperledger Besu
+# Vault + Web3Signer (retired signer)
+
+> **What:** The previous signer (Vault keeps exportable keys, Web3Signer loads them), being retired; kept for comparison benchmarks.
+> **For:** developers.
+> **Related:** [MPC signer](../components/mpc-signer.md) · [benchmarks](mpc-benchmarks.md)
+
+**Contents**
+- [Prerequisites](#prerequisites)
+- [1. Configure Besu connection](#1-configure-besu-connection)
+- [2. Start Vault](#2-start-vault)
+- [3. Provision the signer](#3-provision-the-signer)
+- [4. Start Web3Signer](#4-start-web3signer)
+- [5. Token renewal](#5-token-renewal)
+- [Security boundaries](#security-boundaries)
+- [Stop services](#stop-services)
+
+---
 
 This Docker Compose bundle runs HashiCorp Vault and Web3Signer. It expects an
 existing Besu node with JSON-RPC enabled. Applications send `eth_sendTransaction`

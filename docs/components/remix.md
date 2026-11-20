@@ -1,4 +1,10 @@
-# Self-hosted Remix IDE
+# Remix IDE (self-hosted)
+
+> **What:** The self-hosted Remix IDE with a local Solidity compiler mirror, and how to use it with this chain.
+> **For:** contract developers, operators.
+> **Related:** [contract deployment](../features/contract-deployment.md) · [NFT workflow](../features/nft-workflow.md) · [access control](../deployment/access-control.md)
+
+---
 
 [Remix](https://remix.ethereum.org) served from the monitoring host, `http://<monitoring host>:30200`,
 for writing, compiling and testing contracts in the browser. Nothing is downloaded from the
@@ -46,9 +52,9 @@ cd remix && SOLC_VERSIONS="0.8.28" docker compose build && docker compose up -d
 3. **Export the artifact:** Remix writes `contracts/artifacts/<Name>.json` (ABI + bytecode) when
    *Settings → Generate contract metadata* is on. Download it, together with the source.
 4. **Deploy to production** on the chainlens **Deploy** page
-   ([`../ansible/CHAINLENS-DEPLOY.md`](../ansible/CHAINLENS-DEPLOY.md); for an NFT collection, the
-   whole path to a sale is in [`../docs/nft-workflow.md`](../docs/nft-workflow.md)), or from the operator with
-   [`besu-production/operator/deploy-contract.js`](../besu-production/README.md#deploying-a-contract),
+   ([Contract deployment (chainlens Deploy page)](../features/contract-deployment.md); for an NFT collection, the
+   whole path to a sale is in [NFT workflow](../features/nft-workflow.md)), or from the operator with
+   [Besu production packages (manual setup)](../deployment/besu-manual.md#deploying-a-contract),
    signed by an MPC account. Remix itself never connects to the production chain and holds no keys.
    The record it writes makes the contract readable in chainlens.
 

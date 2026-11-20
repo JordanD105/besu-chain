@@ -1,4 +1,4 @@
-# Every Besu node: "<BIND_IP>:<METRICS_PORT>" from that node's .env (docs/production-layout.md).
+# Every Besu node: "<BIND_IP>:<METRICS_PORT>" from that node's .env (docs/overview/production-layout.md).
 # Saved changes are picked up within a minute (no restart).
 - targets: ["192.168.68.135:9545"]
   labels: { node: val1, role: validator }

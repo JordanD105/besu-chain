@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Health of the Besu RPC nodes behind the RPC VIP, for HAProxy (ha/README.md).
+"""Health of the Besu RPC nodes behind the RPC VIP, for HAProxy (docs/deployment/high-availability.md).
 
 eth_syncing alone is not enough: a node that stopped importing blocks (lost its peers, stuck
 import) still answers "false" and keeps the VIP while serving an old chain. This service checks

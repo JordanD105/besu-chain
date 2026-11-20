@@ -2,7 +2,7 @@
 
 # ---- Who may connect: the firewall opens each service only to these IPs ----------------------
 # Lists take addresses and networks, e.g. [192.168.68.21, 10.1.2.0/24] (192.168.68.* is written
-# 192.168.68.0/24). See ACCESS.md.
+# 192.168.68.0/24). See docs/deployment/access-control.md.
 # The operator / bastion running Ansible: SSH, the MPC admin API, Besu RPC, and every service
 # below. REQUIRED: the firewall closes everything else, so a wrong value locks you out.
 operator_ip: ""
@@ -40,7 +40,7 @@ sender01_funding_wei: "1000000000000000000000000"   # SENDER01 balance in the ge
 # MPC signing policy (cluster.json; every node enforces it)
 mpc_max_value_wei: "1000000000000000000000"   # 1000 ETH per transaction
 mpc_max_gas: 30000000
-mpc_allowed_to: ""        # leave empty for the proxy (see mpc-signer/docs/production.md)
+mpc_allowed_to: ""        # leave empty for the proxy (see docs/deployment/mpc-signer-production.md)
 # Presignature pools: big keys (SENDER01) keep mpc_pool_target, small keys mpc_pool_target_small.
 # Accounts from /createaccount get mpc_new_account_pool unless the request names a pool.
 mpc_pool_target: 500
@@ -74,7 +74,7 @@ mpc_image: registry.example.com/mpc-signer:1.3.0
 mpc_image_build: true
 mpc_bigint: bigint-rug    # GMP backend (faster, LGPL); "" for the pure-Rust default
 
-# Self-hosted Remix IDE on the monitoring host (:30200, remix/README.md): compile and test
+# Self-hosted Remix IDE on the monitoring host (:30200, docs/components/remix.md): compile and test
 # contracts in the browser, with a local compiler mirror (no internet needed by its users).
 # The operator fetches the prebuilt Remix site once (git, github.com) and builds the image.
 remix_enabled: true
@@ -83,7 +83,7 @@ remix_commit: b694f46a0adad6ff2a54bcf0b0a5340e94631a56            # Remix 2.6.15
 remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version is always added)
 # (who may open Remix: remix_ips at the top)
 
-# Sections (docs/sections.md): applications call /createaccount and /transfer with their section's
+# Sections (docs/features/sections.md): applications call /createaccount and /transfer with their section's
 # X-Section-Key. false: calls without a key still use SENDER01 (for applications not moved yet);
 # true: such calls are refused.
 sections_required: false
@@ -104,7 +104,7 @@ rpc_auto_restart_minutes: 5
 prometheus_retention: 400d
 prometheus_retention_size: 20GB
 
-# Deploy page in chainlens (#/deploy, ansible/CHAINLENS-DEPLOY.md): deploy compiled contracts (common
+# Deploy page in chainlens (#/deploy, docs/features/contract-deployment.md): deploy compiled contracts (common
 # or NFT collections) from the browser, through the proxy, signed by the contract account center and
 # registered on chain. Only operator_ip and chainlens_deploy_ips can use it, with the token Ansible
 # generates (state/secrets/chainlens_deploy_token). Off by default.
@@ -113,7 +113,7 @@ chainlens_deploy_enabled: false
 # [192.168.68.1]. They can deploy contracts (with the token): list admin machines only. The firewall
 # opens chainlens (:30100) for them too, so they need not be in chainlens_ips.
 chainlens_deploy_ips: []
-# Sections page in chainlens (#/sections, docs/sections.md): create sections, top up, sweep, pay
+# Sections page in chainlens (#/sections, docs/features/sections.md): create sections, top up, sweep, pay
 # back, rename, info fields, API keys, accounts, archive, history. Same access as the Deploy page (operator_ip,
 # chainlens_deploy_ips, the same token). Off by default.
 chainlens_sections_enabled: false

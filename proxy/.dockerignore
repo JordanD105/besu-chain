@@ -7,4 +7,3 @@ docker-compose.yml
 .dockerignore
 contracts
 scripts
-api.txt

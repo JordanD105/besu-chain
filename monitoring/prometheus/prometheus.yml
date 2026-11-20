@@ -28,7 +28,7 @@ scrape_configs:
     metrics_path: /metrics
     authorization:
       type: Bearer
-      # the coordinator's MPC_METRICS_TOKEN (see README); empty file if no token is set
+      # the coordinator's MPC_METRICS_TOKEN (see docs/components/monitoring.md); empty file if no token is set
       credentials_file: /etc/prometheus/secrets/mpc-metrics-token
     file_sd_configs:
       - files: [/etc/prometheus/targets/mpc.yml]

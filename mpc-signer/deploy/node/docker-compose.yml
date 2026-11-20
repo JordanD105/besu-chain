@@ -1,5 +1,5 @@
 # ONE MPC node. Run on its own host, operated by its own team (node 0, 1 and 2 on 3 hosts).
-# Steps: see mpc-signer/docs/production.md
+# Steps: see docs/deployment/mpc-signer-production.md
 #   ./init.sh            create .env (passphrase, id) and the node identity -> prints node<ID>.json
 #   (copy cluster.json from the operator here)
 #   docker compose up -d

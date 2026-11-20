@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# firewalld rules for the production layout (docs/production-layout.md). Run on each host as root.
+# firewalld rules for the production layout (docs/overview/production-layout.md). Run on each host as root.
 #
 # By hand, with the documented addresses (192.168.68.135-.139):
 #   PROXY_CLIENTS="10.1.2.3 10.1.2.4" ADMIN=10.1.2.9 ./firewall-layout.sh 135   (135 136 137 138 139)

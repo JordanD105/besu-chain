@@ -124,7 +124,7 @@ table("ETH moved in the selected time range", f'sum by (section, op) (increase(p
 y += 8
 
 dash = {
-    "title": "Sections", "uid": "sections", "description": "Per-section balances, low-balance alerts and activity (docs/sections.md)",
+    "title": "Sections", "uid": "sections", "description": "Per-section balances, low-balance alerts and activity (docs/features/sections.md)",
     "tags": ["sections", "production"], "editable": True, "schemaVersion": 39, "version": 1, "refresh": "30s",
     "time": {"from": "now-30d", "to": "now"}, "timezone": "", "graphTooltip": 1,
     "templating": {"list": [{

@@ -1,4 +1,19 @@
-# besu-production: production Hyperledger Besu (QBFT) network
+# Besu production packages (manual setup)
+
+> **What:** The production Besu packages used by hand (Ansible does the same): network files, starting nodes, adding and removing validators, operations.
+> **For:** operators.
+> **Related:** [Ansible](ansible.md) · [production layout](../overview/production-layout.md) · [disaster recovery](../operations/disaster-recovery.md)
+
+**Contents**
+- [Production vs. test network](#production-vs-test-network)
+- [Sizing and topology](#sizing-and-topology)
+- [Step by step](#step-by-step)
+- [Several nodes on one host](#several-nodes-on-one-host)
+- [Deploying a contract](#deploying-a-contract)
+- [Operations](#operations)
+- [What it does not do (yet)](#what-it-does-not-do-yet)
+
+---
 
 This folder is the production counterpart of `../besu-test-network`, for a permissioned QBFT network:
 - **validators**, one per host and failure domain, reachable only over p2p;
@@ -14,7 +29,7 @@ Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own 
 - node key backup;
 - **adding a 5th validator** to the running chain (new node, file update, rolling restart, vote).
 
-Production layout ([`../docs/production-layout.md`](../docs/production-layout.md)): 4 validators,
+Production layout ([Production layout](../overview/production-layout.md)): 4 validators,
 one per host, and 2 RPC nodes, on the two application hosts.
 
 ```
@@ -34,8 +49,8 @@ one per host, and 2 RPC nodes, on the two application hosts.
 | `operator/move-node.sh` | operator, later | a node keeps its key but gets a new IP/port (e.g. a replacement host): updates its address in the network files |
 | `operator/deploy-contract.js` | operator | deploy a compiled contract, signed by an MPC account, and record it for chainlens ([Deploying a contract](#deploying-a-contract)) |
 | `operator/qbft.sh` | on a validator host | validator set, add/remove votes, peers, health |
-| [`../monitoring/`](../monitoring) | monitoring host | Prometheus + Grafana, dashboards and alerts for these nodes and the MPC signer |
-| `firewall-example.sh` | every host | ufw rules per role (generic; for the 5-host layout with firewalld use [`../ha/firewall-layout.sh`](../ha/firewall-layout.sh)) |
+| [`monitoring/`](../../monitoring) | monitoring host | Prometheus + Grafana, dashboards and alerts for these nodes and the MPC signer |
+| `firewall-example.sh` | every host | ufw rules per role (generic; for the 5-host layout with firewalld use [`ha/firewall-layout.sh`](../../ha/firewall-layout.sh)) |
 
 ## Production vs. test network
 
@@ -57,7 +72,7 @@ one per host, and 2 RPC nodes, on the two application hosts.
   - Each: 4 vCPU, 8 GB RAM, SSD. `JAVA_OPTS=-Xmx2g` is enough at today's load (~100–200 MB of heap
     used); raise it if the *JVM heap used* panel says so.
 - **RPC nodes:** **rpc1** (.135) and **rpc2** (.136) behind HAProxy on the floating IP
-  `192.168.68.150:8545` (rpc1 normally, rpc2 when rpc1 is unhealthy; [`../ha/`](../ha)).
+  `192.168.68.150:8545` (rpc1 normally, rpc2 when rpc1 is unhealthy; [`ha/`](../../ha)).
   Chainlens reads **rpc2** directly, so explorer polling stays off rpc1.
   - Each: 4–8 vCPU, 8–16 GB RAM, SSD.
 - **Two nodes on one host** (.135, .136): host networking and separate ports (section *Several
@@ -72,7 +87,7 @@ one per host, and 2 RPC nodes, on the two application hosts.
 
 - Linux with Docker Engine and Compose v2 on every node host; synchronized clocks (`chrony`).
 - A private network between all nodes (the layout uses 192.168.68.0/24).
-- Firewall: [`../ha/firewall-layout.sh`](../ha/firewall-layout.sh) applies the layout's rules with
+- Firewall: [`ha/firewall-layout.sh`](../../ha/firewall-layout.sh) applies the layout's rules with
   firewalld (or `firewall-example.sh` for ufw):
 
 | From | To | Port |
@@ -94,7 +109,7 @@ cp -r besu-production/node /opt/besu-val1 && cd /opt/besu-val1
 cp .env.example .env
 ```
 
-The exact values of every node are in [`../docs/production-layout.md`](../docs/production-layout.md)
+The exact values of every node are in [Production layout](../overview/production-layout.md)
 (section 2). Edit `.env`:
 
 | Variable | Value |
@@ -145,7 +160,7 @@ only cap on the work in one block, so keep it modest. To change it on a running 
 limit toward it gradually.
 
 `ALLOC` should contain only the accounts you really want funded, for example the MPC `SENDER01`
-(see `../mpc-signer/docs/production.md`). **Keep the network files.** `genesis.json` must never
+(see `docs/deployment/mpc-signer-production.md`). **Keep the network files.** `genesis.json` must never
 change once the chain is running.
 
 ### 4. Distribute and start (each host)
@@ -184,7 +199,7 @@ Then point the applications at the RPC nodes:
 - coordinators: `MPC_BESU_RPC=http://192.168.68.150:8545`;
 - chainlens (.139): `BESU_RPC=http://192.168.68.136:8555` (rpc2).
 
-Add the nodes to monitoring: one line per node in `../monitoring/prometheus/targets/besu.yml` (see [`../monitoring/README.md`](../monitoring/README.md)).
+Add the nodes to monitoring: one line per node in `../monitoring/prometheus/targets/besu.yml` (see [Monitoring (Prometheus and Grafana)](../components/monitoring.md)).
 
 ## Several nodes on one host
 
@@ -207,10 +222,10 @@ halt the chain (quorum 3). An RPC node next to a validator is fine.
 
 `operator/deploy-contract.js` deploys a compiled contract with an **MPC account** (the coordinator
 signs, no private key exists anywhere), checks the result and writes a record to
-[`../contracts/deployments/`](../contracts/deployments). Chainlens reads those records: the contract
+[`contracts/deployments/`](../../contracts/deployments). Chainlens reads those records: the contract
 gets its name, and its page lists its functions and runs the read-only ones.
 
-**1. Compile** for this chain (the self-hosted Remix IDE, [`../remix/`](../remix/README.md), works offline): Solidity with `evmVersion` **`cancun`** or older (Besu here has no
+**1. Compile** for this chain (the self-hosted Remix IDE, [Remix IDE (self-hosted)](../components/remix.md), works offline): Solidity with `evmVersion` **`cancun`** or older (Besu here has no
 Prague opcodes), and keep the compiler version and optimizer settings with the source. Export the
 full compiler artifact (ABI **and** bytecode): Hardhat `artifacts/…/X.json`, Foundry `out/X.sol/X.json`,
 Remix `artifacts/X.json` (Remix: *Solidity compiler → Advanced → EVM version cancun*), or the
@@ -252,8 +267,8 @@ the code on chain with the artifact's runtime bytecode (exit code 3 if it differ
 **From the browser instead:** chainlens has a Deploy page, for the operator and admin PCs only, off
 by default: it deploys through the proxy, signed by the contract account center, and registers the
 contract on chain with its ABI, so applications can use it with `/contract/call` and
-`/contract/send` ([`../ansible/CHAINLENS-DEPLOY.md`](../ansible/CHAINLENS-DEPLOY.md),
-[`../docs/sections.md`](../docs/sections.md)). Prefer it for contracts applications will use: a
+`/contract/send` ([Contract deployment (chainlens Deploy page)](../features/contract-deployment.md),
+[Sections](../features/sections.md)). Prefer it for contracts applications will use: a
 contract deployed with this script is not in the on-chain registry.
 
 Otherwise chainlens only **reads** (`eth_call` of view/pure functions). Calls that change state go
@@ -264,7 +279,7 @@ through the proxy or a script like this one, signed by an MPC account.
 | Task | How |
 |---|---|
 | **Upgrade Besu** | set the new exact tag in `BESU_IMAGE` and run `./start.sh`, **one node at a time**, waiting until it is back at the chain head (`qbft.sh health`). With 4 validators, never have 2 down at once. |
-| **A node gets a new IP** (same key, e.g. a replacement host) | operator: `operator/move-node.sh network/ <node>.json <new IP:port>`, copy the 4 files to every node, restart the others one at a time; start the node on the new host with `restore-key.sh`. **Never run one key on two hosts at once.** See [`../docs/disaster-recovery.md`](../docs/disaster-recovery.md), 6.1 |
+| **A node gets a new IP** (same key, e.g. a replacement host) | operator: `operator/move-node.sh network/ <node>.json <new IP:port>`, copy the 4 files to every node, restart the others one at a time; start the node on the new host with `restore-key.sh`. **Never run one key on two hosts at once.** See [Disaster recovery](../operations/disaster-recovery.md), 6.1 |
 | **Add an RPC node** | `init.sh` on the new host, then `operator/add-node.sh network/ rpcN.json`. Copy the 4 files to **every** node, restart nodes one at a time (`./start.sh && docker compose restart`), then start the new node. |
 | **Add a validator** | same as an RPC node, then on **more than half** of the current validators run `operator/qbft.sh propose 0x<new address> true`. Once `qbft.sh validators` lists it, run `qbft.sh discard 0x<address>` on those validators. |
 | **Remove a validator** | `qbft.sh propose 0x<address> false` on more than half of the validators, then `discard`. Then remove its enode from the network files with care, and redistribute. |
@@ -272,8 +287,8 @@ through the proxy or a script like this one, signed by an MPC account.
 | **A sender's transactions are not mined, while blocks continue** (proxy alert `ProxySenderStalled`; the RPC node's pool keeps growing) | the RPC node has them, the validators don't: a validator receiving a busy sender's transactions out of nonce order keeps only `tx-pool-max-future-by-sender` of them (Besu's default 200) and drops the rest, and dropped transactions are not sent again. **Fix:** restart **one** validator (`docker compose restart`): when it reconnects, it fetches the RPC node's pool. **Prevention:** `tx-pool-max-future-by-sender=2000` in every validator's `validator.toml` (the default in this package). |
 | **Chain halted, then quorum came back, but no new blocks** | While quorum is lost, every validator keeps moving to higher QBFT rounds, and each round doubles its timeout (`REQUEST_TIMEOUT` × 2^round). Validators that were down restart at round 0, so after a long outage they need minutes to meet in the same round (dry run: an ~8 min outage took **8 min 20 s** to resume on its own; a 3 min outage resumed within 45 s). If no block comes within about a minute of quorum being back, **restart all validators at the same time** (`docker compose restart` on each). Their round state is in memory only, so nothing is lost; in the dry run blocks resumed **25 s** after the restart. |
 | **New genesis (reset the chain)** | Besu refuses to start with *"Supplied genesis block does not match chain data stored in /data"*. Either put the original network files back, or, to really start a new chain, run `./reset-chain.sh` on **every** node (validators first). It deletes the chain data but keeps the node key, so the enodes stay valid. **Don't delete the volume**: that deletes the key too. |
-| **Monitoring** | [`../monitoring/`](../monitoring): Prometheus + Grafana with a Besu production dashboard and alerts (quorum lost, no new blocks, node down, peers missing, out of sync, tx pool, heap, disk). Metrics are served on `BIND_IP:METRICS_PORT`; the compose files add `BIND_IP` to the host allowlist so Prometheus is not refused with 403. |
-| **Backups** | **Keys:** `./backup-key.sh /secure/dir` on every node (once, then encrypt; losing 2 of 4 validator keys ends the chain). Restore on a rebuilt host with `./restore-key.sh <file>`. **Chain data:** `./snapshot-chain.sh /backup/chain` daily from cron on **one** node that applications don't depend on (a validator is fine: it checks all peers are connected first, then stops the node for a few minutes), with `COPY_TO=user@host:/path` for an off-site copy and `KEEP` snapshots kept. Restore onto any node of the chain with `./restore-chain.sh <archive>` (keeps that node's key; refuses another chain's snapshot). Results are published to monitoring (node-exporter textfile collector), with alerts on old, missing or failed backups. Full procedures: [`../docs/disaster-recovery.md`](../docs/disaster-recovery.md). |
+| **Monitoring** | [`monitoring/`](../../monitoring): Prometheus + Grafana with a Besu production dashboard and alerts (quorum lost, no new blocks, node down, peers missing, out of sync, tx pool, heap, disk). Metrics are served on `BIND_IP:METRICS_PORT`; the compose files add `BIND_IP` to the host allowlist so Prometheus is not refused with 403. |
+| **Backups** | **Keys:** `./backup-key.sh /secure/dir` on every node (once, then encrypt; losing 2 of 4 validator keys ends the chain). Restore on a rebuilt host with `./restore-key.sh <file>`. **Chain data:** `./snapshot-chain.sh /backup/chain` daily from cron on **one** node that applications don't depend on (a validator is fine: it checks all peers are connected first, then stops the node for a few minutes), with `COPY_TO=user@host:/path` for an off-site copy and `KEEP` snapshots kept. Restore onto any node of the chain with `./restore-chain.sh <archive>` (keeps that node's key; refuses another chain's snapshot). Results are published to monitoring (node-exporter textfile collector), with alerts on old, missing or failed backups. Full procedures: [Disaster recovery](../operations/disaster-recovery.md). |
 
 ## What it does not do (yet)
 

@@ -958,7 +958,7 @@ function chartBar(bucket, percent) {
     return el("div", { class: "bar", style: "height:" + (parts.length ? percent.toFixed(2) : "0") + "%" }, parts);
 }
 
-// ---- Platform overview on the dashboard (docs/sections.md): system accounts, contracts, sections.
+// ---- Platform overview on the dashboard (docs/features/sections.md): system accounts, contracts, sections.
 // Charts follow the dataviz rules: categorical slots 1-3 (validated), one axis, thin bars with a 2px
 // gap and a 4px rounded end, value labels at the bar ends, a hover tooltip per row, a table view.
 function ethText(value) {
@@ -1434,7 +1434,7 @@ function stat(value, label) {
     return el("div", { class: "stat" }, [el("b", {}, String(value)), el("span", {}, label)]);
 }
 
-// The section of an account (docs/sections.md): its name and role, or a special account's role
+// The section of an account (docs/features/sections.md): its name and role, or a special account's role
 function sectionCell(row) {
     if (!row.role) {
         return el("span", { class: "muted" }, "—");
@@ -2173,7 +2173,7 @@ async function showDeploy() {
     ]));
 }
 
-// ---- Sections pages (docs/sections.md): only shown to the operator's and chainlens_deploy_ips'
+// ---- Sections pages (docs/features/sections.md): only shown to the operator's and chainlens_deploy_ips'
 // browsers when the server has them on (chainlens_sections_enabled). Uses the admin token of the
 // Deploy page (same token, kept in this tab).
 async function sectionGet(path) {

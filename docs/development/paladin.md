@@ -1,4 +1,10 @@
-# Paladin Node Configuration
+# Paladin privacy nodes (test network)
+
+> **What:** The Paladin privacy nodes bundled with the test network (Pente, Noto, Zeto).
+> **For:** developers.
+> **Related:** [development environment](../getting-started/development.md)
+
+---
 
 This directory contains configuration for three Paladin nodes (`paladin1`, `paladin2`, `paladin3`), each paired with a dedicated Besu sidecar and Postgres instance.
 

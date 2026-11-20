@@ -1,6 +1,21 @@
-# ansible: production deployment from scratch (option B)
+# Ansible deployment
 
-Ansible deploys the whole production layout ([`../docs/production-layout.md`](../docs/production-layout.md))
+> **What:** The Ansible deployment: settings, phases, the steps of the MPC teams, the operator state, reruns and security notes.
+> **For:** operators.
+> **Related:** [operator guide](operator-guide.md) · [access control](access-control.md) · [troubleshooting](../operations/troubleshooting.md)
+
+**Contents**
+- [1. Requirements](#1-requirements)
+- [2. Settings](#2-settings)
+- [3. Run](#3-run)
+- [4. The operator's state (`state/`, never committed)](#4-the-operators-state-state-never-committed)
+- [5. Running it again](#5-running-it-again)
+- [6. Security notes](#6-security-notes)
+- [7. How it was tested](#7-how-it-was-tested)
+
+---
+
+Ansible deploys the whole production layout ([Production layout](../overview/production-layout.md))
 on the 5 hosts. It does everything **except the MPC nodes**: each MPC node team initialises and starts
 its own node, so no person or tool holds two key shares. The playbook stops when it needs the teams,
 says exactly what they must do, and continues where it stopped when you run it again.
@@ -16,13 +31,13 @@ says exactly what they must do, and continues where it stopped when you run it a
 | 6 | `06-proxy.yml` | operator, .135, .136 | the SectionRegistry (once: admin MPC key, contract); proxy settings (not started) |
 | 7 | `07-ha.yml` | .135, .136 | HAProxy, keepalived: VIPs on .135, proxy1 started |
 | 8 | `08-check.yml` | operator | Besu, MPC and proxy through the VIPs; once: test account + transfer |
-| 9 | `09-monitoring.yml` | .139 | Prometheus, Grafana (all targets checked), chainlens, Remix IDE ([`../remix/`](../remix/README.md)) |
+| 9 | `09-monitoring.yml` | .139 | Prometheus, Grafana (all targets checked), chainlens, Remix IDE ([Remix IDE (self-hosted)](../components/remix.md)) |
 | 10 | `10-backups.yml` | .137 | daily chain snapshot cron; prints what stays manual |
 
 `site.yml` runs them in order.
 
 **Step-by-step guide for the operator (install, SSH, settings, the three runs):
-[`OPERATOR.md`](OPERATOR.md).**
+[Operator guide](operator-guide.md).**
 
 ## 1. Requirements
 
@@ -57,7 +72,7 @@ Rules for a new plan:
 - the two HA hosts (`app_hosts`) and both VIPs in the **same subnet** (keepalived moves the VIPs
   with ARP); the VIPs **unused** addresses; `vip_prefix` the subnet's mask length;
 - every host reachable from the others on the ports of
-  [`../docs/production-layout.md`](../docs/production-layout.md) section 3;
+  [Production layout](../overview/production-layout.md) section 3;
 - `operator_ip` and the access lists (`proxy_client_ips`, `chainlens_ips`, `grafana_ips`,
   `remix_ips`, below) in the new network.
 
@@ -65,7 +80,7 @@ Preflight checks that every host really holds its inventory IP, that all address
 and that no host uses a VIP. Change the plan **before** the first deployment: the Besu node
 addresses (enodes) and the MPC node URLs are written into the genesis files and `cluster.json`
 then; moving a deployed node to a new IP follows
-[`../docs/disaster-recovery.md`](../docs/disaster-recovery.md) 6.1 "New IP".
+[Disaster recovery](../operations/disaster-recovery.md) 6.1 "New IP".
 
 ### Other settings
 
@@ -87,7 +102,7 @@ Edit `group_vars/all/settings.yml`. Required:
 | `remix_ips` | developers using the Remix IDE (`.139:30200`) |
 
 The access lists take addresses and networks (`192.168.68.0/24`, not `192.168.68.*`); adding,
-removing and checking access: **[`ACCESS.md`](ACCESS.md)**.
+removing and checking access: **[Access control](access-control.md)**.
 | `snapshot_copy_to` | off-site target for the daily chain snapshot (`user@host:/path`, root's SSH key on .137) |
 
 **Image versions** (exact tags, used on every host):
@@ -123,9 +138,9 @@ To change a version, set the new tag (and archive file name) and rerun
 **Presignature pools:** `mpc_pool_target` (big keys such as `SENDER01`), `mpc_pool_target_small`
 (small keys) and `mpc_new_account_pool` (the class of accounts from `/createaccount` that name
 none: `big`, `small` or `none`). See "Presignature pools" in
-[`../mpc-signer/docs/production.md`](../mpc-signer/docs/production.md). When the MPC image version
+[MPC signer in production](mpc-signer-production.md). When the MPC image version
 changes, the MPC node teams upgrade their nodes **before** you rerun `site.yml`:
-[`../mpc-signer/docs/upgrade.md`](../mpc-signer/docs/upgrade.md).
+[MPC signer upgrade](../operations/mpc-signer-upgrade.md).
 
 Review the rest: chain id, block period, `SENDER01` funding, MPC policy, image names,
 `mpc_image_build` (build on the operator, or pull from your registry), `install_packages`.
@@ -170,17 +185,17 @@ its first run):
 | MPC shares (3 nodes) | opt-in (the nodes belong to their teams): hourly cron and a first backup. The archives are sealed (useless without the team's passphrase) and stay on the node's host: each team copies them off it | `mpc_backup_cron` (default `false`), `mpc_backup_dir` |
 
 The GPG key pair (create it, give Ansible only the public half, keep the private half offline,
-decrypt for a restore): **[`GPG-KEY.md`](GPG-KEY.md)**.
+decrypt for a restore): **[GPG key for the node-key backups](gpg-key.md)**.
 
-Restoring everything from these backups after losing the whole site: **[`RESTORE.md`](RESTORE.md)**.
-- **Failover tests:** [`../docs/production-layout.md`](../docs/production-layout.md) section 6, then go live.
+Restoring everything from these backups after losing the whole site: **[Restore with Ansible](../operations/restore.md)**.
+- **Failover tests:** [Production layout](../overview/production-layout.md) section 6, then go live.
 
 ## 4. The operator's state (`state/`, never committed)
 
 | Path | Contents | |
 |---|---|---|
 | `secrets/` | `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN`, `MPC_METRICS_TOKEN`, the two VRRP passwords, the Grafana admin password, the proxy admin token (`proxy_admin_token`), the chainlens deploy token | **secret** |
-| `registry.json`, `registry-admin`, `registry-record/` | the SectionRegistry's address, its admin MPC key and its deployment record ([`../docs/sections.md`](../docs/sections.md)), created by `06-proxy.yml` | public, integrity matters |
+| `registry.json`, `registry-admin`, `registry-record/` | the SectionRegistry's address, its admin MPC key and its deployment record ([Sections](../features/sections.md)), created by `06-proxy.yml` | public, integrity matters |
 | `contract-center` | the contract account center: the MPC key that deploys every contract (`06-proxy.yml`) | public |
 | `mpc/node*.json`, `cluster.json` | MPC nodes' public keys, the cluster file | public, integrity matters |
 | `besu/*.json`, `network/` | Besu nodes' public keys, genesis and network files | public, integrity matters |

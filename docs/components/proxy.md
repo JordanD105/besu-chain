@@ -1,4 +1,23 @@
-# Run the proxy with the MPC signer (no Vault, no Web3Signer)
+# Proxy (application API)
+
+> **What:** Running the proxy (the application API) on the MPC signer: configuration, the Redis-optional nonce design, NFT collections and troubleshooting.
+> **For:** developers and operators.
+> **Related:** [proxy API](../reference/proxy-api.md) · [sections](../features/sections.md) · [architecture](../overview/architecture.md)
+
+**Contents**
+- [Step 1: Start the MPC signer and create the sender key](#step-1-start-the-mpc-signer-and-create-the-sender-key)
+- [Step 2: Give `SENDER01` a balance in the genesis block](#step-2-give-sender01-a-balance-in-the-genesis-block)
+- [Step 3: Point the coordinator at Besu, and pool only the hot sender](#step-3-point-the-coordinator-at-besu-and-pool-only-the-hot-sender)
+- [Step 4: Configure the proxy for the MPC signer](#step-4-configure-the-proxy-for-the-mpc-signer)
+- [Step 5: Verify](#step-5-verify)
+- [How the proxy decides who signs](#how-the-proxy-decides-who-signs)
+- [Nonces and balance checks: fast path + periodic chain check](#nonces-and-balance-checks-fast-path--periodic-chain-check)
+- [Operating it](#operating-it)
+- [Troubleshooting](#troubleshooting)
+- [Redis is optional (no replica needed)](#redis-is-optional-no-replica-needed)
+- [Several NFT collections](#several-nft-collections)
+
+---
 
 This guide starts from nothing and sets up the proxy so that every transaction is signed by the
 2-of-3 MPC signer:
@@ -23,12 +42,12 @@ Everything below was tested end to end:
 
 The examples assume one Docker host, `192.168.68.130` (development). Replace it with your host's IP.
 
-**Production** (5 hosts, [`production-layout.md`](production-layout.md)): the same proxy runs on
+**Production** (5 hosts, [Production layout](../overview/production-layout.md)): the same proxy runs on
 192.168.68.135 (proxy1, active) and .136 (proxy2, standby), with the same `.env` from
-[`../proxy/.env.example`](../proxy/.env.example): Besu and the MPC signer through HAProxy on the
+[`proxy/.env.example`](../../proxy/.env.example): Besu and the MPC signer through HAProxy on the
 floating IP `192.168.68.150` (`BESU_IP`, `WEB3SIGNER_IP`, `MPC_ADMIN_URL`). Applications call the
 proxy's floating IP `192.168.68.151:30000`. keepalived starts the proxy only on the host holding
-that IP ([`../ha/README.md`](../ha/README.md)), so exactly one proxy is active.
+that IP ([High availability (HAProxy and keepalived)](../deployment/high-availability.md)), so exactly one proxy is active.
 
 ---
 
@@ -107,7 +126,7 @@ Edit `mpc-signer/quickstart/.env`:
 MPC_BESU_RPC=http://host.docker.internal:8545
 # SENDER01 keeps a big presignature pool (fast signing, ~1 network round). Accounts created by
 # /createaccount get a small pool by default (MPC_NEW_ACCOUNT_POOL on the proxy, MPC_POOL_TARGET_SMALL
-# here) or none ("pool":"none": cold path, ~0.6-1.5 s). See mpc-signer/docs/production.md.
+# here) or none ("pool":"none": cold path, ~0.6-1.5 s). See docs/deployment/mpc-signer-production.md.
 MPC_POOL_KEYS=0x3a554bc204821a020b6a12749aaf95b23b82111d
 # Listen on the host IP so the proxy container can reach the coordinator
 MPC_PUBLISH=192.168.68.130:9100
@@ -286,10 +305,10 @@ Tested on 4 validators + RPC node + MPC cluster:
 | Task | How |
 |---|---|
 | Watch signing | `GET :9100/admin/pool`: `ready` for `SENDER01`, `hot_signs`, `cold_signs`, `failed_signs` |
-| Faster sustained throughput | more CPU per MPC node, `MPC_REFILL_CONCURRENCY`, `MPC_COMPUTE_THREADS`, a larger `MPC_POOL_TARGET` for bursts (see `mpc-signer/bench/RESULTS.md`) |
+| Faster sustained throughput | more CPU per MPC node, `MPC_REFILL_CONCURRENCY`, `MPC_COMPUTE_THREADS`, a larger `MPC_POOL_TARGET` for bursts (see `docs/development/mpc-benchmarks.md`) |
 | Backups | each node's Docker volume (`node0-data`, `node1-data`, `node2-data`) **and** its passphrase in `quickstart/.env`. Keep them separate per node. |
 | A node is down | signing continues with the other 2. `/createaccount` needs **all 3** (key generation), so new accounts fail until it returns. |
-| Production | [`production-layout.md`](production-layout.md): MPC nodes on 3 hosts run by different teams (`mpc-signer/deploy/`), two coordinators behind HAProxy, the proxy active on .135 and standby on .136 (one active replica: the sender lock and nonce counter are in its memory) |
+| Production | [Production layout](../overview/production-layout.md): MPC nodes on 3 hosts run by different teams (`mpc-signer/deploy/`), two coordinators behind HAProxy, the proxy active on .135 and standby on .136 (one active replica: the sender lock and nonce counter are in its memory) |
 
 ## Troubleshooting
 
@@ -332,4 +351,4 @@ Choose a collection with `"collection"` in the `/nft/mint` and `/nft/transfer` b
 `?collection=` on `GET /nft/:id`, `/nft/:id/metadata` and `/nft/owner/:address`. The value can be
 the collection's **name**, its **symbol** (both case-insensitive) or its **address**. Without it,
 the default collection is used, so single-collection requests still work. `contract` is accepted
-as an alias. Token ids start at 1 in each collection. Examples are in `proxy/api.txt`.
+as an alias. Token ids start at 1 in each collection. Examples are in `docs/reference/proxy-api.md`.

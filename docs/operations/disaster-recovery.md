@@ -1,8 +1,24 @@
-# Disaster recovery runbook
+# Disaster recovery
+
+> **What:** What is backed up and when, the alerts that watch the backups, recovery steps per scenario, and drills.
+> **For:** operators.
+> **Related:** [restore with Ansible](restore.md) · [alerts](alerts.md) · [GPG key](../deployment/gpg-key.md)
+
+**Contents**
+- [1. Roles and contacts](#1-roles-and-contacts)
+- [2. What must survive, and where it is](#2-what-must-survive-and-where-it-is)
+- [3. Backup schedule](#3-backup-schedule)
+- [4. Recovery objectives](#4-recovery-objectives)
+- [5. First response (any incident)](#5-first-response-any-incident)
+- [6. Procedures](#6-procedures)
+- [7. After any recovery: checklist](#7-after-any-recovery-checklist)
+- [8. Drills](#8-drills)
+
+---
 
 What to back up, how to know the backups work, and the exact steps to recover from each kind of
 loss. It covers `besu-production/`, `mpc-signer/deploy/`, `proxy/`, `chainlens/`, `monitoring/`
-and `ha/`, in the 5-host production layout ([`production-layout.md`](production-layout.md)):
+and `ha/`, in the 5-host production layout ([Production layout](../overview/production-layout.md)):
 
 | Host | Runs |
 |---|---|
@@ -121,7 +137,7 @@ back.
    4 network files into `network/`.
 3. Restore its key (decrypt the backup first) and start. A backup made by Ansible
    (`ansible/state/key-backups/<node>.key.gpg`) is decrypted with your offline GPG private key,
-   e.g. `gpg --decrypt val3.key.gpg > val3.key` ([`../ansible/GPG-KEY.md`](../ansible/GPG-KEY.md),
+   e.g. `gpg --decrypt val3.key.gpg > val3.key` ([GPG key for the node-key backups](../deployment/gpg-key.md),
    step 5); copy the result to the host over SSH, and shred it everywhere once restored
    (`shred -u val3.key`):
    ```bash
@@ -133,7 +149,7 @@ back.
 **Key lost (no backup):** run `./init.sh` (new key), then on the operator side
 `operator/add-node.sh network/ <new node>.json`, distribute the network files to every node,
 restart them one at a time, and vote: `qbft.sh propose 0x<new address> true` on more than half of
-the validators, then `qbft.sh propose 0x<old address> false`. See `besu-production/README.md`.
+the validators, then `qbft.sh propose 0x<old address> false`. See `docs/deployment/besu-manual.md`.
 
 **New IP (same key):** the operator updates that enode's `@<ip>:<port>` in the network files
 (`static-nodes.json`, `permissions_config.toml`, `SHA256SUMS`):
@@ -153,7 +169,7 @@ is gone.
    `curl -s http://192.168.68.151:30000/status/senders` answers; Grafana shows blocks and signatures.
 2. Rebuild the lost host with the **same IP**: its Besu nodes as in 6.1 (val and rpc, each with
    `restore-key.sh` and `start.sh`; for a large chain `restore-chain.sh` first), mpc1 as in 6.4
-   (.135 only), the coordinator and the proxy (6.6), HAProxy + keepalived (`ha/README.md`).
+   (.135 only), the coordinator and the proxy (6.6), HAProxy + keepalived (`docs/deployment/high-availability.md`).
 3. The VIPs **stay** on .136 (`nopreempt`). Move them back at a quiet time: on .136
    `systemctl restart keepalived`.
 
@@ -207,7 +223,7 @@ fails until all three are up. **Fix it today**: there is no redundancy left.
 
 **No backup or no passphrase for that node:** signing still works with 2 of 3, but redundancy is
 gone for good (the library can't re-share keys). Build a new cluster and move all funds:
-`mpc-signer/docs/production.md`, step 14.
+`docs/deployment/mpc-signer-production.md`, step 14.
 
 ### 6.5 Two MPC nodes lost
 
@@ -223,7 +239,7 @@ node). As soon as **two** nodes are up, signing works again.
 
 All four are stateless: redeploy from git plus the saved `.env` / `cluster.json`. The coordinator
 and the proxy have twins on .135/.136: HAProxy and keepalived switch to the twin automatically
-(`ha/README.md`), so rebuilding the lost one isn't urgent, but redundancy is gone until it's back.
+(`docs/deployment/high-availability.md`), so rebuilding the lost one isn't urgent, but redundancy is gone until it's back.
 
 | Component | Rebuild | Check |
 |---|---|---|
@@ -235,7 +251,7 @@ and the proxy have twins on .135/.136: HAProxy and keepalived switch to the twin
 ### 6.7 Whole site lost
 
 Everything down. With the Ansible deployment, follow
-**[`../ansible/RESTORE.md`](../ansible/RESTORE.md)** (the same steps, with Ansible preparing the
+**[Restore with Ansible](restore.md)** (the same steps, with Ansible preparing the
 hosts first and finishing after the restore). By hand, work in this order; each step needs the
 previous one.
 
