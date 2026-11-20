@@ -85,6 +85,11 @@ remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version i
 # X-Section-Key. false: calls without a key still use SENDER01 (for applications not moved yet);
 # true: such calls are refused.
 sections_required: false
+# Alerts (Grafana "Sections" dashboard, alert SectionUpfrontLow / SectionUpfrontEmpty): an enabled
+# section's upfront account below this many ETH. 0 = off.
+upfront_low_balance_eth: 100
+# Alert Sender01Low: SENDER01 (it funds every top-up) below this many ETH. 0 = off.
+sender01_low_balance_eth: 10000
 
 # Deploy page in chainlens (#/deploy, ansible/CHAINLENS-DEPLOY.md): deploy compiled contracts (common
 # or NFT collections) from the browser, through the proxy, signed by the contract account center and

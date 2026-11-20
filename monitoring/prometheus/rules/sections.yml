@@ -1,0 +1,38 @@
+groups:
+  - name: sections
+    rules:
+      - alert: SectionUpfrontLow
+        # an enabled section's upfront account (funds its new accounts and -x transfers) is below
+        # upfront_low_balance_eth (settings.yml; 0 = off): top it up from the chainlens Sections page
+        expr: >-
+          proxy_section_balance_eth{role="upfront",active="1"}
+          < on() group_left() (proxy_section_low_balance_eth > 0)
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Section {{ $labels.section }}: upfront balance {{ $value | printf \"%.2f\" }} ETH is below the threshold"
+          description: "Its /createaccount and /transfer -x fail once it is empty. Top it up (chainlens -> Sections -> {{ $labels.section }} -> Top up)."
+
+      - alert: SectionUpfrontEmpty
+        expr: proxy_section_balance_eth{role="upfront",active="1"} == 0 and on() (proxy_section_low_balance_eth > 0)
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Section {{ $labels.section }}: the upfront account is empty"
+          description: "Its /createaccount (with an amount) and /transfer -x are refused. Top it up."
+
+      - alert: Sender01Low
+        # SENDER01 funds every section's top-up (and the calls without a section key)
+        expr: proxy_sender01_balance_eth < on() group_left() (proxy_sender01_low_balance_eth > 0)
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "SENDER01 balance {{ $value | printf \"%.2f\" }} ETH is below sender01_low_balance_eth"
+          description: "Section top-ups come from SENDER01: pay money back to it from payment accounts (chainlens -> Sections -> Pay back)."
+
+      - alert: SectionMetricsFailing
+        expr: proxy_sections_metrics_error == 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "The proxy can't read the section balances (SectionRegistry or Besu not answering)"

@@ -34,6 +34,7 @@ Dashboards (folder **Production**):
 | **Besu production (QBFT)** | chain height, seconds since last block, validators up vs expected, a table per node (up, height, peers, in sync, last block age, tx pool), block time, tx/s, gas, tx pool, peers, refused connections, JSON-RPC rate/latency, P2P traffic, CPU, JVM heap, GC; **Proxy senders**: per sender mined OK / STALLED, in flight, nonce gap, repairs, fillers |
 | **MPC signer** | coordinator up, MPC nodes up vs threshold, keys, presignatures ready, signatures/s (hot/cold), signing latency p50/p95, failures and policy refusals, pool per hot key vs target, presign rate and duration |
 | **Hosts** | CPU, memory, fullest disk, disk I/O, network per host; **Backups**: age, size, result of every backup |
+| **Sections** | ([`../docs/sections.md`](../docs/sections.md)) active sections, upfront accounts below the threshold, SENDER01; balances of every section's upfront / consumption / payment account (table and over time, with the threshold line); operations and ETH moved per section and kind (create account, +x, −x, NFT first sale / resale, top-up, sweep, pay back) |
 
 Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations](#operations)):
 
@@ -58,6 +59,10 @@ Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations]
 | `ProxyNonceGap` | warning | a missing nonce has blocked a sender for > 2 min (the proxy normally repairs it after 30 s / 10 blocks) |
 | `ProxyNonceRepaired` | info | the proxy repaired a gap (lost transactions or filler transactions): see its log |
 | `ProxySenderCheckFailing` / `ProxyDown` | warning / critical | the proxy can't read Besu for its check / doesn't answer |
+| `SectionUpfrontLow` | warning | an enabled section's upfront account below `upfront_low_balance_eth` for 2 min: top it up (chainlens → Sections) |
+| `SectionUpfrontEmpty` | critical | an enabled section's upfront account is empty: its `/createaccount` (with an amount) and `/transfer -x` are refused |
+| `Sender01Low` | warning | SENDER01 below `sender01_low_balance_eth` for 5 min (it funds every top-up): pay money back from payment accounts |
+| `SectionMetricsFailing` | warning | the proxy can't read the section balances for 10 min |
 | `HostDown` / `HostDiskFull` / `HostMemoryHigh` | warning | node-exporter down; a disk > 80 %; memory > 90 % |
 | `HostClockNotSynced` | warning | a host's clock not synchronized by chrony, or more than 100 ms off, for 10 min (QBFT rejects blocks with bad timestamps) |
 | `BackupFailed` | warning | the last run of a backup script failed |

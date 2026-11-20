@@ -52,6 +52,9 @@ const CONFIG = {
     REGISTRY_FROM_BLOCK: Math.max(0, parseInt(process.env.REGISTRY_FROM_BLOCK || "0", 10) || 0),
     // contract_account_center: the MPC key that deploys every contract (step 4)
     CONTRACT_CENTER: (process.env.CONTRACT_CENTER || "").trim(),
+    // monitoring thresholds (0 = off): an upfront account / SENDER01 below them raises an alert
+    UPFRONT_LOW_BALANCE_ETH: Number(process.env.UPFRONT_LOW_BALANCE_ETH || 0) || 0,
+    SENDER01_LOW_BALANCE_ETH: Number(process.env.SENDER01_LOW_BALANCE_ETH || 0) || 0,
     REDIS: {
         host: process.env.REDIS_IP || process.env.IP || BESU_IP,
         port: Number(process.env.REDIS_PORT) || 36379
@@ -1191,6 +1194,7 @@ app.get("/metrics", (req, res) => {
     metric("proxy_sender_nonce_adopted_total", "counter", "Times Besu's nonce was ahead (another client used the key).", per((_, st) => st.adopted));
     metric("proxy_sender_stalls_total", "counter", "Stalls detected (ready transactions not mined).", per((_, st) => st.stalls));
 
+    lines.push(...sectionMetricLines());
     res.type("text/plain; version=0.0.4").send(lines.join("\n") + "\n");
 });
 
@@ -2251,6 +2255,8 @@ async function transferNftV3(req, contract, tokenId) {
         throw httpError(400, `the sale would revert: ${revertReason(error)}`);
     }
 
+    countSectionOp(section, firstSale ? "nft_first_sale" : "nft_resale", price);
+
     return {
         success: true,
         section: { id: section.id, name: section.name },
@@ -3006,6 +3012,9 @@ async function sectionMove(section, from, to, amountInput, memo, quietIfEmpty = 
     }
 
     console.log(`section ${section.id}: ${memo}: ${amount} ETH ${from} -> ${to} (${result.txHash})`);
+    const op = / top-up$/.test(memo) ? "topup" : / sweep$/.test(memo) ? "sweep" : / pay back$/.test(memo) ? "payback"
+        : /replaced$/.test(memo) ? "account_replaced" : /archived/.test(memo) ? "archive_return" : "other";
+    countSectionOp(section, op, amount);
     return { success: true, id: section.id, operation: memo, from, to, amount, txHash: result.txHash, nonce: result.nonce };
 }
 
@@ -3657,6 +3666,93 @@ app.post("/contract/send", async (req, res) => {
     }
 });
 
+// ---- Section metrics (step 6): balances refreshed every 15 s (the scrape stays fast), operation
+// counters in memory (they restart at 0 with the proxy; dashboards use increase()).
+const sectionOps = new Map(); // "id|op" -> { id, name, op, count, wei }
+const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "nft_first_sale", "nft_resale", "topup", "sweep", "payback", "account_replaced", "archive_return"];
+const sectionMetrics = { rows: [], sender01: null, error: 0, at: 0 };
+
+function countSectionOp(section, op, amountEth) {
+    const key = `${section.id}|${op}`;
+    const entry = sectionOps.get(key) || { id: section.id, name: section.name, op, count: 0, wei: 0n };
+    entry.name = section.name;
+    entry.count += 1;
+
+    try {
+        entry.wei += ethToWei(String(amountEth || "0"));
+    } catch (error) {
+        // amount not countable: count only
+    }
+
+    sectionOps.set(key, entry);
+}
+
+async function refreshSectionMetrics() {
+    try {
+        const rows = [];
+
+        if (sectionsConfigured()) {
+            for (const section of (await listSections()).filter((s) => !s.archived)) {
+                // every counter exists from the start at 0, so the first operation counts in increase()
+                for (const op of SECTION_OPS) {
+                    const key = `${section.id}|${op}`;
+
+                    if (!sectionOps.has(key)) {
+                        sectionOps.set(key, { id: section.id, name: section.name, op, count: 0, wei: 0n });
+                    }
+                }
+
+                for (const [role, address] of Object.entries(section.accounts)) {
+                    rows.push({ id: section.id, name: section.name, active: section.active, role, eth: Number(ethers.formatEther(await getBalanceWei(address))) });
+                }
+            }
+        }
+
+        sectionMetrics.rows = rows;
+        sectionMetrics.sender01 = isAddress(CONFIG.SENDER01) ? Number(ethers.formatEther(await getBalanceWei(CONFIG.SENDER01))) : null;
+        sectionMetrics.error = 0;
+        sectionMetrics.at = Date.now();
+    } catch (error) {
+        sectionMetrics.error = 1;
+    }
+}
+
+setInterval(refreshSectionMetrics, 15000).unref();
+setTimeout(refreshSectionMetrics, 5000).unref();
+
+function labelValue(text) {
+    return String(text).replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, " ");
+}
+
+function sectionMetricLines() {
+    const lines = [];
+    const metric = (name, type, help, rows) => {
+        lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
+        rows.forEach(([labels, value]) => lines.push(labels ? `${name}{${labels}} ${value}` : `${name} ${value}`));
+    };
+    const sec = (id, name) => `section_id="${id}",section="${labelValue(name)}"`;
+
+    metric("proxy_section_balance_eth", "gauge", "Balance of a section account (role upfront, consumption, payment).",
+        sectionMetrics.rows.map((r) => [`${sec(r.id, r.name)},role="${r.role}",active="${r.active ? 1 : 0}"`, r.eth]));
+    metric("proxy_section_active", "gauge", "1 = the section is enabled (archived sections are not listed).",
+        [...new Map(sectionMetrics.rows.map((r) => [r.id, r])).values()].map((r) => [sec(r.id, r.name), r.active ? 1 : 0]));
+    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, nft_first_sale, nft_resale, topup, sweep, payback, account_replaced, archive_return).",
+        [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, e.count]));
+    metric("proxy_section_amount_eth_total", "counter", "ETH moved by section operations since the proxy started.",
+        [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, Number(ethers.formatEther(e.wei))]));
+    metric("proxy_section_low_balance_eth", "gauge", "Alert threshold for upfront accounts (0 = off).", [["", CONFIG.UPFRONT_LOW_BALANCE_ETH]]);
+
+    if (sectionMetrics.sender01 !== null) {
+        metric("proxy_sender01_balance_eth", "gauge", "SENDER01's balance (it funds the upfront accounts).", [["", sectionMetrics.sender01]]);
+    }
+
+    metric("proxy_sender01_low_balance_eth", "gauge", "Alert threshold for SENDER01 (0 = off).", [["", CONFIG.SENDER01_LOW_BALANCE_ETH]]);
+    metric("proxy_sections_metrics_error", "gauge", "1 = the last refresh of the section balances failed.", [["", sectionMetrics.error]]);
+    metric("proxy_sections_metrics_age_seconds", "gauge", "Seconds since the section balances were refreshed.",
+        [["", sectionMetrics.at ? Math.round((Date.now() - sectionMetrics.at) / 1000) : -1]]);
+    return lines;
+}
+
 // ---- Section calls: X-Section-Key -> section_i
 
 // The section of a request, or null for a call without X-Section-Key (SENDER01 behaviour, unless
@@ -3755,6 +3851,7 @@ async function createSectionAccount(section, amount, pool) {
         await assertCanPay(funder, amount);
         return pay(funder, address, amount, true);
     });
+    countSectionOp(section, "create_account", amount);
 
     return {
         success: true,
@@ -3806,6 +3903,7 @@ async function sectionTransfer(section, body) {
     const sender = negative ? section.accounts.upfront : user;
     const recipient = negative ? user : section.accounts.consumption;
     const { txHash, nonce } = await withSenderLock(sender, () => pay(sender, recipient, value, true, memoText));
+    countSectionOp(section, negative ? "transfer_out" : "transfer_in", value);
 
     return {
         success: true,

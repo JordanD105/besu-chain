@@ -3,11 +3,11 @@
 A **section** is a group of applications (section_1 … section_n) with its own accounts and its own
 API key. Money for a section's users comes from the section's own accounts instead of SENDER01.
 
-**Status:** steps 1–5 of 6 are built: the registry (version 2), the proxy admin API, section-scoped
+**Status:** all 6 steps are built: the registry (version 2), the proxy admin API, section-scoped
 `/createaccount` and `/transfer`, the chainlens **Sections** page (with the sections' user
 accounts), contracts deployed by the contract account center with `/contract/call` and
-`/contract/send`, and NFT collections version 3 (minted by the center, sales paid to the section).
-Step 6 (monitoring) comes next.
+`/contract/send`, NFT collections version 3 (minted by the center, sales paid to the section), and
+monitoring (alerts and the Grafana **Sections** dashboard).
 
 ## Accounts
 
@@ -219,6 +219,25 @@ refused. With `sections_required: true` they are refused altogether (`X-Section-
 | `/nft/transfer`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` | **built** |
 | `/nft/transfer`, resale (section_i) | proxy | the seller approves; the buyer `buy(tokenId, …)` at the same mint price; NFT → buyer, price → seller | **built** |
 
+## Monitoring (step 6)
+
+The proxy's `/metrics` (scraped by Prometheus through the proxy VIP) adds:
+
+| Metric | |
+|---|---|
+| `proxy_section_balance_eth{section_id, section, role, active}` | each account's balance (role upfront / consumption / payment), refreshed every 15 s |
+| `proxy_section_active{section_id, section}` | 1 = enabled |
+| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | operations and ETH moved since the proxy started (op: `create_account`, `transfer_in`, `transfer_out`, `nft_first_sale`, `nft_resale`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`); they restart at 0 with the proxy (dashboards use `increase()`) |
+| `proxy_sender01_balance_eth` | SENDER01's balance |
+| `proxy_section_low_balance_eth`, `proxy_sender01_low_balance_eth` | the alert thresholds |
+
+Settings (`ansible/group_vars/all/settings.yml`): **`upfront_low_balance_eth`** (default 100; 0 =
+off) and **`sender01_low_balance_eth`** (default 10000). Alerts `SectionUpfrontLow` (warning),
+`SectionUpfrontEmpty` (critical), `Sender01Low`, `SectionMetricsFailing`
+([`../monitoring/prometheus/rules/sections.yml`](../monitoring/prometheus/rules/sections.yml)); the
+**Sections** dashboard in Grafana shows balances, the threshold line and the activity per section.
+Disabled and archived sections don't raise the upfront alerts.
+
 ## Build steps
 
 1. **Registry contract and proxy admin API** — built (version 2: rename, info fields, account
@@ -229,4 +248,4 @@ refused. With `sections_required: true` they are refused altogether (`X-Section-
 4. **`/contract/call`, `/contract/send`, and Deploy through the proxy as `contract_account_center`** — built.
 5. **NftCollection v3**, `/nft/mint` by the center, `/nft/transfer` by section buyers — built; and the
    sections' user accounts in chainlens.
-6. Monitoring: upfront low-balance alert (fixed amount), Sections dashboard.
+6. **Monitoring**: upfront low-balance alert (fixed amount), SENDER01 alert, Sections dashboard — built.
