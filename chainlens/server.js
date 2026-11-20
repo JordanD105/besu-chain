@@ -118,8 +118,51 @@ function loadRegistry() {
 loadRegistry();
 setInterval(loadRegistry, 15000).unref();
 
+// Contracts registered on chain (SectionRegistry ContractRegistered events: deployed through the proxy)
+const REGISTRY_CONTRACT = (process.env.REGISTRY_CONTRACT || "").trim();
+const REGISTRY_FROM_BLOCK = Math.max(0, parseInt(process.env.REGISTRY_FROM_BLOCK || "0", 10) || 0);
+const registryEvents = new ethers.Interface(["event ContractRegistered(address indexed contractAddress, uint8 kind, string name, string abiJson)"]);
+const chainRegistry = { byAddress: new Map(), scannedTo: -1, running: null };
+
+function chainRegistryScan() {
+    if (!ethers.isAddress(REGISTRY_CONTRACT)) {
+        return Promise.resolve();
+    }
+    if (!chainRegistry.running) {
+        chainRegistry.running = (async () => {
+            const head = parseInt(await rpc("eth_blockNumber", []), 16);
+            const topic = registryEvents.getEvent("ContractRegistered").topicHash;
+            for (let start = chainRegistry.scannedTo >= 0 ? chainRegistry.scannedTo + 1 : REGISTRY_FROM_BLOCK; start <= head; start += 1000) {
+                const end = Math.min(start + 999, head);
+                const logs = await rpc("eth_getLogs", [{ address: REGISTRY_CONTRACT, fromBlock: ethers.toQuantity(start), toBlock: ethers.toQuantity(end), topics: [topic] }]);
+                for (const log of logs) {
+                    try {
+                        const parsed = registryEvents.parseLog(log);
+                        const abi = JSON.parse(parsed.args.abiJson);
+                        const address = ethers.getAddress(parsed.args.contractAddress);
+                        chainRegistry.byAddress.set(address.toLowerCase(), {
+                            record: { name: parsed.args.name, address, abi, kind: Number(parsed.args.kind) === 2 ? "NFT collection" : "common", source: "registry" },
+                            iface: new ethers.Interface(abi)
+                        });
+                    } catch (error) {
+                        console.error("contract registry (chain): unreadable entry:", error.message);
+                    }
+                }
+                chainRegistry.scannedTo = end;
+            }
+        })().catch((error) => console.error("contract registry (chain):", error.message))
+            .finally(() => { chainRegistry.running = null; });
+    }
+    return chainRegistry.running;
+}
+
+setTimeout(() => chainRegistryScan(), 3000).unref();
+setInterval(() => chainRegistryScan(), 15000).unref();
+
+// A contract's record: the repository's files first, then the chain's registry
 function contractEntry(address) {
-    return registry.byAddress.get(String(address).toLowerCase()) || null;
+    const key = String(address).toLowerCase();
+    return registry.byAddress.get(key) || chainRegistry.byAddress.get(key) || null;
 }
 
 function fragmentInfo(fragment) {
@@ -1365,8 +1408,19 @@ app.get("/api/contracts/:address", async (req, res) => {
         out.label = contractLabel(address) || out.label;
         out.record = {
             name: r.name, deployer: r.deployer, txHash: r.txHash, blockNumber: r.blockNumber,
-            deployedAt: r.deployedAt, artifact: r.artifact, constructorArgs: r.constructorArgs, codeCheck: r.codeCheck
+            deployedAt: r.deployedAt, artifact: r.artifact, constructorArgs: r.constructorArgs, codeCheck: r.codeCheck,
+            kind: r.kind, source: r.source || "file"
         };
+        if (r.source === "registry") {
+            // registered on chain: the deployment comes from the indexed transactions
+            const creation = db.txs.find((tx) => tx.contractAddress && tx.contractAddress.toLowerCase() === address.toLowerCase());
+            if (creation) {
+                out.record.deployer = creation.from;
+                out.record.txHash = creation.hash;
+                out.record.blockNumber = creation.blockNumber;
+                out.record.deployedAt = creation.timestamp ? new Date(creation.timestamp * 1000).toISOString() : null;
+            }
+        }
         // the code on chain is the code that was recorded (not replaced by a different contract)
         out.codeMatchesRecord = r.codeHash ? ethers.keccak256(code) === r.codeHash : null;
         const fns = entry.iface.fragments.filter((f) => f.type === "function");
@@ -1456,8 +1510,9 @@ if (SECTIONS.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !DEPLOY.al
     console.error("Sections page: ADMIN_TOKEN (16+ characters), ADMIN_ALLOWED_IPS, PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
     SECTIONS.enabled = false;
 }
-if (DEPLOY.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !ethers.isAddress(DEPLOY.from) || !DEPLOY.coordinator || !DEPLOY.allowed.length)) {
-    console.error("Deploy page: DEPLOY_TOKEN (16+ characters), DEPLOYER, COORDINATOR_URL and DEPLOY_ALLOWED_IPS are required; the page stays off");
+// The Deploy page deploys through the proxy (signed by the contract account center, registered on chain)
+if (DEPLOY.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !DEPLOY.allowed.length || !SECTIONS.proxy || !SECTIONS.proxyToken)) {
+    console.error("Deploy page: ADMIN_TOKEN (16+ characters), ADMIN_ALLOWED_IPS, PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
     DEPLOY.enabled = false;
 }
 
@@ -1504,28 +1559,32 @@ function deployGuard(req, res, next) {
     next();
 }
 
-// The contract to deploy and its typed arguments, from a request body
-function deployInput(body) {
+// The contract to deploy, from a request body: only what the proxy needs (the artifact may be large)
+function deployBodyForProxy(body) {
     const json = body && body.artifact;
     if (!json || typeof json !== "object") {
         throw new Error("no artifact: choose the compiler's JSON file");
     }
     const art = deployer.loadArtifact(json, body.contract || "", String(body.artifactName || "Contract").replace(/\.json$/i, ""));
-    let args;
-    try {
-        args = deployer.coerceArgs(art.abi, Array.isArray(body.args) ? body.args : []);
-    } catch (error) {
-        throw new Error("constructor arguments: arrays and tuples are written as JSON (" + error.message + ")");
-    }
-    const name = String(body.name || "").trim().slice(0, 80) || art.name;
-    return { art, args, name };
+    return {
+        kind: body.kind === "nft" ? "nft" : "common",
+        name: String(body.name || "").trim().slice(0, 80) || art.name,
+        abi: art.abi,
+        bytecode: art.bytecode,
+        deployedBytecode: art.deployedBytecode,
+        immutableReferences: art.immutables || undefined,
+        args: Array.isArray(body.args) ? body.args : []
+    };
 }
 
-async function deployPlan(input) {
-    return deployer.prepare({
-        art: input.art, args: input.args, name: input.name, from: DEPLOY.from, rpcUrl: DEPLOY.rpc,
-        coordinatorUrl: DEPLOY.coordinator, maxGas: DEPLOY.maxGas, sender01: DEPLOY.sender01
-    });
+let deployCenter = { address: null, at: 0 };
+
+async function centerAddress() {
+    if (!deployCenter.address || Date.now() - deployCenter.at > 60000) {
+        const r = await proxyAdmin("GET", "/admin/contracts");
+        deployCenter = { address: r.status === 200 ? r.data.center : null, at: Date.now() };
+    }
+    return deployCenter.address;
 }
 
 // ---- Sections page (docs/sections.md): the operator's and chainlens_deploy_ips' browsers, with the
@@ -1644,11 +1703,17 @@ app.get("/api/sections/:id/history", sectionsGuard, async (req, res) => {
     }
 });
 
-app.get("/api/deploy/status", (req, res) => {
+app.get("/api/deploy/status", async (req, res) => {
     if (!DEPLOY.enabled || !ipAllowed(req.socket.remoteAddress)) {
         return res.json({ enabled: false });
     }
-    res.json({ enabled: true, deployer: ethers.getAddress(DEPLOY.from), busy: DEPLOY.busy });
+    let deployer = null;
+    try {
+        deployer = await centerAddress();
+    } catch (error) {
+        // shown as unknown
+    }
+    res.json({ enabled: true, deployer, busy: DEPLOY.busy });
 });
 
 const deployJson = express.json({ limit: "25mb" });
@@ -1667,41 +1732,38 @@ app.post("/api/deploy/inspect", deployJson, deployGuard, (req, res) => {
     }
 });
 
-// Dry run: every check, nothing signed or sent
+// Dry run through the proxy: every check, nothing signed
 app.post("/api/deploy/check", deployJson, deployGuard, async (req, res) => {
     try {
-        const plan = await deployPlan(deployInput(req.body));
-        res.json(deployer.planSummary(plan));
+        const r = await proxyAdmin("POST", "/admin/contracts/check", deployBodyForProxy(req.body));
+        res.status(r.status).json(r.data);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 });
 
-// Deploy: the same checks again; the address must be the one the check showed (nothing changed)
+// Deploy through the proxy (signed by the contract account center, registered on chain). The address
+// must still be the one the check showed (nothing changed in between).
 app.post("/api/deploy/send", deployJson, deployGuard, async (req, res) => {
     if (DEPLOY.busy) {
         return res.status(409).json({ error: "another deployment is running: try again when it is done" });
     }
     DEPLOY.busy = true;
     try {
-        const input = deployInput(req.body);
-        const plan = await deployPlan(input);
-        if (!req.body.expectAddress || plan.address.toLowerCase() !== String(req.body.expectAddress).toLowerCase()) {
-            return res.status(409).json({ error: "the deployer's state changed since the check (address " + plan.address + "): check again" });
+        const body = deployBodyForProxy(req.body);
+        const check = await proxyAdmin("POST", "/admin/contracts/check", body);
+        if (check.status !== 200) {
+            return res.status(check.status).json(check.data);
         }
-        console.log("deploy:", plan.name, "->", plan.address, "from", req.socket.remoteAddress);
-        const record = await deployer.send(plan, input.art, { rpcUrl: DEPLOY.rpc, coordinatorUrl: DEPLOY.coordinator, artifactName: String(req.body.artifactName || "") });
-        let saved = true;
-        try {
-            fs.mkdirSync(REGISTRY_LOCAL_DIR, { recursive: true });
-            fs.writeFileSync(path.join(REGISTRY_LOCAL_DIR, record.address.toLowerCase() + ".json"), JSON.stringify(record, null, 2) + "\n");
-            loadRegistry();
-        } catch (error) {
-            saved = false;
-            console.error("deploy: record not saved:", error.message);
+        if (!req.body.expectAddress || check.data.address.toLowerCase() !== String(req.body.expectAddress).toLowerCase()) {
+            return res.status(409).json({ error: "the deployer's state changed since the check (address " + check.data.address + "): check again" });
         }
-        const { abi, ...rest } = record;
-        res.json({ ...rest, saved });
+        console.log("deploy:", body.kind, JSON.stringify(body.name), "->", check.data.address, "from", req.socket.remoteAddress);
+        const r = await proxyAdmin("POST", "/admin/contracts/deploy", body);
+        if (r.status === 200) {
+            chainRegistryScan().catch(() => {});
+        }
+        res.status(r.status).json({ ...r.data, saved: r.status === 200 });
     } catch (error) {
         res.status(400).json({ error: error.message });
     } finally {
@@ -1855,6 +1917,6 @@ app.listen(PORT, HOST, () => {
     console.log(`Chainlens http://${HOST}:${PORT}`);
     console.log(`Besu ${BESU}`);
     console.log(SECTIONS.enabled ? `Sections page on: proxy ${SECTIONS.proxy}, from ${DEPLOY.allowed.join(" ")}` : "Sections page off");
-    console.log(DEPLOY.enabled ? `Deploy page on: deployer ${DEPLOY.from}, from ${DEPLOY.allowed.join(" ")}` : "Deploy page off");
+    console.log(DEPLOY.enabled ? `Deploy page on: through the proxy ${SECTIONS.proxy}, from ${DEPLOY.allowed.join(" ")}` : "Deploy page off");
     loop();
 });

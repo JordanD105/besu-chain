@@ -36,6 +36,12 @@ chainlens_deploy_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/sec
 proxy_admin_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/proxy_admin_token', chars=['hexdigits'], length=48) }}"
 # The SectionRegistry, deployed once by 06-proxy.yml
 registry: "{{ (lookup('ansible.builtin.file', state_dir ~ '/registry.json') | from_json) if (state_dir ~ '/registry.json') is file else {} }}"
+# The block the registry was deployed in (its record from deploy-contract.js), and the contract account center
+registry_from_block: >-
+  {{ (lookup('ansible.builtin.file', state_dir ~ '/registry-record/' ~ (registry.address | default('') | lower) ~ '.json')
+      | from_json).blockNumber
+     if registry.address is defined and (state_dir ~ '/registry-record/' ~ (registry.address | lower) ~ '.json') is file else 0 }}
+contract_center: "{{ (lookup('ansible.builtin.file', state_dir ~ '/contract-center') | trim) if (state_dir ~ '/contract-center') is file else '' }}"
 vrrp_pass_proxy: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_proxy', chars=['ascii_letters', 'digits'], length=8) }}"
 
 # SENDER01: written by 04-coordinators.yml after the key ceremony

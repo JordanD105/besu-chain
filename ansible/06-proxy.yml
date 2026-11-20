@@ -92,6 +92,30 @@
               {{ {'address': registry_address, 'admin': lookup('ansible.builtin.file', admin_file) | trim}
                  | combine({'previous': registry_previous, 'migrated': false} if registry_previous else {}) }}
 
+    - name: Contract account center already created?
+      ansible.builtin.stat:
+        path: "{{ state_dir }}/contract-center"
+      register: center_stat
+
+    - name: Contract account center (MPC key that deploys every contract, big presignature pool)
+      ansible.builtin.uri:
+        url: "{{ coord1_url }}/admin/keys"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ mpc_admin_token }}"
+        body_format: json
+        body: { pool: big }
+        timeout: 180
+      register: center_key
+      when: not center_stat.stat.exists
+
+    - name: Remember the contract account center
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/contract-center"
+        content: "{{ center_key.json.address }}\n"
+        mode: "0600"
+      when: not center_stat.stat.exists
+
     - name: Registry
       ansible.builtin.debug:
         msg: "SectionRegistry {{ reg.address }}, admin {{ reg.admin }}"

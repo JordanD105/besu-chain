@@ -83,7 +83,7 @@ Edit `group_vars/all/settings.yml`:
 | `ntp_servers` | your time servers, e.g. `[ntp1.internal.example, 10.0.0.1]`. Empty: the distribution's public servers (needs internet). Hosts without internet access **must** have internal servers here: QBFT rejects blocks with wrong timestamps. The `HostClockNotSynced` alert and the Clock columns of the Hosts dashboard watch it |
 | `chainlens_sections_enabled` | the Sections page in chainlens (off by default): create and manage sections, top up, sweep, pay back ([`../docs/sections.md`](../docs/sections.md)); same access and token as the Deploy page |
 | `sections_required` | `false` (default): calls without a section key still use SENDER01; `true` once all applications send their `X-Section-Key` ([`../docs/sections.md`](../docs/sections.md)) |
-| `chainlens_deploy_enabled`, `chainlens_deployer`, `chainlens_deploy_ips` | the Deploy page in chainlens (off by default): deploy contracts from the browser, for `operator_ip` and the admin PCs in `chainlens_deploy_ips`: [`CHAINLENS-DEPLOY.md`](CHAINLENS-DEPLOY.md) |
+| `chainlens_deploy_enabled`, `chainlens_deploy_ips` | the Deploy page in chainlens (off by default): deploy contracts from the browser through the proxy (contract account center, registered on chain), for `operator_ip` and the admin PCs in `chainlens_deploy_ips`: [`CHAINLENS-DEPLOY.md`](CHAINLENS-DEPLOY.md) |
 | `remix_enabled` | the self-hosted Remix IDE on the monitoring host (`:30200`, on by default; [`../remix/README.md`](../remix/README.md)): the operator fetches Remix from github.com once |
 | `vrrp_interface` | leave empty: it's detected automatically |
 

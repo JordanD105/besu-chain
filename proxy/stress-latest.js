@@ -47,6 +47,10 @@ const CONFIG = {
     ADMIN_ALLOWED_IPS: (process.env.ADMIN_ALLOWED_IPS || "").split(/[\s,]+/).filter(Boolean),
     // true: /createaccount and /transfer need a section's X-Section-Key (no SENDER01 fallback)
     SECTION_KEY_REQUIRED: String(process.env.SECTION_KEY_REQUIRED || "").toLowerCase() === "true",
+    // the block the registry was deployed in (its events are read from there)
+    REGISTRY_FROM_BLOCK: Math.max(0, parseInt(process.env.REGISTRY_FROM_BLOCK || "0", 10) || 0),
+    // contract_account_center: the MPC key that deploys every contract (step 4)
+    CONTRACT_CENTER: (process.env.CONTRACT_CENTER || "").trim(),
     REDIS: {
         host: process.env.REDIS_IP || process.env.IP || BESU_IP,
         port: Number(process.env.REDIS_PORT) || 36379
@@ -2976,6 +2980,460 @@ app.post("/admin/registry/migrate", adminGuard, adminRoute(async (req) => {
     return { success: true, from: ethers.getAddress(from), to: ethers.getAddress(CONFIG.REGISTRY_CONTRACT), sections: done };
 }));
 
+// =======================
+// Contracts (docs/sections.md, step 4)
+// =======================
+// Contracts are deployed by CONTRACT_CENTER (an MPC key, through this proxy's send queue) and
+// registered in the SectionRegistry with their ABI (ContractRegistered event). Applications read
+// them with /contract/call and change them with /contract/send, signed by a user account of their
+// section. Only registered contracts and only functions of their ABI.
+
+const CONTRACT_KINDS = { common: 1, nft: 2 };
+const contractBook = { byAddress: new Map(), scannedTo: -1, at: 0, loading: null };
+
+function requireCenter() {
+    if (!isAddress(CONFIG.CONTRACT_CENTER)) {
+        throw httpError(503, "the contract account center is not configured (CONTRACT_CENTER)");
+    }
+}
+
+// Registered contracts, from the registry's ContractRegistered events (new ones read every 10 s)
+async function loadContracts(fresh = false) {
+    requireSections();
+
+    if (!fresh && contractBook.scannedTo >= 0 && Date.now() - contractBook.at < 10000) {
+        return contractBook.byAddress;
+    }
+
+    if (!contractBook.loading) {
+        contractBook.loading = (async () => {
+            const from = contractBook.scannedTo >= 0 ? contractBook.scannedTo + 1 : CONFIG.REGISTRY_FROM_BLOCK;
+            const head = parseInt(await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []), 16);
+
+            if (from <= head) {
+                const logs = await registryLogs(CONFIG.REGISTRY_CONTRACT, from, [registryIface.getEvent("ContractRegistered").topicHash]);
+
+                for (const log of logs) {
+                    const parsed = registryIface.parseLog(log);
+                    const address = ethers.getAddress(parsed.args.contractAddress);
+
+                    try {
+                        const abi = JSON.parse(parsed.args.abiJson);
+                        contractBook.byAddress.set(address.toLowerCase(), {
+                            address,
+                            kind: Number(parsed.args.kind) === 2 ? "nft" : "common",
+                            name: parsed.args.name,
+                            abi,
+                            iface: new ethers.Interface(abi),
+                            registeredIn: parseInt(log.blockNumber, 16)
+                        });
+                    } catch (error) {
+                        console.error(`contract ${address}: unreadable ABI in the registry (${error.message})`);
+                    }
+                }
+            }
+
+            contractBook.scannedTo = head;
+            contractBook.at = Date.now();
+        })().finally(() => { contractBook.loading = null; });
+    }
+
+    await contractBook.loading;
+    return contractBook.byAddress;
+}
+
+async function registeredContract(address) {
+    if (!isAddress(String(address || ""))) {
+        throw httpError(400, "contract: a contract address");
+    }
+
+    let entry = (await loadContracts()).get(address.toLowerCase());
+
+    if (!entry) {
+        entry = (await loadContracts(true)).get(address.toLowerCase());
+    }
+
+    if (!entry) {
+        throw httpError(404, `${ethers.getAddress(address)} is not a registered contract`);
+    }
+
+    return entry;
+}
+
+function contractFunction(entry, fn) {
+    let fragment;
+
+    try {
+        fragment = entry.iface.getFunction(String(fn || ""));
+    } catch (error) {
+        throw httpError(400, `function "${fn}": ${/ambiguous/i.test(error.message) ? "several functions have this name, give the signature, e.g. transfer(address,uint256)" : "not in the contract's ABI"}`);
+    }
+
+    if (!fragment) {
+        throw httpError(400, `function "${fn}" is not in the contract's ABI`);
+    }
+
+    return fragment;
+}
+
+// Arguments typed as text: arrays and tuples as JSON, booleans as true/false; other values as given
+function coerceParams(params, raw) {
+    const list = Array.isArray(raw) ? raw : [];
+
+    if (list.length !== params.length) {
+        throw httpError(400, `expects ${params.length} argument(s): (${params.map((p) => p.format("sighash") + (p.name ? " " + p.name : "")).join(", ")})`);
+    }
+
+    return params.map((p, i) => {
+        const v = list[i];
+
+        if (typeof v !== "string") {
+            return v;
+        }
+
+        if (p.baseType === "array" || p.baseType === "tuple") {
+            try {
+                return JSON.parse(v);
+            } catch (error) {
+                throw httpError(400, `argument ${p.name || i}: arrays and tuples are written as JSON`);
+            }
+        }
+
+        if (p.baseType === "bool") {
+            return v.trim().toLowerCase() === "true";
+        }
+
+        return v.trim();
+    });
+}
+
+function jsonValue(value) {
+    if (typeof value === "bigint") {
+        return value.toString();
+    }
+
+    if (value instanceof Uint8Array) {
+        return ethers.hexlify(value);
+    }
+
+    if (value && typeof value === "object" && typeof value.toArray === "function") {
+        return value.toArray().map(jsonValue);
+    }
+
+    if (Array.isArray(value)) {
+        return value.map(jsonValue);
+    }
+
+    return value;
+}
+
+function revertReason(error) {
+    const text = String(error && error.message || error);
+    const m = text.match(/revert(?:ed)?:?\s*(.*)$/i);
+    const reason = m && m[1] ? m[1].trim() : text;
+    return reason.replace(/^\((.*)\)$/, "$1");
+}
+
+// A receipt, whatever its status (waitForReceipt throws on a revert)
+async function receiptOf(txHash) {
+    const started = Date.now();
+
+    while (Date.now() - started < 120000) {
+        const receipt = await rpc(CONFIG.BESU_RPC, "eth_getTransactionReceipt", [txHash]);
+
+        if (receipt) {
+            return receipt;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    throw httpError(504, `transaction ${txHash} was not mined within 120 s`);
+}
+
+function decodeEvents(entry, receipt) {
+    return (receipt.logs || []).filter((log) => log.address.toLowerCase() === entry.address.toLowerCase()).map((log) => {
+        try {
+            const parsed = entry.iface.parseLog(log);
+            const args = {};
+            parsed.fragment.inputs.forEach((input, i) => { args[input.name || String(i)] = jsonValue(parsed.args[i]); });
+            return { name: parsed.name, args };
+        } catch (error) {
+            return { name: log.topics[0] ? log.topics[0].slice(0, 10) : "log", args: {} };
+        }
+    });
+}
+
+// ---- Admin: the deployment of a contract by the center (check = dry run)
+
+function deployInputOf(body) {
+    const b = body || {};
+    const kind = String(b.kind || "common");
+
+    if (!CONTRACT_KINDS[kind]) {
+        throw httpError(400, "kind: common or nft");
+    }
+
+    if (!Array.isArray(b.abi) || typeof b.bytecode !== "string" || !/^(0x)?[0-9a-fA-F]+$/.test(b.bytecode)) {
+        throw httpError(400, "abi (array) and bytecode (hex) are required: the compiled contract");
+    }
+
+    if (b.bytecode.includes("__$")) {
+        throw httpError(400, "the bytecode has unlinked library placeholders (__$...$__)");
+    }
+
+    const name = typeof b.name === "string" && b.name.trim() ? b.name.trim().slice(0, 80) : "Contract";
+    const iface = new ethers.Interface(b.abi);
+    const args = coerceParams(iface.deploy.inputs, b.args || []);
+    let encoded;
+
+    try {
+        encoded = iface.encodeDeploy(args);
+    } catch (error) {
+        throw httpError(400, `constructor arguments: ${error.shortMessage || error.message}`);
+    }
+
+    const bytecode = b.bytecode.startsWith("0x") ? b.bytecode : "0x" + b.bytecode;
+    return {
+        kind, name, iface, abi: b.abi, args, data: ethers.concat([bytecode, encoded]),
+        deployedBytecode: typeof b.deployedBytecode === "string" && b.deployedBytecode.length > 2
+            ? (b.deployedBytecode.startsWith("0x") ? b.deployedBytecode : "0x" + b.deployedBytecode) : null,
+        immutables: b.immutableReferences || null
+    };
+}
+
+async function deployCheck(input) {
+    let estimate;
+
+    try {
+        estimate = await estimateGas({ from: CONFIG.CONTRACT_CENTER, data: input.data, value: "0x0" });
+    } catch (error) {
+        throw httpError(400, `the deployment reverts or is invalid (${revertReason(error)}). Check the constructor arguments and the EVM version (cancun at the latest)`);
+    }
+
+    const block = await rpc(CONFIG.BESU_RPC, "eth_getBlockByNumber", ["latest", false]);
+
+    if (withGasBuffer(estimate) > BigInt(block.gasLimit)) {
+        throw httpError(400, `needs ${estimate} gas, more than a block holds (${BigInt(block.gasLimit)})`);
+    }
+
+    return estimate;
+}
+
+function codeCheck(input, code) {
+    const expected = input.deployedBytecode;
+
+    if (!expected) {
+        return "not checked (no deployedBytecode)";
+    }
+
+    if (code.toLowerCase() === expected.toLowerCase()) {
+        return "matches the artifact";
+    }
+
+    if (ethers.dataLength(code) !== ethers.dataLength(expected)) {
+        return "DIFFERS from the artifact";
+    }
+
+    if (input.immutables && Object.keys(input.immutables).length) {
+        const a = ethers.getBytes(code).slice();
+        const b = ethers.getBytes(expected).slice();
+
+        for (const refs of Object.values(input.immutables)) {
+            for (const { start, length } of refs) {
+                a.fill(0, start, start + length);
+                b.fill(0, start, start + length);
+            }
+        }
+
+        return ethers.hexlify(a) === ethers.hexlify(b) ? "matches the artifact (immutable values excluded)" : "DIFFERS from the artifact";
+    }
+
+    return "same length as the artifact, not identical";
+}
+
+app.get("/admin/contracts", adminGuard, adminRoute(async () => {
+    requireSections();
+    const book = await loadContracts(true);
+    return {
+        success: true,
+        center: isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : null,
+        contracts: [...book.values()].map(({ iface, abi, ...rest }) => rest)
+    };
+}));
+
+// Dry run: every check, nothing signed
+app.post("/admin/contracts/check", adminGuard, adminRoute(async (req) => {
+    requireSections();
+    requireCenter();
+    const input = deployInputOf(req.body);
+    const estimate = await deployCheck(input);
+    const nonce = parseInt(await rpc(CONFIG.BESU_RPC, "eth_getTransactionCount", [CONFIG.CONTRACT_CENTER, "pending"]), 16);
+
+    return {
+        success: true,
+        name: input.name,
+        kind: input.kind,
+        from: ethers.getAddress(CONFIG.CONTRACT_CENTER),
+        constructor: input.iface.deploy.inputs.map((p) => p.format("sighash") + (p.name ? " " + p.name : "")).join(", "),
+        args: jsonValue(input.args),
+        estimate: estimate.toString(),
+        gas: withGasBuffer(estimate).toString(),
+        address: ethers.getCreateAddress({ from: CONFIG.CONTRACT_CENTER, nonce }),
+        creationSize: ethers.dataLength(input.data)
+    };
+}));
+
+// Deploy (signed by the center), check the code, register it (registry admin)
+app.post("/admin/contracts/deploy", adminGuard, adminRoute(async (req) => {
+    requireSections();
+    requireCenter();
+    const input = deployInputOf(req.body);
+    await deployCheck(input);
+    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, input.data, true));
+    const receipt = await receiptOf(sent.txHash);
+
+    if (BigInt(receipt.status) !== 1n || !receipt.contractAddress) {
+        throw httpError(400, `the deployment reverted in block ${BigInt(receipt.blockNumber)} (transaction ${sent.txHash})`);
+    }
+
+    const address = ethers.getAddress(receipt.contractAddress);
+    const code = await rpc(CONFIG.BESU_RPC, "eth_getCode", [address, "latest"]);
+    const check = codeCheck(input, code);
+    const registered = await registryWrite("registerContract", [address, CONTRACT_KINDS[input.kind], input.name, JSON.stringify(input.abi)]);
+    contractBook.byAddress.set(address.toLowerCase(), {
+        address, kind: input.kind, name: input.name, abi: input.abi, iface: input.iface, registeredIn: parseInt(registered.receipt.blockNumber, 16)
+    });
+    console.log(`contract ${input.kind} "${input.name}" deployed at ${address} by the center (${sent.txHash}), ${check}`);
+
+    return {
+        success: true,
+        name: input.name,
+        kind: input.kind,
+        address,
+        deployer: ethers.getAddress(CONFIG.CONTRACT_CENTER),
+        txHash: sent.txHash,
+        blockNumber: Number(BigInt(receipt.blockNumber)),
+        gasUsed: Number(BigInt(receipt.gasUsed)),
+        codeCheck: check,
+        registryTxHash: registered.txHash
+    };
+}));
+
+// ---- Applications: read and write registered contracts
+
+// Read: a view/pure function (eth_call on the latest block). With sections_required, a section key.
+app.post("/contract/call", async (req, res) => {
+    try {
+        await sectionFromRequest(req);
+        const entry = await registeredContract(req.body.contract);
+        const fragment = contractFunction(entry, req.body.function);
+
+        if (fragment.stateMutability !== "view" && fragment.stateMutability !== "pure") {
+            throw httpError(400, `${fragment.format("sighash")} changes state: use POST /contract/send`);
+        }
+
+        const data = entry.iface.encodeFunctionData(fragment, coerceParams(fragment.inputs, req.body.args));
+        let result;
+
+        try {
+            result = await ethCall(entry.address, data);
+        } catch (error) {
+            throw httpError(400, `call reverted: ${revertReason(error)}`);
+        }
+
+        const decoded = entry.iface.decodeFunctionResult(fragment, result);
+        res.json({
+            success: true,
+            contract: entry.address,
+            function: fragment.format("sighash"),
+            outputs: fragment.outputs.map((p, i) => ({ name: p.name || String(i), type: p.format("sighash"), value: jsonValue(decoded[i]) }))
+        });
+    } catch (error) {
+        if (!error.statusCode) {
+            console.error(error);
+        }
+
+        res.status(error.statusCode || 500).json({ error: error.message });
+    }
+});
+
+// Write: a state-changing function, signed by a user account of the caller's section. Waits for the
+// block; answers with the status and the contract's decoded events.
+app.post("/contract/send", async (req, res) => {
+    try {
+        const section = await sectionFromRequest(req);
+
+        if (!section) {
+            throw httpError(401, "X-Section-Key is required: transactions are sent by a user account of a section");
+        }
+
+        const entry = await registeredContract(req.body.contract);
+        const fragment = contractFunction(entry, req.body.function);
+
+        if (fragment.stateMutability === "view" || fragment.stateMutability === "pure") {
+            throw httpError(400, `${fragment.format("sighash")} only reads: use POST /contract/call`);
+        }
+
+        if (!isAddress(String(req.body.from || ""))) {
+            throw httpError(400, "from: the user account (of this section) that signs");
+        }
+
+        const from = ethers.getAddress(req.body.from);
+        await assertSectionUser(section, from);
+        let valueWei = 0n;
+
+        if (req.body.value !== undefined && req.body.value !== null && String(req.body.value) !== "" && String(req.body.value) !== "0") {
+            if (fragment.stateMutability !== "payable") {
+                throw httpError(400, `${fragment.format("sighash")} is not payable: send no value`);
+            }
+
+            if (!/^\d+(\.\d+)?$/.test(String(req.body.value))) {
+                throw httpError(400, "value: ETH, e.g. \"1.5\"");
+            }
+
+            valueWei = ethToWei(String(req.body.value));
+        }
+
+        const data = entry.iface.encodeFunctionData(fragment, coerceParams(fragment.inputs, req.body.args));
+        let sent;
+
+        try {
+            sent = await withSenderLock(from, () => sendData(from, entry.address, data, true, valueWei));
+        } catch (error) {
+            if (error.statusCode) {
+                throw error;
+            }
+
+            throw httpError(400, `the transaction would revert: ${revertReason(error)}`);
+        }
+
+        const receipt = await receiptOf(sent.txHash);
+        const ok = BigInt(receipt.status) === 1n;
+        console.log(`section ${section.id}: ${from} -> ${entry.address} ${fragment.format("sighash")} ${ok ? "ok" : "REVERTED"} (${sent.txHash})`);
+
+        res.status(ok ? 200 : 400).json({
+            success: ok,
+            ...(ok ? {} : { error: "the transaction reverted on chain" }),
+            section: { id: section.id, name: section.name },
+            contract: entry.address,
+            function: fragment.format("sighash"),
+            from,
+            value: ethers.formatEther(valueWei),
+            txHash: sent.txHash,
+            blockNumber: Number(BigInt(receipt.blockNumber)),
+            gasUsed: Number(BigInt(receipt.gasUsed)),
+            events: ok ? decodeEvents(entry, receipt) : []
+        });
+    } catch (error) {
+        if (!error.statusCode) {
+            console.error(error);
+        }
+
+        res.status(error.statusCode || 500).json({ error: error.message });
+    }
+});
+
 // ---- Section calls: X-Section-Key -> section_i
 
 // The section of a request, or null for a call without X-Section-Key (SENDER01 behaviour, unless
@@ -3038,8 +3496,9 @@ async function assertNotSectionAccount(address) {
         return;
     }
 
-    if (ethers.getAddress(address) === ethers.getAddress(CONFIG.REGISTRY_ADMIN)) {
-        throw httpError(403, "the registry admin account can't be used here");
+    if (ethers.getAddress(address) === ethers.getAddress(CONFIG.REGISTRY_ADMIN)
+        || (isAddress(CONFIG.CONTRACT_CENTER) && ethers.getAddress(address) === ethers.getAddress(CONFIG.CONTRACT_CENTER))) {
+        throw httpError(403, "the registry admin and contract center accounts can't be used here");
     }
 
     const owner = await accountSection(address);
@@ -3160,6 +3619,13 @@ async function checkRegistryAtStart() {
         }
 
         senderState(CONFIG.REGISTRY_ADMIN).pinned = true;
+
+        if (isAddress(CONFIG.CONTRACT_CENTER)) {
+            senderState(CONFIG.CONTRACT_CENTER).pinned = true;
+        }
+
+        loadContracts(true).then((book) => console.log(`contracts: ${book.size} registered, center ${CONFIG.CONTRACT_CENTER || "(not configured)"}`))
+            .catch((error) => console.error(`contracts: not loaded yet (${error.message})`));
         console.log(`sections: registry ${CONFIG.REGISTRY_CONTRACT} v${version}, ${count} section(s), admin API ${CONFIG.ADMIN_TOKEN ? "on" : "off"}`);
     } catch (error) {
         // e.g. Besu behind HAProxy not answering yet right after a restart: try again

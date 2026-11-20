@@ -127,6 +127,25 @@ POST /admin/sections/1/archive   { "confirm": "Shop A" }
 POST /admin/registry/migrate     { "from": "0xOldRegistry" }
 
 # ---------------------------------------------------------------
+# Contracts (docs/sections.md, step 4): registered contracts only, functions of their ABI only
+# ---------------------------------------------------------------
+# Read: a view/pure function
+POST /contract/call
+{ "contract": "0x...", "function": "balanceOf", "args": ["0xOwner"] }
+-> { "success": true, "function": "balanceOf(address)", "outputs": [ { "name": "0", "type": "uint256", "value": "3" } ] }
+
+# Write: signed by "from", a user account of the caller's section (X-Section-Key required)
+POST /contract/send        X-Section-Key: sk_...
+{ "contract": "0x...", "function": "transfer(address,uint256)", "args": ["0xTo", "5"], "from": "0xSectionUser", "value": "0" }
+-> { "success": true, "txHash": "0x...", "blockNumber": 123, "events": [ { "name": "Transfer", "args": { ... } } ] }
+
+# Admin (ADMIN_TOKEN): deploy as the contract account center, then register on chain with the ABI
+GET  /admin/contracts
+POST /admin/contracts/check    { "kind": "common" | "nft", "name": "...", "abi": [...], "bytecode": "0x...", "deployedBytecode": "0x...", "args": [...] }
+POST /admin/contracts/deploy   (same body)
+-> { "success": true, "address": "0x...", "txHash": "0x...", "codeCheck": "matches the artifact", "registryTxHash": "0x..." }
+
+# ---------------------------------------------------------------
 # Section calls (docs/sections.md): header X-Section-Key: sk_... (the section must be active)
 # ---------------------------------------------------------------
 # Account of the section, funded from the section's upfront account (not SENDER01)

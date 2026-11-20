@@ -86,21 +86,21 @@ remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version i
 # true: such calls are refused.
 sections_required: false
 
-# Deploy page in chainlens (#/deploy, ansible/CHAINLENS-DEPLOY.md): deploy compiled contracts from the
-# browser, signed by ONE MPC account. Only operator_ip and chainlens_deploy_ips can use it, with the
-# token Ansible generates (state/secrets/chainlens_deploy_token). Off by default.
+# Deploy page in chainlens (#/deploy, ansible/CHAINLENS-DEPLOY.md): deploy compiled contracts (common
+# or NFT collections) from the browser, through the proxy, signed by the contract account center and
+# registered on chain. Only operator_ip and chainlens_deploy_ips can use it, with the token Ansible
+# generates (state/secrets/chainlens_deploy_token). Off by default.
 chainlens_deploy_enabled: false
 # Addresses (or networks) allowed to use the Deploy page besides operator_ip, e.g. an admin PC:
 # [192.168.68.1]. They can deploy contracts (with the token): list admin machines only. The firewall
 # opens chainlens (:30100) for them too, so they need not be in chainlens_ips.
 chainlens_deploy_ips: []
 # Sections page in chainlens (#/sections, docs/sections.md): create sections, top up, sweep, pay
-# back, API keys, allowed IPs, history. Same access as the Deploy page (operator_ip,
+# back, rename, info fields, API keys, accounts, archive, history. Same access as the Deploy page (operator_ip,
 # chainlens_deploy_ips, the same token). Off by default.
 chainlens_sections_enabled: false
-# The deployer: an MPC account used only for deployments, never SENDER01. Create it once with
-#   curl -s -X POST http://<vip_proxy>:30000/createaccount -H 'content-type: application/json' -d '{"amount":"0","pool":"none"}'
-chainlens_deployer: ""
+# (chainlens_deployer is no longer used: the Deploy page deploys through the proxy, signed by the
+# contract account center, created by Ansible: state/contract-center)
 
 # Extra compose files for building the proxy / chainlens / remix images on the operator, e.g. to
 # set a build proxy or a corporate CA:  { proxy: [/path/override.yml], chainlens: [...] }

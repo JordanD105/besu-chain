@@ -180,7 +180,8 @@ Restoring everything from these backups after losing the whole site: **[`RESTORE
 | Path | Contents | |
 |---|---|---|
 | `secrets/` | `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN`, `MPC_METRICS_TOKEN`, the two VRRP passwords, the Grafana admin password, the proxy admin token (`proxy_admin_token`), the chainlens deploy token | **secret** |
-| `registry.json`, `registry-admin` | the SectionRegistry's address and its admin MPC key ([`../docs/sections.md`](../docs/sections.md)), created once by `06-proxy.yml` | public, integrity matters |
+| `registry.json`, `registry-admin`, `registry-record/` | the SectionRegistry's address, its admin MPC key and its deployment record ([`../docs/sections.md`](../docs/sections.md)), created by `06-proxy.yml` | public, integrity matters |
+| `contract-center` | the contract account center: the MPC key that deploys every contract (`06-proxy.yml`) | public |
 | `mpc/node*.json`, `cluster.json` | MPC nodes' public keys, the cluster file | public, integrity matters |
 | `besu/*.json`, `network/` | Besu nodes' public keys, genesis and network files | public, integrity matters |
 | `sender01` | the hot MPC key's address | public |
