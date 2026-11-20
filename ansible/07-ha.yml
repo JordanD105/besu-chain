@@ -30,6 +30,56 @@
     - name: SELinux booleans (detected with getenforce)
       ansible.builtin.include_tasks: tasks/selinux-ha.yml
 
+    # HAProxy asks it whether each RPC node is current (block age and height, not only eth_syncing)
+    - name: RPC health checker (ha/rpc-health.py)
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/ha/rpc-health.py"
+        dest: /usr/local/bin/besu-rpc-health
+        mode: "0755"
+      register: rpc_health_bin
+
+    - name: RPC health checker settings
+      ansible.builtin.template:
+        src: templates/besu-rpc-health.env.j2
+        dest: /etc/besu-rpc-health.env
+        mode: "0644"
+      register: rpc_health_env
+
+    - name: RPC health checker service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/besu-rpc-health.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Besu RPC node health for HAProxy (ha/rpc-health.py)
+          After=network-online.target docker.service
+          Before=haproxy.service
+
+          [Service]
+          EnvironmentFile=/etc/besu-rpc-health.env
+          ExecStart=/usr/bin/python3 /usr/local/bin/besu-rpc-health
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+      register: rpc_health_unit
+
+    - name: RPC health checker running
+      ansible.builtin.systemd_service:
+        name: besu-rpc-health
+        state: "{{ 'restarted' if (rpc_health_bin.changed or rpc_health_env.changed or rpc_health_unit.changed) else 'started' }}"
+        enabled: true
+        daemon_reload: "{{ rpc_health_unit.changed }}"
+
+    - name: RPC health checker answers
+      ansible.builtin.uri:
+        url: http://127.0.0.1:{{ rpc_health_status_port }}/
+      register: rpc_health
+      until: rpc_health.status == 200
+      retries: 15
+      delay: 2
+
     - name: haproxy.cfg (generated from the IP plan)
       ansible.builtin.template:
         src: templates/haproxy.cfg.j2

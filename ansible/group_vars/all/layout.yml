@@ -71,3 +71,7 @@ built_image_archives:
 ha_primary: "{{ coordinators[0].host }}"     # holds the VIPs normally (keepalived priority 150)
 ha_peer: "{{ (groups['app_hosts'] | reject('equalto', inventory_hostname) | list + [''])[0] }}"
 rpc_nodes: "{{ besu_nodes | selectattr('role', 'equalto', 'rpc') | list }}"
+# besu-rpc-health (ha/rpc-health.py) on the HAProxy hosts: status on this port (local only), RPC
+# node N's health on this port + N
+rpc_health_status_port: 8410
+rpc_health_base_port: 8410

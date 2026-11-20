@@ -33,6 +33,27 @@ groups:
         annotations:
           summary: "{{ $labels.node }} has {{ $value }} peers, fewer than the other nodes"
 
+      - alert: BesuPeersLow
+        # a node down to 0 or 1 peer depends on a single connection for its blocks (rpc2 stalled
+        # this way): every node should reach all the others (static-nodes.json)
+        expr: ethereum_peer_count{job="besu"} < 2
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.node }} ({{ $labels.role }}) has only {{ $value }} peer(s)"
+
+      - alert: BesuNodeStalled
+        # this node's newest block is over 60 s old while the most up-to-date node is current: it
+        # stopped importing (eth_syncing may still say false). RPC nodes leave the VIP and are
+        # restarted by besu-rpc-health; validators need a look.
+        expr: >-
+          (timestamp(besu_blockchain_chain_head_timestamp{job="besu"}) - besu_blockchain_chain_head_timestamp{job="besu"}) > 60
+          and on() (min(timestamp(besu_blockchain_chain_head_timestamp{job="besu"}) - besu_blockchain_chain_head_timestamp{job="besu"}) < 30)
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.node }} ({{ $labels.role }}) stopped importing blocks: newest block {{ $value | humanizeDuration }} old"
+
       - alert: BesuNotInSync
         expr: besu_synchronizer_in_sync{job="besu"} == 0 or (ethereum_best_known_block_number{job="besu"} - ethereum_blockchain_height{job="besu"}) > 10
         for: 5m

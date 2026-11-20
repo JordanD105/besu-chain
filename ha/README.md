@@ -178,3 +178,21 @@ Start everything again after each test and check Grafana before the next one.
 - **Same subnet only:** the VIPs move within 192.168.68.0/24. Hosts in other sites would need DNS
   or a routed load balancer instead.
 - **Keep both hosts identical:** HAProxy file, proxy `.env` and image, coordinator settings.
+
+## RPC health (besu-rpc-health)
+
+HAProxy does not trust `eth_syncing` alone: a Besu node that stops importing blocks (for example
+after losing its peers) still answers `false` and would keep the RPC VIP while serving an old chain.
+`besu-rpc-health` ([`rpc-health.py`](rpc-health.py), a systemd service on both HAProxy hosts,
+installed by `ansible/07-ha.yml`) checks every RPC node every 2 s and answers HAProxy on
+`127.0.0.1:8410+N` (node N). A node is healthy when it is not syncing, is within
+`rpc_max_blocks_behind` (10) blocks of the best head (the RPC nodes and the host's own validator)
+and its newest block is younger than `rpc_max_block_age` (30 s), unless no node has a newer block
+(the chain itself is halted). If no node passes, the most up-to-date one keeps serving (degraded).
+An RPC node on the same host that stays stalled for `rpc_auto_restart_minutes` (5) while the chain
+moves on is restarted with `docker restart` (RPC nodes hold no keys; 0 = never).
+
+```bash
+curl -s http://127.0.0.1:8410/          # every node: height, age, behind, peers, healthy, reason
+journalctl -u besu-rpc-health -f        # health changes and restarts
+```

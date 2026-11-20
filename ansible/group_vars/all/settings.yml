@@ -90,6 +90,13 @@ sections_required: false
 upfront_low_balance_eth: 100
 # Alert Sender01Low: SENDER01 (it funds every top-up) below this many ETH. 0 = off.
 sender01_low_balance_eth: 10000
+# RPC VIP health (ha/rpc-health.py): an RPC node leaves the VIP when its newest block is older than
+# rpc_max_block_age seconds while another node has newer blocks, or it is more than
+# rpc_max_blocks_behind blocks behind. A node that stays stalled rpc_auto_restart_minutes while the
+# chain moves on is restarted (docker restart; RPC nodes hold no keys). 0 = never restart.
+rpc_max_block_age: 30
+rpc_max_blocks_behind: 10
+rpc_auto_restart_minutes: 5
 # How long Prometheus keeps metrics (Grafana Sections "Period": Year needs > 365d), and a disk cap:
 # above it the oldest data goes first (0B = no cap).
 prometheus_retention: 400d

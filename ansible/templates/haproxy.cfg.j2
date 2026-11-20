@@ -24,18 +24,20 @@ frontend health
     monitor-uri /healthz
 
 # Besu JSON-RPC: rpc1 normally, rpc2 only when rpc1 is unhealthy. One node at a
-# time, so the proxy reads nonces from the same pool the coordinator sends to. A node that is
-# syncing (eth_syncing != false) is not used. rpc1 and rpc2 must have {{ vip_rpc }} in
-# BESU_HOST_ALLOWLIST: clients send Host: {{ vip_rpc }}.
+# time, so the proxy reads nonces from the same pool the coordinator sends to. Health comes from
+# besu-rpc-health (ha/rpc-health.py, one local port per node): a node is used only if it is not
+# syncing, within {{ rpc_max_blocks_behind }} blocks of the best head and its newest block is younger
+# than {{ rpc_max_block_age }} s (unless the whole chain is halted). eth_syncing alone missed a node
+# that had stopped importing. rpc1 and rpc2 must have {{ vip_rpc }} in BESU_HOST_ALLOWLIST: clients
+# send Host: {{ vip_rpc }}.
 frontend besu_rpc
     bind {{ vip_rpc }}:8545
     default_backend besu_rpc
 backend besu_rpc
-    option httpchk
-    http-check send meth POST uri / ver HTTP/1.1 hdr Host {{ vip_rpc }} hdr Content-Type application/json body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_syncing\",\"params\":[]}"
-    http-check expect rstring "\"result\" *: *false"
+    option httpchk GET /
+    http-check expect status 200
 {% for n in rpc_nodes %}
-    server {{ n.name }} {{ ip_of[n.host] }}:{{ n.rpc_port }} check inter 2s fall 3 rise 2{{ ' backup' if not loop.first else '' }}
+    server {{ n.name }} {{ ip_of[n.host] }}:{{ n.rpc_port }} check addr 127.0.0.1 port {{ rpc_health_base_port + loop.index }} inter 2s fall 2 rise 2{{ ' backup' if not loop.first else '' }}
 {% endfor %}
 
 # MPC signer (Web3Signer-compatible JSON-RPC + admin API): coord1 normally, coord2 when coord1 is

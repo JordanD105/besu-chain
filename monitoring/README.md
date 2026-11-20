@@ -44,6 +44,8 @@ Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations]
 | `BesuNoNewBlocks` | critical | the newest block is older than 3 × the block period + 5 s for 1 min. If it keeps firing after `BesuValidatorQuorumLost` has cleared, restart all validators together (see *Chain halted…* in `besu-production/README.md`) |
 | `BesuNodeDown` | warning | a Besu node's metrics don't answer for 1 min |
 | `BesuPeersMissing` | warning | a node has fewer peers than (nodes up − 1) for 5 min |
+| `BesuPeersLow` | warning | a node has fewer than 2 peers for 2 min (one connection away from isolation) |
+| `BesuNodeStalled` | warning | a node's newest block is over 60 s old while the chain is current, for 1 min (stopped importing; `eth_syncing` may still say false) |
 | `BesuNotInSync` | warning | a node is syncing or > 10 blocks behind for 5 min |
 | `BesuTxPoolGrowing` | warning | > 1000 pending transactions on a node for 10 min |
 | `BesuUnpermittedPeers` | info | a node refused a connection from a node not in `permissions_config.toml` |
