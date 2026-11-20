@@ -185,12 +185,19 @@ def handler_for(name):
     return Handler
 
 
+class QuietServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        pass  # HAProxy closes its check connection as soon as it has the status line
+
+
 def main():
     if not NODES:
         sys.exit("RPC_NODES is empty")
     threading.Thread(target=loop, daemon=True).start()
-    servers = [ThreadingHTTPServer(("127.0.0.1", n["port"]), handler_for(n["name"])) for n in NODES]
-    servers.append(ThreadingHTTPServer(("127.0.0.1", STATUS_PORT), handler_for(None)))
+    servers = [QuietServer(("127.0.0.1", n["port"]), handler_for(n["name"])) for n in NODES]
+    servers.append(QuietServer(("127.0.0.1", STATUS_PORT), handler_for(None)))
     for server in servers[1:]:
         threading.Thread(target=server.serve_forever, daemon=True).start()
     log("checking %s every %ss (max age %ss, max behind %d, restart after %s min)" % (
