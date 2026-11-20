@@ -59,19 +59,37 @@
       register: base_loaded
       changed_when: "'loaded' in base_loaded.stdout"
 
-    - name: MPC image present?
-      ansible.builtin.command: docker image inspect {{ mpc_image }}
+    # What the MPC image is built from: the Dockerfile, Cargo.toml, Cargo.lock, src/, the vendored
+    # crates (offline/*.tgz) and the big-integer backend. Stored in the image as a label, so a change
+    # to the mpc-signer code (committed or not) rebuilds it, and an unchanged one is not rebuilt.
+    - name: MPC source hash
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        { printf 'bigint=%s\n' {{ mpc_bigint | quote }};
+        find Dockerfile Cargo.toml Cargo.lock src offline -type f ! -name README.md | LC_ALL=C sort | xargs sha256sum; }
+        | sha256sum | cut -d' ' -f1
+      args:
+        chdir: "{{ repo_root }}/mpc-signer"
+        executable: /bin/bash
+      register: mpc_src
+      changed_when: false
+      when: mpc_image_build | bool
+
+    - name: MPC image built from these sources?
+      ansible.builtin.command: >-
+        docker image inspect -f '{% raw %}{{ index .Config.Labels "besu-chain.mpc-source" }}{% endraw %}' {{ mpc_image }}
       register: img
       changed_when: false
       failed_when: false
       when: mpc_image_build | bool
 
-    - name: Build the MPC image (several minutes)
+    - name: Build the MPC image (several minutes; when missing or the mpc-signer code changed)
       ansible.builtin.command: >-
         docker build {{ ('--build-arg BIGINT=' ~ mpc_bigint) if mpc_bigint else '' }}
         {{ '--network none' if offline_build | bool else '' }}
+        --label besu-chain.mpc-source={{ mpc_src.stdout }}
         -t {{ mpc_image }} {{ repo_root }}/mpc-signer
-      when: mpc_image_build | bool and img.rc != 0
+      when: mpc_image_build | bool and (img.rc != 0 or img.stdout != mpc_src.stdout)
       changed_when: true
 
     - name: MPC image content ID (layers and config, the same for identical builds on every image store)

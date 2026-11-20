@@ -15,12 +15,15 @@ RUN --mount=type=bind,source=offline,target=/offline \
       && printf '[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "vendor"\n' > .cargo/config.toml \
       && offline=--offline; \
     fi \
-    && cargo build --release --locked $offline --no-default-features --features "$BIGINT" --bins
+    && cargo build --release --locked $offline --no-default-features --features "$BIGINT" --bins \
+    && mkdir -p /out && cp target/release/mpc-node target/release/mpc-coordinator /out/ \
+    && rm -rf target vendor
 
 FROM debian:bookworm-slim
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 RUN useradd --system --uid 10001 --home /data mpc && mkdir -p /data && chown mpc /data
-COPY --from=build /src/target/release/mpc-node /src/target/release/mpc-coordinator /usr/local/bin/
+# only the two programs leave the build stage (target/ is deleted in the same step: a small layer)
+COPY --from=build /out/mpc-node /out/mpc-coordinator /usr/local/bin/
 USER mpc
 VOLUME ["/data"]
 ENV MPC_DATA_DIR=/data

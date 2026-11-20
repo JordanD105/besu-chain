@@ -360,9 +360,10 @@ To change something, edit the setting (or commit the code change) and rerun `sit
   health checker restarts only when its script or settings changed.
 - New proxy / chainlens / Remix / documentation site code: rebuilt on the operator, copied only when the image content
   changed; the running proxy is recreated (seconds).
-- **A rebuilt MPC image** (same `mpc_image` tag, new content): `02-images.yml` builds it only when
-  the tag is missing on the operator, so to rebuild, remove it there first (`docker rmi <mpc_image>`).
-  It compares the image by content (layers and configuration), saves it again and loads it on every
+- **The MPC image after an `mpc-signer` code change:** `02-images.yml` labels the image with a hash of
+  what it is built from (`Dockerfile`, `Cargo.toml`, `Cargo.lock`, `src/`, the vendored crates,
+  `mpc_bigint`) and rebuilds it when that hash changes, even with the same `mpc_image` tag; unchanged
+  code is not rebuilt. It compares the image by content (layers and configuration), saves it again and loads it on every
   coordinator and MPC node host whose copy differs; a second run loads nothing. `04-coordinators.yml`
   then recreates the coordinators on it; the MPC node teams restart their nodes (`docker compose up
   -d` in the node folder, one team at a time; [MPC upgrade](../operations/mpc-signer-upgrade.md)).
