@@ -260,7 +260,7 @@ The other coordinator keeps signing through the VIP.
 **Warning.** No ready presignature for a big (hot) key for 2 minutes: signing falls back to the
 slow path (~0.6 s per signature).
 
-1. **Confirm:** *Pools of big keys*, *Presignatures generated per second*. After an MPC node or
+1. **Confirm:** MPC signer → *Keys needing attention* (which key, which coordinator), *Big keys: the 10 lowest pools*, *Presignatures generated per second*. After an MPC node or
    coordinator restart it is normal for a few minutes.
 2. **Fix:** if it lasts:
    - one of the 3 nodes down slows presigning: [MpcNodeDown](#mpcnodedown);

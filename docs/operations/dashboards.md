@@ -167,9 +167,27 @@ coordinator only: the network between those two hosts. Down from both: the node 
 
 ### Presignature pool
 
+Every pooled MPC key (classes `big` and `small`) has its own pool on **each** coordinator. With many
+keys, read the counts and **Keys needing attention**; the rest is there to look one up. Keys are
+**named** from the proxy (`proxy_account_info`, label `account`): SENDER01, registry admin, contract
+center, `<section> · upfront` / `consumption` / `payment`; a key without a name shows its address.
+Variables at the top: **Class** (big, small), **Section** and **Search** (part of a name or an
+address); a key without a name ignores the Section filter.
+
+![MPC signer, presignature pools (lab): counts, keys needing attention (none), all pooled keys by name](../images/screenshots/grafana-mpc-keys.png)
+
 | Panel | Shows | Healthy | If not |
 |---|---|---|---|
-| **Pools of big keys** | ready presignatures per big key (SENDER01, upfront accounts, other hot senders), with the target line | near the target | stays low while signing: signing is faster than presigning; refill by itself after bursts (`MpcPoolEmpty`) |
+| **Pooled keys** | keys with a pool, matching the filters | | |
+| **Empty pools** | pools with no presignature: that key signs the slow way (~0.6–1.5 s) | 0 | refill by itself after a burst or a node restart (`MpcPoolEmpty`) |
+| **Below half** | pools under half of their target | 0 | signing faster than presigning |
+| **Presignatures ready** / **Pool fill** | ready in these pools / ready ÷ their targets | ~100 % | |
+| **Presigning now** | presign sessions running for these keys | | |
+| **Keys needing attention** | only the pools with a problem: **EMPTY** red, **LOW** orange (under half), one row per key and coordinator; *all pools OK* when none | empty | |
+| **All pooled keys** | every key and coordinator, emptiest first, with pages: Key, State, Class, Coordinator, Kind, Section, Ready, Target, Fill (gauge), Presigning, Address | | |
+| **Lowest pools: 10 keys** | the 10 lowest fills, with the coordinator | 100 % | |
+| **Pool fill by class** | ready ÷ target of each class, per coordinator, over time | near 100 % | |
+| **Big keys: the 10 lowest pools** | at each moment the 10 big keys (SENDER01, upfront accounts, other hot senders) with the fewest presignatures, by name, with the target line | near the target | stays low while signing: signing is faster than presigning; refill by itself after bursts (`MpcPoolEmpty`) |
 | **Pools of small keys** | ready presignatures of all small keys (accounts from `/createaccount`), summed, with the total target | near the total | many small pools empty for long: `MpcSmallPoolsEmpty` |
 | **Presignatures generated per second** | presigning rate | — | **this is the sustained capacity**: signing faster than this drains the pools |
 | **Average presign duration** | seconds per presignature | stable | rising: CPU on the MPC nodes |
@@ -454,7 +472,7 @@ fired are not in the log.
 | Why are transactions not mined? | Proxy & Redis → *Senders needing attention* |
 | Which section runs out of money first? | Sections → *Sections needing attention*, *Fewest days left* |
 | Can we sign? Create accounts? | MPC signer → *MPC nodes up*, *Threshold* |
-| Why is signing slow? | MPC signer → *Signatures per second* (cold path), *Pools* |
+| Why is signing slow? | MPC signer → *Signatures per second* (cold path), *Keys needing attention* |
 | Is the API failing or slow? | Proxy & Redis → *5xx errors*, *Latency p95*, *Errors per second* |
 | Which section needs a top-up? | Sections → *Upfront below threshold*, *Upfront accounts* |
 | How much did each section earn this week? | Sections, Period = Week → *ETH moved per period* |
