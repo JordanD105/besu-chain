@@ -2740,6 +2740,66 @@ app.post("/admin/sections/:id/active", adminGuard, adminRoute(async (req) => {
     return { success: true, id: section.id, active: req.body.active, txHash: written.txHash };
 }));
 
+// ---- Admin routes: section money (step 3). Each transfer carries a memo naming the operation,
+// so the chain itself shows what it was. "all" moves the whole spendable balance (gas is free).
+
+function adminAmount(value, allowAll) {
+    const text = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+
+    if (allowAll && text === "all") {
+        return "all";
+    }
+
+    if (!/^\d+(\.\d+)?$/.test(text) || ethToWei(text) === 0n) {
+        throw httpError(400, allowAll ? "amount: a positive number of ETH, or \"all\"" : "amount: a positive number of ETH");
+    }
+
+    return text;
+}
+
+async function sectionMove(section, from, to, amountInput, memo) {
+    let amount = amountInput;
+
+    const result = await withSenderLock(from, async () => {
+        if (amount === "all") {
+            const available = await availableWei(from);
+
+            if (available === 0n) {
+                throw httpError(400, "nothing to move: the balance is 0");
+            }
+
+            amount = ethers.formatEther(available);
+        }
+
+        await assertCanPay(from, amount);
+        return pay(from, to, amount, true, memo);
+    });
+    console.log(`section ${section.id}: ${memo}: ${amount} ETH ${from} -> ${to} (${result.txHash})`);
+
+    return { success: true, id: section.id, operation: memo, from, to, amount, txHash: result.txHash, nonce: result.nonce };
+}
+
+// SENDER01 -> upfront_i
+app.post("/admin/sections/:id/topup", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    return sectionMove(section, CONFIG.SENDER01, section.accounts.upfront, adminAmount(req.body.amount, false),
+        `section ${section.id} top-up`);
+}));
+
+// consumption_i -> payment_i
+app.post("/admin/sections/:id/sweep", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    return sectionMove(section, section.accounts.consumption, section.accounts.payment, adminAmount(req.body.amount, true),
+        `section ${section.id} sweep`);
+}));
+
+// payment_i -> SENDER01
+app.post("/admin/sections/:id/payback", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    return sectionMove(section, section.accounts.payment, CONFIG.SENDER01, adminAmount(req.body.amount, true),
+        `section ${section.id} pay back`);
+}));
+
 // ---- Section calls (step 2): X-Section-Key + source IP -> section_i
 
 const ACCOUNT_USER = 1;

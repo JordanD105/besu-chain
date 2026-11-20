@@ -658,7 +658,7 @@ function noteStatus(status) {
 }
 
 function skipRefresh() {
-    if (document.hidden || /^#\/(contracts\/0x|deploy)/.test(location.hash)) {
+    if (document.hidden || /^#\/(contracts\/0x|deploy|sections)/.test(location.hash)) {
         return true;
     }
 
@@ -775,6 +775,15 @@ async function render(options) {
 
         if (path === "#/deploy") {
             return showDeploy();
+        }
+
+        if (path === "#/sections") {
+            return showSections();
+        }
+
+        const sectionPage = path.match(/^#\/sections\/(\d+)$/);
+        if (sectionPage) {
+            return showSection(sectionPage[1]);
         }
 
         const contract = path.match(/^#\/contracts\/(0x[0-9a-fA-F]{40})$/);
@@ -1640,6 +1649,250 @@ async function showDeploy() {
     ]));
 }
 
+// ---- Sections pages (docs/sections.md): only shown to the operator's and chainlens_deploy_ips'
+// browsers when the server has them on (chainlens_sections_enabled). Uses the admin token of the
+// Deploy page (same token, kept in this tab).
+async function sectionGet(path) {
+    const response = await fetch(path, { headers: { authorization: "Bearer " + deployToken() } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const error = new Error(data.error || ("HTTP " + response.status));
+        error.status = response.status;
+        throw error;
+    }
+    return data;
+}
+
+function tokenBox(onSaved) {
+    const input = el("input", { class: "table-search", type: "password", placeholder: t("sections.token"), "aria-label": t("sections.token"), autocomplete: "off", value: deployToken() });
+    const save = el("button", { type: "button", class: "fn-run" }, t("sections.useToken"));
+    save.addEventListener("click", () => { setDeployToken(input.value.trim()); onSaved(); });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter") save.click(); });
+    return el("div", { class: "deploy-form" }, [
+        el("label", {}, [el("span", { class: "muted" }, t("sections.token")), input]),
+        el("div", { class: "deploy-buttons" }, [save])
+    ]);
+}
+
+function keyBox(name, key) {
+    return el("div", { class: "key-box" }, [
+        el("b", {}, t("sections.keyFor").replace("{name}", name)),
+        el("div", { class: "muted" }, t("sections.keyOnce")),
+        el("div", { class: "key-value" }, [el("code", {}, key), copyButton(key)])
+    ]);
+}
+
+function ipText(list) {
+    return (list || []).join(", ");
+}
+
+function ipList(text) {
+    return String(text || "").split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+}
+
+async function showSections() {
+    const token = showToken;
+    const status = await api("/api/sections/status");
+    if (token !== showToken) {
+        return;
+    }
+    if (!status.enabled) {
+        return show(el("section", { class: "card" }, [el("h2", {}, t("sections.title")), el("div", { class: "empty" }, t("sections.off"))]));
+    }
+
+    const message = el("div", { class: "deploy-error" });
+    let data;
+    try {
+        data = deployToken() ? await sectionGet("/api/sections") : null;
+    } catch (error) {
+        if (error.status === 401) {
+            setDeployToken("");
+        }
+        message.textContent = error.message;
+    }
+    if (token !== showToken) {
+        return;
+    }
+    if (!data) {
+        return show(el("section", { class: "card" }, [el("h2", {}, t("sections.title")), el("div", { class: "muted", style: "margin-bottom:12px" }, t("sections.needToken")), tokenBox(() => render()), message]));
+    }
+
+    // create
+    const nameInput = el("input", { class: "table-search", placeholder: t("sections.name"), "aria-label": t("sections.name") });
+    const ipsInput = el("input", { class: "table-search", placeholder: "10.1.2.3, 10.1.5.0/24", "aria-label": t("sections.ips") });
+    const createButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("sections.create"));
+    const createResult = el("div");
+    createButton.addEventListener("click", async () => {
+        const name = nameInput.value.trim();
+        if (!name || !window.confirm(t("sections.confirmCreate").replace("{name}", name))) {
+            return;
+        }
+        createButton.disabled = true;
+        createResult.replaceChildren(el("span", { class: "muted" }, t("sections.creating")));
+        try {
+            const r = await deployPost("/api/sections", { name, allowedIps: ipList(ipsInput.value) });
+            createResult.replaceChildren(keyBox(r.section.name, r.apiKey), el("div", { style: "margin-top:8px" }, el("a", { href: "#/sections/" + r.section.id }, t("sections.open").replace("{name}", r.section.name))));
+            nameInput.value = "";
+            ipsInput.value = "";
+        } catch (error) {
+            createResult.replaceChildren(el("span", { class: "bad-text" }, error.message));
+        }
+        createButton.disabled = false;
+    });
+
+    const table = dataTable([
+        { label: "col.id", sort: (row) => row.id, cell: (row) => String(row.id) },
+        { label: "sections.name", sort: (row) => row.name, search: (row) => row.name, cell: (row) => el("a", { href: "#/sections/" + row.id }, row.name) },
+        { label: "sections.status", sort: (row) => (row.active ? 1 : 0), cell: (row) => el("span", { class: "badge " + (row.active ? "type" : "create") }, row.active ? t("sections.active") : t("sections.disabled")) },
+        { label: "sections.upfront", sort: (row) => Number(row.balances.upfront), cell: (row) => row.balances.upfront },
+        { label: "sections.consumption", sort: (row) => Number(row.balances.consumption), cell: (row) => row.balances.consumption },
+        { label: "sections.payment", sort: (row) => Number(row.balances.payment), cell: (row) => row.balances.payment },
+        { label: "sections.ips", sort: (row) => ipText(row.allowedIps), search: (row) => ipText(row.allowedIps), cell: (row) => ipText(row.allowedIps) }
+    ], data.sections, { sort: 0, dir: "asc", key: "sections" });
+
+    show(el("div", {}, [
+        el("section", { class: "card" }, [
+            el("div", { class: "card-head" }, [el("h2", {}, t("sections.title")), el("span", { class: "muted" }, t("sections.registry") + " " + short(data.registry))]),
+            data.sections.length ? table : el("div", { class: "empty" }, t("sections.none"))
+        ]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.new")),
+            el("div", { class: "muted", style: "margin-bottom:12px" }, t("sections.newNote")),
+            el("div", { class: "deploy-form" }, [
+                el("label", {}, [el("span", { class: "muted" }, t("sections.name")), nameInput]),
+                el("label", {}, [el("span", { class: "muted" }, t("sections.ips")), ipsInput]),
+                el("div", { class: "deploy-buttons" }, [createButton])
+            ]),
+            createResult
+        ]),
+        message
+    ]));
+}
+
+async function showSection(id) {
+    const token = showToken;
+    const status = await api("/api/sections/status");
+    if (token !== showToken) {
+        return;
+    }
+    if (!status.enabled) {
+        return show(el("section", { class: "card" }, [el("h2", {}, t("sections.title")), el("div", { class: "empty" }, t("sections.off"))]));
+    }
+    let data;
+    try {
+        data = await sectionGet("/api/sections/" + id + "/history");
+    } catch (error) {
+        if (error.status === 401) {
+            setDeployToken("");
+            return show(el("section", { class: "card" }, [el("h2", {}, t("sections.title")), el("div", { class: "muted", style: "margin-bottom:12px" }, t("sections.needToken")), tokenBox(() => render()), el("div", { class: "bad-text" }, error.message)]));
+        }
+        throw error;
+    }
+    if (token !== showToken) {
+        return;
+    }
+    const s = data.section;
+    const result = el("div", { class: "deploy-error" });
+    const done = (r, text) => {
+        result.replaceChildren(el("span", {}, text), r.txHash ? el("span", {}, [" ", ident(r.txHash, "#/transactions/" + r.txHash)]) : null,
+            el("span", { class: "muted" }, " " + t("sections.refreshSoon")));
+        setTimeout(() => { if (location.hash === "#/sections/" + id) render(); }, 4000);
+    };
+    const act = async (button, action, body, confirmText, onDone) => {
+        if (confirmText && !window.confirm(confirmText)) {
+            return;
+        }
+        button.disabled = true;
+        result.replaceChildren(el("span", { class: "muted" }, "…"));
+        try {
+            const r = await deployPost("/api/sections/" + id + "/" + action, body);
+            onDone(r);
+        } catch (error) {
+            result.replaceChildren(el("span", { class: "bad-text" }, error.message));
+        }
+        button.disabled = false;
+    };
+    const moveRow = (label, action, allowAll, from, to) => {
+        const input = el("input", { class: "table-search", placeholder: allowAll ? t("sections.amountOrAll") : t("sections.amount"), "aria-label": label });
+        const button = el("button", { type: "button", class: "fn-run" }, label);
+        button.addEventListener("click", () => {
+            const amount = input.value.trim();
+            if (!amount) {
+                return;
+            }
+            act(button, action, { amount }, t("sections.confirmMove").replace("{op}", label).replace("{amount}", amount).replace("{from}", from).replace("{to}", to),
+                (r) => { input.value = ""; done(r, label + ": " + r.amount + " ETH"); });
+        });
+        return el("div", { class: "section-action" }, [el("span", { class: "muted" }, label + " (" + from + " → " + to + ")"), el("div", { class: "section-inputs" }, [input, button])]);
+    };
+
+    const ipsInput = el("input", { class: "table-search", value: ipText(s.allowedIps), "aria-label": t("sections.ips") });
+    const ipsButton = el("button", { type: "button", class: "fn-run" }, t("sections.saveIps"));
+    ipsButton.addEventListener("click", () => act(ipsButton, "ips", { allowedIps: ipList(ipsInput.value) }, null, (r) => done(r, t("sections.ipsSaved"))));
+    const keyButton = el("button", { type: "button", class: "fn-run" }, t("sections.rotate"));
+    keyButton.addEventListener("click", () => act(keyButton, "key", {}, t("sections.confirmRotate").replace("{name}", s.name), (r) => result.replaceChildren(keyBox(s.name, r.apiKey))));
+    const activeButton = el("button", { type: "button", class: "fn-run" }, s.active ? t("sections.disable") : t("sections.enable"));
+    activeButton.addEventListener("click", () => act(activeButton, "active", { active: !s.active },
+        (s.active ? t("sections.confirmDisable") : t("sections.confirmEnable")).replace("{name}", s.name), (r) => done(r, r.active ? t("sections.active") : t("sections.disabled"))));
+
+    const accountRow = (role, label) => [el("span", { class: "muted" }, label), el("span", {}, [addr(s.accounts[role]), "  ", el("b", {}, s.balances[role] + " ETH")])];
+    const history = dataTable([
+        { label: "col.time", sort: (row) => row.timestamp || 0, cell: (row) => stamp(row.timestamp) },
+        { label: "sections.kind", sort: (row) => row.kind, search: (row) => row.kind + " " + (row.memo || ""), cell: (row) => el("span", { class: "badge type" }, row.kind) },
+        { label: "col.value", sort: (row) => Number(row.value), cell: (row) => row.value },
+        { label: "col.from", sort: (row) => row.from, cell: (row) => addr(row.from) },
+        { label: "col.to", sort: (row) => row.to || "", cell: (row) => (row.to ? addr(row.to) : el("span", {}, "—")) },
+        { label: "sections.memo", sort: (row) => row.memo || "", cell: (row) => row.memo || "" },
+        { label: "col.hash", sort: (row) => row.hash, cell: (row) => ident(row.hash, "#/transactions/" + row.hash) }
+    ], data.history, { sort: 0, dir: "desc", key: "section-history" });
+
+    show(el("div", {}, [
+        el("div", { class: "muted", style: "margin-bottom:10px" }, [el("a", { href: "#/sections" }, t("sections.title")), " / ", s.name]),
+        el("section", { class: "card" }, [
+            el("div", { class: "card-head" }, [
+                el("h2", {}, [s.name + " ", el("span", { class: "badge " + (s.active ? "type" : "create") }, s.active ? t("sections.active") : t("sections.disabled"))]),
+                el("span", { class: "muted" }, "#" + s.id)
+            ]),
+            el("div", { class: "kv" }, [
+                ...accountRow("upfront", t("sections.upfront")),
+                ...accountRow("consumption", t("sections.consumption")),
+                ...accountRow("payment", t("sections.payment")),
+                el("span", { class: "muted" }, t("sections.ips")), el("span", {}, ipText(s.allowedIps) || "—"),
+                el("span", { class: "muted" }, t("sections.created")), el("span", {}, stamp(s.createdAt))
+            ])
+        ]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.money")),
+            el("div", { class: "section-actions" }, [
+                moveRow(t("sections.topup"), "topup", false, "SENDER01", t("sections.upfront")),
+                moveRow(t("sections.sweep"), "sweep", true, t("sections.consumption"), t("sections.payment")),
+                moveRow(t("sections.payback"), "payback", true, t("sections.payment"), "SENDER01")
+            ]),
+            result
+        ]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.settings")),
+            el("div", { class: "section-actions" }, [
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.ips")), el("div", { class: "section-inputs" }, [ipsInput, ipsButton])]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.keyLabel")), el("div", { class: "section-inputs" }, [keyButton, activeButton])])
+            ])
+        ]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.history")),
+            data.history.length ? history : el("div", { class: "empty" }, t("sections.noHistory"))
+        ])
+    ]));
+}
+
+async function showSectionsNav() {
+    try {
+        const status = await api("/api/sections/status");
+        document.querySelector("#nav-sections").hidden = !status.enabled;
+    } catch (error) {
+        // stays hidden
+    }
+}
+
 async function showDeployNav() {
     try {
         const status = await api("/api/deploy/status");
@@ -2011,6 +2264,7 @@ function showApi() {
 
 window.addEventListener("hashchange", render);
 showDeployNav();
+showSectionsNav();
 document.addEventListener("localechange", () => {
     themeButton.setAttribute("aria-label", t(document.body.classList.contains("light") ? "theme.dark" : "theme.light"));
     render({ refresh: true });

@@ -94,6 +94,10 @@ chainlens_deploy_enabled: false
 # [192.168.68.1]. They can deploy contracts (with the token): list admin machines only. The firewall
 # opens chainlens (:30100) for them too, so they need not be in chainlens_ips.
 chainlens_deploy_ips: []
+# Sections page in chainlens (#/sections, docs/sections.md): create sections, top up, sweep, pay
+# back, API keys, allowed IPs, history. Same access as the Deploy page (operator_ip,
+# chainlens_deploy_ips, the same token). Off by default.
+chainlens_sections_enabled: false
 # The deployer: an MPC account used only for deployments, never SENDER01. Create it once with
 #   curl -s -X POST http://<vip_proxy>:30000/createaccount -H 'content-type: application/json' -d '{"amount":"0","pool":"none"}'
 chainlens_deployer: ""

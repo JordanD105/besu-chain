@@ -1433,17 +1433,29 @@ app.post("/api/contracts/:address/call", express.json({ limit: "64kb" }), async 
 // account (DEPLOYER) through the coordinator, with the checks of deploy.js. Allowed only from the
 // operator's IP (DEPLOY_ALLOWED_IPS) and with the token (DEPLOY_TOKEN). The record goes to
 // REGISTRY_LOCAL_DIR; the Ansible deployment copies it back to the repository.
+// The admin pages (Deploy, Sections) share one gate: the token and the allowed source addresses.
 const DEPLOY = {
     enabled: String(process.env.DEPLOY_ENABLED || "").toLowerCase() === "true",
-    token: process.env.DEPLOY_TOKEN || "",
+    token: process.env.ADMIN_TOKEN || process.env.DEPLOY_TOKEN || "",
     from: process.env.DEPLOYER || "",
     coordinator: process.env.COORDINATOR_URL || "",
     rpc: process.env.DEPLOY_RPC || BESU,
     sender01: process.env.SENDER01 || "",
     maxGas: process.env.MAX_GAS || "30000000",
-    allowed: (process.env.DEPLOY_ALLOWED_IPS || "").split(/[\s,]+/).filter(Boolean),
+    allowed: (process.env.ADMIN_ALLOWED_IPS || process.env.DEPLOY_ALLOWED_IPS || "").split(/[\s,]+/).filter(Boolean),
     busy: false
 };
+// Sections page (SECTIONS_ENABLED): forwards to the proxy's admin API, server-side (the proxy's
+// token never reaches the browser).
+const SECTIONS = {
+    enabled: String(process.env.SECTIONS_ENABLED || "").toLowerCase() === "true",
+    proxy: String(process.env.PROXY_ADMIN_URL || "").replace(/\/$/, ""),
+    proxyToken: process.env.PROXY_ADMIN_TOKEN || ""
+};
+if (SECTIONS.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !DEPLOY.allowed.length || !SECTIONS.proxy || !SECTIONS.proxyToken)) {
+    console.error("Sections page: ADMIN_TOKEN (16+ characters), ADMIN_ALLOWED_IPS, PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
+    SECTIONS.enabled = false;
+}
 if (DEPLOY.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !ethers.isAddress(DEPLOY.from) || !DEPLOY.coordinator || !DEPLOY.allowed.length)) {
     console.error("Deploy page: DEPLOY_TOKEN (16+ characters), DEPLOYER, COORDINATOR_URL and DEPLOY_ALLOWED_IPS are required; the page stays off");
     DEPLOY.enabled = false;
@@ -1515,6 +1527,122 @@ async function deployPlan(input) {
         coordinatorUrl: DEPLOY.coordinator, maxGas: DEPLOY.maxGas, sender01: DEPLOY.sender01
     });
 }
+
+// ---- Sections page (docs/sections.md): the operator's and chainlens_deploy_ips' browsers, with the
+// admin token. Every action is forwarded to the proxy's admin API.
+function sectionsGuard(req, res, next) {
+    if (!SECTIONS.enabled) {
+        return res.status(404).json({ error: "the Sections page is off (chainlens_sections_enabled)" });
+    }
+    if (!ipAllowed(req.socket.remoteAddress)) {
+        return res.status(403).json({ error: "the Sections page is only allowed from operator_ip and chainlens_deploy_ips" });
+    }
+    if (!tokenOk(req)) {
+        console.warn("sections: wrong token from", req.socket.remoteAddress);
+        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
+    }
+    next();
+}
+
+async function proxyAdmin(method, pathname, body) {
+    const response = await fetch(SECTIONS.proxy + pathname, {
+        method,
+        headers: { authorization: "Bearer " + SECTIONS.proxyToken, "content-type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(300000)
+    });
+    const data = await response.json().catch(() => ({ error: "the proxy answered HTTP " + response.status }));
+    return { status: response.status, data };
+}
+
+app.get("/api/sections/status", (req, res) => {
+    res.json({ enabled: SECTIONS.enabled && ipAllowed(req.socket.remoteAddress) });
+});
+
+const sectionsJson = express.json({ limit: "64kb" });
+const SECTION_ACTIONS = ["key", "ips", "active", "topup", "sweep", "payback"];
+
+app.get("/api/sections", sectionsGuard, async (req, res) => {
+    try {
+        const r = await proxyAdmin("GET", "/admin/sections?fresh=1");
+        res.status(r.status).json(r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+});
+
+app.post("/api/sections", sectionsJson, sectionsGuard, async (req, res) => {
+    try {
+        const r = await proxyAdmin("POST", "/admin/sections", { name: req.body.name, allowedIps: req.body.allowedIps });
+        console.log("sections: create", JSON.stringify(req.body.name), "from", req.socket.remoteAddress, "->", r.status);
+        res.status(r.status).json(r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+});
+
+app.get("/api/sections/:id", sectionsGuard, async (req, res) => {
+    if (!/^\d+$/.test(req.params.id)) {
+        return res.status(400).json({ error: "invalid section id" });
+    }
+    try {
+        const r = await proxyAdmin("GET", "/admin/sections/" + req.params.id);
+        res.status(r.status).json(r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+});
+
+app.post("/api/sections/:id/:action", sectionsJson, sectionsGuard, async (req, res) => {
+    if (!/^\d+$/.test(req.params.id) || !SECTION_ACTIONS.includes(req.params.action)) {
+        return res.status(404).json({ error: "unknown section action" });
+    }
+    try {
+        const r = await proxyAdmin("POST", "/admin/sections/" + req.params.id + "/" + req.params.action, req.body || {});
+        console.log("sections:", req.params.action, "section", req.params.id, JSON.stringify(req.body || {}), "from", req.socket.remoteAddress, "->", r.status);
+        res.status(r.status).json(r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+});
+
+// Money history of a section: every indexed transaction of its three accounts, labelled
+app.get("/api/sections/:id/history", sectionsGuard, async (req, res) => {
+    if (!/^\d+$/.test(req.params.id)) {
+        return res.status(400).json({ error: "invalid section id" });
+    }
+    try {
+        const r = await proxyAdmin("GET", "/admin/sections/" + req.params.id);
+        if (r.status !== 200) {
+            return res.status(r.status).json(r.data);
+        }
+        const acc = r.data.section.accounts;
+        const up = acc.upfront.toLowerCase();
+        const co = acc.consumption.toLowerCase();
+        const pa = acc.payment.toLowerCase();
+        const s01 = String(process.env.SENDER01 || "").toLowerCase();
+        const kind = (from, to) => {
+            if (to === up && from === s01) return "top-up";
+            if (from === co && to === pa) return "sweep";
+            if (from === pa && to === s01) return "pay back";
+            if (from === up) return "upfront -> account";
+            if (to === co) return "account -> consumption";
+            if (to === up || to === pa) return "received";
+            return "other";
+        };
+        const rows = db.txs.filter((tx) => {
+            const from = tx.from.toLowerCase();
+            const to = tx.to ? tx.to.toLowerCase() : "";
+            return [up, co, pa].includes(from) || [up, co, pa].includes(to);
+        }).slice(-500).reverse().map((tx) => ({
+            ...publicTx(tx),
+            kind: kind(tx.from.toLowerCase(), tx.to ? tx.to.toLowerCase() : "")
+        }));
+        res.json({ section: r.data.section, history: rows, indexed: db.indexed, head: db.head });
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+});
 
 app.get("/api/deploy/status", (req, res) => {
     if (!DEPLOY.enabled || !ipAllowed(req.socket.remoteAddress)) {
@@ -1726,6 +1854,7 @@ app.get("/api/search", (req, res) => {
 app.listen(PORT, HOST, () => {
     console.log(`Chainlens http://${HOST}:${PORT}`);
     console.log(`Besu ${BESU}`);
+    console.log(SECTIONS.enabled ? `Sections page on: proxy ${SECTIONS.proxy}, from ${DEPLOY.allowed.join(" ")}` : "Sections page off");
     console.log(DEPLOY.enabled ? `Deploy page on: deployer ${DEPLOY.from}, from ${DEPLOY.allowed.join(" ")}` : "Deploy page off");
     loop();
 });
