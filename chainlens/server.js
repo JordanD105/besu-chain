@@ -1539,6 +1539,15 @@ function buildSectionStats(period) {
     };
     const center = CONTRACT_CENTER.toLowerCase();
     const firstFunding = new Map(); // user -> first time its section's upfront account paid it
+    // balance changes of the section accounts, to rebuild each period's closing balances backwards
+    // from today's (gas is free on this chain: min-gas-price 0)
+    const BALANCE_ROLES = { upfront: "upfront", consumption: "consumption", payment: "payment", user: "users" };
+    const deltas = []; // { id, role, ms, eth }
+    const move = (info, ms, eth) => {
+        if (info && info.sectionId && BALANCE_ROLES[info.role] && eth !== 0) {
+            deltas.push({ id: info.sectionId, role: BALANCE_ROLES[info.role], ms, eth });
+        }
+    };
 
     for (const tx of db.txs) {
         if (tx.status !== "success") {
@@ -1561,6 +1570,21 @@ function buildSectionStats(period) {
         const eth = Number(ethers.formatEther(BigInt(tx.value || "0x0")));
         const fr = f && f.role;
         const tr = t && t.role;
+        if (eth > 0) {
+            move(f, ms, -eth);
+            move(t, ms, eth);
+            if (tx.functionName === "buy" && fr === "user") {
+                // the collection passes the price on: to the buyer's section's consumption account on a
+                // first sale (center was the seller), to the seller on a resale
+                const transfer = (tx.events || []).find((e) => e.name === "Transfer" && e.args[0]);
+                const seller = transfer ? String(transfer.args[0].value).toLowerCase() : null;
+                if (seller === center) {
+                    move({ sectionId: fid, role: "consumption" }, ms, eth);
+                } else if (seller) {
+                    move(sectionOf(seller), ms, eth);
+                }
+            }
+        }
         if (fr === "sender01" && tr === "upfront") {
             add(tid, ms, "topup", eth);
         } else if (fr === "upfront" && tr === "user" && fid === tid) {
@@ -1601,6 +1625,21 @@ function buildSectionStats(period) {
         }
     }
 
+    // closing balances: today's, minus every change after the period's end
+    const current = new Map(((overview.data && overview.data.sections) || []).map((x) => [x.id, x.balances || {}]));
+    const ends = starts.slice(1).concat([Infinity]);
+    for (const [id] of sections) {
+        const now = current.get(id) || {};
+        const mine = deltas.filter((d) => d.id === id);
+        data.get(id).forEach((row, i) => {
+            row.balances = {};
+            for (const role of ["upfront", "consumption", "payment", "users"]) {
+                const later = mine.filter((d) => d.role === role && d.ms >= ends[i]).reduce((sum, d) => sum + d.eth, 0);
+                row.balances[role] = Math.max(0, Math.round(((now[role] || 0) - later) * 1e6) / 1e6);
+            }
+        });
+    }
+
     const round = (v) => Math.round(v * 1e6) / 1e6;
     return {
         period,
@@ -1609,7 +1648,7 @@ function buildSectionStats(period) {
         periods: starts.map((start) => ({ start, label: periodLabel(start, period) })),
         sections: sections.map(([id, s]) => ({
             id, name: s.name, active: s.active,
-            values: data.get(id).map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, round(v)])))
+            values: data.get(id).map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, typeof v === "number" ? round(v) : v])))
         }))
     };
 }

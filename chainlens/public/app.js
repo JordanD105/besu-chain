@@ -1076,7 +1076,7 @@ function balancesTable(sections) {
 // in a column chart (one series, one axis); click a column for that period's table by section.
 const STAT_UNITS = { newUsers: "count", nftSales: "count", nftFirstSales: "count", txs: "count" };
 const STAT_COLUMNS = ["newUsers", "income", "fromUsers", "nftSales", "nftEth", "toUsers", "topup", "sweep", "payback", "txs"];
-const statState = { period: "month", section: "all", metric: "income", index: null };
+const statState = { period: "month", section: "all", metric: "balances", index: null };
 const statCache = new Map(); // period -> the last answer (drawn at once on the dashboard's refresh)
 
 function statValue(value, metric) {
@@ -1086,7 +1086,20 @@ function statValue(value, metric) {
 function statSum(stats, metric, index) {
     return stats.sections
         .filter((s) => statState.section === "all" || String(s.id) === statState.section)
-        .reduce((sum, s) => sum + s.values[index][metric], 0);
+        .reduce((sum, s) => sum + (metric.startsWith("bal:")
+            ? (s.values[index].balances || {})[metric.slice(4)] || 0
+            : metric === "balances"
+                ? BALANCE_SLOTS.reduce((t2, [role]) => t2 + ((s.values[index].balances || {})[role] || 0), 0)
+                : s.values[index][metric]), 0);
+}
+
+// one stacked column (bottom to top: upfront, consumption, payment, users), as the balance bars
+function balanceColumn(stats, i, max) {
+    const segments = BALANCE_SLOTS.map(([role, slot]) => {
+        const v = statSum(stats, "bal:" + role, i);
+        return v > 0 && max > 0 ? el("i", { class: "col-seg " + slot, style: "height:" + (v / max * 100) + "%" }) : null;
+    }).filter(Boolean);
+    return el("span", { class: "col-stack" }, segments);
 }
 
 function statsCard() {
@@ -1131,7 +1144,8 @@ function statsCard() {
         ]);
         sectionSelect.value = statState.section;
         sectionSelect.addEventListener("change", () => { statState.section = sectionSelect.value; load(); });
-        const metricSelect = el("select", { "aria-label": t("stats.measure") }, STAT_COLUMNS.map((m) => el("option", { value: m }, t("stats." + m))));
+        const metricSelect = el("select", { "aria-label": t("stats.measure") }, ["balances", ...STAT_COLUMNS].map((m) => el("option", { value: m }, t("stats." + m))));
+        const stacked = metric === "balances";
         metricSelect.value = metric;
         metricSelect.addEventListener("change", () => { statState.metric = metricSelect.value; load(); });
 
@@ -1144,13 +1158,17 @@ function statsCard() {
                 const label = i === index || (i === peak && max > 0) ? statValue(sums[i], metric) : "";
                 const col = el("button", { type: "button", class: "col" + (i === index ? " on" : ""), "aria-label": p.label + ": " + statValue(sums[i], metric) }, [
                     el("span", { class: "col-value" }, label),
-                    el("span", { class: "col-track" }, [el("i", { class: "col-bar", style: "height:" + (max > 0 ? Math.max(sums[i] > 0 ? 2 : 0, sums[i] / max * 100) : 0) + "%" })]),
+                    el("span", { class: "col-track" }, [stacked ? balanceColumn(stats, i, max)
+                        : el("i", { class: "col-bar", style: "height:" + (max > 0 ? Math.max(sums[i] > 0 ? 2 : 0, sums[i] / max * 100) : 0) + "%" })]),
                     el("span", { class: "col-label" }, p.label)
                 ]);
                 col.addEventListener("click", () => { statState.index = i; load(); });
                 col.addEventListener("mousemove", (event) => showVizTip(event, [
                     [p.label + (statState.section === "all" ? "" : " · " + sectionSelect.selectedOptions[0].textContent)],
-                    ...STAT_COLUMNS.map((m) => [t("stats." + m), statValue(statSum(stats, m, i), m), m === metric ? "s1" : null])
+                    ...(stacked
+                        ? [...BALANCE_SLOTS.slice().reverse().map(([role, slot]) => [balanceLabel(role), ethText(statSum(stats, "bal:" + role, i)) + " ETH", slot]),
+                            [t("platform.total"), ethText(sums[i]) + " ETH"]]
+                        : STAT_COLUMNS.map((m) => [t("stats." + m), statValue(statSum(stats, m, i), m), m === metric ? "s1" : null]))
                 ]));
                 col.addEventListener("mouseleave", hideVizTip);
                 return col;
@@ -1160,16 +1178,30 @@ function statsCard() {
         const rows = stats.sections
             .filter((s) => statState.section === "all" || String(s.id) === statState.section)
             .map((s) => Object.assign({ name: s.name }, s.values[index]));
-        const table = dataTable([
-            { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
-            ...STAT_COLUMNS.map((m) => ({ label: "stats." + m, sort: (r) => r[m], cell: (r) => statValue(r[m], m) }))
-        ], rows, { key: "section-stats", compact: true });
-        const totals = el("div", { class: "stat-totals" }, STAT_COLUMNS.slice(0, 6).map((m) =>
-            el("div", { class: "stat-total" + (m === metric ? " on" : "") }, [el("span", {}, t("stats." + m)), el("b", {}, statValue(statSum(stats, m, index), m))])));
+        const balanceTotal = (r) => BALANCE_SLOTS.reduce((sum, [role]) => sum + ((r.balances || {})[role] || 0), 0);
+        const table = stacked
+            ? dataTable([
+                { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
+                ...BALANCE_SLOTS.map(([role]) => ({ label: role === "users" ? "platform.usersSeg" : "role." + role, sort: (r) => (r.balances || {})[role] || 0, cell: (r) => ethText((r.balances || {})[role] || 0) })),
+                { label: "platform.total", sort: balanceTotal, cell: (r) => ethText(balanceTotal(r)) }
+            ], rows, { key: "section-stats-balances", compact: true })
+            : dataTable([
+                { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
+                ...STAT_COLUMNS.map((m) => ({ label: "stats." + m, sort: (r) => r[m], cell: (r) => statValue(r[m], m) }))
+            ], rows, { key: "section-stats", compact: true });
+        const totals = stacked
+            ? el("div", { class: "stat-totals" }, [
+                ...BALANCE_SLOTS.map(([role, slot]) => el("div", { class: "stat-total" }, [
+                    el("span", {}, [el("i", { class: "viz-swatch " + slot }), " " + balanceLabel(role) + " (ETH)"]), el("b", {}, ethText(statSum(stats, "bal:" + role, index)))])),
+                el("div", { class: "stat-total on" }, [el("span", {}, t("platform.total") + " (ETH)"), el("b", {}, ethText(sums[index]))])
+            ])
+            : el("div", { class: "stat-totals" }, STAT_COLUMNS.slice(0, 6).map((m) =>
+                el("div", { class: "stat-total" + (m === metric ? " on" : "") }, [el("span", {}, t("stats." + m)), el("b", {}, statValue(statSum(stats, m, index), m))])));
 
         holder.replaceChildren(
             el("div", { class: "card-head" }, [el("h2", {}, t("stats.title")), el("div", { class: "stat-controls" }, [tabs, sectionSelect, metricSelect])]),
-            el("div", { class: "muted stat-note" }, t("stats.note")),
+            el("div", { class: "muted stat-note" }, t(stacked ? "stats.noteBalances" : "stats.note")),
+            stacked ? vizLegend() : null,
             columns,
             el("h3", { class: "stat-period" }, stats.periods[index].label + (statState.section === "all" ? "" : " · " + sectionSelect.selectedOptions[0].textContent)),
             totals,

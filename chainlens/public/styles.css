@@ -604,17 +604,26 @@ body.light { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s0: #868b95; }
 .col-track { display: flex; align-items: flex-end; justify-content: center; min-height: 0; }
 .col-bar { display: block; width: min(28px, 70%); background: var(--s1); border-radius: 4px 4px 0 0; opacity: .7; }
 .col.on .col-bar { opacity: 1; }
+.col-stack { display: flex; flex-direction: column-reverse; gap: 2px; width: min(28px, 70%); height: 100%; justify-content: flex-start; }
+.col-seg { display: block; width: 100%; min-height: 2px; opacity: .8; }
+.col-seg:last-child { border-radius: 4px 4px 0 0; }
+.col.on .col-seg { opacity: 1; }
+.col-seg.s1 { background: var(--s1); }
+.col-seg.s2 { background: var(--s2); }
+.col-seg.s3 { background: var(--s3); }
+.col-seg.s0 { background: var(--s0); }
+.stat-total .viz-swatch { vertical-align: -1px; }
 .col-label { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: center; text-align: center; }
 .col.on .col-label { color: var(--text); font-weight: 600; }
 .stat-period { margin: 6px 0 0; font-size: 14px; }
 .table-scroll { overflow-x: auto; }
 .table-scroll table { min-width: 760px; }
-.stat-totals { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.stat-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
 .stat-total { background: var(--raised); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
 .stat-total span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stat-total b { font-size: 18px; font-variant-numeric: tabular-nums; }
 .stat-total.on { box-shadow: inset 3px 0 0 var(--s1); }
-@media (max-width: 900px) { .stat-totals { grid-template-columns: repeat(3, minmax(0, 1fr)); } .col-label { font-size: 10px; } }
+@media (max-width: 900px) { .col-label { font-size: 10px; } }
 @media (max-width: 640px) { .stat-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .col-value { font-size: 10px; } .viz-parts { min-width: 0; gap: 2px; } }
 .viz-end { color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 48px; text-align: right; }
 .viz-legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 4px; }

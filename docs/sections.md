@@ -198,6 +198,7 @@ transactions, by the roles of sender and receiver:
 
 | Measure | Counted from |
 |---|---|
+| Balances (end of period), the default | each period's closing balances (upfront / consumption / payment / users), stacked like the Sections bars: today's balances minus every later change (gas is free on this chain) |
 | New users | the registry's `AccountAdded` (or the account's first funding, if earlier) |
 | +x from users | user account → the section's consumption account |
 | NFT sales / NFT sales (ETH) | `buy` calls by the section's user accounts (first sales: the center was the seller) |
