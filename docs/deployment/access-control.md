@@ -1,10 +1,13 @@
 # Access control
 
 > **What:** Who may connect to each service (proxy, chainlens, Grafana, Remix, the documentation site, the operator), how to allow addresses or networks, and how to check it.
+>
 > **For:** operators.
+>
 > **Related:** [Ansible](ansible.md) · [high availability](high-availability.md) · [production layout](../overview/production-layout.md)
 
 **Contents**
+
 - [Admin pages and the proxy admin API](#admin-pages-and-the-proxy-admin-api)
 - [Fixed rules (not settings)](#fixed-rules-not-settings)
 - [Single addresses and networks](#single-addresses-and-networks)

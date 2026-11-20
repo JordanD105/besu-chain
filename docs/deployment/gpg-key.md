@@ -1,10 +1,13 @@
 # GPG key for the node-key backups
 
 > **What:** The GPG key that encrypts the node-key backups: create it, give Ansible the public half, keep the private half offline, check and decrypt backups.
+>
 > **For:** operators.
+>
 > **Related:** [Ansible](ansible.md) · [disaster recovery](../operations/disaster-recovery.md) · [restore](../operations/restore.md)
 
 **Contents**
+
 - [1. Create the key pair](#1-create-the-key-pair)
 - [2. Export the public key for Ansible](#2-export-the-public-key-for-ansible)
 - [3. Move the private key off the operator (if you created it there)](#3-move-the-private-key-off-the-operator-if-you-created-it-there)

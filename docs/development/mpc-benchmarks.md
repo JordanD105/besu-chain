@@ -1,10 +1,13 @@
 # MPC signer benchmarks
 
 > **What:** Throughput and latency of the MPC signer, and how to size the MPC nodes.
+>
 > **For:** developers, capacity planning.
+>
 > **Related:** [MPC signer](../components/mpc-signer.md) · [development environment](../getting-started/development.md)
 
 **Contents**
+
 - [How to run](#how-to-run)
 - [Measured results](#measured-results)
 - [Reading the numbers](#reading-the-numbers)

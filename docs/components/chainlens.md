@@ -3,11 +3,14 @@
 > **What:** the web explorer of the chain (`chainlens/`): blocks, transactions, accounts, contracts,
 > NFTs, the platform overview and section statistics, plus admin pages for deploying contracts,
 > managing sections and minting / selling NFTs.
+>
 > **For:** everyone who looks at the chain; the admin pages are for operators.
+>
 > **Related:** [sections](../features/sections.md) · [contract deployment](../features/contract-deployment.md) ·
 > [NFT workflow](../features/nft-workflow.md) · [access control](../deployment/access-control.md)
 
 **Contents**
+
 - [At a glance](#at-a-glance)
 - [Pages](#pages)
 - [Admin pages](#admin-pages)

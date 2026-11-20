@@ -2,11 +2,14 @@
 
 > **What:** this documentation as a self-hosted website: built from `docs/` with MkDocs (Material
 > theme) into static HTML and served by nginx in Docker. Search, dark mode, no internet needed.
+>
 > **For:** operators (deploying it) and everyone (reading it).
+>
 > **Related:** [documentation map](../README.md) · [access control](../deployment/access-control.md) ·
 > [Ansible](../deployment/ansible.md)
 
 **Contents**
+
 - [At a glance](#at-a-glance)
 - [Production (Ansible)](#production-ansible)
 - [Any Docker host](#any-docker-host)

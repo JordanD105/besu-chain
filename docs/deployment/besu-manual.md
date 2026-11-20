@@ -1,10 +1,13 @@
 # Besu production packages (manual setup)
 
 > **What:** The production Besu packages used by hand (Ansible does the same): network files, starting nodes, adding and removing validators, operations.
+>
 > **For:** operators.
+>
 > **Related:** [Ansible](ansible.md) · [production layout](../overview/production-layout.md) · [disaster recovery](../operations/disaster-recovery.md)
 
 **Contents**
+
 - [Production vs. test network](#production-vs-test-network)
 - [Sizing and topology](#sizing-and-topology)
 - [Step by step](#step-by-step)
@@ -17,6 +20,7 @@
 
 [`besu-production/`](../../besu-production) is the production counterpart of
 [`besu-test-network/`](../../besu-test-network), for a permissioned QBFT network:
+
 - **validators**, one per host and failure domain, reachable only over p2p;
 - **RPC nodes**, non-validating, serving the proxy, the MPC coordinator and the explorer.
 
@@ -24,6 +28,7 @@ Every node's key is generated **on its own host** and never leaves it. The opera
 public enodes and builds the network files from them.
 
 Every step was dry-run with 4 validator hosts and 1 RPC node, each with its own IP:
+
 - network build and start, with checksum verification;
 - a transaction through the RPC node, and the RPC node refusing `admin_*`;
 - one validator stopped: blocks continue. Two stopped: the chain halts. Restarted: it resumes.
@@ -142,6 +147,7 @@ Then run:
 ```
 
 `init.sh`:
+
 - generates the node key inside the `besu-data` volume (from the kernel's random generator);
 - writes `<NODE_NAME>.json` with the **public** enode and address. Send this file to the operator.
 - Back up the key now: `./backup-key.sh /secure/dir`, encrypt the file, and store it in this team's
@@ -157,6 +163,7 @@ ALLOC="0x<SENDER01>=1000000000000000000000000" \
 ```
 
 This produces:
+
 - `genesis.json`, with the QBFT validator set encoded by Besu (`rlp encode --type=QBFT_EXTRA_DATA`);
 - `static-nodes.json`;
 - `permissions_config.toml`, the node allowlist;
@@ -203,6 +210,7 @@ curl -s http://192.168.68.150:8545 -H 'content-type: application/json' --data '{
 ```
 
 Then point the applications at the RPC nodes:
+
 - proxy (.135, .136): `BESU_IP=192.168.68.150`, `BESU_PORT=8545` (HAProxy);
 - coordinators: `MPC_BESU_RPC=http://192.168.68.150:8545`;
 - chainlens (.139): `BESU_RPC=http://192.168.68.136:8555` (rpc2).

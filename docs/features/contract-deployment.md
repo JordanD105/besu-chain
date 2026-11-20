@@ -1,10 +1,13 @@
 # Contract deployment (chainlens Deploy page)
 
 > **What:** Deploying compiled contracts from the chainlens Deploy page, signed by the contract account center and registered on chain.
+>
 > **For:** operators, contract developers.
+>
 > **Related:** [Remix](../components/remix.md) · [NFT workflow](nft-workflow.md) · [contract records](contract-records.md)
 
 **Contents**
+
 - [Turn it on](#turn-it-on)
 - [Deploy](#deploy)
 - [The records](#the-records)

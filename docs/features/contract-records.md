@@ -1,10 +1,13 @@
 # Contract records
 
 > **What:** The contract registry folder `contracts/deployments/`: one JSON record per deployed contract.
+>
 > **For:** operators, contract developers.
+>
 > **Related:** [contract deployment](contract-deployment.md) · [chainlens](../components/chainlens.md)
 
 **Contents**
+
 - [Two kinds of registration](#two-kinds-of-registration)
 - [What a record holds](#what-a-record-holds)
 - [Publish a record](#publish-a-record)

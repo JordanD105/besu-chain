@@ -1,10 +1,13 @@
 # MPC signer in production
 
 > **What:** The MPC signer in production: three teams, tokens, the key ceremony, backups and restore, operations.
+>
 > **For:** MPC node teams, operators.
+>
 > **Related:** [MPC signer](../components/mpc-signer.md) · [MPC upgrade](../operations/mpc-signer-upgrade.md) · [disaster recovery](../operations/disaster-recovery.md)
 
 **Contents**
+
 - [1. Prerequisites](#1-prerequisites)
 - [2. Build and distribute the image (once per release, e.g. in CI)](#2-build-and-distribute-the-image-once-per-release-eg-in-ci)
 - [3. Generate the shared tokens (operator)](#3-generate-the-shared-tokens-operator)
@@ -24,6 +27,7 @@
 ---
 
 This guide deploys the 2-of-3 MPC signer for production:
+
 - **three MPC nodes** on three hosts, run by **three different admin teams**;
 - **two coordinators**, behind HAProxy on a floating IP.
 
@@ -150,6 +154,7 @@ Then run:
 ```
 
 `init.sh`:
+
 - generates this node's `MPC_NODE_PASSPHRASE` into `.env` (mode 600);
 - creates the node identity in the `mpc-data` Docker volume;
 - writes `node<ID>.json`, containing the node's **public** keys and URL.
@@ -368,10 +373,12 @@ holds an identity.
 ## 14. If a share is lost for good
 
 If a node's data **and** its backup (or its passphrase) are lost:
+
 - **Signing still works** with the other two nodes.
 - **There is no redundancy left**, and the library cannot re-share or refresh keys yet.
 
 To recover redundancy:
+
 1. Build a **new** cluster (steps 4–8) with new keys.
 2. Move funds from the old `SENDER01` and user accounts to the new keys.
 3. Deploy new NFT collections. A collection's minter is fixed to the `SENDER01` that deployed it.

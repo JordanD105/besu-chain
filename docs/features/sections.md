@@ -1,10 +1,13 @@
 # Sections
 
 > **What:** Sections: business units with their own API key, accounts and money flow, recorded in the on-chain SectionRegistry; plus registered contracts, NFT collections v3 and section monitoring.
+>
 > **For:** architects, developers, business admins.
+>
 > **Related:** [proxy API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md) · [NFT workflow](nft-workflow.md)
 
 **Contents**
+
 - [Accounts](#accounts)
 - [Architecture](#architecture)
 - [The SectionRegistry (on chain, version 2)](#the-sectionregistry-on-chain-version-2)

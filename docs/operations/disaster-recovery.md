@@ -1,10 +1,13 @@
 # Disaster recovery
 
 > **What:** What is backed up and when, the alerts that watch the backups, recovery steps per scenario, and drills.
+>
 > **For:** operators.
+>
 > **Related:** [restore with Ansible](restore.md) · [alerts](alerts.md) · [GPG key](../deployment/gpg-key.md)
 
 **Contents**
+
 - [1. Roles and contacts](#1-roles-and-contacts)
 - [2. What must survive, and where it is](#2-what-must-survive-and-where-it-is)
 - [3. Backup schedule](#3-backup-schedule)

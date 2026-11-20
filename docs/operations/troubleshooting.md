@@ -1,10 +1,13 @@
 # Troubleshooting
 
 > **What:** symptoms you may see, their usual cause, how to check and how to fix. Organized by symptom.
+>
 > **For:** operators on duty.
+>
 > **Related:** [alerts](alerts.md) · [disaster recovery](disaster-recovery.md) · [architecture](../overview/architecture.md)
 
 **Contents**
+
 - [First checks](#first-checks)
 - [Chain](#chain)
 - [RPC and the RPC VIP](#rpc-and-the-rpc-vip)

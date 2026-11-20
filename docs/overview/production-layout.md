@@ -1,10 +1,13 @@
 # Production layout
 
 > **What:** The production layout in full: every host, port and setting, the manual deployment from scratch, the failure table and failover tests.
+>
 > **For:** operators, reviewers.
+>
 > **Related:** [architecture](architecture.md) · [Ansible](../deployment/ansible.md) · [high availability](../deployment/high-availability.md)
 
 **Contents**
+
 - [1. Hosts](#1-hosts)
 - [2. Settings per component](#2-settings-per-component)
 - [3. Ports and firewall](#3-ports-and-firewall)

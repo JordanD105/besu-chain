@@ -1,11 +1,14 @@
 # Proxy API reference
 
 > **What:** every endpoint of the proxy (`proxy/stress-latest.js`), with request bodies and answers.
+>
 > **For:** application developers and operators.
+>
 > **Related:** [proxy component](../components/proxy.md) · [sections](../features/sections.md) ·
 > [NFT workflow](../features/nft-workflow.md) · [glossary](../glossary.md)
 
 **Contents**
+
 - [Conventions](#conventions)
 - [Accounts and transfers](#accounts-and-transfers)
 - [Section calls (`X-Section-Key`)](#section-calls-x-section-key)

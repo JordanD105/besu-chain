@@ -1,10 +1,13 @@
 # Operator guide
 
 > **What:** Deploying production with Ansible from the operator machine, step by step: tools, SSH access, settings, the runs, and what to do afterwards.
+>
 > **For:** operators (start here for production).
+>
 > **Related:** [Ansible](ansible.md) · [access control](access-control.md) · [architecture](../overview/architecture.md)
 
 **Contents**
+
 - [1. Install the tools on the operator](#1-install-the-tools-on-the-operator)
 - [2. Get the code](#2-get-the-code)
 - [3. SSH access to the 5 hosts](#3-ssh-access-to-the-5-hosts)

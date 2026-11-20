@@ -1,7 +1,9 @@
 # Remix IDE (self-hosted)
 
 > **What:** The self-hosted Remix IDE with a local Solidity compiler mirror, and how to use it with this chain.
+>
 > **For:** contract developers, operators.
+>
 > **Related:** [contract deployment](../features/contract-deployment.md) · [NFT workflow](../features/nft-workflow.md) · [access control](../deployment/access-control.md)
 
 ---

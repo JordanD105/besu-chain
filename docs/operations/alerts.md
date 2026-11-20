@@ -1,10 +1,13 @@
 # Alerts
 
 > **What:** Every alert of the monitoring stack: when it fires, what it means and what to do.
+>
 > **For:** operators on duty.
+>
 > **Related:** [troubleshooting](troubleshooting.md) · [monitoring](../components/monitoring.md) · [disaster recovery](disaster-recovery.md)
 
 **Contents**
+
 - [How alerts work here](#how-alerts-work-here)
 - [1. Besu: the chain (`besu.yml`)](#1-besu-the-chain-besuyml)
 - [2. MPC signing (`mpc.yml`)](#2-mpc-signing-mpcyml)

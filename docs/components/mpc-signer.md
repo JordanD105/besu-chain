@@ -1,10 +1,13 @@
 # MPC signer
 
 > **What:** The 2-of-3 MPC signer: design, protocol, quick start and security notes.
+>
 > **For:** MPC node teams, developers, reviewers.
+>
 > **Related:** [MPC production](../deployment/mpc-signer-production.md) · [MPC upgrade](../operations/mpc-signer-upgrade.md) · [benchmarks](../development/mpc-benchmarks.md)
 
 **Contents**
+
 - [How signing works](#how-signing-works)
 - [Presignature pools: big, small, none](#presignature-pools-big-small-none)
 - [Coordinator API](#coordinator-api)
@@ -158,6 +161,7 @@ cd mpc-signer/quickstart
 ```
 
 What `init` creates:
+
 - **`.env`** (mode 600): node passphrases, the node token and the admin token. Never commit it.
 - **`cluster.json`**: node public keys and the signing policy (`chain_id`, value limit, gas limit, allowlist).
 - **One Docker volume per node** (`node0-data` …): that node's sealed key share.
@@ -173,11 +177,13 @@ Other commands:
 | `./quickstart.sh destroy` | deletes all shares and secrets. Any funds held by MPC addresses are then lost |
 
 Options, set as environment variables before `init`:
+
 - `MPC_BIGINT=bigint-rug` uses GMP: presigning is several times faster, but it adds an LGPL
   dependency. Default: `bigint-num` (pure Rust).
 - `CHAIN_ID=…` sets the chain id in the signing policy (default 1337).
 
 Options in `.env` (read by `quickstart/docker-compose.yml`):
+
 - `MPC_PUBLISH=0.0.0.0:9100` exposes the coordinator beyond localhost (default `127.0.0.1:9100`).
 - `MPC_METRICS_TOKEN` protects `GET /metrics`. Dashboards and alerts:
   [Monitoring](monitoring.md).

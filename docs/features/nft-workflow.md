@@ -1,10 +1,13 @@
 # NFT workflow
 
 > **What:** From Solidity to an NFT sale: compile in Remix, deploy in chainlens, mint, create a buyer, sell.
+>
 > **For:** contract developers, business admins.
+>
 > **Related:** [sections](sections.md) · [proxy API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md)
 
 **Contents**
+
 - [0. Before you start](#0-before-you-start)
 - [1. Compile in Remix](#1-compile-in-remix)
 - [2. Deploy in chainlens](#2-deploy-in-chainlens)

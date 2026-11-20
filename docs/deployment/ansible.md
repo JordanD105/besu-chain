@@ -1,10 +1,13 @@
 # Ansible deployment
 
 > **What:** The Ansible deployment: settings, phases, the steps of the MPC teams, the operator state, reruns and security notes.
+>
 > **For:** operators.
+>
 > **Related:** [operator guide](operator-guide.md) · [access control](access-control.md) · [troubleshooting](../operations/troubleshooting.md)
 
 **Contents**
+
 - [1. Requirements](#1-requirements)
 - [2. Settings](#2-settings)
 - [3. Run](#3-run)
@@ -78,6 +81,7 @@ keepalived (`keepalived.conf` and its three scripts), the RPC health checker set
 `monitoring/prometheus/targets/` are only for a setup by hand with the documented addresses.
 
 Rules for a new plan:
+
 - the two HA hosts (`app_hosts`) and both VIPs in the **same subnet** (keepalived moves the VIPs
   with ARP); the VIPs **unused** addresses; `vip_prefix` the subnet's mask length;
 - every host reachable from the others on the ports of
@@ -321,6 +325,7 @@ ansible-playbook 01-hosts.yml
 ```
 
 To change something, edit the setting (or commit the code change) and rerun `site.yml`:
+
 - `.env` changes recreate only the affected containers; Besu nodes and coordinators are updated
   one host at a time.
 - HAProxy and keepalived are **reloaded**, not restarted, so the VIPs stay where they are. The RPC
@@ -341,6 +346,7 @@ To change something, edit the setting (or commit the code change) and rerun `sit
   from a node into `state/network/`.
 
 Limits:
+
 - Firewall rules are only **added** to firewalld: an IP removed from one of the access lists stays
   allowed to the host's own ports until you remove its rule (`firewall-cmd --permanent
   --remove-rich-rule=…`, `firewall-cmd --reload`). The allow list for the ports Docker publishes
@@ -374,6 +380,7 @@ Limits:
 
 End to end on 5 lab hosts (Ubuntu 24.04 containers with systemd, sshd and Docker, on
 192.168.68.0/24), driven from an operator:
+
 - the three runs above, with the MPC teams' steps done by hand from the generated instructions;
 - a fourth run with no changes: `changed=0` on every host;
 - .135 powered off: VIPs on .136 within seconds, proxy2 started, a transfer signed by coord2 with

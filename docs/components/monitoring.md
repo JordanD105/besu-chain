@@ -1,10 +1,13 @@
 # Monitoring (Prometheus and Grafana)
 
 > **What:** Prometheus and Grafana for production: what is scraped, the dashboards, the alert list, the firewall and day-to-day operations.
+>
 > **For:** operators.
+>
 > **Related:** [alerts](../operations/alerts.md) · [troubleshooting](../operations/troubleshooting.md) · [Ansible](../deployment/ansible.md)
 
 **Contents**
+
 - [What is scraped](#what-is-scraped)
 - [Dashboards](#dashboards)
 - [Alerts](#alerts)

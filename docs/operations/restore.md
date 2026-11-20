@@ -1,10 +1,13 @@
 # Restore with Ansible
 
 > **What:** Rebuilding the whole site from the backups with Ansible: prepare the hosts, restore node keys, chain snapshot and MPC shares, then deploy.
+>
 > **For:** operators.
+>
 > **Related:** [disaster recovery](disaster-recovery.md) · [GPG key](../deployment/gpg-key.md) · [operator guide](../deployment/operator-guide.md)
 
 **Contents**
+
 - [What you need](#what-you-need)
 - [1. Operator machine and hosts](#1-operator-machine-and-hosts)
 - [2. Besu nodes: key and chain, before anything starts them](#2-besu-nodes-key-and-chain-before-anything-starts-them)
@@ -136,6 +139,7 @@ ansible-playbook site.yml
 ```
 
 Now it's safe:
+
 - phase 03 finds the MPC nodes up;
 - phase 04 starts the coordinators, with no new key ceremony (`state/sender01` exists);
 - phase 05 keeps the restored keys (`init.sh` never replaces an existing key), reuses the genesis

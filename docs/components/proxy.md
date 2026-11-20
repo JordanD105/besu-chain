@@ -1,10 +1,13 @@
 # Proxy (application API)
 
 > **What:** Running the proxy (the application API) on the MPC signer: setup, settings, who signs, the Redis-optional nonce design, NFT collections, sections, metrics and troubleshooting.
+>
 > **For:** developers and operators.
+>
 > **Related:** [proxy API](../reference/proxy-api.md) · [sections](../features/sections.md) · [architecture](../overview/architecture.md)
 
 **Contents**
+
 - [Step 1: Start the MPC signer and create the sender key](#step-1-start-the-mpc-signer-and-create-the-sender-key)
 - [Step 2: Give `SENDER01` a balance in the genesis block](#step-2-give-sender01-a-balance-in-the-genesis-block)
 - [Step 3: Point the coordinator at Besu, and pool only the hot sender](#step-3-point-the-coordinator-at-besu-and-pool-only-the-hot-sender)
@@ -47,6 +50,7 @@ the admin API ([Sections and registered contracts](#sections-and-registered-cont
 sets all of it up.
 
 Everything in steps 1 to 5 was tested end to end:
+
 - `/createaccount` created an MPC key in about 0.7 s.
 - `/transfer` from a user account took about 1.5 s on the cold path.
 - `/nft/deploy` set the MPC sender as minter.
@@ -80,6 +84,7 @@ MPC_BIGINT=bigint-rug CHAIN_ID=1337 ./quickstart.sh init
 | `CHAIN_ID` | Must equal the `chainId` in Besu's genesis (1337 in `besu-test-network`). |
 
 If `init` says **already initialised**, a cluster from an earlier run exists. Either:
+
 - keep it: check `grep chain_id cluster.json` shows your chain id, then run `up` and `setup`. To switch to the faster backend, set `MPC_BIGINT=bigint-rug` in `.env` and run `docker compose build node0` first.
 - or run `./quickstart.sh destroy` to delete it and its key shares, then `init` again.
 
@@ -94,6 +99,7 @@ NFTs (version-2 collections). Write it down. Besu does not need to be running ye
 only involves the 3 MPC nodes.
 
 Check the signing policy in `quickstart/cluster.json`. Every node enforces it:
+
 - `chain_id` must match the chain.
 - `max_value_wei` must cover your largest `/createaccount` amount or transfer. The default is 1000 ETH.
 
@@ -346,6 +352,7 @@ it), `stalled` and `stallSeconds`, and the counters `nonceRepairs`, `fillerTrans
 ([Metrics and monitoring](#metrics-and-monitoring)).
 
 Tested on 4 validators + RPC node + MPC cluster:
+
 - a gap left while the proxy was down (3 transactions waiting above a missing nonce): the restarted
   proxy, with no request, sent 1 filler after 12 blocks and all were mined;
 - the validators refusing the proxy's transactions while the RPC node accepted them (the stall

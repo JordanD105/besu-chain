@@ -1,10 +1,13 @@
 # MPC signer upgrade
 
 > **What:** Upgrading the MPC signer: ship the image, MPC nodes one at a time by their teams, then coordinators and proxy; rollback.
+>
 > **For:** MPC node teams, operators.
+>
 > **Related:** [MPC production](../deployment/mpc-signer-production.md) · [MPC signer](../components/mpc-signer.md)
 
 **Contents**
+
 - [1. Operator: build and ship the image (phases 00–02 only)](#1-operator-build-and-ship-the-image-phases-0002-only)
 - [2. Each MPC team: upgrade its node, one node at a time](#2-each-mpc-team-upgrade-its-node-one-node-at-a-time)
 - [3. Operator: upgrade everything else](#3-operator-upgrade-everything-else)

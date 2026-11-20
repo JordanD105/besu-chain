@@ -1,7 +1,9 @@
 # Paladin privacy nodes (test network)
 
 > **What:** The Paladin privacy nodes bundled with the test network (Pente, Noto, Zeto).
+>
 > **For:** developers.
+>
 > **Related:** [development environment](../getting-started/development.md)
 
 ---
@@ -166,6 +168,7 @@ When node A wants to create a Noto token, or form a Pente privacy group, it need
 The factory is the answer. It is a known, static address — hardcoded in every `paladin*.yaml` — that acts as a shared registry. When node A calls the factory to deploy a new token instance, the factory emits an on-chain event. Nodes B and C are watching that factory address and see the event. Discovery is solved without any out-of-band coordination.
 
 Without a factory:
+
 - Node A deploys a Noto token at some arbitrary address.
 - Nodes B and C have no way to know it exists unless A tells them off-chain.
 - You have rebuilt exactly the coordination problem you were trying to solve.
@@ -415,6 +418,7 @@ npm run compile
 ```
 
 `npm run compile` first runs `get_abis.mjs`, which downloads the official ABI artifacts:
+
 - Paladin release (`abis.tar.gz`): `PenteFactory_V0.json`, `NotoFactory.json`, `Noto.json`, `ZetoFactory.json`
 - Zeto release: `Zeto_Anon.json` and the five `Groth16Verifier_*.json` files
 

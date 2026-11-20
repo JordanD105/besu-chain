@@ -1,7 +1,9 @@
 # Development environment
 
 > **What:** the whole stack on one Docker host for development and tests.
+>
 > **For:** developers.
+>
 > **Related:** [introduction](../overview/introduction.md) · [proxy](../components/proxy.md) ·
 > [MPC signer](../components/mpc-signer.md) · [benchmarks](../development/mpc-benchmarks.md)
 

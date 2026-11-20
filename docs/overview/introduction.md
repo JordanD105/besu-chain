@@ -1,7 +1,9 @@
 # Introduction
 
 > **What:** what this project is, its components, and the two setups (development and production).
+>
 > **For:** everyone, first.
+>
 > **Next:** [architecture](architecture.md) · [glossary](../glossary.md) · [documentation map](../README.md)
 
 ---

@@ -1,10 +1,13 @@
 # High availability (HAProxy and keepalived)
 
 > **What:** High availability on h135 / h136: HAProxy, keepalived, the floating IPs, the RPC health check, the firewall and failover tests.
+>
 > **For:** operators.
+>
 > **Related:** [architecture](../overview/architecture.md) · [troubleshooting](../operations/troubleshooting.md) · [production layout](../overview/production-layout.md)
 
 **Contents**
+
 - [Overview](#overview)
 - [1. Prepare both hosts (.135 and .136)](#1-prepare-both-hosts-135-and-136)
 - [2. Settings that must point at the VIPs](#2-settings-that-must-point-at-the-vips)
@@ -44,6 +47,7 @@ failover, so that losing .135 doesn't stop payments. Layout and settings:
 | `firewall-layout.sh` | run once on **every** host (.135–.139) | run with the plan's addresses |
 
 Why this design:
+
 - **One backend at a time** (rpc2 and coord2 are `backup`): the proxy reads nonces from the same
   RPC node the coordinator sends to, and only one presignature pool is consumed. coord2 runs all
   the time with its pool full, and re-reads the key list from the MPC nodes, so it signs for

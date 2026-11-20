@@ -2,11 +2,14 @@
 
 > **What:** how the production system is built: hosts, floating IPs, network zones, what happens on
 > a request, what survives a failure, and the known gaps.
+>
 > **For:** operators, architects, reviewers.
+>
 > **Related:** [production layout](production-layout.md) (every port and setting) ·
 > [high availability](../deployment/high-availability.md) · [disaster recovery](../operations/disaster-recovery.md)
 
 **Contents**
+
 - [Hosts](#hosts)
 - [Floating IPs](#floating-ips)
 - [Network zones](#network-zones)
