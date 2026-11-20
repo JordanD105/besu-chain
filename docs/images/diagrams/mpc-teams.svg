@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="790" viewBox="0 0 1600 790" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="arrB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker>
+<marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="arrC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="arrH" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="arrN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<marker id="arrM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1600" height="790" fill="#f8fafc"/>
+<text x="40" y="50" font-size="26" fill="#0f172a" font-weight="700">MPC signer in production: three teams, two coordinators</text>
+<text x="40" y="78" font-size="15" fill="#475569">Each team runs one node with its own share, passphrase and backups. The coordinators hold no key material.</text>
+<rect x="40" y="130" width="330" height="110" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#sh)"/>
+<text x="60" y="162" font-size="16" fill="#9a3412" font-weight="700">Clients (proxy, scripts)</text>
+<text x="60" y="190" font-size="14" fill="#334155" font-weight="700">VIP 192.168.68.150:9100</text>
+<text x="60" y="212" font-size="13" fill="#64748b">HAProxy: coord1, coord2 as backup</text>
+<polyline points="372,185 437,185" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="440" y="120" width="340" height="130" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="460" y="152" font-size="17" fill="#1e3a8a" font-weight="700">coord1</text>
+<rect x="690" y="134" width="70" height="24" rx="12.0" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+<text x="725.0" y="150.32" font-size="12" fill="#1e3a8a" text-anchor="middle" font-weight="700">active</text>
+<text x="460" y="178" font-size="13.5" fill="#334155">h135  192.168.68.135  :9100</text>
+<text x="460" y="202" font-size="13.5" fill="#334155">no key material, only the tokens</text>
+<text x="460" y="226" font-size="13" fill="#64748b">own presignature pool</text>
+<rect x="820" y="120" width="340" height="130" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="840" y="152" font-size="17" fill="#1e3a8a" font-weight="700">coord2</text>
+<rect x="1028" y="134" width="112" height="24" rx="12.0" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+<text x="1084.0" y="150.32" font-size="12" fill="#1e3a8a" text-anchor="middle" font-weight="700">warm standby</text>
+<text x="840" y="178" font-size="13.5" fill="#334155">h136  192.168.68.136  :9100</text>
+<text x="840" y="202" font-size="13.5" fill="#334155">no key material, only the tokens</text>
+<text x="840" y="226" font-size="13" fill="#64748b">own presignature pool</text>
+<rect x="1200" y="120" width="360" height="130" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="1220" y="152" font-size="16" fill="#0f172a" font-weight="700">Operator</text>
+<text x="1220" y="178" font-size="13.5" fill="#334155">MPC_ADMIN_TOKEN, cluster.json</text>
+<text x="1220" y="202" font-size="13.5" fill="#334155">starts the key ceremony</text>
+<text x="1220" y="226" font-size="13" fill="#64748b">(ceremony.sh / 04-coordinators.yml)</text>
+<polyline points="610,252 610,292" fill="none" stroke="#059669" stroke-width="2"/>
+<polyline points="990,252 990,292" fill="none" stroke="#059669" stroke-width="2"/>
+<polyline points="270,292 1330,292" fill="none" stroke="#059669" stroke-width="2"/>
+<polyline points="270,292 270,337" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrG)"/>
+<polyline points="800,292 800,337" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrG)"/>
+<polyline points="1330,292 1330,337" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrG)"/>
+<text x="1020" y="282" font-size="12.5" fill="#064e3b" font-style="italic">to each node :7000 (node token)</text>
+<rect x="40" y="340" width="460" height="216" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="60" y="374" font-size="18" fill="#064e3b" font-weight="700">Team A: mpc1</text>
+<text x="480" y="374" font-size="12.5" fill="#64748b" text-anchor="end" font-family="'JetBrains Mono', Consolas, Menlo, monospace">MPC_NODE_ID=0</text>
+<text x="60" y="400" font-size="13.5" fill="#334155">h135  192.168.68.135</text>
+<rect x="60" y="424" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="74" y="447" font-size="13.5" fill="#064e3b" font-weight="700">one key share</text>
+<text x="200" y="447" font-size="13" fill="#334155">sealed on disk, per key</text>
+<rect x="60" y="466" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="74" y="489" font-size="13.5" fill="#064e3b" font-weight="700">own passphrase</text>
+<text x="200" y="489" font-size="13" fill="#334155">MPC_NODE_PASSPHRASE, team vault</text>
+<rect x="60" y="508" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="74" y="531" font-size="13.5" fill="#064e3b" font-weight="700">own backups</text>
+<text x="200" y="531" font-size="13" fill="#334155">backup.sh, this team's storage only</text>
+<rect x="570" y="340" width="460" height="216" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="590" y="374" font-size="18" fill="#064e3b" font-weight="700">Team B: mpc2</text>
+<text x="1010" y="374" font-size="12.5" fill="#64748b" text-anchor="end" font-family="'JetBrains Mono', Consolas, Menlo, monospace">MPC_NODE_ID=1</text>
+<text x="590" y="400" font-size="13.5" fill="#334155">h137  192.168.68.137</text>
+<rect x="590" y="424" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="604" y="447" font-size="13.5" fill="#064e3b" font-weight="700">one key share</text>
+<text x="730" y="447" font-size="13" fill="#334155">sealed on disk, per key</text>
+<rect x="590" y="466" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="604" y="489" font-size="13.5" fill="#064e3b" font-weight="700">own passphrase</text>
+<text x="730" y="489" font-size="13" fill="#334155">MPC_NODE_PASSPHRASE, team vault</text>
+<rect x="590" y="508" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="604" y="531" font-size="13.5" fill="#064e3b" font-weight="700">own backups</text>
+<text x="730" y="531" font-size="13" fill="#334155">backup.sh, this team's storage only</text>
+<rect x="1100" y="340" width="460" height="216" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="1120" y="374" font-size="18" fill="#064e3b" font-weight="700">Team C: mpc3</text>
+<text x="1540" y="374" font-size="12.5" fill="#64748b" text-anchor="end" font-family="'JetBrains Mono', Consolas, Menlo, monospace">MPC_NODE_ID=2</text>
+<text x="1120" y="400" font-size="13.5" fill="#334155">h138  192.168.68.138</text>
+<rect x="1120" y="424" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="1134" y="447" font-size="13.5" fill="#064e3b" font-weight="700">one key share</text>
+<text x="1260" y="447" font-size="13" fill="#334155">sealed on disk, per key</text>
+<rect x="1120" y="466" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="1134" y="489" font-size="13.5" fill="#064e3b" font-weight="700">own passphrase</text>
+<text x="1260" y="489" font-size="13" fill="#334155">MPC_NODE_PASSPHRASE, team vault</text>
+<rect x="1120" y="508" width="420" height="36" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="1134" y="531" font-size="13.5" fill="#064e3b" font-weight="700">own backups</text>
+<text x="1260" y="531" font-size="13" fill="#334155">backup.sh, this team's storage only</text>
+<rect x="40" y="590" width="740" height="104" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="60" y="622" font-size="16" fill="#064e3b" font-weight="700">Key ceremony: needs all three nodes</text>
+<rect x="60" y="640" width="80" height="24" rx="12.0" fill="#ecfdf5" stroke="#059669" stroke-width="1.2"/>
+<text x="100.0" y="656.5" font-size="12.5" fill="#064e3b" text-anchor="middle" font-weight="700">mpc1</text>
+<rect x="152" y="640" width="80" height="24" rx="12.0" fill="#ecfdf5" stroke="#059669" stroke-width="1.2"/>
+<text x="192.0" y="656.5" font-size="12.5" fill="#064e3b" text-anchor="middle" font-weight="700">mpc2</text>
+<rect x="244" y="640" width="80" height="24" rx="12.0" fill="#ecfdf5" stroke="#059669" stroke-width="1.2"/>
+<text x="284.0" y="656.5" font-size="12.5" fill="#064e3b" text-anchor="middle" font-weight="700">mpc3</text>
+<polyline points="340,652 395,652" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrG)"/>
+<text x="408" y="657" font-size="14" fill="#064e3b" font-weight="700">SENDER01 (later keys, /createaccount, too)</text>
+<text x="60" y="682" font-size="13" fill="#64748b">Each node keeps only its share; the private key never exists anywhere.</text>
+<rect x="820" y="590" width="740" height="104" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="840" y="622" font-size="16" fill="#064e3b" font-weight="700">Signing: any two of three</text>
+<rect x="840" y="640" width="116" height="24" rx="12.0" fill="#ecfdf5" stroke="#059669" stroke-width="1.2"/>
+<text x="898.0" y="656.5" font-size="12.5" fill="#064e3b" text-anchor="middle" font-weight="700">mpc1 + mpc2</text>
+<rect x="968" y="640" width="116" height="24" rx="12.0" fill="#ecfdf5" stroke="#059669" stroke-width="1.2"/>
+<text x="1026.0" y="656.5" font-size="12.5" fill="#064e3b" text-anchor="middle" font-weight="700">mpc1 + mpc3</text>
+<rect x="1096" y="640" width="116" height="24" rx="12.0" fill="#ecfdf5" stroke="#059669" stroke-width="1.2"/>
+<text x="1154.0" y="656.5" font-size="12.5" fill="#064e3b" text-anchor="middle" font-weight="700">mpc2 + mpc3</text>
+<polyline points="1222,652 1277,652" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrG)"/>
+<text x="1290" y="657" font-size="14" fill="#064e3b" font-weight="700">signature</text>
+<text x="840" y="682" font-size="13" fill="#64748b">One node can be down. Two nodes lost for good = the funds are lost.</text>
+<rect x="40" y="714" width="1520" height="46" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/>
+<text x="60" y="743" font-size="14" fill="#9f1239" font-weight="700">The one rule: no person, admin account, host, backup location or secret store may reach two nodes (any two shares can sign).</text>
+</svg>

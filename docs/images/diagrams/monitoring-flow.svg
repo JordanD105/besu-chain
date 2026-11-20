@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="780" viewBox="0 0 1600 780" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="arrB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker>
+<marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="arrC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="arrH" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="arrN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<marker id="arrM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1600" height="780" fill="#f8fafc"/>
+<text x="40" y="50" font-size="26" fill="#0f172a" font-weight="700">Monitoring: what is scraped, where it goes</text>
+<text x="40" y="78" font-size="15" fill="#475569">Prometheus on h139 (192.168.68.139) pulls /metrics every 15 s over the private network; Grafana reads Prometheus.</text>
+<rect x="40" y="116" width="430" height="104" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="58" y="146" font-size="16" fill="#4c1d95" font-weight="700">Besu nodes</text>
+<text x="454" y="146" font-size="12.5" fill="#64748b" text-anchor="end" font-family="'JetBrains Mono', Consolas, Menlo, monospace">job besu</text>
+<text x="58" y="174" font-size="13.5" fill="#334155">val1–4, rpc1–2 on .135–.138</text>
+<text x="58" y="196" font-size="13.5" fill="#334155">:9545 / :9546 …  /metrics</text>
+<polyline points="617,168.0 472,168.0" fill="none" stroke="#7c3aed" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="40" y="240" width="430" height="104" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="58" y="270" font-size="16" fill="#064e3b" font-weight="700">MPC coordinators</text>
+<text x="454" y="270" font-size="12.5" fill="#64748b" text-anchor="end" font-family="'JetBrains Mono', Consolas, Menlo, monospace">job mpc-coordinator</text>
+<text x="58" y="298" font-size="13.5" fill="#334155">coord1 .135, coord2 .136  :9100 /metrics</text>
+<text x="58" y="320" font-size="13.5" fill="#334155">bearer token; they probe the MPC nodes</text>
+<polyline points="617,292.0 472,292.0" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="40" y="364" width="430" height="104" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="58" y="394" font-size="16" fill="#1e3a8a" font-weight="700">Proxy (active)</text>
+<text x="454" y="394" font-size="12.5" fill="#64748b" text-anchor="end" font-family="'JetBrains Mono', Consolas, Menlo, monospace">job proxy</text>
+<text x="58" y="422" font-size="13.5" fill="#334155">through the proxy VIP</text>
+<text x="58" y="444" font-size="13.5" fill="#334155">192.168.68.151:30000 /metrics</text>
+<polyline points="617,416.0 472,416.0" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="40" y="488" width="430" height="104" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#sh)"/>
+<text x="58" y="518" font-size="16" fill="#9a3412" font-weight="700">redis-exporter (active)</text>
+<text x="454" y="518" font-size="12.5" fill="#64748b" text-anchor="end" font-family="'JetBrains Mono', Consolas, Menlo, monospace">job redis</text>
+<text x="58" y="546" font-size="13.5" fill="#334155">through the proxy VIP</text>
+<text x="58" y="568" font-size="13.5" fill="#334155">192.168.68.151:9121 /metrics</text>
+<polyline points="617,540.0 472,540.0" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="40" y="612" width="430" height="104" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" filter="url(#sh)"/>
+<text x="58" y="642" font-size="16" fill="#92400e" font-weight="700">node-exporter, every host</text>
+<text x="454" y="642" font-size="12.5" fill="#64748b" text-anchor="end" font-family="'JetBrains Mono', Consolas, Menlo, monospace">job hosts</text>
+<text x="58" y="670" font-size="13.5" fill="#334155">:9101 on .135–.139: CPU, memory, disk</text>
+<text x="58" y="692" font-size="13.5" fill="#334155">+ backup results (textfile *.prom)</text>
+<polyline points="617,664.0 472,664.0" fill="none" stroke="#f59e0b" stroke-width="2" marker-end="url(#arr)"/>
+<text x="545.0" y="106" font-size="12.5" fill="#64748b" text-anchor="middle" font-style="italic">scrape (pull)</text>
+<text x="40" y="756" font-size="12.5" fill="#64748b">MPC nodes are not scraped: each coordinator checks its nodes (GET /health every 10 s) and reports mpc_node_up.</text>
+<rect x="620" y="116" width="400" height="600" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" filter="url(#sh)"/>
+<text x="640" y="150" font-size="20" fill="#92400e" font-weight="700">Prometheus</text>
+<text x="640" y="174" font-size="13.5" fill="#334155">h139, localhost:9090</text>
+<rect x="640" y="196" width="360" height="80" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="658" y="224" font-size="14.5" fill="#334155" font-weight="700">time series</text>
+<text x="658" y="248" font-size="13" fill="#64748b">one job per row, targets from the IP plan</text>
+<text x="658" y="266" font-size="13" fill="#64748b">scrape every 15 s</text>
+<rect x="640" y="312" width="360" height="128" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="658" y="340" font-size="14.5" fill="#334155" font-weight="700" font-family="'JetBrains Mono', Consolas, Menlo, monospace">rules/</text>
+<text x="658" y="366" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">besu.yml · mpc.yml · proxy.yml</text>
+<text x="658" y="388" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">sections.yml · hosts.yml</text>
+<text x="658" y="410" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">backups.yml</text>
+<polyline points="820.0,278 820.0,309" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="640" y="478" width="360" height="126" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/>
+<text x="658" y="506" font-size="15" fill="#9f1239" font-weight="700">Alerts</text>
+<rect x="658" y="520" width="78" height="24" rx="12.0" fill="#fff1f2" stroke="#e11d48" stroke-width="1.2"/>
+<text x="697.0" y="536.5" font-size="12.5" fill="#9f1239" text-anchor="middle" font-weight="700">critical</text>
+<rect x="746" y="520" width="78" height="24" rx="12.0" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="785.0" y="536.5" font-size="12.5" fill="#92400e" text-anchor="middle" font-weight="700">warning</text>
+<rect x="834" y="520" width="56" height="24" rx="12.0" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="862.0" y="536.5" font-size="12.5" fill="#334155" text-anchor="middle" font-weight="700">info</text>
+<text x="658" y="570" font-size="13" fill="#334155">Prometheus Alerts page; nothing is sent</text>
+<text x="658" y="590" font-size="13" fill="#64748b">by default (add Alertmanager / contact points)</text>
+<polyline points="820.0,442 820.0,475" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<text x="830.0" y="464" font-size="12.5" fill="#64748b">evaluate</text>
+<rect x="1140" y="116" width="420" height="600" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="1160" y="150" font-size="20" fill="#0f172a" font-weight="700">Grafana</text>
+<text x="1160" y="174" font-size="13.5" fill="#334155">h139 :3000, login, only grafana_ips</text>
+<text x="1160" y="200" font-size="13" fill="#64748b">folder Production, each with an Alerts row on top</text>
+<rect x="1160" y="220" width="380" height="72" rx="10" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="1178" y="248" font-size="14.5" fill="#4c1d95" font-weight="700">Besu production (QBFT)</text>
+<text x="1178" y="272" font-size="13" fill="#334155">blocks, Nodes table, proxy senders</text>
+<rect x="1160" y="306" width="380" height="72" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+<text x="1178" y="334" font-size="14.5" fill="#064e3b" font-weight="700">MPC signer</text>
+<text x="1178" y="358" font-size="13" fill="#334155">nodes vs threshold, pools, signatures</text>
+<rect x="1160" y="392" width="380" height="72" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="1178" y="420" font-size="14.5" fill="#1e3a8a" font-weight="700">Proxy &amp; Redis</text>
+<text x="1178" y="444" font-size="13" fill="#334155">requests, latency, senders, Redis</text>
+<rect x="1160" y="478" width="380" height="72" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="1178" y="506" font-size="14.5" fill="#14532d" font-weight="700">Sections</text>
+<text x="1178" y="530" font-size="13" fill="#334155">upfront balances, SENDER01, per Period</text>
+<rect x="1160" y="564" width="380" height="72" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="1178" y="592" font-size="14.5" fill="#92400e" font-weight="700">Hosts</text>
+<text x="1178" y="616" font-size="13" fill="#334155">CPU, memory, disk, network, Backups</text>
+<polyline points="1137,236 1022,236" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<text x="1080.0" y="226" font-size="12.5" fill="#64748b" text-anchor="middle" font-style="italic">queries</text>
+<polyline points="1137,541 1002,541" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<text x="1080.0" y="531" font-size="12.5" fill="#64748b" text-anchor="middle" font-style="italic">Alerts row</text>
+</svg>

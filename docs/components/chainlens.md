@@ -30,6 +30,8 @@
 | **Writes** | nothing by itself; the admin pages forward to the proxy's admin API |
 | **Languages / themes** | English and Chinese (EN / 中文 switch), dark and light |
 
+![Chainlens dashboard: totals, platform overview and section balances](../images/screenshots/chainlens-dashboard.png)
+
 ## Pages
 
 | Page | URL | Shows |
@@ -45,6 +47,12 @@
 Everything except the admin pages is visible to everyone who can open chainlens: the information is
 public on chain anyway.
 
+![Chainlens Accounts page with the Section column](../images/screenshots/chainlens-accounts.png)
+
+![Section statistics on the dashboard, per period](../images/screenshots/chainlens-statistics.png)
+
+![A registered contract page with its read-only functions](../images/screenshots/chainlens-contract.png)
+
 ## Admin pages
 
 Hidden until enabled, and usable only from `operator_ip` and `chainlens_deploy_ips`, with the
@@ -56,6 +64,10 @@ They forward to the proxy's admin API, so the proxy signs, never chainlens.
 | **Deploy** (`#/deploy`) | `chainlens_deploy_enabled: true` | deploy a compiled contract (Remix / Hardhat / Foundry artifact) as the contract account center, check first, register it | [contract deployment](../features/contract-deployment.md) |
 | **Sections** (`#/sections`) | `chainlens_sections_enabled: true` | create sections, top up, sweep, pay back, rename, info fields, keys, replace accounts, archive; a section's user accounts | [sections](../features/sections.md) |
 | **Mint and sell** (on an NFT collection's page) | either of the above | mint an NFT (price fixed at mint); sell it to a section's user account | [NFT workflow](../features/nft-workflow.md) |
+
+![The admin Sections page: the list of sections and the New section form](../images/screenshots/chainlens-sections.png)
+
+![The admin Deploy page](../images/screenshots/chainlens-deploy.png)
 
 ## How it works
 

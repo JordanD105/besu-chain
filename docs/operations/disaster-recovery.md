@@ -29,7 +29,7 @@ and `ha/`, in the 5-host production layout ([Production layout](../overview/prod
 | 192.168.68.136 | val2, rpc2, coord2, proxy2 (standby), HAProxy + keepalived |
 | 192.168.68.137 | val3, mpc2 (takes the daily chain snapshot) |
 | 192.168.68.138 | val4, mpc3 |
-| 192.168.68.139 | Prometheus, Grafana (`:3000`), chainlens (`:30100`), Remix IDE (`:30200`) |
+| 192.168.68.139 | Prometheus, Grafana (`:3000`), chainlens (`:30100`), Remix IDE (`:30200`), documentation website (`:30300`) |
 
 Keep a **printed or offline copy** of this page and of the contact list: during a disaster the
 repository, the wiki or the network may be unavailable.
@@ -65,6 +65,8 @@ Fill in before going live.
 write-once** (ransomware encrypts every backup it can reach).
 
 ## 3. Backup schedule
+
+![What is backed up, on which host and when, where it is kept and what restores it](../images/diagrams/backups-map.svg)
 
 | What | Command (from that host's directory) | When (cron example) |
 |---|---|---|
@@ -283,6 +285,7 @@ but redundancy is gone until it's back.
 | Proxy (proxy1 .135 / proxy2 .136) | `proxy/`: `.env`, `docker compose build`; **don't start it by hand**: keepalived starts it on the host holding `.151` | `GET http://192.168.68.151:30000/status/senders`: no gap, no stall; a test transfer |
 | Chainlens (.139) | `chainlens/`: `.env` (`BESU_RPC` = rpc2), `docker compose up -d --build`. With the Deploy page on, keep its records (`/var/lib/chainlens/deployments`) | re-indexes from block 0 by itself |
 | Remix IDE (.139) | Ansible `12-remix.yml` ([Remix IDE](../components/remix.md)) | opens on `:30200` |
+| Documentation website (.139) | Ansible `13-docs-site.yml` ([documentation website](../components/docs-site.md)) | opens on `:30300` |
 | Monitoring (.139) | `monitoring/`: `setup.sh` with the metrics token, targets, `docker compose up -d` | `./check-targets.sh`; history before the loss is gone |
 
 ### 6.7 Whole site lost

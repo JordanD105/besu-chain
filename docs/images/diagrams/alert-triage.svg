@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="560" viewBox="0 0 1600 560" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="arrB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker>
+<marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="arrC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="arrH" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="arrN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<marker id="arrM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1600" height="560" fill="#f8fafc"/>
+<text x="40" y="50" font-size="26" fill="#0f172a" font-weight="700">Triage: from a firing alert to cleared</text>
+<text x="40" y="78" font-size="15" fill="#475569">One failure usually raises several alerts. Find the cause first, then work each remaining alert with its runbook section.</text>
+<rect x="40" y="154.0" width="210" height="124" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="2" filter="url(#sh)"/>
+<text x="58" y="186.0" font-size="16" fill="#9f1239" font-weight="700">Alert fires</text>
+<text x="58" y="214.0" font-size="13.5" fill="#334155">Alerts row on top of every</text>
+<text x="58" y="236.0" font-size="13.5" fill="#334155">Grafana dashboard, or the</text>
+<text x="58" y="258.0" font-size="13.5" fill="#334155">Prometheus Alerts page</text>
+<polyline points="252,216 287,216" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="290" y="154.0" width="230" height="124" rx="12" fill="#ffffff" stroke="#e11d48" stroke-width="2" filter="url(#sh)"/>
+<text x="308" y="186.0" font-size="16" fill="#9f1239" font-weight="700">Critical first</text>
+<text x="308" y="214.0" font-size="13.5" fill="#334155">critical: act now</text>
+<text x="308" y="236.0" font-size="13.5" fill="#334155">then warning, then info</text>
+<text x="308" y="258.0" font-size="13.5" fill="#334155">note the time</text>
+<polyline points="522,216 565,216" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polygon points="700,120 832,216 700,312 568,216" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#sh)"/>
+<text x="700" y="200" font-size="14" fill="#9a3412" text-anchor="middle" font-weight="700">Is a HostDown or</text>
+<text x="700" y="220" font-size="14" fill="#9a3412" text-anchor="middle" font-weight="700">BesuNodeDown</text>
+<text x="700" y="240" font-size="14" fill="#9a3412" text-anchor="middle" font-weight="700">explaining it?</text>
+<polyline points="834,216 877,216" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<text x="848" y="206" font-size="13" fill="#334155" font-weight="700">no</text>
+<rect x="880" y="154.0" width="250" height="124" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="898" y="186.0" font-size="16" fill="#1e3a8a" font-weight="700">Follow the runbook</text>
+<text x="898" y="214.0" font-size="13.5" fill="#334155">click the alert's name:</text>
+<text x="898" y="236.0" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">alert-runbook.md#&lt;alert&gt;</text>
+<text x="898" y="258.0" font-size="13.5" fill="#334155">Confirm → Fix (commands)</text>
+<polyline points="1132,216 1167,216" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1170" y="154.0" width="210" height="124" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" filter="url(#sh)"/>
+<text x="1188" y="186.0" font-size="16" fill="#92400e" font-weight="700">Check the panel</text>
+<text x="1188" y="214.0" font-size="13.5" fill="#334155">the runbook's Check step:</text>
+<text x="1188" y="236.0" font-size="13.5" fill="#334155">the dashboard panel is</text>
+<text x="1188" y="258.0" font-size="13.5" fill="#334155">back to normal</text>
+<polyline points="1382,216 1407,216" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrM)"/>
+<rect x="1410" y="154.0" width="150" height="124" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1428" y="186.0" font-size="16" fill="#14532d" font-weight="700">Cleared</text>
+<text x="1428" y="214.0" font-size="13.5" fill="#334155">gone from the</text>
+<text x="1428" y="236.0" font-size="13.5" fill="#334155">Alerts row; band</text>
+<text x="1428" y="258.0" font-size="13.5" fill="#334155">on charts ends</text>
+<polyline points="700,314 700,357" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<text x="710" y="338" font-size="13" fill="#334155" font-weight="700">yes</text>
+<rect x="565" y="360" width="300" height="124" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#sh)"/>
+<text x="583" y="392" font-size="16" fill="#9a3412" font-weight="700">Fix the cause first</text>
+<text x="583" y="420" font-size="13.5" fill="#334155">bring the host or node back</text>
+<text x="583" y="442" font-size="13.5" fill="#334155">(runbook: HostDown, BesuNodeDown)</text>
+<text x="583" y="464" font-size="13.5" fill="#334155">its other alerts then clear</text>
+<polyline points="563,422.0 405,422.0 405,281.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<text x="417" y="412.0" font-size="12.5" fill="#64748b" font-style="italic">what is still firing?</text>
+<rect x="910" y="360" width="650" height="124" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="928" y="390" font-size="14" fill="#334155" font-weight="700">Alerts that follow a host outage</text>
+<text x="928" y="416" font-size="13" fill="#334155">after it is back, for minutes: MpcPoolEmpty, MpcPresignFailing, MpcShareBackupTooOld</text>
+<text x="928" y="438" font-size="13" fill="#334155">(pools refill, next hourly backup). While it was down, after an hour:</text>
+<text x="928" y="460" font-size="13" fill="#334155">MpcShareBackupMissing, ValidatorKeyBackupMissing (records unreachable).</text>
+<text x="40" y="536" font-size="12.5" fill="#64748b">Example (h135 down): HostDown host-135 is the cause; BesuNodeDown val1, rpc1, MpcNodeDown node 0, MpcCoordinatorDown 135:9100 follow from it.</text>
+</svg>

@@ -25,6 +25,8 @@ production layout ([Production layout](../overview/production-layout.md)), next 
 
 ## What is scraped
 
+![Targets scraped by Prometheus on h139, its rules and alerts, and the Grafana dashboards](../images/diagrams/monitoring-flow.svg)
+
 Prometheus scrapes every 15 s, over the private network. One job per row
 ([`prometheus/prometheus.yml`](../../monitoring/prometheus/prometheus.yml)):
 
@@ -67,6 +69,8 @@ All dashboards are in the Grafana folder **Production**. Grafana opens on **Besu
 Every panel of every dashboard, with healthy values and what to do: [Grafana dashboards](../operations/dashboards.md).
 Every dashboard starts with an **Alerts** row: the number of critical and warning alerts firing,
 and a table of every firing alert (critical first, with "Firing for").
+
+![The Besu production dashboard](../images/screenshots/grafana-besu-production.png)
 
 | Dashboard | File | Shows |
 |---|---|---|

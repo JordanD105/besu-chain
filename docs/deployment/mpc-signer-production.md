@@ -31,6 +31,8 @@ This guide deploys the 2-of-3 MPC signer for production:
 - **three MPC nodes** on three hosts, run by **three different admin teams**;
 - **two coordinators**, behind HAProxy on a floating IP.
 
+![Three teams each run one MPC node with its own share, passphrase and backups; two coordinators hold no key material](../images/diagrams/mpc-teams.svg)
+
 In the production layout ([Production layout](../overview/production-layout.md)):
 mpc1 (`MPC_NODE_ID=0`) on 192.168.68.135, mpc2 (1) on .137, mpc3 (2) on .138; coord1 on .135,
 coord2 on .136; clients reach the coordinators at `192.168.68.150:9100` (coord1, coord2 as backup).

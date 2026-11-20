@@ -46,6 +46,8 @@ All commands below run in `ansible/` on the operator.
 URL). Phases 02–13 first check that the hosts have the current code
 (`code-current.yml`, see [5. Running it again](#5-running-it-again)).
 
+![The phases in the order site.yml runs them, with the hosts each one touches](../images/diagrams/ansible-phases.svg)
+
 **Step-by-step guide for the operator (install, SSH, settings, the three runs):
 [Operator guide](operator-guide.md).**
 

@@ -29,6 +29,8 @@
 | **Internet needed** | no: no external fonts or scripts; search runs in the browser |
 | **Files** | `docs-site/` (`Dockerfile`, `mkdocs.yml`, `hooks.py`, `nginx.conf`, `docker-compose.yml`) |
 
+![The documentation website](../images/screenshots/docs-site.png)
+
 The site has the same structure as `docs/`: tabs for Overview, Getting started, Deployment,
 Components, Features, Operations, Reference and Development; full-text search; a light / dark switch;
 a copy button on every code block.
@@ -43,7 +45,7 @@ docs_ips: [192.168.68.0/24]     # who may read it: addresses or networks
 ```
 
 Apply (phase 01 copies the code and opens the firewall, 02 builds the image from the committed
-`docs/`, 09 runs it on the monitoring host):
+`docs/`, 13 runs it on the monitoring host):
 
 ```bash
 ansible-playbook 01-hosts.yml 02-images.yml 13-docs-site.yml
@@ -68,6 +70,10 @@ docker compose -f docs-site/docker-compose.yml up -d --build
 ```
 
 ## How it is built
+
+![docs/ built by MkDocs in a Docker build stage into a static English and Korean site, served by nginx on h139:30300](../images/diagrams/docs-site-build.svg)
+
+The numbers match the steps below.
 
 1. **Build stage** (`python:3.12.8-slim`): installs `mkdocs 1.6.1` and `mkdocs-material 9.5.49`
    (from PyPI, at build time only), copies the repository (secrets, state and large files are

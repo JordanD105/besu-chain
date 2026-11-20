@@ -12,6 +12,8 @@
 for writing, compiling and testing contracts in the browser. Nothing is downloaded from the
 internet at use time: the compilers come from a mirror inside the image.
 
+![The self-hosted Remix IDE](../images/screenshots/remix.png)
+
 | | |
 |---|---|
 | Remix | the prebuilt site of `github.com/remix-project-org/remix-live` (branch `gh-pages`, what remix.ethereum.org serves), pinned by commit: `remix_commit` in `ansible/group_vars/all/settings.yml` (Remix 2.6.15) |

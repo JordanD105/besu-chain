@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="730" viewBox="0 0 1600 730" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="arrB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker>
+<marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="arrC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="arrH" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="arrN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<marker id="arrM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1600" height="730" fill="#f8fafc"/>
+<text x="40" y="50" font-size="26" fill="#0f172a" font-weight="700">Backups: what, where, when, and what restores it</text>
+<text x="40" y="78" font-size="15" fill="#475569">Ansible 10-backups.yml installs the first three; the operator copies ansible/state/ off-site.</text>
+<text x="44" y="122" font-size="12.5" fill="#64748b" font-weight="700">WHAT</text>
+<text x="384" y="122" font-size="12.5" fill="#64748b" font-weight="700">MADE ON / WHEN</text>
+<text x="764" y="122" font-size="12.5" fill="#64748b" font-weight="700">KEPT</text>
+<text x="1204" y="122" font-size="12.5" fill="#64748b" font-weight="700">RESTORED WITH</text>
+<rect x="40" y="136" width="300" height="102" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="60" y="170" font-size="17" fill="#4c1d95" font-weight="700">Node keys</text>
+<text x="60" y="198" font-size="13.5" fill="#334155">val1–4, rpc1–2 (6 keys)</text>
+<rect x="380" y="136" width="340" height="102" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="400" y="170" font-size="14" fill="#334155">each Besu host .135–.138</text>
+<text x="400" y="196" font-size="14" fill="#92400e" font-weight="700">ONCE per key (backup-key.sh)</text>
+<rect x="760" y="136" width="400" height="102" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="780" y="170" font-size="13.5" fill="#334155">GPG-encrypted on the host to your public key,</text>
+<text x="780" y="196" font-size="13.5" fill="#334155">plain copy shredded, fetched to the operator:</text>
+<text x="780" y="222" font-size="13.5" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">ansible/state/key-backups/&lt;node&gt;.key.gpg</text>
+<rect x="1200" y="136" width="360" height="102" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1220" y="174" font-size="13.5" fill="#14532d" font-weight="700">gpg --decrypt (offline private key)</text>
+<text x="1220" y="200" font-size="13.5" fill="#14532d">→ restore-key.sh, then start.sh</text>
+<polyline points="342,187.0 377,187.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polyline points="722,187.0 757,187.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polyline points="1162,187.0 1197,187.0" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrM)"/>
+<rect x="40" y="256" width="300" height="102" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="60" y="290" font-size="17" fill="#064e3b" font-weight="700">MPC key shares</text>
+<text x="60" y="318" font-size="13.5" fill="#334155">3 nodes, one share each</text>
+<text x="60" y="339" font-size="13.5" fill="#334155">+ the passphrase, kept apart</text>
+<rect x="380" y="256" width="340" height="102" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="400" y="290" font-size="14" fill="#334155">mpc1 h135, mpc2 h137, mpc3 h138</text>
+<text x="400" y="316" font-size="14" fill="#92400e" font-weight="700">HOURLY at :07 (backup.sh)</text>
+<text x="400" y="342" font-size="13" fill="#64748b">opt-in: mpc_backup_cron: true</text>
+<rect x="760" y="256" width="400" height="102" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="780" y="290" font-size="13.5" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">mpc_backup_dir (/secure/mpc-backup)</text>
+<text x="780" y="316" font-size="13.5" fill="#334155">on that node's own host;</text>
+<text x="780" y="342" font-size="13.5" fill="#334155">each team copies its archive off</text>
+<rect x="1200" y="256" width="360" height="102" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1220" y="294" font-size="13.5" fill="#14532d" font-weight="700">restore.sh &lt;archive&gt;, by that team</text>
+<text x="1220" y="320" font-size="13.5" fill="#14532d">same node id + same passphrase</text>
+<polyline points="342,307.0 377,307.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polyline points="722,307.0 757,307.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polyline points="1162,307.0 1197,307.0" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrM)"/>
+<rect x="40" y="376" width="300" height="102" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="60" y="410" font-size="17" fill="#4c1d95" font-weight="700">Chain snapshot</text>
+<text x="60" y="438" font-size="13.5" fill="#334155">no keys inside</text>
+<text x="60" y="459" font-size="13.5" fill="#334155">any node of this chain</text>
+<rect x="380" y="376" width="340" height="102" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="400" y="410" font-size="14" fill="#334155">val3 on h137 (stopped a few min)</text>
+<text x="400" y="436" font-size="14" fill="#92400e" font-weight="700">DAILY 03:17 (snapshot-chain.sh)</text>
+<rect x="760" y="376" width="400" height="102" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="780" y="410" font-size="13.5" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">snapshot_dir (/backup/chain) on h137</text>
+<text x="780" y="436" font-size="13.5" fill="#334155">optional off-site copy: snapshot_copy_to</text>
+<rect x="1200" y="376" width="360" height="102" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1220" y="414" font-size="13.5" fill="#14532d" font-weight="700">restore-chain.sh &lt;snapshot.tgz&gt;</text>
+<text x="1220" y="440" font-size="13.5" fill="#14532d">(after restore-key.sh)</text>
+<polyline points="342,427.0 377,427.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polyline points="722,427.0 757,427.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polyline points="1162,427.0 1197,427.0" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrM)"/>
+<rect x="40" y="496" width="300" height="102" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" filter="url(#sh)"/>
+<text x="60" y="530" font-size="17" fill="#92400e" font-weight="700">Operator state</text>
+<text x="60" y="558" font-size="13.5" fill="#334155">ansible/state/: secrets, network/,</text>
+<text x="60" y="579" font-size="13.5" fill="#334155">cluster.json, key-backups/ …</text>
+<rect x="380" y="496" width="340" height="102" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="400" y="530" font-size="14" fill="#334155">the operator machine</text>
+<text x="400" y="556" font-size="14" fill="#334155">after every change</text>
+<rect x="760" y="496" width="400" height="102" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="780" y="530" font-size="13.5" fill="#334155">copy it to your vault / off-site</text>
+<text x="780" y="556" font-size="13.5" fill="#334155">(not committed, mode 700)</text>
+<rect x="1200" y="496" width="360" height="102" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1220" y="534" font-size="13.5" fill="#14532d" font-weight="700">put state/ back, then the phases</text>
+<text x="1220" y="560" font-size="13.5" fill="#14532d">in Restore with Ansible</text>
+<polyline points="342,547.0 377,547.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polyline points="722,547.0 757,547.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<polyline points="1162,547.0 1197,547.0" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrM)"/>
+<rect x="40" y="622" width="1520" height="62" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="60" y="648" font-size="14" fill="#92400e" font-weight="700">Is it working?</text>
+<text x="178" y="648" font-size="13.5" fill="#334155">each backup script writes its result to node-exporter's textfile directory on its own host → Hosts dashboard (Backups table)</text>
+<text x="178" y="670" font-size="13" fill="#64748b">and alerts BackupFailed, ChainSnapshotTooOld/Missing, MpcShareBackupTooOld/Missing, ValidatorKeyBackupMissing. A host that is down makes its backups look missing.</text>
+<text x="40" y="710" font-size="13" fill="#9f1239" font-weight="700">Rule: never two MPC shares, or a share and its passphrase, in one place. Keep at least one copy offline or write-once.</text>
+</svg>

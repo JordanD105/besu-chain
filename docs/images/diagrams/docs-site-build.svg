@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="540" viewBox="0 0 1600 540" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="arrB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker>
+<marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="arrC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="arrH" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="arrN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<marker id="arrM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1600" height="540" fill="#f8fafc"/>
+<text x="40" y="50" font-size="26" fill="#0f172a" font-weight="700">Documentation website: how it is built and served</text>
+<text x="40" y="78" font-size="15" fill="#475569">docker build turns the committed docs/ into static HTML once; nginx only serves files. No internet at serving time.</text>
+<rect x="40" y="120" width="260" height="300" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="58" y="154" font-size="17" fill="#0f172a" font-weight="700">Repository</text>
+<text x="58" y="186" font-size="13.5" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">docs/*.md</text>
+<text x="58" y="207" font-size="12.5" fill="#64748b">English pages</text>
+<text x="58" y="228" font-size="13.5" fill="#334155"></text>
+<text x="58" y="249" font-size="13.5" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">docs/*.ko.md</text>
+<text x="58" y="270" font-size="12.5" fill="#64748b">Korean, next to each page</text>
+<text x="58" y="291" font-size="13.5" fill="#334155"></text>
+<text x="58" y="312" font-size="13.5" fill="#334155">+ files the docs link to</text>
+<text x="58" y="333" font-size="12.5" fill="#64748b">contracts, playbooks, rules …</text>
+<polyline points="302,270.0 337,270.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="340" y="120" width="400" height="300" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<circle cx="368" cy="150" r="13" fill="#2563eb"/>
+<text x="368" y="155" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">1</text>
+<text x="390" y="156" font-size="17" fill="#1e3a8a" font-weight="700">Docker build stage</text>
+<text x="362" y="182" font-size="13" fill="#64748b">python:3.12.8-slim, PyPI only at build time</text>
+<text x="362" y="212" font-size="13.5" fill="#334155">mkdocs 1.6.1</text>
+<text x="362" y="234" font-size="13.5" fill="#334155">mkdocs-material 9.5.49</text>
+<text x="362" y="256" font-size="13.5" fill="#334155">mkdocs-static-i18n 1.2.3</text>
+<text x="362" y="278" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">mkdocs build → /site</text>
+<rect x="360" y="306" width="360" height="96" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<circle cx="384" cy="332" r="13" fill="#2563eb"/>
+<text x="384" y="337" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">2</text>
+<text x="406" y="338" font-size="14.5" fill="#1e3a8a" font-weight="700" font-family="'JetBrains Mono', Consolas, Menlo, monospace">hooks.py</text>
+<text x="378" y="364" font-size="13" fill="#334155">links outside docs/ → /_source/&lt;path&gt;; copies them</text>
+<text x="378" y="386" font-size="12.5" fill="#64748b">never .env, binaries or files over 2 MB</text>
+<polyline points="742,270.0 777,270.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="780" y="120" width="280" height="300" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="798" y="154" font-size="17" fill="#0f172a" font-weight="700">Static site</text>
+<text x="798" y="190" font-size="13.5" fill="#334155" font-weight="700" font-family="'JetBrains Mono', Consolas, Menlo, monospace">/</text>
+<text x="798" y="209" font-size="12.5" fill="#64748b">English</text>
+<text x="798" y="228" font-size="13.5" fill="#334155"></text>
+<text x="798" y="247" font-size="13.5" fill="#334155" font-weight="700" font-family="'JetBrains Mono', Consolas, Menlo, monospace">/ko/</text>
+<text x="798" y="266" font-size="12.5" fill="#64748b">Korean (English if no .ko.md)</text>
+<text x="798" y="285" font-size="13.5" fill="#334155"></text>
+<text x="798" y="304" font-size="13.5" fill="#334155" font-weight="700" font-family="'JetBrains Mono', Consolas, Menlo, monospace">/_source/</text>
+<text x="798" y="323" font-size="12.5" fill="#64748b">linked files, as plain text</text>
+<rect x="798" y="380" width="172" height="24" rx="12.0" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="884.0" y="396.5" font-size="12.5" fill="#334155" text-anchor="middle" font-weight="700">search index: en + ko</text>
+<polyline points="1062,270.0 1097,270.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1100" y="120" width="260" height="300" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" filter="url(#sh)"/>
+<circle cx="1128" cy="150" r="13" fill="#d97706"/>
+<text x="1128" y="155" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">3</text>
+<text x="1150" y="156" font-size="17" fill="#92400e" font-weight="700">Serve stage</text>
+<text x="1120" y="190" font-size="13.5" fill="#334155">nginx:1.27.3-alpine</text>
+<text x="1120" y="212" font-size="12.5" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">localhost/besu-docs/docs</text>
+<text x="1120" y="234" font-size="13.5" fill="#334155">read-only container</text>
+<text x="1120" y="256" font-size="13.5" fill="#334155"></text>
+<text x="1120" y="278" font-size="15" fill="#334155" font-weight="700">h139  :30300</text>
+<text x="1120" y="300" font-size="12.5" fill="#64748b">192.168.68.139</text>
+<text x="1120" y="322" font-size="12.5" fill="#64748b">/_source/ only as text/plain</text>
+<polyline points="1362,270.0 1397,270.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1400" y="180" width="160" height="180" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="1418" y="216" font-size="17" fill="#0f172a" font-weight="700">Readers</text>
+<text x="1418" y="244" font-size="13.5" fill="#334155">docs_ips</text>
+<text x="1418" y="265" font-size="13.5" fill="#334155">+ operator_ip</text>
+<text x="1418" y="286" font-size="12.5" fill="#64748b">(firewall)</text>
+<rect x="40" y="456" width="1020" height="60" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="60" y="481" font-size="14" fill="#1e3a8a" font-weight="700">Ansible:</text>
+<text x="130" y="481" font-size="13.5" fill="#334155">02-images.yml builds the image once on the operator, from the committed docs/, and ships it to h139</text>
+<text x="130" y="502" font-size="12.5" fill="#64748b">13-docs-site.yml starts it on h139 (docs_site_enabled); by hand: docker compose -f docs-site/docker-compose.yml up -d --build</text>
+<rect x="1100" y="456" width="460" height="60" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="1120" y="481" font-size="14" fill="#14532d" font-weight="700">No internet needed when serving</text>
+<text x="1120" y="502" font-size="12.5" fill="#334155">no external fonts or scripts; search runs in the browser</text>
+</svg>

@@ -123,6 +123,8 @@ that host is down, its backups look missing.
 
 ## Reading an incident
 
+![Triage flow: critical first, find a HostDown or BesuNodeDown cause, then the runbook and the dashboard panel](../images/diagrams/alert-triage.svg)
+
 One failure usually raises several alerts. Start with the **critical** ones, then look for a
 `HostDown` or `BesuNodeDown` that explains the rest. Example: a host of the HA pair (h135) shut down.
 
