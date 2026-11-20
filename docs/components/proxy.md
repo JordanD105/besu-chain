@@ -309,6 +309,8 @@ Which account a request may send from is decided before that:
 
 ## Nonces and balance checks: fast path + periodic chain check
 
+![How the proxy picks nonces: per-sender lock, next nonce from memory or max(Redis, chain pending), balance check, send through the coordinator, remember pending, and the 2 s background check that adopts, fills or reports gaps](../images/diagrams/nonce-management.svg)
+
 Transactions from one sender must use consecutive nonces, so the proxy sends them **one at a time
 per sender** (a per-sender lock). To keep that lock short, it holds only **one signing round trip**:
 

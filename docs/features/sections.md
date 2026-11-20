@@ -69,6 +69,8 @@ ordered nonces); chainlens is the UI and calls the proxy's admin API.
 
 ## The SectionRegistry (on chain, version 2)
 
+![Several sections, each with its sk_… key, 3 accounts and user accounts, all recorded in the on-chain SectionRegistry written by the registry admin through the proxy](../images/diagrams/section-model.svg)
+
 [`proxy/contracts/SectionRegistry.sol`](../../proxy/contracts/SectionRegistry.sol), compiled to
 [`proxy/section-registry.json`](../../proxy/section-registry.json) (solc 0.8.28, EVM cancun;
 `proxy/scripts/compile-contract.js`). Both proxies and chainlens read it; nothing else stores
@@ -138,6 +140,8 @@ so the chain itself says what it was. Contract deployment (`/admin/contracts/*`)
 `chainlens_deploy_ips`, with the same admin token (`state/secrets/chainlens_deploy_token`); for every
 other address the page and its menu entry don't exist. Chainlens forwards each action to the proxy's
 admin API (the proxy's token never reaches the browser) and logs it with the requester's address.
+
+![The chainlens Sections page: the sections and the New section form](../images/screenshots/chainlens-sections.png)
 
 - **List:** each section with its status, the 3 balances and its info fields; **New section** (name,
   optional description) shows the API key once, with a copy button.
@@ -263,6 +267,8 @@ total held by its **user accounts**, stacked, labelled `upfront / consumption / 
 `970 / 0 / 0 / 30`) and its number of user accounts, with a hover tooltip per section and a **Table**
 view. Read from the chain every 15 s (`GET /api/overview`).
 
+![Platform overview and section balances on the chainlens Dashboard](../images/screenshots/chainlens-dashboard.png)
+
 Below it, **Section statistics** per **day, week, month, quarter or year** (UTC; the last 14 days,
 12 weeks or months, 8 quarters, 5 years; default: month), for all sections or one: a column chart of
 one measure per period, and, for the period you click (default: the current one), totals and a table
@@ -286,6 +292,8 @@ Roles are today's (a replaced account counts as `retired`); history older than c
 start is not included.
 
 ## Flows
+
+![The money cycle of one section: SENDER01 top-up to the upfront account, −x and new-account funding to user accounts, +x and first NFT sales to the consumption account, sweep to the payment account, pay back to SENDER01](../images/diagrams/section-money-flow.svg)
 
 | Action | Who | Signed by / what happens |
 |---|---|---|

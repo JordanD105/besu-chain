@@ -32,6 +32,8 @@ are in [sections](sections.md#nft-collections)).
 | 4. Buyer | `POST /createaccount` with a section's key, or **Create account** on the chainlens Sections page | — (funded by the section's upfront account) |
 | 5. Sell | **Sell** on the collection's chainlens page, or `POST /nft/transfer` with the section's key | the buyer (and, for a resale, the seller's approval) |
 
+![NFT workflow: 1 compile in Remix, 2 deploy in chainlens (contract account center), 3 mint at a fixed price, 4 a section user account as buyer, 5 sell with X-Section-Key: first sale pays the section's consumption account, resale pays the seller](../images/diagrams/nft-lifecycle.svg)
+
 The addresses below are the production ones (proxy VIP `192.168.68.151:30000`, chainlens and Remix
 on h139). Run steps 2, 3 and 5 in the browser from the operator machine or a PC in
 `chainlens_deploy_ips` ([Contract deployment (chainlens Deploy page)](contract-deployment.md)).
@@ -100,6 +102,8 @@ curl -s -X POST http://192.168.68.151:30000/nft/deploy -H 'Content-Type: applica
 **In chainlens:** on the collection's page (`#/contracts/0x…`), open the **Mint and sell** card.
 Fill in a name, a price in ETH and an image URL. The description and attributes (JSON) are optional.
 Click **Mint**. The result shows the new token id and links to the NFT.
+
+![The Mint and sell card on an NFT collection's page](../images/screenshots/chainlens-mint-sell.png)
 
 **Or with curl** (`collection` = the address, the name or the symbol):
 

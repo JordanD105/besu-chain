@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="620" viewBox="0 0 1560 620" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1560" height="620" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" fill="#0f172a" font-weight="700">NFT workflow: from Solidity to a sale (version-3 collection)</text>
+<text x="40" y="73" font-size="15" fill="#475569">The step numbers match the sections of this guide. Steps 2, 3 and 5 run from the operator machine or a PC in chainlens_deploy_ips.</text>
+<rect x="40" y="110" width="268" height="175" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="174.0" y="144" font-size="15" fill="#334155" font-weight="700" text-anchor="middle">Compile in Remix</text>
+<text x="174.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">192.168.68.139:30200</text>
+<text x="174.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">solc 0.8.28 · EVM cancun</text>
+<text x="174.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">→ NftCollection.json</text>
+<text x="174.0" y="221" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">(ABI + bytecode)</text>
+<text x="174.0" y="239" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">signed by: nothing</text>
+<circle cx="64" cy="139" r="13" fill="#64748b"/>
+<text x="64" y="144" font-size="14" fill="#ffffff" font-weight="700" text-anchor="middle">1</text>
+<path d="M308,197.5 L336,197.5" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="338" y="110" width="268" height="175" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#sh)"/>
+<text x="472.0" y="144" font-size="15" fill="#155e75" font-weight="700" text-anchor="middle">Deploy in chainlens</text>
+<text x="472.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Deploy page, kind NFT collection</text>
+<text x="472.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">args: name_, symbol_, registry_</text>
+<text x="472.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">or POST /nft/deploy</text>
+<text x="472.0" y="221" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">signed by the contract account</text>
+<text x="472.0" y="239" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">center → it is the minter</text>
+<circle cx="362" cy="139" r="13" fill="#0891b2"/>
+<text x="362" y="144" font-size="14" fill="#ffffff" font-weight="700" text-anchor="middle">2</text>
+<path d="M606,197.5 L634,197.5" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="636" y="110" width="268" height="175" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="770.0" y="144" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">Mint</text>
+<text x="770.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Mint and sell card</text>
+<text x="770.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">or POST /nft/mint</text>
+<text x="770.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">amount = price, fixed for good</text>
+<text x="770.0" y="221" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">signed by the center; the NFT</text>
+<text x="770.0" y="239" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">is held by the center, for sale</text>
+<circle cx="660" cy="139" r="13" fill="#2563eb"/>
+<text x="660" y="144" font-size="14" fill="#ffffff" font-weight="700" text-anchor="middle">3</text>
+<path d="M904,197.5 L932,197.5" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="934" y="110" width="268" height="175" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1068.0" y="144" font-size="15" fill="#14532d" font-weight="700" text-anchor="middle">Buyer</text>
+<text x="1068.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">a user account of a section</text>
+<text x="1068.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">POST /createaccount</text>
+<text x="1068.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">+ X-Section-Key: sk_…</text>
+<text x="1068.0" y="221" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">funded by the section's upfront</text>
+<text x="1068.0" y="239" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">account; needs ≥ the price</text>
+<circle cx="958" cy="139" r="13" fill="#16a34a"/>
+<text x="958" y="144" font-size="14" fill="#ffffff" font-weight="700" text-anchor="middle">4</text>
+<path d="M1202,197.5 L1230,197.5" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="1232" y="110" width="268" height="175" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="1366.0" y="144" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">Sell</text>
+<text x="1366.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Sell, or POST /nft/transfer</text>
+<text x="1366.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">+ X-Section-Key (buyer's section)</text>
+<text x="1366.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">buyer signs buy(tokenId, payee)</text>
+<text x="1366.0" y="221" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">atomic: pays the price, gets</text>
+<text x="1366.0" y="239" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">the token; else nothing moves</text>
+<circle cx="1256" cy="139" r="13" fill="#2563eb"/>
+<text x="1256" y="144" font-size="14" fill="#ffffff" font-weight="700" text-anchor="middle">5</text>
+<rect x="700" y="400" width="400" height="130" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="900.0" y="430" font-size="15" fill="#14532d" font-weight="700" text-anchor="middle">First sale (the center holds it)</text>
+<text x="900.0" y="450" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">price → the buyer's section's</text>
+<text x="900.0" y="469" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">consumption account</text>
+<text x="900.0" y="488" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">the contract checks isConsumptionAccount(payee)</text>
+<rect x="1150" y="400" width="370" height="130" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="1335.0" y="430" font-size="15" fill="#334155" font-weight="700" text-anchor="middle">Resale (a user holds it)</text>
+<text x="1335.0" y="450" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">buyer: a user of the same section</text>
+<text x="1335.0" y="469" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">price → the seller</text>
+<text x="1335.0" y="488" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">the proxy sends the seller's approve</text>
+<text x="1335.0" y="506" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">if needed (approveTxHash)</text>
+<path d="M1302,285 L930,398" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
+<text x="1120" y="336" font-size="13" fill="#14532d" font-weight="700" text-anchor="end">first sale</text>
+<path d="M1402,285 L1335,398" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="1392" y="362" font-size="13" fill="#334155" font-weight="700" text-anchor="start">resale</text>
+<rect x="40" y="400" width="610" height="130" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="56" y="430" font-size="15" fill="#334155" font-weight="700" text-anchor="start">Who holds the token</text>
+<text x="56" y="450" font-size="13" fill="#334155" font-weight="400" text-anchor="start">after ③: the contract account center</text>
+<text x="56" y="469" font-size="13" fill="#334155" font-weight="400" text-anchor="start">after ⑤: the buyer (resale: the next buyer)</text>
+<text x="56" y="488" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">Every sale is at the mint price. The chainlens Sell form needs no section key:</text>
+<text x="56" y="506" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">it calls the proxy with the admin token; the section is then the buyer's.</text>
+<text x="40" y="580" font-size="13" fill="#475569" font-weight="400" text-anchor="start">⑥ Check: chainlens #/nfts/&lt;collection&gt;/&lt;tokenId&gt;, the buyer's account page, the Sections page (consumption balance); then sweep and pay back.</text>
+</svg>

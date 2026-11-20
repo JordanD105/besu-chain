@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="700" viewBox="0 0 1560 700" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1560" height="700" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" fill="#0f172a" font-weight="700">The money cycle of one section (section_i)</text>
+<text x="40" y="73" font-size="15" fill="#475569">Every arrow is one signed transaction with a memo. Top-up, sweep and pay back are manual (admin API / chainlens Sections page).</text>
+<rect x="550" y="100" width="970" height="510" rx="16" fill="#ffffff" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text x="574" y="128" font-size="15" fill="#14532d" font-weight="700" text-anchor="start">section_i · its apps call with X-Section-Key: sk_…</text>
+<rect x="40" y="170" width="230" height="400" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="155.0" y="350" font-size="15" fill="#334155" font-weight="700" text-anchor="middle">SENDER01</text>
+<text x="155.0" y="370" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">platform account</text>
+<text x="155.0" y="389" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">big presignature pool</text>
+<text x="155.0" y="408" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">funds the upfront accounts,</text>
+<text x="155.0" y="426" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">receives the pay backs</text>
+<rect x="590" y="170" width="280" height="90" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="730.0" y="205" font-size="15" fill="#14532d" font-weight="700" text-anchor="middle">upfront_account_i</text>
+<text x="730.0" y="225" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">pays out · kind 2 upfront</text>
+<rect x="1100" y="170" width="380" height="90" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="1290.0" y="205" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">user accounts of section_i</text>
+<text x="1290.0" y="225" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">created by /createaccount · kind 1 user</text>
+<rect x="1100" y="480" width="380" height="90" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1290.0" y="515" font-size="15" fill="#14532d" font-weight="700" text-anchor="middle">consumption_account_i</text>
+<text x="1290.0" y="535" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">receives · kind 3 consumption</text>
+<rect x="590" y="480" width="280" height="90" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="730.0" y="515" font-size="15" fill="#14532d" font-weight="700" text-anchor="middle">payment_account_i</text>
+<text x="730.0" y="535" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">collects · kind 4 payment</text>
+<rect x="1210" y="295" width="270" height="130" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="1345.0" y="320" font-size="15" fill="#4c1d95" font-weight="700" text-anchor="middle">③ first NFT sale</text>
+<text x="1345.0" y="339" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">POST /nft/transfer + X-Section-Key</text>
+<text x="1345.0" y="357" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">NftCollection v3: buy(tokenId, payee)</text>
+<text x="1345.0" y="375" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">payee must be the consumption account</text>
+<text x="1345.0" y="393" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">of an active section (checked on chain)</text>
+<path d="M270,215 L588,215" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
+<text x="430" y="180" font-size="14" fill="#14532d" font-weight="700" text-anchor="middle">① Top up</text>
+<text x="430" y="198" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">POST /admin/sections/:id/topup</text>
+<text x="430" y="236" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">{amount} · manual only</text>
+<path d="M870,215 L1098,215" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
+<text x="985" y="150" font-size="14" fill="#14532d" font-weight="700" text-anchor="middle">② −x: upfront pays</text>
+<text x="985" y="168" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">POST /createaccount {amount}</text>
+<text x="985" y="184" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">(new account funding)</text>
+<text x="985" y="236" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">POST /transfer {amount: "-x"}</text>
+<path d="M1150,260 L1150,478" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
+<text x="1138" y="340" font-size="14" fill="#14532d" font-weight="700" text-anchor="end">③ +x</text>
+<text x="1138" y="358" font-size="12" fill="#334155" font-weight="400" text-anchor="end">POST /transfer</text>
+<text x="1138" y="374" font-size="12" fill="#334155" font-weight="400" text-anchor="end">{account, amount: "x"}</text>
+<path d="M1345,260 L1345,293" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
+<path d="M1345,425 L1345,478" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
+<path d="M1100,525 L872,525" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
+<text x="985" y="490" font-size="14" fill="#14532d" font-weight="700" text-anchor="middle">④ Sweep</text>
+<text x="985" y="508" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">POST /admin/sections/:id/sweep</text>
+<text x="985" y="546" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">{amount | "all"}</text>
+<path d="M590,525 L272,525" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
+<text x="430" y="490" font-size="14" fill="#14532d" font-weight="700" text-anchor="middle">⑤ Pay back</text>
+<text x="430" y="508" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">POST /admin/sections/:id/payback</text>
+<text x="430" y="546" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">{amount | "all"}</text>
+<text x="40" y="650" font-size="13" fill="#475569" font-weight="400" text-anchor="start">Same actions on the chainlens Sections page: Top up, Create account / Transfer, Sweep, Pay back. Archive sends all money of the 3 accounts back to SENDER01.</text>
+<text x="40" y="674" font-size="13" fill="#475569" font-weight="400" text-anchor="start">A keyless call can't move a section's money (403). Resales pay the seller, not the section.</text>
+</svg>

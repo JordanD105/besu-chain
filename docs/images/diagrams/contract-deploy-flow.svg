@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="640" viewBox="0 0 1560 640" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1560" height="640" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" fill="#0f172a" font-weight="700">Deploying a contract from the chainlens Deploy page</text>
+<text x="40" y="73" font-size="15" fill="#475569">Check is a dry run (nothing signed). Deploy signs as the contract account center, checks the code, then registers the contract on chain.</text>
+<rect x="40" y="110" width="250" height="190" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="165.0" y="142" font-size="15" fill="#334155" font-weight="700" text-anchor="middle">Browser</text>
+<text x="165.0" y="162" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">operator_ip or a PC in</text>
+<text x="165.0" y="181" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">chainlens_deploy_ips</text>
+<text x="165.0" y="200" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">deploy token</text>
+<text x="165.0" y="218" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">+ compiler artifact (.json:</text>
+<text x="165.0" y="236" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">ABI, bytecode, deployedBytecode)</text>
+<rect x="390" y="110" width="290" height="190" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#sh)"/>
+<text x="535.0" y="142" font-size="15" fill="#155e75" font-weight="700" text-anchor="middle">chainlens Deploy page</text>
+<text x="535.0" y="162" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">#/deploy · /api/deploy/*</text>
+<text x="535.0" y="181" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">step 8: Check</text>
+<text x="535.0" y="200" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">step 9: Deploy (confirm)</text>
+<text x="535.0" y="219" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">one deployment at a time</text>
+<rect x="800" y="110" width="320" height="190" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="960.0" y="142" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">proxy admin API</text>
+<text x="960.0" y="162" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">POST /admin/contracts/check</text>
+<text x="960.0" y="181" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">POST /admin/contracts/deploy</text>
+<text x="960.0" y="200" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">check: arguments, gas, no revert,</text>
+<text x="960.0" y="218" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">fits in a block, the future address</text>
+<text x="960.0" y="236" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">after the block: code vs deployedBytecode</text>
+<rect x="1240" y="110" width="280" height="190" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="1380.0" y="142" font-size="15" fill="#064e3b" font-weight="700" text-anchor="middle">MPC signer</text>
+<text x="1380.0" y="162" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">coordinator → 2 of 3 nodes</text>
+<text x="1380.0" y="181" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">sign as the contract</text>
+<text x="1380.0" y="200" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">account center</text>
+<text x="1380.0" y="219" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">policy: contract creation allowed,</text>
+<text x="1380.0" y="237" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">ALLOWED_TO empty</text>
+<path d="M290,190 L388,190" fill="none" stroke="#0891b2" stroke-width="2" marker-end="url(#aC)"/>
+<text x="339" y="180" font-size="12" fill="#155e75" font-weight="600" text-anchor="middle">token</text>
+<path d="M680,190 L798,190" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<text x="739" y="180" font-size="12" fill="#1e3a8a" font-weight="600" text-anchor="middle">proxy admin</text>
+<text x="739" y="210" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">token (server</text>
+<text x="739" y="226" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">side only)</text>
+<path d="M1120,190 L1238,190" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#aM)"/>
+<text x="1179" y="180" font-size="12" fill="#064e3b" font-weight="600" text-anchor="middle">sign</text>
+<text x="1179" y="210" font-size="12" fill="#064e3b" font-weight="400" text-anchor="middle">as the center</text>
+<rect x="800" y="410" width="720" height="160" rx="14" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="820" y="438" font-size="16" fill="#4c1d95" font-weight="700" text-anchor="start">Besu</text>
+<rect x="820" y="454" width="330" height="100" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="985.0" y="480" font-size="15" fill="#4c1d95" font-weight="700" text-anchor="middle">SectionRegistry</text>
+<text x="985.0" y="500" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">registerContract → ContractRegistered</text>
+<text x="985.0" y="519" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">(address, kind, name, ABI)</text>
+<rect x="1170" y="454" width="330" height="100" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="1335.0" y="480" font-size="15" fill="#4c1d95" font-weight="700" text-anchor="middle">new contract</text>
+<text x="1335.0" y="500" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">deployer (msg.sender) =</text>
+<text x="1335.0" y="519" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">contract account center</text>
+<path d="M985,300 L985,452" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<text x="997" y="336" font-size="12" fill="#1e3a8a" font-weight="600" text-anchor="start">③ registerContract (kind, name, ABI),</text>
+<text x="997" y="352" font-size="12" fill="#1e3a8a" font-weight="400" text-anchor="start">signed by the registry admin (MPC)</text>
+<path d="M1380,300 L1380,452" fill="none" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>
+<text x="1392" y="336" font-size="12" fill="#4c1d95" font-weight="600" text-anchor="start">① signed creation,</text>
+<text x="1392" y="352" font-size="12" fill="#4c1d95" font-weight="400" text-anchor="start">mined in a block</text>
+<text x="1368" y="378" font-size="12" fill="#334155" font-weight="600" text-anchor="end">② proxy compares the code</text>
+<text x="1368" y="394" font-size="12" fill="#334155" font-weight="400" text-anchor="end">with deployedBytecode</text>
+<rect x="390" y="430" width="290" height="120" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#sh)"/>
+<text x="535.0" y="462" font-size="15" fill="#155e75" font-weight="700" text-anchor="middle">contract page</text>
+<text x="535.0" y="482" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">#/contracts/0x…</text>
+<text x="535.0" y="501" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">read functions work at once</text>
+<text x="535.0" y="520" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">usable by /contract/call, /contract/send</text>
+<path d="M535,300 L535,428" fill="none" stroke="#0891b2" stroke-width="2" marker-end="url(#aC)"/>
+<text x="547" y="360" font-size="12" fill="#155e75" font-weight="600" text-anchor="start">link after Deploy</text>
+<path d="M800,490 L682,490" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#aP)"/>
+<text x="741" y="480" font-size="12" fill="#4c1d95" font-weight="400" text-anchor="middle">reads the</text>
+<text x="741" y="512" font-size="12" fill="#4c1d95" font-weight="400" text-anchor="middle">event</text>
+<text x="40" y="610" font-size="13" fill="#475569" font-weight="400" text-anchor="start">Without the browser: the same two calls on the proxy with the proxy admin token. The code check result (matches / DIFFERS / not checked) is reported; the contract is registered in every case.</text>
+</svg>

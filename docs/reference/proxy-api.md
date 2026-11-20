@@ -23,6 +23,8 @@
 
 ## Conventions
 
+![The three kinds of proxy callers: an application without a key, an application with X-Section-Key, and the operator or chainlens with the admin token, with the checks and the endpoints each can use](../images/diagrams/api-callers.svg)
+
 | | |
 |---|---|
 | **Base URL** | `http://<proxy VIP>:30000` — production `http://192.168.68.151:30000` (the active proxy). Development: `http://localhost:30000` |

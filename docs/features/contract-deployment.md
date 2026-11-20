@@ -70,6 +70,10 @@ cat state/secrets/chainlens_deploy_token
 
 ## Deploy
 
+![Deploy flow: browser to the chainlens Deploy page (Check, then Deploy), the proxy admin API, signing as the contract account center through the MPC signer, the code check, registration in the SectionRegistry and the chainlens contract page](../images/diagrams/contract-deploy-flow.svg)
+
+![The chainlens Deploy page](../images/screenshots/chainlens-deploy.png)
+
 1. Compile with **EVM version cancun** (Remix: [Remix IDE (self-hosted)](../components/remix.md)) and keep
    the compiler artifact (`.json` with ABI and bytecode: Remix `contracts/artifacts/<Name>.json`,
    Hardhat, Foundry or solc output).

@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="800" viewBox="0 0 1500 800" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1500" height="800" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" fill="#0f172a" font-weight="700">Sections and the SectionRegistry</text>
+<text x="40" y="73" font-size="15" fill="#475569">Each section has its own API key, 3 accounts and its user accounts. All of it is recorded on chain; only the registry admin writes.</text>
+<rect x="40" y="105" width="330" height="100" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#sh)"/>
+<text x="205.0" y="140" font-size="15" fill="#155e75" font-weight="700" text-anchor="middle">chainlens Sections page</text>
+<text x="205.0" y="160" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">or the operator with curl</text>
+<text x="205.0" y="179" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">admin token, from ADMIN_ALLOWED_IPS</text>
+<rect x="500" y="105" width="420" height="100" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="710.0" y="140" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">proxy admin API · /admin/sections</text>
+<text x="710.0" y="160" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">create, rename, info, key, active,</text>
+<text x="710.0" y="179" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">replace account, archive, user accounts</text>
+<rect x="1060" y="105" width="400" height="100" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="1260.0" y="140" font-size="15" fill="#334155" font-weight="700" text-anchor="middle">Readers: both proxies and chainlens</text>
+<text x="1260.0" y="160" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">no database: the chain is the record</text>
+<text x="1260.0" y="179" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">sections cached 10 s on the proxy</text>
+<path d="M370,155 L498,155" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<text x="434" y="145" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">admin API</text>
+<rect x="40" y="290" width="1420" height="100" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="750.0" y="322" font-size="16" fill="#4c1d95" font-weight="700" text-anchor="middle">SectionRegistry v2 (on Besu)</text>
+<text x="750.0" y="342" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">per section: name · 3 accounts · API-key hash (keccak256; the key itself is never stored) · active / archived · info fields (up to 32)</text>
+<text x="750.0" y="361" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">every account's kind: 1 user · 2 upfront · 3 consumption · 4 payment · 5 retired   ·   registered contracts with their ABI   ·   isConsumptionAccount(address)</text>
+<path d="M710,205 L710,288" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#aM)"/>
+<rect x="722" y="230" width="300" height="30" rx="15.0" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+<text x="872.0" y="249.32" font-size="12" fill="#064e3b" font-weight="600" text-anchor="middle">signed by the registry admin (MPC key)</text>
+<path d="M1260,288 L1260,207" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#aP)"/>
+<text x="1272" y="252" font-size="12" fill="#4c1d95" font-weight="400" text-anchor="start">read (events + views)</text>
+<rect x="40" y="470" width="440" height="270" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="60" y="500" font-size="17" fill="#14532d" font-weight="700" text-anchor="start">section_1</text>
+<rect x="260" y="483" width="200" height="26" rx="13.0" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/>
+<text x="360.0" y="500.32" font-size="12" fill="#9f1239" font-weight="600" text-anchor="middle">key sk_… (shown once)</text>
+<rect x="60" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="122" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">upfront</text>
+<text x="122" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 2</text>
+<rect x="198" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="260" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">consumption</text>
+<text x="260" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 3</text>
+<rect x="336" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="398" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">payment</text>
+<text x="398" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 4</text>
+<rect x="60" y="600" width="400" height="120" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="80" y="625" font-size="13" fill="#1e3a8a" font-weight="700" text-anchor="start">user accounts · kind 1</text>
+<circle cx="92" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="138" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="184" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="230" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="276" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="316" y="665" font-size="16" fill="#1e3a8a" font-weight="700" text-anchor="start">…</text>
+<text x="80" y="702" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">POST /createaccount with this section's key</text>
+<path d="M260,470 L260,392" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#aP)"/>
+<text x="272" y="436" font-size="12" fill="#4c1d95" font-weight="400" text-anchor="start">recorded on chain</text>
+<rect x="530" y="470" width="440" height="270" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="550" y="500" font-size="17" fill="#14532d" font-weight="700" text-anchor="start">section_2</text>
+<rect x="750" y="483" width="200" height="26" rx="13.0" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/>
+<text x="850.0" y="500.32" font-size="12" fill="#9f1239" font-weight="600" text-anchor="middle">key sk_… (shown once)</text>
+<rect x="550" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="612" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">upfront</text>
+<text x="612" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 2</text>
+<rect x="688" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="750" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">consumption</text>
+<text x="750" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 3</text>
+<rect x="826" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="888" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">payment</text>
+<text x="888" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 4</text>
+<rect x="550" y="600" width="400" height="120" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="570" y="625" font-size="13" fill="#1e3a8a" font-weight="700" text-anchor="start">user accounts · kind 1</text>
+<circle cx="582" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="628" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="674" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="714" y="665" font-size="16" fill="#1e3a8a" font-weight="700" text-anchor="start">…</text>
+<text x="570" y="702" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">POST /createaccount with this section's key</text>
+<path d="M750,470 L750,392" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#aP)"/>
+<text x="762" y="436" font-size="12" fill="#4c1d95" font-weight="400" text-anchor="start">recorded on chain</text>
+<rect x="1020" y="470" width="440" height="270" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1040" y="500" font-size="17" fill="#14532d" font-weight="700" text-anchor="start">section_n</text>
+<rect x="1240" y="483" width="200" height="26" rx="13.0" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/>
+<text x="1340.0" y="500.32" font-size="12" fill="#9f1239" font-weight="600" text-anchor="middle">key sk_… (shown once)</text>
+<rect x="1040" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="1102" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">upfront</text>
+<text x="1102" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 2</text>
+<rect x="1178" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="1240" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">consumption</text>
+<text x="1240" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 3</text>
+<rect x="1316" y="525" width="124" height="58" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="1378" y="549" font-size="13" fill="#14532d" font-weight="700" text-anchor="middle">payment</text>
+<text x="1378" y="569" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">kind 4</text>
+<rect x="1040" y="600" width="400" height="120" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="1060" y="625" font-size="13" fill="#1e3a8a" font-weight="700" text-anchor="start">user accounts · kind 1</text>
+<circle cx="1072" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="1118" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="1164" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<circle cx="1210" cy="660" r="15" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="1250" y="665" font-size="16" fill="#1e3a8a" font-weight="700" text-anchor="start">…</text>
+<text x="1060" y="702" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">POST /createaccount with this section's key</text>
+<path d="M1240,470 L1240,392" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#aP)"/>
+<text x="1252" y="436" font-size="12" fill="#4c1d95" font-weight="400" text-anchor="start">recorded on chain</text>
+<text x="40" y="772" font-size="13" fill="#475569" font-weight="400" text-anchor="start">Apps of a section send X-Section-Key; the proxy hashes it and finds the active section. Sections are identified by the key alone (no per-section IPs).</text>
+</svg>

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="600" viewBox="0 0 1560 600" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1560" height="600" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" fill="#0f172a" font-weight="700">Three kinds of proxy callers</text>
+<text x="40" y="73" font-size="15" fill="#475569">All of them must first pass the firewall (proxy_client_ips) to reach http://192.168.68.151:30000. The proxy then checks the headers.</text>
+<rect x="40" y="105" width="380" height="128" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="230.0" y="161" font-size="16" fill="#334155" font-weight="700" text-anchor="middle">Application without a section</text>
+<text x="230.0" y="181" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">no key header</text>
+<rect x="520" y="105" width="400" height="128" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="720.0" y="139" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">No key</text>
+<text x="720.0" y="159" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">allowed while sections_required: false</text>
+<text x="720.0" y="177" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">(else 401 X-Section-Key is required)</text>
+<text x="720.0" y="195" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">can't move a section's money (403)</text>
+<rect x="1020" y="105" width="500" height="128" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="1036" y="133" font-size="15" fill="#334155" font-weight="700" text-anchor="start">Can use</text>
+<text x="1036" y="153" font-size="13" fill="#334155" font-weight="400" text-anchor="start">POST /createaccount (funded by SENDER01)</text>
+<text x="1036" y="172" font-size="13" fill="#334155" font-weight="400" text-anchor="start">POST /transfer {from, to, amount}</text>
+<text x="1036" y="191" font-size="13" fill="#334155" font-weight="400" text-anchor="start">POST /nft/deploy, /nft/mint, version-2 sales</text>
+<text x="1036" y="210" font-size="13" fill="#334155" font-weight="400" text-anchor="start">POST /contract/call (read) · GET reads</text>
+<path d="M420,169.0 L518,169.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<path d="M920,169.0 L1018,169.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="40" y="255" width="380" height="128" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="230.0" y="311" font-size="16" fill="#14532d" font-weight="700" text-anchor="middle">Application of a section</text>
+<text x="230.0" y="331" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">X-Section-Key: sk_…</text>
+<rect x="520" y="255" width="400" height="128" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="720.0" y="289" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">Key hash → an active section</text>
+<text x="720.0" y="309" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">401 unknown section key</text>
+<text x="720.0" y="327" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">403 section "…" is disabled</text>
+<rect x="1020" y="255" width="500" height="128" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="1036" y="283" font-size="15" fill="#14532d" font-weight="700" text-anchor="start">Can use</text>
+<text x="1036" y="303" font-size="13" fill="#334155" font-weight="400" text-anchor="start">its own user accounts: /createaccount</text>
+<text x="1036" y="322" font-size="13" fill="#334155" font-weight="400" text-anchor="start">+x / −x: POST /transfer</text>
+<text x="1036" y="341" font-size="13" fill="#334155" font-weight="400" text-anchor="start">NFT purchase: POST /nft/transfer (version 3)</text>
+<text x="1036" y="360" font-size="13" fill="#334155" font-weight="400" text-anchor="start">POST /contract/send (from = its user account)</text>
+<path d="M420,319.0 L518,319.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<path d="M920,319.0 L1018,319.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="40" y="405" width="380" height="128" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#sh)"/>
+<text x="230.0" y="461" font-size="16" fill="#155e75" font-weight="700" text-anchor="middle">Operator / chainlens</text>
+<text x="230.0" y="481" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Authorization: Bearer &lt;ADMIN_TOKEN&gt;</text>
+<text x="230.0" y="500" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">from ADMIN_ALLOWED_IPS</text>
+<rect x="520" y="405" width="400" height="128" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="720.0" y="439" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">Token + source address</text>
+<text x="720.0" y="459" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">404 admin API off (no token / IPs)</text>
+<text x="720.0" y="477" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">403 address not allowed · 401 wrong token</text>
+<rect x="1020" y="405" width="500" height="128" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#sh)"/>
+<text x="1036" y="433" font-size="15" fill="#155e75" font-weight="700" text-anchor="start">Can use</text>
+<text x="1036" y="453" font-size="13" fill="#334155" font-weight="400" text-anchor="start">/admin/sections/* (create, top up, sweep,</text>
+<text x="1036" y="472" font-size="13" fill="#334155" font-weight="400" text-anchor="start">pay back, keys, accounts, archive …)</text>
+<text x="1036" y="491" font-size="13" fill="#334155" font-weight="400" text-anchor="start">/admin/contracts/check, /deploy</text>
+<text x="1036" y="510" font-size="13" fill="#334155" font-weight="400" text-anchor="start">/nft/transfer version 3 without a section key</text>
+<path d="M420,469.0 L518,469.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<path d="M920,469.0 L1018,469.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="40" y="576" font-size="13" fill="#475569" font-weight="400" text-anchor="start">Chainlens calls the admin API for its Sections, Deploy and Mint and sell pages with its own token, which never reaches the browser.</text>
+</svg>

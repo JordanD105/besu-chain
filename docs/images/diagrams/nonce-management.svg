@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="720" viewBox="0 0 1560 720" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1560" height="720" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" fill="#0f172a" font-weight="700">How the proxy picks nonces</text>
+<text x="40" y="73" font-size="15" fill="#475569">Fast path ①–⑤ for every transaction; the background check ⑥ compares with the chain and repairs. The chain is the truth, Redis only a cache.</text>
+<rect x="40" y="105" width="262" height="165" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="171.0" y="137" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">① Per-sender lock</text>
+<text x="171.0" y="157" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">withSenderLock: one</text>
+<text x="171.0" y="176" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">transaction at a time</text>
+<text x="171.0" y="195" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">per sender</text>
+<text x="171.0" y="214" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">held for one signing round trip</text>
+<path d="M302,187 L340,187" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<rect x="342" y="105" width="262" height="165" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="473.0" y="137" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">② Next nonce</text>
+<text x="473.0" y="157" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">memory counter, + 1</text>
+<text x="473.0" y="176" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">no counter yet (start, error,</text>
+<text x="473.0" y="195" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">repair): max(Redis, pending)</text>
+<text x="473.0" y="214" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">pending = eth_getTransactionCount</text>
+<path d="M604,187 L642,187" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<rect x="644" y="105" width="262" height="165" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="775.0" y="137" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">③ Balance check</text>
+<text x="775.0" y="157" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">snapshot: balance + confirmed</text>
+<text x="775.0" y="176" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">nonce at the same block,</text>
+<text x="775.0" y="195" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">minus the in-flight value</text>
+<text x="775.0" y="214" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">never allows more than the chain</text>
+<path d="M906,187 L944,187" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<rect x="946" y="105" width="262" height="165" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="1077.0" y="137" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">④ Send</text>
+<text x="1077.0" y="157" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">eth_sendTransaction to the</text>
+<text x="1077.0" y="176" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">coordinator: 2 of 3 MPC</text>
+<text x="1077.0" y="195" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">nodes sign → Besu</text>
+<text x="1077.0" y="214" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">SIGNER_IP:SIGNER_PORT</text>
+<path d="M1208,187 L1246,187" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<rect x="1248" y="105" width="262" height="165" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="1379.0" y="137" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">⑤ Remember pending</text>
+<text x="1379.0" y="157" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">memory: next nonce, value</text>
+<text x="1379.0" y="176" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">of each unconfirmed nonce</text>
+<text x="1379.0" y="195" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Redis: same (cache)</text>
+<text x="1379.0" y="214" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">Redis writes are not waited for</text>
+<rect x="40" y="360" width="300" height="290" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="190.0" y="392" font-size="15" fill="#334155" font-weight="700" text-anchor="middle">Redis: a cache only</text>
+<text x="190.0" y="412" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">nonce:&lt;sender&gt;</text>
+<text x="190.0" y="431" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">pending-value:&lt;sender&gt;</text>
+<text x="190.0" y="450" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">down, empty or stale: harmless,</text>
+<text x="190.0" y="468" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">the chain's pending count wins</text>
+<text x="190.0" y="486" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">(max) when the counter is read</text>
+<text x="190.0" y="504" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle"></text>
+<text x="190.0" y="522" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">proxy_redis_up = 0 →</text>
+<text x="190.0" y="540" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">alert ProxyRedisDisconnected</text>
+<path d="M330,358 L420,272" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 5" marker-start="url(#a)" marker-end="url(#a)"/>
+<text x="60" y="314" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">read when there is no counter;</text>
+<text x="60" y="330" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">written in the background</text>
+<rect x="380" y="360" width="760" height="290" rx="14" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" filter="url(#sh)"/>
+<text x="400" y="390" font-size="16" fill="#92400e" font-weight="700" text-anchor="start">⑥ Background check every 2 s (SENDER_CHECK_MS)</text>
+<text x="400" y="412" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">SENDER01, registry admin, contract center always; senders used in the last 5 min; senders with pending values in Redis</text>
+<line x1="396" y1="428" x2="1124" y2="428" stroke="#fde68a" stroke-width="1"/>
+<text x="404" y="448" font-size="13" fill="#334155" font-weight="600" text-anchor="start">a transaction was mined</text>
+<text x="670" y="448" font-size="13" fill="#334155" font-weight="400" text-anchor="start">→ its value stops being reserved</text>
+<line x1="396" y1="461" x2="1124" y2="461" stroke="#fde68a" stroke-width="1"/>
+<text x="404" y="481" font-size="13" fill="#334155" font-weight="600" text-anchor="start">Besu's pending nonce is ahead</text>
+<text x="670" y="481" font-size="13" fill="#334155" font-weight="400" text-anchor="start">→ continue from Besu's value (another client sent)</text>
+<line x1="396" y1="494" x2="1124" y2="494" stroke="#fde68a" stroke-width="1"/>
+<text x="404" y="514" font-size="13" fill="#9f1239" font-weight="600" text-anchor="start">gap, transactions wait above it</text>
+<text x="670" y="514" font-size="13" fill="#334155" font-weight="400" text-anchor="start">→ after ~30 s AND 10 blocks: a filler (0 ETH to itself) per missing nonce</text>
+<line x1="396" y1="527" x2="1124" y2="527" stroke="#fde68a" stroke-width="1"/>
+<text x="404" y="547" font-size="13" fill="#9f1239" font-weight="600" text-anchor="start">gap, nothing above it (lost)</text>
+<text x="670" y="547" font-size="13" fill="#334155" font-weight="400" text-anchor="start">→ after the same wait: continue from Besu's pending nonce</text>
+<line x1="396" y1="560" x2="1124" y2="560" stroke="#fde68a" stroke-width="1"/>
+<text x="404" y="580" font-size="13" fill="#9f1239" font-weight="600" text-anchor="start">stall: ready in the pool, not mined</text>
+<text x="670" y="580" font-size="13" fill="#334155" font-weight="400" text-anchor="start">→ report only (ProxySenderStalled): restart one validator</text>
+<text x="404" y="632" font-size="12" fill="#64748b" font-weight="400" text-anchor="start">Nothing is repaired while the chain is halted. Nonce changes and fillers run under the sender's lock.</text>
+<path d="M610,358 L610,272" fill="none" stroke="#f59e0b" stroke-width="2" marker-end="url(#aO)"/>
+<text x="622" y="320" font-size="12" fill="#92400e" font-weight="600" text-anchor="start">corrects the counter</text>
+<rect x="1180" y="360" width="340" height="290" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="1350.0" y="392" font-size="15" fill="#4c1d95" font-weight="700" text-anchor="middle">Besu RPC node (BESU_IP)</text>
+<text x="1350.0" y="412" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">eth_getTransactionCount</text>
+<text x="1350.0" y="431" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">latest and pending</text>
+<text x="1350.0" y="450" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">eth_getBalance (same block)</text>
+<text x="1350.0" y="469" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">txpool: what waits above a gap</text>
+<text x="1350.0" y="488" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">TXPOOL API needed to find gaps</text>
+<text x="1350.0" y="506" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">after a proxy restart</text>
+<text x="1350.0" y="524" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle"></text>
+<text x="1350.0" y="542" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">⟵ ⑥ reads all of this every 2 s</text>
+<text x="1350.0" y="560" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">and sends the fillers</text>
+<path d="M1180,590 L1142,590" fill="none" stroke="#7c3aed" stroke-width="2" marker-start="url(#aP)" marker-end="url(#aP)"/>
+<path d="M1077,270 L1077,320 L1300,320 L1300,358" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<text x="1312" y="345" font-size="12" fill="#1e3a8a" font-weight="600" text-anchor="start">signed transactions</text>
+<text x="40" y="690" font-size="13" fill="#475569" font-weight="400" text-anchor="start">SENDER_STUCK_MS 30000 · SENDER_STUCK_BLOCKS 10 · SENDER_IDLE_MS 300000.  State per sender: GET /status/senders and /metrics.  One proxy replica: the lock is in process memory.</text>
+</svg>
