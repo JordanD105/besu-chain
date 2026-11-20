@@ -27,7 +27,8 @@
 
 - `02-images.yml`은 운영자 머신에서 고정된 Remix 사이트를 **커밋당 한 번** 가져오고(`git fetch
   --depth 1`, 약 400 MB, `state/build/remix/remix-live`에 저장; 이를 위해 운영자 머신은 github.com에
-  접근할 수 있어야 합니다) `localhost/besu-remix/remix`를 빌드합니다. 다른 이미지와 마찬가지로 한 번
+  접근할 수 있어야 하며, 그렇지 않으면 `image_archives_dir`에 사이트 아카이브가 있어야 합니다:
+  [오프라인 빌드](../deployment/offline-build.md)) `localhost/besu-remix/remix`를 빌드합니다. 다른 이미지와 마찬가지로 한 번
   빌드하여 호스트로 복사하며, `save-images.yml`은 이를 `remix-docker.tar`로 저장합니다.
 - `12-remix.yml`은 모니터링 호스트에서 이를 시작하고 컴파일러 목록을 확인합니다.
 - `ha/firewall-layout.sh`는 모니터링 호스트의 포트 30200을 `operator_ip`와 `remix_ips`에 개방합니다.

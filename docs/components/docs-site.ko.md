@@ -73,8 +73,10 @@ docker compose -f docs-site/docker-compose.yml up -d --build
 
 ![문서 사이트: Docker 빌드 단계에서 MkDocs로 영어/한국어 정적 사이트를 만들고 h139:30300의 nginx가 제공](../images/diagrams/docs-site-build.svg)
 
-1. **빌드 단계** (`python:3.12.8-slim`): `mkdocs 1.6.1`과 `mkdocs-material 9.5.49`를 설치하고(빌드 시에만
-   PyPI에서), 저장소를 복사한 뒤(비밀 정보, 상태, 대용량 파일은 `Dockerfile.dockerignore`로 제외)
+1. **빌드 단계** (`python:3.12.8-slim`): `mkdocs 1.6.1`, `mkdocs-material 9.5.49`,
+   `mkdocs-static-i18n 1.2.3`과 그 의존성을 설치하고(모두 `docs-site/requirements.txt`에 버전이 고정되어 있으며,
+   빌드 시에만 PyPI에서 받거나 네트워크 없이 `docs-site/offline/wheels.tgz`에서 설치합니다:
+   [오프라인 빌드](../deployment/offline-build.md)), 저장소를 복사한 뒤(비밀 정보, 상태, 대용량 파일은 `Dockerfile.dockerignore`로 제외)
    `mkdocs build`를 실행합니다.
 2. **소스 파일 링크:** 문서는 `docs/` 외부의 파일(컨트랙트, 플레이북, 알림 규칙 등)에 링크합니다.
    `hooks.py`는 이러한 링크를 `/_source/<path>`로 바꾸고 파일을 그곳에 복사하므로, 사이트에서 일반
@@ -93,6 +95,6 @@ docker compose -f docs-site/docker-compose.yml up -d --build
 - 로컬에서 빌드를 확인합니다(경고에 깨진 링크와 앵커가 표시됩니다).
 
 ```bash
-pip install mkdocs==1.6.1 mkdocs-material==9.5.49
+pip install -r docs-site/requirements.txt
 mkdocs build -f docs-site/mkdocs.yml -d /tmp/site
 ```

@@ -164,6 +164,12 @@ ansible-playbook save-images.yml -e image_archives_dir=/opt/000
 다시 실행하십시오. Besu 노드는 한 번에 하나씩 다시 생성되며, 각 노드가 다시 동기화된 후 다음 노드로
 넘어갑니다.
 
+**인터넷 없이 빌드하기.** `save-images.yml`은 빌드의 **베이스 이미지**(Dockerfile의 `FROM` 줄: node,
+python, nginx, rust, debian)도 `base-<image>.tar`로 저장하며(베이스 이미지만 저장하려면
+`--tags base-images`), `02-images.yml`은 없는 베이스 이미지를 그곳에서 로드합니다.
+`offline_build: true`이면 모든 빌드가 네트워크 없이, 저장소에 커밋된 패키지 아카이브와 Remix의
+아카이브를 사용하여 실행됩니다: [오프라인 빌드](offline-build.md).
+
 ### 사전 서명 풀 {#presignature-pools}
 
 `mpc_pool_target`(`SENDER01` 같은 큰 키), `mpc_pool_target_small`(작은 키),

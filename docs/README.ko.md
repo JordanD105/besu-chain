@@ -36,6 +36,7 @@
 | Besu 검증자 추가 또는 제거, MPC 노드 이동 | [노드 추가 및 제거](operations/adding-nodes.md) |
 | 손실된 호스트나 사이트 복구 | [재해 복구](operations/disaster-recovery.md) · [Ansible로 복원](operations/restore.md) |
 | MPC 서명기 업그레이드 | [MPC 업그레이드](operations/mpc-signer-upgrade.md) |
+| 인터넷이 없는 사이트에서 이미지 빌드 | [오프라인 빌드](deployment/offline-build.md) |
 | 모든 것을 한 대의 머신에서 실행 | [개발 환경](getting-started/development.md) |
 
 ---
@@ -65,6 +66,7 @@
 | [Besu 수동 설정](deployment/besu-manual.md) | Besu 패키지 수동 설치: 네트워크 파일, 시작, 검증자 추가 / 제거 |
 | [운영 환경의 MPC 서명기](deployment/mpc-signer-production.md) | 세 팀, 토큰, 키 세레모니, 백업, 운영 |
 | [GPG 키](deployment/gpg-key.md) | 노드 키 백업을 암호화하는 키 |
+| [오프라인 빌드](deployment/offline-build.md) | 인터넷 없이 모든 이미지 빌드: 패키지 아카이브, 베이스 이미지, `offline_build` |
 
 ### 구성 요소 {#components}
 | 문서 | 내용 |
