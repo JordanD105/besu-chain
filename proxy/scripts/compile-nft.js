@@ -1,17 +1,19 @@
-// Rebuild nft-collection.json after changing contracts/NftCollection.sol:
+// Rebuilds nft-collection.json, the LEGACY version-2 collection (contracts/NftCollectionV2.sol: minted by
+// SENDER01, sales paid to the minter). New collections are version 3 (contracts/NftCollection.sol,
+// compiled with: node scripts/compile-contract.js contracts/NftCollection.sol NftCollection nft-collection-v3.json).
 //   npm install solc@0.8.28
 //   node scripts/compile-nft.js
 const fs = require("fs");
 const path = require("path");
 const solc = require("solc");
 
-const sourcePath = path.join(__dirname, "..", "contracts", "NftCollection.sol");
+const sourcePath = path.join(__dirname, "..", "contracts", "NftCollectionV2.sol");
 const source = fs.readFileSync(sourcePath, "utf8");
 
 const input = {
     language: "Solidity",
     sources: {
-        "NftCollection.sol": { content: source }
+        "NftCollectionV2.sol": { content: source }
     },
     settings: {
         optimizer: { enabled: true, runs: 200 },
@@ -38,7 +40,7 @@ if (output.errors) {
     }
 }
 
-const contract = output.contracts["NftCollection.sol"].NftCollection;
+const contract = output.contracts["NftCollectionV2.sol"].NftCollectionV2;
 const artifact = {
     contractName: "NftCollection",
     abi: contract.abi,

@@ -1889,6 +1889,42 @@ async function showSection(id) {
     activeButton.addEventListener("click", () => act(activeButton, "active", { active: !s.active },
         (s.active ? t("sections.confirmDisable") : t("sections.confirmEnable")).replace("{name}", s.name), (r) => done(r, r.active ? t("sections.active") : t("sections.disabled"))));
 
+    // user accounts of the section: list (loaded after the page), create, +x / -x
+    const accountsBox = el("div", {}, el("span", { class: "muted" }, "…"));
+    const transferAccount = el("select", { class: "deploy-contract", "aria-label": t("sections.account") });
+    const loadAccounts = async () => {
+        try {
+            const r = await sectionGet("/api/sections/" + id + "/accounts");
+            transferAccount.replaceChildren(...r.accounts.map((a) => el("option", { value: a.address }, short(a.address) + " (" + a.balance + " ETH)")));
+            accountsBox.replaceChildren(r.accounts.length ? dataTable([
+                { label: "col.address", sort: (row) => row.address, search: (row) => row.address, cell: (row) => addr(row.address) },
+                { label: "account.balance", sort: (row) => Number(row.balance), cell: (row) => row.balance + " ETH" },
+                { label: "sections.addedIn", sort: (row) => row.addedIn, cell: (row) => el("a", { href: "#/blocks/" + row.addedIn }, "#" + row.addedIn) }
+            ], r.accounts, { sort: 2, dir: "desc", key: "section-accounts" }) : el("div", { class: "empty" }, t("sections.noAccounts")));
+        } catch (error) {
+            accountsBox.replaceChildren(el("span", { class: "bad-text" }, error.message));
+        }
+    };
+    loadAccounts();
+    const newAmount = el("input", { class: "table-search", placeholder: t("sections.amount"), "aria-label": t("sections.amount"), value: "0" });
+    const newPool = el("select", { class: "deploy-contract", "aria-label": t("sections.pool") }, ["small", "big", "none"].map((v) => el("option", { value: v }, v)));
+    const newButton = el("button", { type: "button", class: "fn-run" }, t("sections.createAccount"));
+    newButton.addEventListener("click", () => act(newButton, "accounts", { amount: newAmount.value.trim() || "0", pool: newPool.value },
+        t("sections.confirmCreateAccount").replace("{amount}", newAmount.value.trim() || "0").replace("{name}", s.name),
+        (r) => { done(r, t("sections.accountCreated").replace("{address}", r.address)); loadAccounts(); }));
+    const moveAmount = el("input", { class: "table-search", placeholder: t("sections.signedAmount"), "aria-label": t("sections.signedAmount") });
+    const moveButton = el("button", { type: "button", class: "fn-run" }, t("sections.transfer"));
+    moveButton.addEventListener("click", () => {
+        const amount = moveAmount.value.trim();
+        if (!amount || !transferAccount.value) {
+            return;
+        }
+        const text = amount.startsWith("-")
+            ? t("sections.confirmOut").replace("{amount}", amount.slice(1)).replace("{account}", short(transferAccount.value))
+            : t("sections.confirmIn").replace("{amount}", amount).replace("{account}", short(transferAccount.value));
+        act(moveButton, "transfer", { account: transferAccount.value, amount }, text, (r) => { moveAmount.value = ""; done(r, r.direction + ": " + r.amount + " ETH"); loadAccounts(); });
+    });
+
     const accountRow = (role, label) => [el("span", { class: "muted" }, label), el("span", {}, [addr(s.accounts[role]), "  ", el("b", {}, s.balances[role] + " ETH")])];
     const history = dataTable([
         { label: "col.time", sort: (row) => row.timestamp || 0, cell: (row) => stamp(row.timestamp) },
@@ -1923,6 +1959,15 @@ async function showSection(id) {
                 moveRow(t("sections.payback"), "payback", true, t("sections.payment"), "SENDER01")
             ]),
             result
+        ]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.accounts")),
+            el("div", { class: "muted", style: "margin-bottom:10px" }, t("sections.accountsNote")),
+            accountsBox,
+            el("div", { class: "section-actions", style: "margin-top:12px" }, [
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.newAccount")), el("div", { class: "section-inputs" }, [newAmount, newPool, newButton])]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.transferLabel")), el("div", { class: "section-inputs" }, [transferAccount, moveAmount, moveButton])])
+            ])
         ]),
         el("section", { class: "card stack" }, [
             el("h2", {}, t("sections.settings")),

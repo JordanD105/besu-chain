@@ -22,6 +22,7 @@ const erc721Iface = new ethers.Interface([
     "function mint(address to, uint256 tokenId, string uri) payable",
     "function mint(address to, uint256 tokenId, string uri, uint256 price)",
     "function buy(uint256 tokenId) payable",
+    "function buy(uint256 tokenId, address payee) payable",
     "function priceOf(uint256 tokenId) view returns (uint256)",
     "function transferFrom(address from, address to, uint256 tokenId)",
     "function safeTransferFrom(address from, address to, uint256 tokenId)",
@@ -1619,7 +1620,7 @@ app.get("/api/sections/status", (req, res) => {
 });
 
 const sectionsJson = express.json({ limit: "64kb" });
-const SECTION_ACTIONS = ["name", "info", "key", "active", "topup", "sweep", "payback", "account", "archive"];
+const SECTION_ACTIONS = ["name", "info", "key", "active", "topup", "sweep", "payback", "account", "archive", "accounts", "transfer"];
 
 app.get("/api/sections", sectionsGuard, async (req, res) => {
     try {
@@ -1659,6 +1660,19 @@ app.post("/api/sections/:id/:action", sectionsJson, sectionsGuard, async (req, r
     try {
         const r = await proxyAdmin("POST", "/admin/sections/" + req.params.id + "/" + req.params.action, req.body || {});
         console.log("sections:", req.params.action, "section", req.params.id, JSON.stringify(req.body || {}), "from", req.socket.remoteAddress, "->", r.status);
+        res.status(r.status).json(r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+});
+
+// The section's user accounts with their balances
+app.get("/api/sections/:id/accounts", sectionsGuard, async (req, res) => {
+    if (!/^\d+$/.test(req.params.id)) {
+        return res.status(400).json({ error: "invalid section id" });
+    }
+    try {
+        const r = await proxyAdmin("GET", "/admin/sections/" + req.params.id + "/accounts");
         res.status(r.status).json(r.data);
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });

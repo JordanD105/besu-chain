@@ -5,6 +5,7 @@ const { ethers } = require("ethers");
 const crypto = require("crypto");
 const nftArtifact = require("./nft-collection.json");
 const registryArtifact = require("./section-registry.json");
+const nftV3Artifact = require("./nft-collection-v3.json");
 
 require("dotenv").config({
     path: path.join(__dirname, ".env")
@@ -1236,6 +1237,8 @@ app.get("/transfer/:txHash", async (req, res) => {
 // =======================
 
 const nftInterface = new ethers.Interface(nftArtifact.abi);
+// version 3 (docs/sections.md): minted by the contract account center; buy(tokenId, payee)
+const nftV3Interface = new ethers.Interface(nftV3Artifact.abi);
 const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 const NFT_META_LIMIT = 512 * 1024;
 const ON_CHAIN_META_LIMIT = 48 * 1024;
@@ -1307,27 +1310,32 @@ async function hasCode(address) {
     return Boolean(code) && code !== "0x";
 }
 
-// Only NftCollection version 2 (price at mint + atomic buy) is supported. Older collections on
-// the chain are ignored by listing/discovery and rejected when selected.
-const COLLECTION_VERSION = 2n;
+// NftCollection version 2 (legacy: minted by SENDER01, sales paid to it) and version 3 (minted by
+// the contract account center, first sales paid to a section's consumption account) are supported.
+// Older collections on the chain are ignored by listing/discovery and rejected when selected.
 const versionCache = new Map();
 
-async function isSupportedCollection(address) {
+async function collectionVersion(address) {
     const key = address.toLowerCase();
 
     if (!versionCache.has(key)) {
-        let ok = false;
+        let v = 0;
 
         try {
-            ok = (await callNft(address, "version", []))[0] === COLLECTION_VERSION;
+            v = Number((await callNft(address, "version", []))[0]);
         } catch (error) {
-            ok = false;
+            v = 0;
         }
 
-        versionCache.set(key, ok);
+        versionCache.set(key, v);
     }
 
     return versionCache.get(key);
+}
+
+async function isSupportedCollection(address) {
+    const v = await collectionVersion(address);
+    return v === 2 || v === 3;
 }
 
 function oldCollectionError(address) {
@@ -1482,6 +1490,19 @@ async function knownCollections() {
 
     if (def && !memNft.collections.has(def)) {
         memNft.collections.set(def, await collectionInfo(def));
+    }
+
+    // version-3 collections registered in the SectionRegistry (deployed by the contract center)
+    if (sectionsConfigured()) {
+        try {
+            for (const entry of (await loadContracts()).values()) {
+                if (entry.kind === "nft" && !memNft.collections.has(entry.address) && await collectionVersion(entry.address) === 3) {
+                    memNft.collections.set(entry.address, await collectionInfo(entry.address));
+                }
+            }
+        } catch (error) {
+            console.warn(`NFT collections from the registry: ${error.message}`);
+        }
     }
 
     // best effort: persist anything Redis is missing (e.g. deployed while Redis was down)
@@ -1954,6 +1975,10 @@ async function deployCollection(name, symbol) {
         }
     }
 
+    if (sectionsConfigured() && isAddress(CONFIG.CONTRACT_CENTER)) {
+        return deployCollectionV3(name, symbol);
+    }
+
     if (!await signerOwns(CONFIG.SENDER01)) {
         throw new Error("sender01 is not managed by Web3Signer");
     }
@@ -1996,9 +2021,74 @@ async function deployCollection(name, symbol) {
     };
 }
 
+// Version 3: deployed by the contract account center (its minter), registered in the SectionRegistry
+async function deployCollectionV3(name, symbol) {
+    const bytecode = nftV3Artifact.bytecode.startsWith("0x") ? nftV3Artifact.bytecode : "0x" + nftV3Artifact.bytecode;
+    const data = ethers.concat([bytecode, nftV3Interface.encodeDeploy([name, symbol, CONFIG.REGISTRY_CONTRACT])]);
+    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, data, true));
+    const receipt = await waitForReceipt(sent.txHash);
+    const contract = ethers.getAddress(receipt.contractAddress);
+    const registered = await registryWrite("registerContract", [contract, CONTRACT_KINDS.nft, name, JSON.stringify(nftV3Artifact.abi)]);
+    contractBook.byAddress.set(contract.toLowerCase(), {
+        address: contract, kind: "nft", name, abi: nftV3Artifact.abi, iface: nftV3Interface, registeredIn: parseInt(registered.receipt.blockNumber, 16)
+    });
+    const existingDefault = await nftContractAddress();
+
+    if (!existingDefault) {
+        await rememberNftContract(contract);
+    }
+
+    await rememberCollection(contract, { name, symbol });
+    console.log(`NFT collection v3 "${name}" (${symbol}) deployed at ${contract} by the center`);
+
+    return {
+        success: true,
+        contract,
+        default: !existingDefault,
+        txHash: sent.txHash,
+        name,
+        symbol,
+        version: 3,
+        minter: ethers.getAddress(CONFIG.CONTRACT_CENTER),
+        registryTxHash: registered.txHash,
+        nonce: sent.nonce
+    };
+}
+
 // Mint: every NFT is minted to SENDER01 (the collection's minter); nothing is paid.
 // "amount" is the NFT's price, stored on chain in the collection (priceOf); /nft/transfer sells
 // the token with buy(), where the buyer pays exactly that price to SENDER01 in one transaction.
+// Version 3: minted by the contract account center (the collection's minter), which holds the NFT
+// for sale. Not tied to a section.
+async function mintNftV3(contract, metadata, tokenURI, price, priceWei) {
+    requireCenter();
+    const center = ethers.getAddress(CONFIG.CONTRACT_CENTER);
+    const minter = ethers.getAddress((await callNft(contract, "minter", []))[0]);
+
+    if (minter !== center) {
+        throw httpError(400, `the collection's minter ${minter} is not the contract account center`);
+    }
+
+    const tokenId = await allocateTokenId(contract);
+    const key = nftMetaKey(contract, tokenId);
+    const record = { metadata, tokenURI, to: center, price };
+    await cache(() => redis.set(key, JSON.stringify(record)));
+    const data = nftV3Interface.encodeFunctionData("mint", [center, tokenId, tokenURI, priceWei]);
+    let sent;
+
+    try {
+        await assertMintFits(center, contract, data);
+        sent = await withSenderLock(center, () => sendData(center, contract, data, true));
+    } catch (error) {
+        await cache(() => redis.del(key));
+        throw error;
+    }
+
+    record.txHash = sent.txHash;
+    await cache(() => redis.set(key, JSON.stringify(record)));
+    return { success: true, tokenId, contract, version: 3, owner: center, price, tokenURI, txHash: sent.txHash, nonce: sent.nonce };
+}
+
 async function mintNft(req) {
     const body = req.body || {};
 
@@ -2026,6 +2116,10 @@ async function mintNft(req) {
     const metadata = buildMetadata(body);
     const tokenURI = onChainTokenUri(metadata);
     const contract = await resolveCollection(collectionParam(body));
+
+    if (await collectionVersion(contract) === 3) {
+        return mintNftV3(contract, metadata, tokenURI, price, priceWei);
+    }
 
     if (!await signerOwns(CONFIG.SENDER01)) {
         throw new Error("sender01 is not managed by the signer");
@@ -2089,7 +2183,92 @@ async function mintNft(req) {
 // ETH goes to SENDER01 atomically; if anything fails the whole sale reverts and no ETH moves.
 // `from` is optional (default: current owner). If the owner is not SENDER01 (a resale), the
 // owner first approves the collection for this token.
-async function transferNft(body) {
+// Version 3 sale, for section_i (X-Section-Key): the buyer "to" is a user account of section_i and
+// signs buy(tokenId, payee) with value = the mint price. First sale (the center holds the NFT): the
+// price goes to section_i's consumption account. Resale: the seller (a user account of section_i)
+// approves the sale if needed, and the price goes to the seller.
+async function transferNftV3(req, contract, tokenId) {
+    const body = req.body || {};
+    const section = await sectionFromRequest(req);
+
+    if (!section) {
+        throw httpError(401, "X-Section-Key is required: this collection's NFTs are sold to accounts of a section");
+    }
+
+    const to = ethers.getAddress(body.to);
+    await assertSectionUser(section, to);
+    const owner = await readOwner(contract, tokenId);
+
+    if (!owner) {
+        throw httpError(404, "token not found");
+    }
+
+    const seller = ethers.getAddress(owner);
+
+    if (body.from && ethers.getAddress(body.from) !== seller) {
+        throw httpError(400, "sender is not the token owner");
+    }
+
+    if (seller === to) {
+        throw httpError(400, "token is already owned by to");
+    }
+
+    const priceWei = (await callNft(contract, "priceOf", [tokenId]))[0];
+    const price = ethers.formatEther(priceWei).replace(/\.0$/, "");
+    const center = isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : null;
+    const firstSale = seller === center;
+    let approveTxHash = null;
+
+    if (!firstSale) {
+        // resale: only between accounts of the calling section; the seller lets the collection sell
+        await assertSectionUser(section, seller);
+        const approved = (await callNft(contract, "getApproved", [tokenId]))[0];
+        const operator = (await callNft(contract, "isApprovedForAll", [seller, contract]))[0];
+
+        if (approved.toLowerCase() !== contract.toLowerCase() && !operator) {
+            const approveData = nftV3Interface.encodeFunctionData("approve", [contract, tokenId]);
+            const approval = await withSenderLock(seller, () => sendData(seller, contract, approveData, true));
+            await waitForReceipt(approval.txHash);
+            approveTxHash = approval.txHash;
+        }
+    }
+
+    const payee = section.accounts.consumption;
+    const buyData = nftV3Interface.encodeFunctionData("buy", [tokenId, payee]);
+    let sent;
+
+    try {
+        sent = await withSenderLock(to, () => sendData(to, contract, buyData, true, priceWei));
+    } catch (error) {
+        if (/insufficient/i.test(error.message)) {
+            throw httpError(400, `insufficient balance: the price of this token is ${price} ETH`);
+        }
+
+        if (error.statusCode) {
+            throw error;
+        }
+
+        throw httpError(400, `the sale would revert: ${revertReason(error)}`);
+    }
+
+    return {
+        success: true,
+        section: { id: section.id, name: section.name },
+        sale: firstSale ? "first sale" : "resale",
+        txHash: sent.txHash,
+        from: seller,
+        to,
+        tokenId,
+        contract,
+        price,
+        paidTo: firstSale ? payee : seller,
+        approveTxHash,
+        nonce: sent.nonce
+    };
+}
+
+async function transferNft(req) {
+    const body = req.body || {};
     const tokenId = parseTokenId(body.tokenId);
 
     if (!body.to || !tokenId) {
@@ -2101,6 +2280,11 @@ async function transferNft(body) {
     }
 
     const contract = await resolveCollection(collectionParam(body));
+
+    if (await collectionVersion(contract) === 3) {
+        return transferNftV3(req, contract, tokenId);
+    }
+
     const to = ethers.getAddress(body.to);
     const sender = ethers.getAddress(CONFIG.SENDER01);
     const owner = await readOwner(contract, tokenId);
@@ -2286,7 +2470,7 @@ app.post("/nft/mint", async (req, res) => {
 
 app.post("/nft/transfer", async (req, res) => {
     try {
-        res.json(await transferNft(req.body || {}));
+        res.json(await transferNft(req));
     } catch (error) {
         console.error(error);
 
@@ -2911,6 +3095,45 @@ async function registryLogs(address, fromBlock, topics) {
 
     return logs;
 }
+
+// ---- Admin routes: a section's user accounts (chainlens Sections page)
+
+// The user accounts of a section (AccountAdded events), with their balances
+app.get("/admin/sections/:id/accounts", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true, true);
+    const logs = await registryLogs(CONFIG.REGISTRY_CONTRACT, CONFIG.REGISTRY_FROM_BLOCK, [
+        registryIface.getEvent("AccountAdded").topicHash, ethers.zeroPadValue(ethers.toBeHex(section.id), 32)
+    ]);
+    const accounts = [];
+
+    for (const log of logs) {
+        const address = ethers.getAddress("0x" + log.topics[2].slice(26));
+
+        if (!accounts.some((a) => a.address === address)) {
+            accounts.push({ address, balance: ethers.formatEther(await getBalanceWei(address)), addedIn: parseInt(log.blockNumber, 16) });
+        }
+    }
+
+    return { success: true, id: section.id, accounts };
+}));
+
+// A new user account of the section, funded from its upfront account (like /createaccount with its key)
+app.post("/admin/sections/:id/accounts", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    const amount = String(req.body.amount === undefined || req.body.amount === null || req.body.amount === "" ? "0" : req.body.amount).trim();
+
+    if (!/^\d+(\.\d+)?$/.test(amount)) {
+        throw httpError(400, "amount: ETH, e.g. \"5\" (0 for none)");
+    }
+
+    return createSectionAccount(section, amount, poolClass(req.body.pool));
+}));
+
+// +x account -> consumption, -x upfront -> account (like /transfer with its key)
+app.post("/admin/sections/:id/transfer", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    return sectionTransfer(section, { account: req.body.account, amount: req.body.amount, memo: req.body.memo });
+}));
 
 // ---- Migration from an earlier registry (v1): sections (name, accounts, key hash, active) and their
 // user accounts are written into this registry. Run once by Ansible after deploying v2.

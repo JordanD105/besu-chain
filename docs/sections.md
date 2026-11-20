@@ -3,10 +3,11 @@
 A **section** is a group of applications (section_1 … section_n) with its own accounts and its own
 API key. Money for a section's users comes from the section's own accounts instead of SENDER01.
 
-**Status:** steps 1–4 of 6 are built: the registry (version 2), the proxy admin API, section-scoped
-`/createaccount` and `/transfer`, the chainlens **Sections** page, and contracts: deployment by the
-contract account center (registered on chain with their ABI), `/contract/call` and `/contract/send`.
-The rest (marked with their step in the flow table) comes next.
+**Status:** steps 1–5 of 6 are built: the registry (version 2), the proxy admin API, section-scoped
+`/createaccount` and `/transfer`, the chainlens **Sections** page (with the sections' user
+accounts), contracts deployed by the contract account center with `/contract/call` and
+`/contract/send`, and NFT collections version 3 (minted by the center, sales paid to the section).
+Step 6 (monitoring) comes next.
 
 ## Accounts
 
@@ -90,6 +91,9 @@ On the proxy (`http://<vip_proxy>:30000/admin/...`), with `Authorization: Bearer
 | `POST /admin/sections/:id/sweep {amount \| "all"}` | `consumption_account_i` → `payment_account_i` |
 | `POST /admin/sections/:id/payback {amount \| "all"}` | `payment_account_i` → SENDER01 |
 | `POST /admin/sections/:id/account {role}` | a new MPC key for `upfront`, `consumption` or `payment`; the old account's whole balance moves to it |
+| `GET /admin/sections/:id/accounts` | the section's user accounts with their balances |
+| `POST /admin/sections/:id/accounts {amount, pool}` | a new user account of the section, funded from its upfront account |
+| `POST /admin/sections/:id/transfer {account, amount}` | `+x` account → consumption, `−x` upfront → account |
 | `POST /admin/sections/:id/archive {confirm: "<name>"}` | all money of the 3 accounts back to SENDER01, then closed for good: key stops working, name freed, history stays |
 
 Every money move carries a memo (`section 1 top-up`, `section 1 sweep`, …), so the chain itself
@@ -105,7 +109,9 @@ API (the proxy's token never reaches the browser) and logs it with the requester
 
 - **List:** each section with its status, the 3 balances and its info fields; **New section** (name,
   optional description) shows the API key once, with a copy button.
-- **A section's page:** its accounts and balances; **Top up**, **Sweep**, **Pay back** (amount, or
+- **A section's page:** its accounts and balances; its **user accounts** (list with balances,
+  **Create account** funded from the upfront account, **Transfer** `+amount` account → consumption /
+  `−amount` upfront → account); **Top up**, **Sweep**, **Pay back** (amount, or
   `all` for sweep and pay back); **Rename**; **info fields** (add, edit, remove); **New API key**;
   **Enable / Disable**; **New upfront / consumption / payment account**; **Archive** (type the
   name to confirm); and its **history**: every transaction of its 3 accounts, labelled (top-up,
@@ -143,6 +149,24 @@ signature (`transfer(address,uint256)`) when the name is overloaded. Arguments: 
 or numbers, addresses `0x…`, booleans `true`/`false`, arrays and tuples as JSON (or JSON text). A
 transaction that would revert is refused before it is signed, with the reason (`the transaction
 would revert: …`).
+
+## NFT collections (step 5)
+
+New collections are **NftCollection version 3** ([`proxy/contracts/NftCollection.sol`](../proxy/contracts/NftCollection.sol),
+`proxy/nft-collection-v3.json`): deployed and minted by the **contract account center**, registered
+in the SectionRegistry, shared by all sections.
+
+| Request | What happens |
+|---|---|
+| `POST /nft/deploy {name, symbol}` | the center deploys a version-3 collection (its minter, with the registry's address) and registers it (kind NFT) |
+| `POST /nft/mint {collection, name, image, …, amount}` | the center mints the NFT to itself, for sale; `amount` is its **price**, fixed for good. Not tied to a section. |
+| `POST /nft/transfer {collection, to, tokenId}` + `X-Section-Key` | a sale to `to`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price. **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user holds it, of the same section): the seller's approval is sent if needed and the price goes to the **seller**. |
+
+The contract itself enforces where a first sale's money goes: `buy` checks
+`SectionRegistry.isConsumptionAccount(payee)` (a live section's consumption account), so even a
+transaction sent around the proxy can't redirect it. A version-3 sale without a section key is
+refused. **Version-2 collections** (minted by SENDER01, e.g. those made before) keep working as
+before, without a key.
 
 ## Application API: section calls
 
@@ -191,9 +215,9 @@ refused. With `sections_required: true` they are refused altogether (`X-Section-
 | **Deploy NFT collection** (UI) | proxy admin API → registry | `contract_account_center` (the minter); shared by all sections (NftCollection v3 in step 5) | **built** (v3: 5) |
 | `/contract/call` | proxy | none (read); any registered contract | **built** |
 | `/contract/send` (section_i) | proxy | a user account of section_i; only registered contracts and their ABI functions | **built** |
-| `/nft/mint` | → `/contract/send` | `contract_account_center`: `mint(tokenId, uri, price)`; price fixed for good | 5 |
-| `/nft/transfer`, first sale (section_i) | → `/contract/send` | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` | 5 |
-| `/nft/transfer`, resale (section_i) | → `/contract/send` | the seller approves; the buyer `buy(tokenId)` at the same mint price; NFT → buyer, price → seller | 5 |
+| `/nft/mint` | proxy (center's queue) | `contract_account_center`: `mint(tokenId, uri, price)`; price fixed for good | **built** |
+| `/nft/transfer`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` | **built** |
+| `/nft/transfer`, resale (section_i) | proxy | the seller approves; the buyer `buy(tokenId, …)` at the same mint price; NFT → buyer, price → seller | **built** |
 
 ## Build steps
 
@@ -203,5 +227,6 @@ refused. With `sections_required: true` they are refused altogether (`X-Section-
 3. **Chainlens Sections page**: create, top up, sweep, pay back, rename, info, keys, accounts,
    archive, history — built.
 4. **`/contract/call`, `/contract/send`, and Deploy through the proxy as `contract_account_center`** — built.
-5. NftCollection v3, and `/nft/mint` / `/nft/transfer` on `/contract/send`.
+5. **NftCollection v3**, `/nft/mint` by the center, `/nft/transfer` by section buyers — built; and the
+   sections' user accounts in chainlens.
 6. Monitoring: upfront low-balance alert (fixed amount), Sections dashboard.
