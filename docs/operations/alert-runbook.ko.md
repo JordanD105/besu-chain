@@ -168,7 +168,7 @@ docker logs --since 30m <container> 2>&1 | grep -iE "error|fail|exception|warn" 
 
 **Warning.** 노드에 대기 중인 트랜잭션이 10분 동안 1,000개를 넘습니다.
 
-1. **확인:** *Transaction pool* 차트. Besu production → *Proxy senders*(STALLED, 논스 공백).
+1. **확인:** *Transaction pool* 차트. Proxy & Redis → *Senders needing attention*(STALLED, NONCE GAP).
 2. **조치:**
    - 발신자가 STALLED인 경우: [ProxySenderStalled](#proxysenderstalled).
    - 논스 공백: [ProxyNonceGap](#proxynoncegap).
@@ -350,7 +350,7 @@ docker logs --since 30m <container> 2>&1 | grep -iE "error|fail|exception|warn" 
 **Critical.** 발신자의 트랜잭션이 RPC 노드의 풀에 준비되어 있지만, 블록이 계속 생성되는데도
 포함되지 않습니다: 검증자에게 해당 트랜잭션이 없습니다.
 
-1. **확인:** Besu production → *Proxy senders*: 해당 발신자의 Mined가 **STALLED**입니다.
+1. **확인:** Proxy & Redis → *Senders needing attention*: 해당 발신자가 **STALLED**입니다.
 2. **조치:** 검증자 **하나**를 재시작하십시오(풀을 다시 가져와 트랜잭션을 포함합니다). 예를 들어
    h137에서:
    ```bash
@@ -391,7 +391,7 @@ docker logs --since 30m <container> 2>&1 | grep -iE "error|fail|exception|warn" 
    ```
 2. **조치:** 응답이 없으면: HAProxy와 RPC 노드를 확인하십시오(h135 / h136에서 `curl -s http://127.0.0.1:8410/`.
    [BesuNodeDown](#besunodedown)).
-3. **해제 확인:** 알림이 해제되고 *Proxy senders*가 다시 갱신됩니다.
+3. **해제 확인:** 알림이 해제되고, Proxy & Redis → *All senders*에서 해당 발신자가 다시 OK입니다.
 
 ### ProxyHttpErrors {#proxyhttperrors}
 

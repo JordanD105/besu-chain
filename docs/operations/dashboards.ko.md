@@ -29,9 +29,9 @@
 
 | 보이는 것 | 의미 |
 |---|---|
-| 상단의 **Alerts 행** (Besu, MPC, Hosts) | *Critical firing*과 *Warnings firing*은 이 대시보드만이 아니라 플랫폼 전체의 모든 알림 수를 셉니다. *Firing alerts* 표는 critical부터 순서대로 노드, 발신자 또는 호스트와 *Firing for*(규칙의 대기 시간을 포함하여 조건이 시작된 시점부터 계산)를 함께 나열합니다. 모든 알림은 [알림](alerts.md)에 설명되어 있습니다 |
+| 모든 대시보드 상단의 **Alerts 행** (Alert log: 이력) | *Critical firing*과 *Warnings firing*은 이 대시보드만이 아니라 플랫폼 전체의 모든 알림 수를 셉니다. *Firing alerts* 표는 critical부터 순서대로 노드, 발신자 또는 호스트와 *Firing for*(규칙의 대기 시간을 포함하여 조건이 시작된 시점부터 계산)를 함께 나열합니다. 모든 알림은 [알림](alerts.md)에 설명되어 있습니다 |
 | 시간 차트의 **점선이 있는 주황색 음영 띠** | 알림이 발생 중이던 기간입니다. 점선은 시작과 끝입니다. 선 위에 마우스를 올리면 알림 이름이 보입니다 |
-| 상단의 **변수** (`node`, `coordinator`, `host`, `section`, `period`) | 필터입니다. 기본값은 *All*이며, 하나 또는 여러 개를 선택하면 모든 패널이 좁혀집니다 |
+| 상단의 **변수** (`node`, `coordinator`, `host`, `kind`, `section`, `search`, `period`) | 필터입니다. 기본값은 *All*이며, 하나 또는 여러 개를 선택하면 모든 패널이 좁혀집니다 |
 | **Dashboards** 메뉴(변수 오른쪽) | 시간 범위를 유지한 채 모든 대시보드로 이동합니다. [Alert log](#alert-log)로 가는 가장 빠른 길입니다 |
 | **시간** | 브라우저의 현지 시간입니다. 호스트의 로그(`docker logs`, `journalctl`)는 UTC일 수 있습니다 |
 | **노드 간의 작은 차이** | Prometheus는 각 대상을 15 s마다 서로 약간 다른 시점에 읽습니다. 1 s 블록에서는 정상인 두 노드가 한 번의 읽기에서 10–15블록 차이 날 수 있습니다 |
@@ -88,7 +88,7 @@
 |---|---|---|---|
 | **Block height** (블록 높이) | 시간에 따른 각 노드의 높이 | 모든 선이 하나의 일정한 대각선 위에 있음 | 평평해지는 선: 해당 노드가 블록 가져오기를 중단했습니다 |
 | **Seconds since last block** (마지막 블록 이후 초) | 각 읽기 시점의 노드별 최신 블록 경과 시간 | 0과 1 s 사이의 평평한 선(각 노드는 1초 안의 서로 다른 시점에 읽히므로 각자 다른 높이에 있음) | 꾸준히 올라가는 선: 해당 노드가 멈췄습니다 |
-| **Transactions per second (in blocks)** (초당 트랜잭션, 블록 기준) | 초당 블록에 포함된 트랜잭션 | 트래픽을 따라감 | 애플리케이션이 전송 중인데 0: 아래 *Proxy senders*를 확인하십시오 |
+| **Transactions per second (in blocks)** (초당 트랜잭션, 블록 기준) | 초당 블록에 포함된 트랜잭션 | 트래픽을 따라감 | 애플리케이션이 전송 중인데 0: 아래 Proxy & Redis → *Senders*를 확인하십시오 |
 | **Gas used per block** (블록당 가스 사용량) | 블록 가스 한도(노란색, 30 M) 대비 사용된 가스(녹색) | 한도보다 훨씬 낮음 | 한도에 근접: 블록이 가득 차서 트랜잭션이 대기합니다 |
 | **Transaction pool** (트랜잭션 풀) | 노드별 대기 중인 트랜잭션 | 급증 후 약 0으로 돌아옴 | 꾸준한 증가: 블록이 따라가지 못하거나 논스 공백이 있습니다(1,000 초과 시 `BesuTxPoolGrowing`) |
 | **Blocks behind** (뒤처진 블록) | 알고 있는 헤드보다 얼마나 뒤처졌는지에 대한 노드 자체 추정치 | 0 | 계속 높음: 따라잡는 중입니다. 정지된 노드는 여기에 0을 표시할 수 있으므로(알지 못함) Nodes 표를 신뢰하십시오 |
@@ -128,21 +128,8 @@ Besu는 Java에서 실행됩니다.
 
 ### 프록시 발신자 (Proxy senders) {#proxy-senders}
 
-프록시는 몇 개의 MPC 계정(발신자)에서 전송하며, 각 계정은 고유한 논스 순서를 가집니다.
-
-**Senders (proxy)** 표:
-
-| 열 | 의미 | 색상 / 조치 |
-|---|---|---|
-| Sender | 발신 계정 | |
-| Mined | 트랜잭션이 채굴되고 있는가? | **OK** 녹색, **STALLED** 빨간색: 트랜잭션이 RPC 노드의 풀에 준비되어 있지만 블록에 포함되지 않습니다. 검증자 **하나**를 재시작하십시오(`ProxySenderStalled`) |
-| In flight | 전송했지만 아직 채굴되지 않음 | 급증 후 약 0으로 돌아옴 |
-| Waiting since | 준비된 트랜잭션이 확인 없이 대기한 시간 | 0 |
-| Nonce gap since | 논스가 누락된 시간(이후 트랜잭션은 대기) | 녹색, 30 s부터 주황색, 120 s부터 빨간색(`ProxyNonceGap`). 프록시는 보통 약 30 s 안에 복구합니다 |
-| Waiting above gap | 공백 뒤에 보류된 트랜잭션 | 0 |
-| Repairs / Fillers | 복구된 공백, 전송된 빈 채움 트랜잭션 | 증가하면 프록시 로그를 확인하십시오 |
-
-**Transactions in flight (proxy)** 및 **Not mined / gap (seconds)**: 같은 값을 시간에 따라 보여 줍니다.
+**Proxy & Redis → [Senders](#senders)**로 옮겨졌습니다. 모든 발신자를 이름으로 표시하며(SENDER01, `Shop B · upfront`,
+`Shop B · user 0x51a9…`), 종류, 섹션, 검색 필터가 있고, 조치가 필요한 발신자를 먼저 보여 줍니다.
 
 ---
 
@@ -196,9 +183,10 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 
 ## Proxy & Redis {#proxy--redis}
 
-애플리케이션 API와 그 논스 캐시입니다. Prometheus는 둘 다 **프록시 VIP를 통해** 읽으므로 이
-대시보드는 항상 **활성** 프록시를 보여 줍니다. 파일: `proxy-redis.json`
-(`monitoring/grafana/tools/gen_proxy_dashboard.py`로 생성).
+애플리케이션 API, API가 전송에 쓰는 계정, 그리고 논스 캐시입니다. Prometheus는 프록시와 Redis를
+**프록시 VIP를 통해** 읽으므로 이 대시보드는 항상 **활성** 프록시를 보여 줍니다. 파일: `proxy-redis.json`
+(`monitoring/grafana/tools/gen_proxy_dashboard.py`로 생성). 다른 모든 대시보드처럼 **Alerts** 행으로
+시작합니다.
 
 ![Proxy & Redis 대시보드 (랩)](../images/screenshots/grafana-proxy-redis.png)
 
@@ -224,13 +212,48 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 | **95th percentile by route** (경로별 95번째 백분위) | 원래 느린 경로를 포함한 모든 경로 |
 | **Routes in the selected time range** (선택한 시간 범위의 경로) | 경로별: 요청, 5xx + aborted, 4xx, p95, 평균(Prometheus `increase()`의 추정치) |
 
-### 발신자와 논스 (Senders and nonces) {#senders-and-nonces}
+### 발신자 (Senders) {#senders}
 
-| 패널 | 표시 내용 | 정상 |
-|---|---|---|
-| **Transactions in flight per sender** (발신자별 처리 중 트랜잭션) | 전송했지만 아직 채굴되지 않음 | 급증 후 약 0으로 돌아옴 |
-| **Nonce gaps (seconds missing)** (논스 공백, 누락된 초) | 논스가 누락된 시간 | 0. 120 s 초과 시 알림 |
-| **Stalls and repairs** (정지와 복구) | 채굴되지 않은 준비된 트랜잭션(정지)과 프록시가 복구한 공백 | 0. 나타나면 프록시 로그를 확인하십시오 |
+프록시가 전송에 쓰는 모든 계정입니다: SENDER01, 컨트랙트 계정 센터, 레지스트리 관리자, 각 섹션의 계정,
+그리고 최근 몇 분 동안 사용된 사용자 계정. 발신자가 많을 때는 개수와 **Senders needing attention**
+(조치가 필요한 발신자) 표를 읽으십시오. 나머지는 특정 발신자를 찾아볼 때 씁니다.
+
+각 발신자는 프록시가 붙인 **이름**을 가집니다(`proxy_sender_info`, 레이블 `account`): 플랫폼 계정은
+이름으로, 섹션 계정은 `<section> · upfront` / `consumption` / `payment`로, 사용자 계정은
+`<section> · user 0x1ce0…35fb`로, 그 밖의 계정은 짧은 주소로 표시합니다. 상단의 변수:
+**Kind**(platform, upfront, consumption, payment, user, retired, other), **Section**, **Search**
+(이름 또는 주소의 일부).
+
+![Proxy & Redis, Senders (랩): 개수, 조치가 필요한 발신자(없음), 이름별 모든 발신자](../images/screenshots/grafana-proxy-senders.png)
+
+| 패널 | 표시 내용 | 정상 | 정상이 아닐 때 |
+|---|---|---|---|
+| **Senders** (발신자) | 필터에 맞는 발신자 | | |
+| **Stalled** (정지됨) | 블록이 생성되는 동안 준비된 트랜잭션이 채굴되지 않는 발신자 | 0 | 검증자 **하나**를 재시작하십시오(`ProxySenderStalled`) |
+| **Nonce gaps** (논스 공백) | 논스가 누락된 발신자(이후 트랜잭션은 대기) | 0 | 프록시가 약 30 s 안에 복구합니다. 120 s 후 `ProxyNonceGap` |
+| **Check failing** (확인 실패) | 체인 확인이 실패한 발신자 | 0 | `ProxySenderCheckFailing`: RPC VIP 또는 Besu |
+| **In flight** / **Waiting above gap** (처리 중 / 공백 뒤 대기) | 필터에 맞는 모든 발신자의, 전송했지만 채굴되지 않은 트랜잭션 / 공백 뒤에 보류된 트랜잭션 | 급증 후 약 0으로 돌아옴 / 0 | |
+| **Repairs (range)** / **Fillers (range)** (복구 / 필러, 범위) | 선택한 시간 범위에서 복구된 공백 / 전송된 필러 트랜잭션 | 0 | 프록시 로그를 확인하십시오 |
+
+**Senders needing attention**: 지금 문제가 있는 발신자만, 가장 심각한 것부터 표시합니다. 문제가 없으면
+*all senders OK*가 표시됩니다. **All senders**: 필터에 맞는 모든 발신자를 문제가 있는 것부터 표시하며,
+아래에 페이지가 있습니다. 열(각 열은 정렬하거나 깔때기 아이콘으로 필터링할 수 있습니다):
+
+| 열 | 의미 |
+|---|---|
+| **Sender** / **Kind** / **Section** / **Address** | 이름, 계정 종류, 소속 섹션, 전체 주소 |
+| **State** | **STALLED** 빨간색, **CHECK FAILING** 보라색, **NONCE GAP** 주황색, **WAITING** 노란색(공백 뒤의 트랜잭션), **OK** 녹색 |
+| **In flight** | 전송했지만 아직 채굴되지 않음 |
+| **Not mined for** / **Nonce gap for** | 준비된 트랜잭션이 대기한 시간 / 논스가 누락된 시간. 30 s부터 주황색, 120 s부터 빨간색 |
+| **Waiting above gap** | 공백 뒤에 보류된 트랜잭션 |
+| **Stalls** / **Repairs** / **Fillers** | 선택한 시간 범위 안의 값 |
+
+| 차트 | 표시 내용 |
+|---|---|
+| **In flight: top 10 senders** (처리 중: 상위 10개 발신자) | 각 시점에 채굴되지 않은 트랜잭션이 가장 많은 발신자 10개, 이름별 |
+| **In flight by kind** (종류별 처리 중) | 플랫폼, 섹션, 사용자 계정, 누적 |
+| **Not mined / nonce gap: top 10** (미채굴 / 논스 공백: 상위 10개) | 해당 상황이 발생 중인 발신자만, 가장 오래된 10개 |
+| **Stalls, repairs and fillers per hour, by kind** (종류별 시간당 정지, 복구, 필러) | 프록시가 얼마나 자주 개입해야 했는지 |
 
 ### 프록시 프로세스 (Proxy process) {#proxy-process}
 
@@ -258,10 +281,11 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 
 ## Sections {#sections}
 
-섹션별 자금과 활동입니다([섹션](../features/sections.md)). 파일: `sections.json`
-(`monitoring/grafana/tools/gen_sections_dashboard.py`로 생성). 변수: **section**(하나, 여러 개 또는
-전체) 및 **Period**(Day, Week, Month = 30일, Quarter = 90일, Year = 365일).
-기본 시간 범위는 최근 30일입니다.
+섹션별 자금과 활동입니다([섹션](../features/sections.md)). 많은 섹션을 위해 만들어졌습니다: 먼저 개수,
+다음으로 조치가 필요한 섹션, 모든 섹션을 담은 하나의 표, 그리고 섹션마다 선 하나 대신 상위 / 하위 10개
+차트를 보여 줍니다. 파일: `sections.json`(`monitoring/grafana/tools/gen_sections_dashboard.py`로 생성).
+**Alerts** 행으로 시작합니다. 변수: **Section**(하나, 여러 개 또는 전체), **Search**(이름의 일부),
+**Period**(Day, Week, Month = 30일, Quarter = 90일, Year = 365일). 기본 시간 범위는 최근 30일입니다.
 
 ![Sections 대시보드 (랩)](../images/screenshots/grafana-sections.png)
 
@@ -269,21 +293,37 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 
 | 패널 | 표시 내용 | 정상 | 정상이 아닐 때 |
 |---|---|---|---|
-| **Active sections** (활성 섹션) | 활성화된 섹션 | 보유한 섹션 수 | |
-| **Upfront below threshold** (임계값 미만 선지급) | 선지급 계정이 `upfront_low_balance_eth` 미만인 활성 섹션 | 0 | chainlens Sections 페이지에서 충전하십시오(`SectionUpfrontLow`, 0이면 `SectionUpfrontEmpty`) |
-| **Low-balance threshold** (잔액 부족 임계값) | `upfront_low_balance_eth` (0 = 알림 꺼짐) | | |
-| **SENDER01** | SENDER01의 잔액: 모든 충전 자금을 제공함 | `sender01_low_balance_eth` 초과 | 보충하거나 결제 계정에서 반환하십시오(`Sender01Low`) |
-| **All upfront** (전체 선지급) | 모든 선지급 계정의 ETH | | |
-| **All consumption + payment** (전체 소비 + 결제) | 모든 섹션이 모은 ETH | | |
+| **Active sections** / **Disabled** (활성 섹션 / 비활성) | 활성화된 / 비활성화된 섹션(보관된 섹션은 표시되지 않음) | 보유한 섹션 수 | |
+| **Upfront empty** (선지급 잔액 0) | 선지급 계정이 0인 활성 섹션: 새 계정 생성과 −x가 실패합니다 | 0(녹색) | 빨간색: 즉시 충전하십시오(`SectionUpfrontEmpty`) |
+| **Upfront low** (선지급 부족) | `upfront_low_balance_eth` 미만인 활성 섹션 | 0 | chainlens Sections 페이지에서 충전하십시오(`SectionUpfrontLow`) |
+| **Runs out within 7 days** (7일 안에 소진) | 최근 7일의 지출 기준으로 선지급 계정이 7일을 버티지 못하는 섹션 | 0 | 소진되기 전에 충전하십시오 |
+| **SENDER01 (ETH)** | SENDER01의 잔액: 모든 충전 자금을 제공함 | `sender01_low_balance_eth` 초과 | 보충하거나 결제 계정에서 반환하십시오(`Sender01Low`) |
+| **All upfront (ETH)** / **Collected (ETH)** (전체 선지급 / 모인 금액) | 모든 선지급 계정의 ETH / 모든 소비 + 결제 계정의 ETH | | |
+
+### 섹션 (Sections) {#sections-1}
+
+**Sections needing attention**(조치가 필요한 섹션): 지금 문제가 있는 섹션만, 가장 심각한 것부터
+표시합니다(문제가 없으면 *all sections OK*). **All sections**(모든 섹션): 모든 섹션을 선지급 잔액이 가장
+낮은 것부터 표시하며, 아래에 페이지가 있습니다. 각 열은 정렬하거나 깔때기 아이콘으로 필터링할 수 있습니다.
+
+| 열 | 의미 |
+|---|---|
+| **State** | **EMPTY** 빨간색(선지급 잔액 0), **LOW** 주황색(임계값 미만), **< 7 DAYS LEFT** 노란색, **OK** 녹색 |
+| **Status** | active 또는 disabled |
+| **Upfront** / **Consumption** / **Payment** | 현재 잔액(ETH) |
+| **Days left** | 최근 7일의 지출 기준으로 선지급 계정이 버티는 기간. 지급한 것이 없으면 *no spending*. 3 미만 빨간색, 7 미만 주황색 |
+| **Spend / day** | 최근 7일 동안 선지급 계정에서 하루에 지급된 ETH(−x 송금과 새 계정 자금 제공) |
+| **New accounts**, **+x in**, **−x out**, **NFT sales**, **Top-ups**, **Swept**, **Paid back** (All sections에만 있음) | 지난 Period의 값 |
 
 ### 잔액 (ETH) (Balances (ETH)) {#balances-eth}
 
 | 패널 | 표시 내용 | 조치 |
 |---|---|---|
-| **Balances by section** (섹션별 잔액) | 각 섹션의 선지급, 소비, 결제 잔액 | |
-| **Upfront accounts** (선지급 계정) | 시간에 따른 선지급 잔액과 빨간 점선으로 표시된 임계값 | 선이 임계값에 도달하기 전에 충전하십시오 |
-| **Consumption accounts** (소비 계정) | 받은 돈(+x 송금, NFT 최초 판매) | 결제 계정으로 스윕하십시오 |
-| **Payment accounts** (결제 계정) | 스윕된 돈 | SENDER01로 반환하십시오 |
+| **Lowest upfront: 10 sections** (선지급 최저: 10개 섹션) | 선지급 잔액이 가장 적은 활성 섹션 10개(0이면 빨간색) | 앞쪽 섹션부터 충전하십시오 |
+| **Fewest days left: 10 sections** (남은 일수 최소: 10개 섹션) | 현재 지출 기준으로 가장 먼저 소진되는 섹션 10개 | |
+| **Most collected: 10 sections** (가장 많이 모인: 10개 섹션) | 섹션별 소비 + 결제 계정의 ETH | 스윕하고 반환하십시오 |
+| **All sections, by account role** (모든 섹션, 계정 역할별) | 선택한 섹션의 선지급, 소비, 결제 잔액을 합산한 시간별 추이 | |
+| **Lowest upfront over time: 10 sections** (시간에 따른 선지급 최저: 10개 섹션) | 각 시점의 가장 낮은 10개와 빨간 점선으로 표시된 임계값 | |
 
 ### 기간별 활동 (Activity per period) {#activity-per-period}
 
@@ -292,14 +332,11 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 
 | 패널 | 표시 내용 |
 |---|---|
-| **New accounts, last period** (지난 기간 새 계정) | 선택한 섹션이 지난 하루 / 한 주 / … 동안 생성한 계정 |
-| **+x from users, last period (ETH)** (지난 기간 사용자로부터의 +x) | 사용자가 소비 계정으로 지불한 금액 |
-| **NFT first sales, last period (ETH)** (지난 기간 NFT 최초 판매) | 소비 계정으로 지불된 NFT 최초 판매 |
-| **Top-ups, last period (ETH)** (지난 기간 충전) | SENDER01 → 선지급 계정 |
-| **Operations per period** (기간별 작업) | 기간과 섹션별 막대: `create_account`, `transfer_in` (+x), `transfer_out` (−x), `nft_first_sale`, `nft_resale`, `topup`, `sweep`, `payback`. 각 막대는 해당 날짜에 **시작하는** 기간을 셉니다(오늘의 막대 = 오늘 현재까지) |
-| **ETH moved per period** (기간별 이동한 ETH) | 같은 내용을 작업 종류별 ETH로 표시 |
-| **ETH moved in the last period** / **Operations in the last period** (지난 기간 이동한 ETH / 작업) | 섹션과 작업별 표 |
-| **ETH moved in the selected time range** (선택한 시간 범위에서 이동한 ETH) | 대시보드 전체 시간 범위 동안의 섹션과 작업별 값 |
+| **New accounts / +x from users / NFT first sales / Top-ups, last period** (지난 기간 새 계정 / 사용자로부터의 +x / NFT 최초 판매 / 충전) | 선택한 모든 섹션 |
+| **Most income / Most new accounts / Most spent, last period: 10 sections** (지난 기간 수입 / 새 계정 / 지출 최다: 10개 섹션) | 지난 기간의 상위 10개 섹션 |
+| **Operations per period** / **ETH moved per period** (기간별 작업 / 기간별 이동한 ETH) | 기간과 작업 종류별 막대(선택한 모든 섹션): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `nft_first_sale`, `nft_resale`, `topup`, `sweep`, `payback`. 각 막대는 해당 날짜에 **시작하는** 기간을 셉니다(오늘의 막대 = 오늘 현재까지) |
+| **Income per period: top 10 sections** (기간별 수입: 상위 10개 섹션) | +x와 NFT 최초 판매, 각 기간에 수입이 가장 많은 섹션 10개 |
+| **ETH moved in the selected time range** (선택한 시간 범위에서 이동한 ETH) | 대시보드 전체 시간 범위 동안의 섹션(행, 페이지 단위)과 작업별 값 |
 
 여러 기간을 포함하는 시간 범위를 선택하십시오(Day: 최근 14–30일, Year: 수년).
 Prometheus는 `prometheus_retention`(기본값 400일) 동안 보관합니다. chainlens 대시보드에는 체인 자체에서
@@ -409,7 +446,8 @@ Prometheus는 `prometheus_retention`(기본값 400일) 동안 보관합니다. c
 |---|---|
 | 체인이 블록을 만들고 있습니까? | Besu production → *Seconds since last block* |
 | 노드가 멈추거나 뒤처졌습니까? | Besu production → *Nodes* (Sync, Behind, Last block age) |
-| 트랜잭션이 왜 채굴되지 않습니까? | Besu production → *Proxy senders*, Proxy & Redis → *Senders and nonces* |
+| 트랜잭션이 왜 채굴되지 않습니까? | Proxy & Redis → *Senders needing attention* |
+| 어느 섹션의 자금이 가장 먼저 바닥납니까? | Sections → *Sections needing attention*, *Fewest days left* |
 | 서명할 수 있습니까? 계정을 생성할 수 있습니까? | MPC signer → *MPC nodes up*, *Threshold* |
 | 서명이 왜 느립니까? | MPC signer → *Signatures per second* (콜드 경로), *Pools* |
 | API가 실패하거나 느립니까? | Proxy & Redis → *5xx errors*, *Latency p95*, *Errors per second* |

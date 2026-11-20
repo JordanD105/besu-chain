@@ -61,7 +61,7 @@
 |---|---|---|---|
 | 애플리케이션에 연결 오류가 발생함 | 프록시 다운, VIP .151 이동 중 | `ProxyDown`, VIP 호스트에서 `docker ps` | keepalived가 다른 프록시를 시작합니다. `journalctl -u keepalived`를 확인합니다 |
 | **대기** 호스트의 프록시 컨테이너가 `Exited (137)`로 표시됨 | 정상: keepalived는 VIP가 없는 호스트의 프록시를 중지합니다(Docker가 부팅 시 다시 시작함) | `journalctl -u keepalived` ("proxy running without the proxy VIP") | 조치할 필요 없음 |
-| 트랜잭션을 보냈지만 채굴되지 않음 (`ProxySenderStalled`) | 검증자의 풀에 해당 트랜잭션이 없음 | Proxy senders 패널 | 검증자 **하나**를 재시작합니다 |
+| 트랜잭션을 보냈지만 채굴되지 않음 (`ProxySenderStalled`) | 검증자의 풀에 해당 트랜잭션이 없음 | Proxy & Redis → *Senders needing attention* | 검증자 **하나**를 재시작합니다 |
 | 발신자의 트랜잭션이 대기함 (`ProxyNonceGap`) | 누락된 논스 | `GET /status/senders`, 프록시 로그 | 프록시가 약 30 s 안에 복구합니다. 그렇지 않으면 로그를 확인합니다 |
 | 프록시 로그에 `redis unavailable` | 시작 시 Redis가 준비되지 않았거나 다운됨 | `ProxyRedisDisconnected` | 정확성에는 영향이 없습니다. Redis를 재시작합니다 |
 

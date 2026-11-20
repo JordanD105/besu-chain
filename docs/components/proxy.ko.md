@@ -458,9 +458,9 @@ Prometheus는 프록시 플로팅 IP를 통해 이를 수집하므로(`targets/r
 job `redis`) 항상 활성 프록시의 Redis를 읽습니다. 방화벽은 9121을
 모니터링 호스트에만 엽니다.
 
-Grafana: **Proxy & Redis** 대시보드(라우트별 요청, 오류, 지연 시간, 송신자와
-논스, 메모리와 이벤트 루프 지연, Redis 클라이언트, 메모리, 키, 적중률, 명령), **Besu production (QBFT)**의
-*Proxy senders* 행, 그리고 **Sections**. 알림(`ProxyDown`,
+Grafana: **Proxy & Redis** 대시보드(라우트별 요청, 오류, 지연 시간, 이름별 모든 송신자와
+조치가 필요한 항목, 메모리와 이벤트 루프 지연, Redis 클라이언트, 메모리, 키, 적중률, 명령)와
+**Sections**. 알림(`ProxyDown`,
 `ProxySenderStalled`, `ProxyNonceGap`, `ProxyNonceRepaired`, `ProxySenderCheckFailing`,
 `ProxyHttpErrors`, `ProxySlow`, `ProxyEventLoopBlocked`, `ProxyRedisDisconnected`, `RedisDown`,
 `RedisMemoryHigh`)은 `monitoring/prometheus/rules/proxy.yml`에 있습니다. 각 알림의 의미와 조치 방법:

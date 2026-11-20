@@ -52,7 +52,7 @@ Redis, 섹션, 호스트, 백업의 여섯 파일).
 | [**BesuNotInSync**](alert-runbook.md#besunotinsync) | warning | 5 min | 노드가 동기화 중이라고 보고하거나, 알고 있는 최고 블록보다 10블록 이상 뒤처짐 | 재시작 후 몇 분간 따라잡는 것은 정상입니다. 계속되면 피어와 로그를 확인하십시오 |
 | [**BesuPeersMissing**](alert-runbook.md#besupeersmissing) | warning | 5 min | 노드의 피어 수가 (가동 중인 노드 수 − 1)보다 적음 | 모든 노드는 다른 모든 노드에 연결되어야 합니다: 방화벽, `static-nodes.json` 또는 `permissions_config.toml`을 확인하십시오 |
 | [**BesuPeersLow**](alert-runbook.md#besupeerslow) | warning | 2 min | 노드의 피어가 2개 미만 | 연결 하나만 끊겨도 고립됩니다. 피어가 하나인 노드는 그 피어가 블록 전송을 멈추면 정지될 수 있습니다. 다른 호스트로의 네트워크와 방화벽을 확인하십시오 |
-| [**BesuTxPoolGrowing**](alert-runbook.md#besutxpoolgrowing) | warning | 10 min | 노드에 대기 중인 트랜잭션이 1,000개 초과 | 트랜잭션이 블록에 담기는 속도보다 빠르게 들어오거나, 멈춰 있습니다(논스 공백, 가스). 프록시 발신자와 `ProxySenderStalled`를 확인하십시오 |
+| [**BesuTxPoolGrowing**](alert-runbook.md#besutxpoolgrowing) | warning | 10 min | 노드에 대기 중인 트랜잭션이 1,000개 초과 | 트랜잭션이 블록에 담기는 속도보다 빠르게 들어오거나, 멈춰 있습니다(논스 공백, 가스). Proxy & Redis → *Senders needing attention*과 `ProxySenderStalled`를 확인하십시오 |
 | [**BesuHeapHigh**](alert-runbook.md#besuheaphigh) | warning | 10 min | Java 힙이 최대치의 90 % 초과 | 곧 긴 가비지 컬렉션 일시 정지가 발생합니다. 호스트에 RAM이 있으면 `-Xmx`(`besu_java_opts`)를 늘리거나, 무엇이 증가하는지 찾으십시오 |
 | [**BesuUnpermittedPeers**](alert-runbook.md#besuunpermittedpeers) | info | – | `permissions_config.toml`에 없는 노드의 연결을 노드가 거부함 | 알 수 없는 머신이거나, 키 또는 IP가 변경된 자체 머신입니다 |
 
