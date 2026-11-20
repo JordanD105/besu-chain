@@ -1224,7 +1224,7 @@
       "type": "table",
       "title": "Operations in the last $period",
       "id": 21,
-      "description": "Per section and operation, over the last period",
+      "description": "Per section and operation, over the last period (counts rounded: Prometheus extrapolates increase())",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1267,7 +1267,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "none",
-          "decimals": 2,
+          "decimals": 0,
           "custom": {
             "align": "auto"
           }

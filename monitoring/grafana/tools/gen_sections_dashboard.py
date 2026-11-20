@@ -54,14 +54,14 @@ def timeseries(title, targets, x, y, w=12, h=8, unit="none", desc="", overrides=
                         "overrides": overrides or []}})
 
 
-def table(title, expr, x, y, w, h, row_field, col_field, unit="none", desc=""):
+def table(title, expr, x, y, w, h, row_field, col_field, unit="none", desc="", decimals=2):
     panels.append({
         "type": "table", "title": title, "id": nid(), "description": desc, "datasource": DS,
         "gridPos": {"x": x, "y": y, "w": w, "h": h},
         "targets": [target(expr, instant=True, fmt="table")],
         "transformations": [{"id": "groupingToMatrix", "options": {"rowField": row_field, "columnField": col_field, "valueField": "Value", "emptyValue": "zero"}}],
         "options": {"showHeader": True, "cellHeight": "sm"},
-        "fieldConfig": {"defaults": {"unit": unit, "decimals": 2, "custom": {"align": "auto"}}, "overrides": []}})
+        "fieldConfig": {"defaults": {"unit": unit, "decimals": decimals, "custom": {"align": "auto"}}, "overrides": []}})
 
 
 SEL = 'section=~"$section"'
@@ -117,7 +117,7 @@ y += 8
 table("ETH moved in the last $period", f'sum by (section, op) (increase(proxy_section_amount_eth_total{{{SEL}}}[$period]))', 0, y, 12, 8,
       "section", "op", desc="Per section and operation, over the last period")
 table("Operations in the last $period", f'sum by (section, op) (increase(proxy_section_operations_total{{{SEL}}}[$period]))', 12, y, 12, 8,
-      "section", "op", desc="Per section and operation, over the last period")
+      "section", "op", desc="Per section and operation, over the last period (counts rounded: Prometheus extrapolates increase())", decimals=0)
 y += 8
 table("ETH moved in the selected time range", f'sum by (section, op) (increase(proxy_section_amount_eth_total{{{SEL}}}[$__range]))', 0, y, 24, 8,
       "section", "op", desc="Per section and operation, over the dashboard's time range")
