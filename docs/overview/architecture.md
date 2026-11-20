@@ -64,6 +64,8 @@ the ports Docker publishes (nftables table `inet besu_docker`).
 
 ## What happens on a request
 
+![The path of one POST /transfer: proxy, MPC coordinator, 2 of 3 MPC nodes, the RPC VIP and the validators](../images/diagrams/transfer-flow.svg)
+
 **`POST /transfer` with a section key** (+x: a user pays its section):
 1. The proxy checks the key, finds the section and checks the account is one of its users.
 2. It takes the sender's lock and computes the nonce: max(cached counter, chain pending count), so a

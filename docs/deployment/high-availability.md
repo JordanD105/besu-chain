@@ -29,6 +29,8 @@
 
 ## Overview
 
+![Failover: normally h135 holds both VIPs; when h135 is down they move to h136 and proxy2 starts](../images/diagrams/ha-failover.svg)
+
 Two floating IPs (VIPs) are held by **192.168.68.135** normally and by **192.168.68.136** after a
 failover, so that losing .135 doesn't stop payments. Layout and settings:
 [Production layout](../overview/production-layout.md).
@@ -133,6 +135,8 @@ ip -br addr
 | applications | the proxy at `http://192.168.68.151:30000` |
 
 ## 3. RPC health (besu-rpc-health)
+
+![How besu-rpc-health decides whether an RPC node is healthy, and how HAProxy uses the answer](../images/diagrams/rpc-health.svg)
 
 **Why:** an RPC node once stopped importing blocks (after losing its peers) while still answering
 `eth_syncing: false`. A check on `eth_syncing` alone kept it on the RPC VIP, serving an old chain.

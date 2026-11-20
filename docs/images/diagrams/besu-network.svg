@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="800" viewBox="0 0 1600 800" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="aY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1600" height="800" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" font-weight="700" fill="#0f172a">Besu network: 4 validators + 2 RPC nodes</text>
+<text x="40" y="72" font-size="15" fill="#475569">Every node connects to the other 5 (static peers, node allowlist, no discovery) · clients reach the chain through the RPC VIP</text>
+
+<!-- clients -->
+<rect x="60" y="100" width="250" height="56" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+<text x="185" y="124" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">Proxy (the active one)</text>
+<text x="185" y="143" font-size="12" fill="#64748b" text-anchor="middle">nonces, balances, reads</text>
+<rect x="370" y="100" width="250" height="56" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.8"/>
+<text x="495" y="124" font-size="14" font-weight="700" fill="#064e3b" text-anchor="middle">MPC coordinators</text>
+<text x="495" y="143" font-size="12" fill="#64748b" text-anchor="middle">send signed transactions</text>
+<line x1="185" y1="156" x2="185" y2="190" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="495" y1="156" x2="495" y2="190" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+
+<!-- VIP -->
+<rect x="60" y="194" width="560" height="56" rx="28" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#sh)"/>
+<text x="340" y="218" font-size="15" font-weight="700" fill="#9a3412" text-anchor="middle">RPC VIP 192.168.68.150:8545 · HAProxy</text>
+<text x="340" y="238" font-size="12" fill="#9a3412" text-anchor="middle">rpc1, rpc2 as backup (used only while current: besu-rpc-health)</text>
+<!-- host columns -->
+<rect x="40" y="290" width="290" height="340" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="56" y="314" font-size="14" font-weight="700" fill="#334155">h135 · 192.168.68.135</text>
+<rect x="350" y="290" width="290" height="340" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="366" y="314" font-size="14" font-weight="700" fill="#334155">h136 · 192.168.68.136</text>
+<rect x="660" y="290" width="290" height="340" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="676" y="314" font-size="14" font-weight="700" fill="#334155">h137 · 192.168.68.137</text>
+<rect x="970" y="290" width="290" height="340" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="986" y="314" font-size="14" font-weight="700" fill="#334155">h138 · 192.168.68.138</text>
+<rect x="1300" y="290" width="260" height="340" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="1316" y="314" font-size="14" font-weight="700" fill="#334155">h139 · 192.168.68.139</text>
+
+<line x1="270" y1="250" x2="270" y2="346" stroke="#ea580c" stroke-width="2" marker-end="url(#aO)"/>
+<text x="280" y="276" font-size="12" fill="#9a3412">active</text>
+<line x1="580" y1="250" x2="580" y2="346" stroke="#ea580c" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+<text x="590" y="276" font-size="12" fill="#9a3412">backup</text>
+
+<!-- RPC nodes -->
+<rect x="60" y="350" width="250" height="80" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8"/>
+<text x="185" y="374" font-size="15" font-weight="700" fill="#4c1d95" text-anchor="middle">rpc1 · RPC node</text>
+<text x="185" y="395" font-size="12" fill="#4c1d95" text-anchor="middle">JSON-RPC :8555 · P2P :30304</text>
+<text x="185" y="414" font-size="12" fill="#64748b" text-anchor="middle">metrics :9546 · does not vote</text>
+<rect x="370" y="350" width="250" height="80" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="6 4"/>
+<text x="495" y="374" font-size="15" font-weight="700" fill="#4c1d95" text-anchor="middle">rpc2 · RPC node</text>
+<text x="495" y="395" font-size="12" fill="#4c1d95" text-anchor="middle">JSON-RPC :8555 · P2P :30304</text>
+<text x="495" y="414" font-size="12" fill="#64748b" text-anchor="middle">metrics :9546 · does not vote</text>
+
+<!-- P2P mesh bus -->
+<line x1="60" y1="470" x2="1240" y2="470" stroke="#7c3aed" stroke-width="3" stroke-dasharray="10 6"/>
+<line x1="185" y1="430" x2="185" y2="470" stroke="#7c3aed" stroke-width="2"/>
+<line x1="495" y1="430" x2="495" y2="470" stroke="#7c3aed" stroke-width="2"/>
+<line x1="185" y1="470" x2="185" y2="510" stroke="#7c3aed" stroke-width="2"/>
+<line x1="495" y1="470" x2="495" y2="510" stroke="#7c3aed" stroke-width="2"/>
+<line x1="805" y1="470" x2="805" y2="510" stroke="#7c3aed" stroke-width="2"/>
+<line x1="1115" y1="470" x2="1115" y2="510" stroke="#7c3aed" stroke-width="2"/>
+<text x="680" y="438" font-size="13" font-weight="700" fill="#4c1d95">P2P full mesh</text>
+<text x="680" y="456" font-size="12" fill="#64748b">each node peers with the other 5</text>
+
+<!-- validators -->
+<rect x="60" y="510" width="250" height="96" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8"/>
+<text x="185" y="534" font-size="15" font-weight="700" fill="#4c1d95" text-anchor="middle">val1 · validator</text>
+<text x="185" y="555" font-size="12" fill="#4c1d95" text-anchor="middle">P2P :30303 · metrics :9545</text>
+<text x="185" y="574" font-size="12" fill="#64748b" text-anchor="middle">RPC 127.0.0.1:8645 only</text>
+<rect x="370" y="510" width="250" height="96" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8"/>
+<text x="495" y="534" font-size="15" font-weight="700" fill="#4c1d95" text-anchor="middle">val2 · validator</text>
+<text x="495" y="555" font-size="12" fill="#4c1d95" text-anchor="middle">P2P :30303 · metrics :9545</text>
+<text x="495" y="574" font-size="12" fill="#64748b" text-anchor="middle">RPC 127.0.0.1:8645 only</text>
+<rect x="680" y="510" width="250" height="96" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8"/>
+<text x="805" y="534" font-size="15" font-weight="700" fill="#4c1d95" text-anchor="middle">val3 · validator</text>
+<text x="805" y="555" font-size="12" fill="#4c1d95" text-anchor="middle">P2P :30303 · metrics :9545</text>
+<text x="805" y="574" font-size="12" fill="#64748b" text-anchor="middle">RPC 127.0.0.1:8545 only</text>
+<text x="805" y="592" font-size="12" fill="#64748b" text-anchor="middle">daily chain snapshot</text>
+<rect x="990" y="510" width="250" height="96" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8"/>
+<text x="1115" y="534" font-size="15" font-weight="700" fill="#4c1d95" text-anchor="middle">val4 · validator</text>
+<text x="1115" y="555" font-size="12" fill="#4c1d95" text-anchor="middle">P2P :30303 · metrics :9545</text>
+<text x="1115" y="574" font-size="12" fill="#64748b" text-anchor="middle">RPC 127.0.0.1:8545 only</text>
+
+<!-- h139 clients -->
+<rect x="1316" y="350" width="228" height="80" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.8"/>
+<text x="1430" y="374" font-size="15" font-weight="700" fill="#155e75" text-anchor="middle">chainlens</text>
+<text x="1430" y="395" font-size="12" fill="#155e75" text-anchor="middle">reads rpc2 directly</text>
+<text x="1430" y="414" font-size="12" fill="#64748b" text-anchor="middle">new blocks every 4 s</text>
+<path d="M 1316 390 L 1290 390 L 1290 336 L 630 336 L 630 386 L 624 386" fill="none" stroke="#0891b2" stroke-width="2" marker-end="url(#aC)"/>
+<rect x="790" y="343" width="340" height="19" fill="#ffffff"/>
+<text x="960" y="357" font-size="12" fill="#155e75" text-anchor="middle">chainlens → rpc2 192.168.68.136:8555 (not the VIP)</text>
+<rect x="1316" y="510" width="228" height="96" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
+<text x="1430" y="534" font-size="15" font-weight="700" fill="#92400e" text-anchor="middle">Prometheus</text>
+<text x="1430" y="555" font-size="12" fill="#92400e" text-anchor="middle">every node, every 15 s</text>
+<text x="1430" y="574" font-size="12" fill="#64748b" text-anchor="middle">:9545 validators</text>
+<text x="1430" y="592" font-size="12" fill="#64748b" text-anchor="middle">:9546 RPC nodes</text>
+<line x1="1316" y1="558" x2="1244" y2="558" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#aY)"/>
+
+<!-- quorum note -->
+<rect x="40" y="660" width="1520" height="100" rx="14" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="64" y="692" font-size="17" font-weight="700" fill="#4c1d95">QBFT quorum: 3 of 4 validators sign each block</text>
+<text x="64" y="716" font-size="13" fill="#4c1d95">One validator (one host) can fail and blocks keep coming every second; with two down the chain stops until one comes back.</text>
+<text x="64" y="738" font-size="13" fill="#4c1d95">RPC nodes only follow the chain (full sync) and answer clients: losing them never stops block production.</text>
+</svg>

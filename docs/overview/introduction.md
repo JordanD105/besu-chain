@@ -10,6 +10,8 @@
 
 ## What it is
 
+![The system at a glance: applications, the proxy, the MPC signer, the Besu chain and the monitoring host](../images/diagrams/system-overview.svg)
+
 A **private Hyperledger Besu blockchain (QBFT consensus)** with everything an organization needs
 to run payments and NFTs on it:
 

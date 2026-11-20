@@ -43,6 +43,8 @@
 
 ## Nodes
 
+![The Besu network: 4 validators and 2 RPC nodes on h135–h138 in a full P2P mesh, the RPC VIP and its clients](../images/diagrams/besu-network.svg)
+
 | Node | Host | Role | Serves |
 |---|---|---|---|
 | val1 | h135 `.135` | validator | makes blocks; RPC on the host's localhost only |
@@ -61,6 +63,8 @@ and answer applications. HAProxy sends RPC traffic to rpc1, and to rpc2 when rpc
 (`besu-rpc-health`: block age and height, not only `eth_syncing`).
 
 ## Consensus (QBFT)
+
+![QBFT quorum: with one validator down the chain continues, with two down it halts](../images/diagrams/qbft-quorum.svg)
 
 - **Proof of authority:** only the listed validators make blocks, in turn (round robin). There is no
   mining and no staking.

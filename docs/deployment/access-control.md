@@ -17,6 +17,8 @@
 
 ---
 
+![Who may reach which port: each allow list, the service it opens, and the two firewall layers](../images/diagrams/access-control.svg)
+
 The firewall on every host (`ha/firewall-layout.sh`, applied by `01-hosts.yml`) opens each service
 only to the IPs in its list in `group_vars/all/settings.yml`. Everyone else is blocked.
 

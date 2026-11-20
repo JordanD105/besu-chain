@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="aY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1200" height="380" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" font-weight="700" fill="#0f172a">QBFT quorum with 4 validators</text>
+<text x="40" y="72" font-size="15" fill="#475569">A block needs signatures from ceil(2n/3) = 3 of the 4 validators</text>
+<rect x="40" y="100" width="360" height="240" rx="14" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="64" y="134" font-size="17" font-weight="700" fill="#14532d">All 4 up</text>
+<circle cx="100" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="100" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val1</text>
+<text x="100" y="262" font-size="12" fill="#64748b" text-anchor="middle">h135</text>
+<circle cx="180" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="180" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val2</text>
+<text x="180" y="262" font-size="12" fill="#64748b" text-anchor="middle">h136</text>
+<circle cx="260" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="260" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val3</text>
+<text x="260" y="262" font-size="12" fill="#64748b" text-anchor="middle">h137</text>
+<circle cx="340" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="340" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val4</text>
+<text x="340" y="262" font-size="12" fill="#64748b" text-anchor="middle">h138</text>
+<text x="220" y="304" font-size="15" font-weight="700" fill="#14532d" text-anchor="middle">blocks every 1 s</text>
+<rect x="420" y="100" width="360" height="240" rx="14" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh)"/>
+<text x="444" y="134" font-size="17" font-weight="700" fill="#14532d">1 down</text>
+<circle cx="480" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="480" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val1</text>
+<text x="480" y="262" font-size="12" fill="#64748b" text-anchor="middle">h135</text>
+<circle cx="560" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="560" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val2</text>
+<text x="560" y="262" font-size="12" fill="#64748b" text-anchor="middle">h136</text>
+<circle cx="640" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="640" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val3</text>
+<text x="640" y="262" font-size="12" fill="#64748b" text-anchor="middle">h137</text>
+<circle cx="720" cy="210" r="30" fill="#ffffff" stroke="#e11d48" stroke-width="2" stroke-dasharray="5 4"/>
+<line x1="708" y1="198" x2="732" y2="222" stroke="#e11d48" stroke-width="3"/>
+<line x1="708" y1="222" x2="732" y2="198" stroke="#e11d48" stroke-width="3"/>
+<text x="720" y="262" font-size="12" fill="#64748b" text-anchor="middle">h138</text>
+<text x="600" y="304" font-size="15" font-weight="700" fill="#14532d" text-anchor="middle">3 of 4 sign: blocks continue</text>
+<rect x="800" y="100" width="360" height="240" rx="14" fill="#fff1f2" stroke="#e11d48" stroke-width="2" filter="url(#sh)"/>
+<text x="824" y="134" font-size="17" font-weight="700" fill="#9f1239">2 down</text>
+<circle cx="860" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="860" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val1</text>
+<text x="860" y="262" font-size="12" fill="#64748b" text-anchor="middle">h135</text>
+<circle cx="940" cy="210" r="30" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+<text x="940" y="215" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">val2</text>
+<text x="940" y="262" font-size="12" fill="#64748b" text-anchor="middle">h136</text>
+<circle cx="1020" cy="210" r="30" fill="#ffffff" stroke="#e11d48" stroke-width="2" stroke-dasharray="5 4"/>
+<line x1="1008" y1="198" x2="1032" y2="222" stroke="#e11d48" stroke-width="3"/>
+<line x1="1008" y1="222" x2="1032" y2="198" stroke="#e11d48" stroke-width="3"/>
+<text x="1020" y="262" font-size="12" fill="#64748b" text-anchor="middle">h137</text>
+<circle cx="1100" cy="210" r="30" fill="#ffffff" stroke="#e11d48" stroke-width="2" stroke-dasharray="5 4"/>
+<line x1="1088" y1="198" x2="1112" y2="222" stroke="#e11d48" stroke-width="3"/>
+<line x1="1088" y1="222" x2="1112" y2="198" stroke="#e11d48" stroke-width="3"/>
+<text x="1100" y="262" font-size="12" fill="#64748b" text-anchor="middle">h138</text>
+<text x="980" y="304" font-size="15" font-weight="700" fill="#9f1239" text-anchor="middle">2 of 4: no quorum, the chain halts</text>
+<text x="40" y="364" font-size="13" fill="#475569">A halted chain resumes when a third validator is back; no block is ever reverted (immediate finality).</text>
+</svg>

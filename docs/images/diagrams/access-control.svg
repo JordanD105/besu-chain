@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="992" viewBox="0 0 1500 992" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="aY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1500" height="992" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" fill="#0f172a" font-weight="700" text-anchor="start">Who may reach which port</text>
+<text x="40" y="72" font-size="15" fill="#475569" text-anchor="start">Each list in group_vars/all/settings.yml opens its service only to those addresses; everyone else is blocked</text>
+<g transform="translate(0,20)">
+<rect x="40" y="110" width="360" height="58" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
+<text x="58" y="135" font-size="15" fill="#92400e" font-weight="700" text-anchor="start">operator_ip</text>
+<text x="58" y="155" font-size="12" fill="#64748b" text-anchor="start">the operator / bastion (one address)</text>
+<rect x="1040" y="110" width="420" height="58" rx="12" fill="#ffffff" stroke="#f59e0b" stroke-width="1.8"/>
+<text x="1058" y="135" font-size="14" fill="#92400e" font-weight="700" text-anchor="start">SSH 22 on every host, Besu RPC 8545 / 8555,</text>
+<text x="1058" y="155" font-size="12" fill="#64748b" text-anchor="start">MPC admin 9100, and every service below</text>
+<line x1="400" y1="139.0" x2="1036" y2="139.0" stroke="#f59e0b" stroke-width="2" marker-end="url(#aY)"/>
+<rect x="40" y="180" width="360" height="58" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+<text x="58" y="205" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="start">proxy_client_ips</text>
+<text x="58" y="225" font-size="12" fill="#64748b" text-anchor="start">applications</text>
+<rect x="1040" y="180" width="420" height="58" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="1.8"/>
+<text x="1058" y="205" font-size="14" fill="#1e3a8a" font-weight="700" text-anchor="start">proxy VIP 192.168.68.151:30000</text>
+<text x="1058" y="225" font-size="12" fill="#64748b" text-anchor="start">the proxy API (HA pair)</text>
+<line x1="400" y1="209.0" x2="1036" y2="209.0" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<rect x="40" y="250" width="360" height="58" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.8"/>
+<text x="58" y="275" font-size="15" fill="#155e75" font-weight="700" text-anchor="start">chainlens_ips</text>
+<text x="58" y="295" font-size="12" fill="#64748b" text-anchor="start">explorer users</text>
+<rect x="1040" y="250" width="420" height="58" rx="12" fill="#ffffff" stroke="#0891b2" stroke-width="1.8"/>
+<text x="1058" y="275" font-size="14" fill="#155e75" font-weight="700" text-anchor="start">chainlens h139:30100</text>
+<text x="1058" y="295" font-size="12" fill="#64748b" text-anchor="start">block explorer (no admin pages)</text>
+<line x1="400" y1="279.0" x2="1036" y2="279.0" stroke="#0891b2" stroke-width="2" marker-end="url(#aC)"/>
+<rect x="40" y="320" width="360" height="58" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.8"/>
+<text x="58" y="345" font-size="15" fill="#155e75" font-weight="700" text-anchor="start">chainlens_deploy_ips</text>
+<text x="58" y="365" font-size="12" fill="#64748b" text-anchor="start">admin PCs</text>
+<rect x="1040" y="320" width="420" height="58" rx="12" fill="#ffffff" stroke="#0891b2" stroke-width="1.8"/>
+<text x="1058" y="345" font-size="14" fill="#155e75" font-weight="700" text-anchor="start">chainlens :30100 + admin pages</text>
+<text x="1058" y="365" font-size="12" fill="#64748b" text-anchor="start">Deploy / Sections, with token, while enabled</text>
+<line x1="400" y1="349.0" x2="1036" y2="349.0" stroke="#0891b2" stroke-width="2" marker-end="url(#aC)"/>
+<rect x="40" y="390" width="360" height="58" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
+<text x="58" y="415" font-size="15" fill="#92400e" font-weight="700" text-anchor="start">grafana_ips</text>
+<text x="58" y="435" font-size="12" fill="#64748b" text-anchor="start">dashboard users</text>
+<rect x="1040" y="390" width="420" height="58" rx="12" fill="#ffffff" stroke="#f59e0b" stroke-width="1.8"/>
+<text x="1058" y="415" font-size="14" fill="#92400e" font-weight="700" text-anchor="start">Grafana h139:3000</text>
+<text x="1058" y="435" font-size="12" fill="#64748b" text-anchor="start">monitoring dashboards</text>
+<line x1="400" y1="419.0" x2="1036" y2="419.0" stroke="#f59e0b" stroke-width="2" marker-end="url(#aY)"/>
+<rect x="40" y="460" width="360" height="58" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.8"/>
+<text x="58" y="485" font-size="15" fill="#334155" font-weight="700" text-anchor="start">remix_ips</text>
+<text x="58" y="505" font-size="12" fill="#64748b" text-anchor="start">developers</text>
+<rect x="1040" y="460" width="420" height="58" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.8"/>
+<text x="1058" y="485" font-size="14" fill="#334155" font-weight="700" text-anchor="start">Remix IDE h139:30200</text>
+<text x="1058" y="505" font-size="12" fill="#64748b" text-anchor="start">self-hosted Remix</text>
+<line x1="400" y1="489.0" x2="1036" y2="489.0" stroke="#94a3b8" stroke-width="2" marker-end="url(#aN)"/>
+<rect x="40" y="530" width="360" height="58" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.8"/>
+<text x="58" y="555" font-size="15" fill="#334155" font-weight="700" text-anchor="start">docs_ips</text>
+<text x="58" y="575" font-size="12" fill="#64748b" text-anchor="start">documentation readers</text>
+<rect x="1040" y="530" width="420" height="58" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.8"/>
+<text x="1058" y="555" font-size="14" fill="#334155" font-weight="700" text-anchor="start">documentation site h139:30300</text>
+<text x="1058" y="575" font-size="12" fill="#64748b" text-anchor="start">this documentation</text>
+<line x1="400" y1="559.0" x2="1036" y2="559.0" stroke="#94a3b8" stroke-width="2" marker-end="url(#aN)"/>
+<rect x="40" y="600" width="360" height="58" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
+<text x="58" y="625" font-size="15" fill="#92400e" font-weight="700" text-anchor="start">monitoring host h139</text>
+<text x="58" y="645" font-size="12" fill="#64748b" text-anchor="start">fixed rule</text>
+<rect x="1040" y="600" width="420" height="58" rx="12" fill="#ffffff" stroke="#f59e0b" stroke-width="1.8"/>
+<text x="1058" y="625" font-size="14" fill="#92400e" font-weight="700" text-anchor="start">metrics: node-exporter 9101 (all hosts),</text>
+<text x="1058" y="645" font-size="12" fill="#64748b" text-anchor="start">Besu 9545/9546, redis 9121, proxy 30000, RPC 8555, MPC 9100</text>
+<line x1="400" y1="629.0" x2="1036" y2="629.0" stroke="#f59e0b" stroke-width="2" marker-end="url(#aY)"/>
+<rect x="40" y="670" width="360" height="58" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8"/>
+<text x="58" y="695" font-size="15" fill="#4c1d95" font-weight="700" text-anchor="start">Besu hosts h135–h138</text>
+<text x="58" y="715" font-size="12" fill="#64748b" text-anchor="start">fixed rule</text>
+<rect x="1040" y="670" width="420" height="58" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="1.8"/>
+<text x="1058" y="695" font-size="14" fill="#4c1d95" font-weight="700" text-anchor="start">P2P 30303 (validators), 30304 (RPC nodes)</text>
+<text x="1058" y="715" font-size="12" fill="#64748b" text-anchor="start">between the Besu hosts only</text>
+<line x1="400" y1="699.0" x2="1036" y2="699.0" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>
+<rect x="660" y="96" width="120" height="646" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="2" opacity="0.92"/>
+<circle cx="720" cy="139.0" r="9" fill="#16a34a"/>
+<path d="M 715 139.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<circle cx="720" cy="209.0" r="9" fill="#16a34a"/>
+<path d="M 715 209.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<circle cx="720" cy="279.0" r="9" fill="#16a34a"/>
+<path d="M 715 279.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<circle cx="720" cy="349.0" r="9" fill="#16a34a"/>
+<path d="M 715 349.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<circle cx="720" cy="419.0" r="9" fill="#16a34a"/>
+<path d="M 715 419.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<circle cx="720" cy="489.0" r="9" fill="#16a34a"/>
+<path d="M 715 489.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<circle cx="720" cy="559.0" r="9" fill="#16a34a"/>
+<path d="M 715 559.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<circle cx="720" cy="629.0" r="9" fill="#16a34a"/>
+<path d="M 715 629.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<circle cx="720" cy="699.0" r="9" fill="#16a34a"/>
+<path d="M 715 699.0 l 4 4 l 7 -8" fill="none" stroke="#ffffff" stroke-width="2"/>
+<text x="720" y="86" font-size="13" fill="#9f1239" font-weight="700" text-anchor="middle">firewall on every host</text>
+<rect x="40" y="772" width="360" height="50" rx="12" fill="#ffffff" stroke="#e11d48" stroke-width="1.8" stroke-dasharray="6 4"/>
+<text x="58" y="794" font-size="15" fill="#9f1239" font-weight="700" text-anchor="start">any other address</text>
+<text x="58" y="812" font-size="12" fill="#64748b" text-anchor="start">not in a list</text>
+<line x1="400" y1="797" x2="656" y2="797" stroke="#e11d48" stroke-width="2" marker-end="url(#aR)"/>
+<text x="720" y="802" font-size="14" fill="#9f1239" font-weight="700" text-anchor="middle">blocked</text>
+<rect x="40" y="848" width="700" height="94" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+<text x="58" y="874" font-size="15" fill="#9a3412" font-weight="700" text-anchor="start">Layer 1 · firewalld rich rules</text>
+<text x="58" y="896" font-size="13" fill="#9a3412" text-anchor="start">ports of the host itself: SSH, HAProxy, Besu nodes with host</text>
+<text x="58" y="915" font-size="13" fill="#9a3412" text-anchor="start">networking, VRRP between h135 and h136</text>
+<text x="58" y="933" font-size="12" fill="#64748b" text-anchor="start">firewall-cmd --list-rich-rules</text>
+<rect x="760" y="848" width="700" height="94" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+<text x="778" y="874" font-size="15" fill="#9a3412" font-weight="700" text-anchor="start">Layer 2 · nftables table inet besu_docker</text>
+<text x="778" y="896" font-size="13" fill="#9a3412" text-anchor="start">ports Docker publishes (Docker forwards them past firewalld): proxy, coordinator,</text>
+<text x="778" y="915" font-size="13" fill="#9a3412" text-anchor="start">MPC node, Grafana, chainlens, Remix, docs site, redis-exporter</text>
+<text x="778" y="933" font-size="12" fill="#64748b" text-anchor="start">nft list table inet besu_docker · same allow lists as layer 1</text>
+</g>
+</svg>

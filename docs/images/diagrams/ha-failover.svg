@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="760" viewBox="0 0 1520 760" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="aY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1520" height="760" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" font-weight="700" fill="#0f172a">Failover of the HA pair h135 / h136</text>
+<text x="40" y="72" font-size="15" fill="#475569">keepalived (VRRP) moves both floating IPs; HAProxy on the VIP .150 picks the backends; only the host holding .151 runs a proxy</text>
+<rect x="40" y="96" width="700" height="560" rx="16" fill="#ffffff" stroke="#334155" stroke-width="1.5" filter="url(#sh)"/>
+<text x="64" y="128" font-size="18" font-weight="700" fill="#16a34a">Normal</text>
+<rect x="64" y="146" width="290" height="40" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.6"/>
+<text x="209.0" y="171" font-size="13" font-weight="700" fill="#1e3a8a" text-anchor="middle">applications → .151:30000</text>
+<line x1="209.0" y1="186" x2="209.0" y2="206" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<rect x="64" y="210" width="290" height="34" rx="17" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+<text x="209.0" y="232" font-size="13" font-weight="700" fill="#9a3412" text-anchor="middle">VIP .151 · :30000 proxy</text>
+<rect x="64" y="252" width="290" height="34" rx="17" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+<text x="209.0" y="274" font-size="13" font-weight="700" fill="#9a3412" text-anchor="middle">VIP .150 · :8545 RPC · :9100 MPC</text>
+<line x1="209.0" y1="286" x2="209.0" y2="306" stroke="#ea580c" stroke-width="2" marker-end="url(#aO)"/>
+<rect x="64" y="310" width="290" height="300" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="80" y="338" font-size="15" font-weight="700" fill="#334155">h135 · 192.168.68.135</text>
+<rect x="78" y="354" width="262" height="50" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6"/>
+<text x="92" y="375" font-size="14" font-weight="700" fill="#9a3412">HAProxy + keepalived</text>
+<text x="92" y="393" font-size="12" fill="#64748b">MASTER (priority 150), holds both VIPs</text>
+<rect x="78" y="414" width="262" height="50" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.6"/>
+<text x="92" y="435" font-size="14" font-weight="700" fill="#1e3a8a">proxy1 · active</text>
+<text x="92" y="453" font-size="12" fill="#64748b">answers on .151:30000</text>
+<rect x="78" y="476" width="262" height="50" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="92" y="497" font-size="14" font-weight="700" fill="#064e3b">coord1 · used</text>
+<text x="92" y="515" font-size="12" fill="#64748b">HAProxy :9100 backend</text>
+<rect x="78" y="538" width="262" height="50" rx="10" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="92" y="559" font-size="14" font-weight="700" fill="#4c1d95">rpc1 · used</text>
+<text x="92" y="577" font-size="12" fill="#64748b">HAProxy :8545 → :8555 backend</text>
+<rect x="426" y="310" width="290" height="300" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="442" y="338" font-size="15" font-weight="700" fill="#334155">h136 · 192.168.68.136</text>
+<rect x="440" y="354" width="262" height="50" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6"/>
+<text x="454" y="375" font-size="14" font-weight="700" fill="#9a3412">HAProxy + keepalived</text>
+<text x="454" y="393" font-size="12" fill="#64748b">BACKUP (priority 100), no VIP</text>
+<rect x="440" y="414" width="262" height="50" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="454" y="435" font-size="14" font-weight="700" fill="#1e3a8a">proxy2 · stopped</text>
+<text x="454" y="453" font-size="12" fill="#64748b">built, not started</text>
+<rect x="440" y="476" width="262" height="50" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="454" y="497" font-size="14" font-weight="700" fill="#064e3b">coord2 · warm backup</text>
+<text x="454" y="515" font-size="12" fill="#64748b">presignature pool full</text>
+<rect x="440" y="538" width="262" height="50" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="454" y="559" font-size="14" font-weight="700" fill="#4c1d95">rpc2 · backup</text>
+<text x="454" y="577" font-size="12" fill="#64748b">follows the chain</text>
+<line x1="358" y1="380" x2="422" y2="380" stroke="#ea580c" stroke-width="2" marker-start="url(#aO)" marker-end="url(#aO)"/>
+<text x="390.0" y="370" font-size="12" font-weight="700" fill="#9a3412" text-anchor="middle">VRRP</text>
+<text x="390.0" y="400" font-size="12" fill="#9a3412" text-anchor="middle">adverts</text>
+<text x="64" y="636" font-size="13" fill="#475569">Normally .135 holds both VIPs; the proxy runs only there.</text>
+<rect x="780" y="96" width="700" height="560" rx="16" fill="#ffffff" stroke="#334155" stroke-width="1.5" filter="url(#sh)"/>
+<text x="804" y="128" font-size="18" font-weight="700" fill="#e11d48">h135 down</text>
+<rect x="1166" y="146" width="290" height="40" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.6"/>
+<text x="1311.0" y="171" font-size="13" font-weight="700" fill="#1e3a8a" text-anchor="middle">applications → .151:30000</text>
+<line x1="1311.0" y1="186" x2="1311.0" y2="206" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<rect x="1166" y="210" width="290" height="34" rx="17" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+<text x="1311.0" y="232" font-size="13" font-weight="700" fill="#9a3412" text-anchor="middle">VIP .151 · :30000 proxy</text>
+<rect x="1166" y="252" width="290" height="34" rx="17" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+<text x="1311.0" y="274" font-size="13" font-weight="700" fill="#9a3412" text-anchor="middle">VIP .150 · :8545 RPC · :9100 MPC</text>
+<line x1="1311.0" y1="286" x2="1311.0" y2="306" stroke="#ea580c" stroke-width="2" marker-end="url(#aO)"/>
+<rect x="804" y="310" width="290" height="300" rx="14" fill="#fff1f2" stroke="#e11d48" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="820" y="338" font-size="15" font-weight="700" fill="#9f1239">h135 · 192.168.68.135</text>
+<line x1="909.0" y1="400" x2="989.0" y2="480" stroke="#e11d48" stroke-width="5"/>
+<line x1="909.0" y1="480" x2="989.0" y2="400" stroke="#e11d48" stroke-width="5"/>
+<text x="949.0" y="520" font-size="15" font-weight="700" fill="#9f1239" text-anchor="middle">host down</text>
+<text x="949.0" y="540" font-size="12" fill="#9f1239" text-anchor="middle">proxy1, coord1, rpc1, mpc1, val1 gone</text>
+<rect x="1166" y="310" width="290" height="300" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="1182" y="338" font-size="15" font-weight="700" fill="#334155">h136 · 192.168.68.136</text>
+<rect x="1180" y="354" width="262" height="50" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6"/>
+<text x="1194" y="375" font-size="14" font-weight="700" fill="#9a3412">HAProxy + keepalived</text>
+<text x="1194" y="393" font-size="12" fill="#64748b">now MASTER, holds both VIPs</text>
+<rect x="1180" y="414" width="262" height="50" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.6"/>
+<text x="1194" y="435" font-size="14" font-weight="700" fill="#1e3a8a">proxy2 · started</text>
+<text x="1194" y="453" font-size="12" fill="#64748b">by keepalived (proxy-start.sh)</text>
+<rect x="1180" y="476" width="262" height="50" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="1194" y="497" font-size="14" font-weight="700" fill="#064e3b">coord2 · signs</text>
+<text x="1194" y="515" font-size="12" fill="#64748b">with mpc2 + mpc3</text>
+<rect x="1180" y="538" width="262" height="50" rx="10" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="1194" y="559" font-size="14" font-weight="700" fill="#4c1d95">rpc2 · serves</text>
+<text x="1194" y="577" font-size="12" fill="#64748b">the RPC VIP</text>
+<line x1="1098" y1="380" x2="1162" y2="380" stroke="#e11d48" stroke-width="2" stroke-dasharray="4 4"/>
+<text x="1130.0" y="370" font-size="12" font-weight="700" fill="#9f1239" text-anchor="middle">VRRP</text>
+<text x="1130.0" y="400" font-size="12" fill="#9f1239" text-anchor="middle">silent</text>
+<text x="804" y="636" font-size="13" fill="#475569">A few seconds of failed requests, then service on .136.</text>
+<text x="40" y="690" font-size="13" fill="#475569">rpc1 or coord1 alone failing: HAProxy switches that backend to the twin on h136 (about 6 s for RPC) and the VIPs stay where they are.</text>
+<text x="40" y="712" font-size="13" fill="#475569">HAProxy failing: keepalived moves .150. The proxy failing: keepalived moves .151, starts proxy2 and stops proxy1.</text>
+<text x="40" y="734" font-size="13" fill="#475569">nopreempt: when h135 comes back the VIPs stay on h136; move them back at a quiet time.</text>
+</svg>

@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="740" viewBox="0 0 1480 740" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="aY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1480" height="740" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" font-weight="700" fill="#0f172a">How besu-rpc-health decides</text>
+<text x="40" y="72" font-size="15" fill="#475569">Runs on h135 and h136; every 2 s it checks each RPC node and answers HAProxy on one local port per node</text>
+<rect x="60" y="100" width="500" height="70" rx="12" fill="#ffffff" stroke="#334155" stroke-width="1.8" filter="url(#sh)"/>
+<text x="310" y="128" font-size="15" fill="#0f172a" font-weight="700" text-anchor="middle">Every 2 s, for each RPC node (rpc1, rpc2)</text>
+<text x="310" y="150" font-size="12" fill="#64748b" text-anchor="middle">eth_getBlockByNumber latest · eth_syncing · net_peerCount</text>
+<line x1="310" y1="170" x2="310" y2="196" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="60" y="200" width="500" height="66" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+<text x="80" y="227" font-size="14" fill="#1e3a8a" font-weight="700" text-anchor="start">Reachable?</text>
+<text x="80" y="248" font-size="12" fill="#64748b" text-anchor="start">no answer or an error</text>
+<line x1="560" y1="233.0" x2="676" y2="233.0" stroke="#e11d48" stroke-width="2" marker-end="url(#aR)"/>
+<text x="618" y="225.0" font-size="12" fill="#9f1239" font-weight="700" text-anchor="middle">no</text>
+<rect x="680" y="208" width="260" height="50" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.8"/>
+<text x="696" y="230" font-size="14" fill="#9f1239" font-weight="700" text-anchor="start">unhealthy (503)</text>
+<text x="696" y="248" font-size="12" fill="#9f1239" text-anchor="start">reason: unreachable</text>
+<line x1="310" y1="266" x2="310" y2="292" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="322" y="286" font-size="12" fill="#334155" font-weight="700" text-anchor="start">yes</text>
+<rect x="60" y="296" width="500" height="66" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+<text x="80" y="323" font-size="14" fill="#1e3a8a" font-weight="700" text-anchor="start">Syncing?</text>
+<text x="80" y="344" font-size="12" fill="#64748b" text-anchor="start">eth_syncing is not false</text>
+<line x1="560" y1="329.0" x2="676" y2="329.0" stroke="#e11d48" stroke-width="2" marker-end="url(#aR)"/>
+<text x="618" y="321.0" font-size="12" fill="#9f1239" font-weight="700" text-anchor="middle">yes</text>
+<rect x="680" y="304" width="260" height="50" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.8"/>
+<text x="696" y="326" font-size="14" fill="#9f1239" font-weight="700" text-anchor="start">unhealthy (503)</text>
+<text x="696" y="344" font-size="12" fill="#9f1239" text-anchor="start">reason: syncing</text>
+<line x1="310" y1="362" x2="310" y2="388" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="322" y="382" font-size="12" fill="#334155" font-weight="700" text-anchor="start">no</text>
+<rect x="60" y="392" width="500" height="66" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+<text x="80" y="419" font-size="14" fill="#1e3a8a" font-weight="700" text-anchor="start">More than rpc_max_blocks_behind (10) behind the head?</text>
+<text x="80" y="440" font-size="12" fill="#64748b" text-anchor="start">head = best of the RPC nodes and the host's own validator</text>
+<line x1="560" y1="425.0" x2="676" y2="425.0" stroke="#e11d48" stroke-width="2" marker-end="url(#aR)"/>
+<text x="618" y="417.0" font-size="12" fill="#9f1239" font-weight="700" text-anchor="middle">yes</text>
+<rect x="680" y="400" width="260" height="50" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.8"/>
+<text x="696" y="422" font-size="14" fill="#9f1239" font-weight="700" text-anchor="start">unhealthy (503)</text>
+<text x="696" y="440" font-size="12" fill="#9f1239" text-anchor="start">reason: N blocks behind</text>
+<line x1="310" y1="458" x2="310" y2="484" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="322" y="478" font-size="12" fill="#334155" font-weight="700" text-anchor="start">no</text>
+<rect x="60" y="488" width="500" height="66" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+<text x="80" y="515" font-size="14" fill="#1e3a8a" font-weight="700" text-anchor="start">Newest block older than rpc_max_block_age (30 s)</text>
+<text x="80" y="536" font-size="12" fill="#64748b" text-anchor="start">while another node has newer blocks?</text>
+<line x1="560" y1="521.0" x2="676" y2="521.0" stroke="#e11d48" stroke-width="2" marker-end="url(#aR)"/>
+<text x="618" y="513.0" font-size="12" fill="#9f1239" font-weight="700" text-anchor="middle">yes</text>
+<rect x="680" y="496" width="260" height="50" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.8"/>
+<text x="696" y="518" font-size="14" fill="#9f1239" font-weight="700" text-anchor="start">unhealthy (503)</text>
+<text x="696" y="536" font-size="12" fill="#9f1239" text-anchor="start">reason: stalled</text>
+<line x1="310" y1="554" x2="310" y2="580" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="322" y="574" font-size="12" fill="#334155" font-weight="700" text-anchor="start">no</text>
+<rect x="60" y="584" width="500" height="60" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+<text x="310" y="610" font-size="16" fill="#14532d" font-weight="700" text-anchor="middle">healthy (200)</text>
+<text x="310" y="630" font-size="12" fill="#14532d" text-anchor="middle">HAProxy may send traffic to this node</text>
+<rect x="1000" y="100" width="440" height="130" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8" filter="url(#sh)"/>
+<text x="1020" y="128" font-size="15" fill="#92400e" font-weight="700" text-anchor="start">Then, over all nodes</text>
+<text x="1020" y="152" font-size="13" fill="#92400e" text-anchor="start">No node healthy? The most up-to-date reachable</text>
+<text x="1020" y="171" font-size="13" fill="#92400e" text-anchor="start">node is reported healthy anyway (degraded), so</text>
+<text x="1020" y="190" font-size="13" fill="#92400e" text-anchor="start">the VIP keeps answering instead of failing all</text>
+<text x="1020" y="209" font-size="13" fill="#92400e" text-anchor="start">requests (e.g. the whole chain is halted).</text>
+<rect x="1000" y="250" width="440" height="150" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.8" filter="url(#sh)"/>
+<text x="1020" y="278" font-size="15" fill="#9f1239" font-weight="700" text-anchor="start">Automatic restart</text>
+<text x="1020" y="302" font-size="13" fill="#9f1239" text-anchor="start">An RPC node on this host that stays stalled or</text>
+<text x="1020" y="321" font-size="13" fill="#9f1239" text-anchor="start">behind for rpc_auto_restart_minutes (5 min) while</text>
+<text x="1020" y="340" font-size="13" fill="#9f1239" text-anchor="start">the chain moves on: docker restart (at most once</text>
+<text x="1020" y="359" font-size="13" fill="#9f1239" text-anchor="start">per period; 0 = never). The other host's node is</text>
+<text x="1020" y="378" font-size="13" fill="#9f1239" text-anchor="start">only reported, never restarted.</text>
+<rect x="1000" y="430" width="440" height="190" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#sh)"/>
+<text x="1020" y="458" font-size="15" fill="#9a3412" font-weight="700" text-anchor="start">HAProxy backend besu_rpc (VIP .150:8545)</text>
+<text x="1020" y="484" font-size="13" fill="#9a3412" font-weight="700" text-anchor="start">rpc1 192.168.68.135:8555</text>
+<text x="1020" y="503" font-size="13" fill="#9a3412" text-anchor="start">   health: GET 127.0.0.1:8411</text>
+<text x="1020" y="528" font-size="13" fill="#9a3412" font-weight="700" text-anchor="start">rpc2 192.168.68.136:8555 (backup)</text>
+<text x="1020" y="547" font-size="13" fill="#9a3412" text-anchor="start">   health: GET 127.0.0.1:8412</text>
+<text x="1020" y="574" font-size="13" fill="#9a3412" text-anchor="start">inter 2s, fall 2, rise 2: 200 = in service</text>
+<text x="1020" y="596" font-size="12" fill="#64748b" text-anchor="start">rpc2 serves only while rpc1 is out</text>
+<path d="M 940 233 L 970 233 L 970 524 " fill="none" stroke="#94a3b8" stroke-width="2"/>
+<line x1="940" y1="233.0" x2="970" y2="233.0" stroke="#94a3b8" stroke-width="2"/>
+<line x1="940" y1="329.0" x2="970" y2="329.0" stroke="#94a3b8" stroke-width="2"/>
+<line x1="940" y1="425.0" x2="970" y2="425.0" stroke="#94a3b8" stroke-width="2"/>
+<line x1="940" y1="521.0" x2="970" y2="521.0" stroke="#94a3b8" stroke-width="2"/>
+<path d="M 970 233 L 970 520 L 996 520" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#aN)"/>
+<path d="M 560 614 L 970 614 L 970 520" fill="none" stroke="#94a3b8" stroke-width="2"/>
+<text x="760" y="606" font-size="12" fill="#64748b" text-anchor="middle">answer per node on 127.0.0.1:8410+N</text>
+<text x="60" y="684" font-size="13" fill="#475569" text-anchor="start">Status of every node (height, age, behind, peers, syncing, healthy, reason) as JSON: curl -s http://127.0.0.1:8410/</text>
+<text x="60" y="706" font-size="13" fill="#475569" text-anchor="start">Settings in settings.yml: rpc_max_blocks_behind, rpc_max_block_age, rpc_auto_restart_minutes (written to /etc/besu-rpc-health.env).</text>
+</svg>

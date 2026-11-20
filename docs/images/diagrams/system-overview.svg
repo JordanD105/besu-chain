@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="880" viewBox="0 0 1400 880" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="aY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1400" height="880" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" font-weight="700" fill="#0f172a">besu-chain at a glance</text>
+<text x="40" y="72" font-size="15" fill="#475569">Applications use one HTTP API; keys are 2-of-3 MPC keys; the chain is a private Besu QBFT network</text>
+
+<!-- applications -->
+<rect x="440" y="98" width="520" height="62" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="700" y="124" font-size="16" font-weight="700" fill="#1e3a8a" text-anchor="middle">Applications (one API key per section)</text>
+<text x="700" y="146" font-size="13" fill="#1e3a8a" text-anchor="middle">accounts · transfers · NFTs · contracts — they never hold keys</text>
+
+<!-- operator -->
+<rect x="1080" y="98" width="280" height="62" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" filter="url(#sh)"/>
+<text x="1220" y="124" font-size="15" font-weight="700" fill="#92400e" text-anchor="middle">Operator machine</text>
+<text x="1220" y="146" font-size="13" fill="#92400e" text-anchor="middle">Ansible deploys every host (SSH)</text>
+
+<line x1="700" y1="160" x2="700" y2="204" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+<text x="712" y="188" font-size="12" fill="#64748b">HTTP :30000</text>
+
+<!-- proxy -->
+<rect x="360" y="208" width="680" height="104" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="384" y="234" font-size="16" font-weight="700" fill="#1e3a8a">Proxy · VIP 192.168.68.151:30000</text>
+<text x="1016" y="234" font-size="12" fill="#64748b" text-anchor="end">keepalived moves the VIP</text>
+<rect x="384" y="248" width="300" height="50" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="534" y="269" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">proxy1 · active (h135)</text>
+<text x="534" y="287" font-size="12" fill="#64748b" text-anchor="middle">key check, nonces, sections</text>
+<rect x="716" y="248" width="300" height="50" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="866" y="269" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">proxy2 · standby (h136)</text>
+<text x="866" y="287" font-size="12" fill="#64748b" text-anchor="middle">started only on failover</text>
+
+<!-- proxy -> MPC, proxy -> Besu -->
+<path d="M 450 312 L 450 380" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#aG)"/>
+<text x="462" y="342" font-size="12" fill="#064e3b">eth_sendTransaction</text>
+<text x="462" y="358" font-size="12" fill="#064e3b">VIP .150:9100</text>
+<path d="M 950 312 L 950 380" fill="none" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>
+<text x="962" y="342" font-size="12" fill="#4c1d95">nonces, balances, reads</text>
+<text x="962" y="358" font-size="12" fill="#4c1d95">VIP .150:8545</text>
+
+<!-- MPC panel -->
+<rect x="40" y="384" width="600" height="276" rx="14" fill="#ecfdf5" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="64" y="412" font-size="16" font-weight="700" fill="#064e3b">MPC signer · 2-of-3 threshold ECDSA</text>
+<text x="64" y="432" font-size="12" fill="#64748b">the private key never exists anywhere</text>
+<rect x="64" y="446" width="552" height="54" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+<text x="340" y="468" font-size="14" font-weight="700" fill="#064e3b" text-anchor="middle">Coordinators: coord1 (h135) · coord2 (h136, warm)</text>
+<text x="340" y="488" font-size="12" fill="#64748b" text-anchor="middle">behind HAProxy on VIP .150:9100 · hold no key material</text>
+<line x1="160" y1="500" x2="160" y2="538" stroke="#059669" stroke-width="2" marker-end="url(#aG)"/>
+<line x1="340" y1="500" x2="340" y2="538" stroke="#059669" stroke-width="2" marker-end="url(#aG)"/>
+<line x1="520" y1="500" x2="520" y2="538" stroke="#059669" stroke-width="2" marker-end="url(#aG)"/>
+<rect x="76" y="542" width="168" height="72" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+<text x="160" y="566" font-size="14" font-weight="700" fill="#064e3b" text-anchor="middle">mpc1 · h135</text>
+<text x="160" y="585" font-size="12" fill="#64748b" text-anchor="middle">team 1</text>
+<text x="160" y="602" font-size="12" fill="#64748b" text-anchor="middle">one key share</text>
+<rect x="256" y="542" width="168" height="72" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+<text x="340" y="566" font-size="14" font-weight="700" fill="#064e3b" text-anchor="middle">mpc2 · h137</text>
+<text x="340" y="585" font-size="12" fill="#64748b" text-anchor="middle">team 2</text>
+<text x="340" y="602" font-size="12" fill="#64748b" text-anchor="middle">one key share</text>
+<rect x="436" y="542" width="168" height="72" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+<text x="520" y="566" font-size="14" font-weight="700" fill="#064e3b" text-anchor="middle">mpc3 · h138</text>
+<text x="520" y="585" font-size="12" fill="#64748b" text-anchor="middle">team 3</text>
+<text x="520" y="602" font-size="12" fill="#64748b" text-anchor="middle">one key share</text>
+<text x="340" y="640" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">any 2 of 3 sign · all 3 create a new key</text>
+
+<!-- Besu panel -->
+<rect x="760" y="384" width="600" height="276" rx="14" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="784" y="412" font-size="16" font-weight="700" fill="#4c1d95">Besu chain · QBFT</text>
+<text x="784" y="432" font-size="12" fill="#64748b">1 s blocks · free gas · 3 of 4 validators sign each block</text>
+<rect x="780" y="446" width="560" height="54" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="1060" y="468" font-size="14" font-weight="700" fill="#9a3412" text-anchor="middle">RPC VIP 192.168.68.150:8545 (HAProxy)</text>
+<text x="1060" y="488" font-size="12" fill="#64748b" text-anchor="middle">uses rpc1, rpc2 as backup, only while current</text>
+<line x1="920" y1="500" x2="920" y2="520" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>
+<line x1="1200" y1="500" x2="1200" y2="520" stroke="#7c3aed" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#aP)"/>
+<rect x="796" y="524" width="248" height="40" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="920" y="549" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">rpc1 · h135</text>
+<rect x="1076" y="524" width="248" height="40" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="1200" y="549" font-size="14" font-weight="700" fill="#4c1d95" text-anchor="middle">rpc2 · h136 (backup)</text>
+<rect x="796" y="580" width="122" height="44" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="857" y="607" font-size="13" font-weight="700" fill="#4c1d95" text-anchor="middle">val1 · h135</text>
+<rect x="938" y="580" width="122" height="44" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="999" y="607" font-size="13" font-weight="700" fill="#4c1d95" text-anchor="middle">val2 · h136</text>
+<rect x="1080" y="580" width="122" height="44" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="1141" y="607" font-size="13" font-weight="700" fill="#4c1d95" text-anchor="middle">val3 · h137</text>
+<rect x="1222" y="580" width="122" height="44" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="1283" y="607" font-size="13" font-weight="700" fill="#4c1d95" text-anchor="middle">val4 · h138</text>
+<text x="1060" y="646" font-size="12" fill="#64748b" text-anchor="middle">full P2P mesh · RPC nodes follow the chain, validators make the blocks</text>
+
+<!-- h139 -> chain -->
+<line x1="1200" y1="712" x2="1200" y2="664" stroke="#0891b2" stroke-width="2" marker-end="url(#aC)"/>
+<text x="1212" y="694" font-size="12" fill="#155e75">reads rpc2 :8555 directly</text>
+<line x1="860" y1="712" x2="860" y2="664" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#aY)"/>
+<text x="872" y="694" font-size="12" fill="#92400e">scrapes metrics of every host</text>
+
+<!-- h139 panel -->
+<rect x="40" y="716" width="1320" height="134" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<text x="64" y="742" font-size="16" font-weight="700" fill="#334155">Monitoring host h139 · 192.168.68.139 — not on the payment path</text>
+<rect x="64" y="758" width="296" height="72" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="212" y="786" font-size="14" font-weight="700" fill="#334155" text-anchor="middle">Remix IDE · :30200</text>
+<text x="212" y="806" font-size="12" fill="#64748b" text-anchor="middle">self-hosted, local compiler mirror</text>
+<rect x="380" y="758" width="296" height="72" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="528" y="786" font-size="14" font-weight="700" fill="#334155" text-anchor="middle">Documentation site · :30300</text>
+<text x="528" y="806" font-size="12" fill="#64748b" text-anchor="middle">these docs</text>
+<rect x="712" y="758" width="296" height="72" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="860" y="786" font-size="14" font-weight="700" fill="#92400e" text-anchor="middle">Prometheus + Grafana · :3000</text>
+<text x="860" y="806" font-size="12" fill="#92400e" text-anchor="middle">dashboards and alerts</text>
+<rect x="1044" y="758" width="296" height="72" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="1.5"/>
+<text x="1192" y="786" font-size="14" font-weight="700" fill="#155e75" text-anchor="middle">chainlens · :30100</text>
+<text x="1192" y="806" font-size="12" fill="#155e75" text-anchor="middle">block explorer + admin pages</text>
+<!-- MPC -> Besu -->
+<line x1="616" y1="473" x2="778" y2="473" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>
+<text x="698" y="461" font-size="12" fill="#4c1d95" text-anchor="middle">signed tx</text>
+<text x="698" y="492" font-size="12" fill="#4c1d95" text-anchor="middle">→ .150:8545</text>
+
+</svg>

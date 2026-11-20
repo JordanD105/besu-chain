@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="640" viewBox="0 0 1500 640" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="aY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/></marker>
+<marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+</defs>
+<rect width="1500" height="640" fill="#f8fafc"/>
+<text x="40" y="46" font-size="26" font-weight="700" fill="#0f172a">One POST /transfer with a section key</text>
+<text x="40" y="72" font-size="15" fill="#475569">Steps 1–5 as in "What happens on a request": the proxy never holds a key; 2 of 3 MPC nodes sign; the chain includes it in the next block</text>
+
+<!-- application -->
+<rect x="40" y="150" width="200" height="100" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6" filter="url(#sh)"/>
+<text x="140" y="182" font-size="16" font-weight="700" fill="#334155" text-anchor="middle">Application</text>
+<text x="140" y="204" font-size="13" fill="#334155" text-anchor="middle">POST /transfer</text>
+<text x="140" y="224" font-size="12" fill="#64748b" text-anchor="middle">section API key</text>
+<line x1="240" y1="200" x2="296" y2="200" stroke="#2563eb" stroke-width="2" marker-end="url(#aB)"/>
+
+<!-- proxy -->
+<rect x="300" y="110" width="360" height="190" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
+<text x="322" y="140" font-size="16" font-weight="700" fill="#1e3a8a">Proxy · VIP .151:30000</text>
+<circle cx="334" cy="172" r="12" fill="#2563eb"/>
+<text x="334" y="177" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<text x="356" y="170" font-size="13" fill="#1e3a8a">checks the key, finds the section,</text>
+<text x="356" y="188" font-size="13" fill="#1e3a8a">checks the account is one of its users</text>
+<circle cx="334" cy="226" r="12" fill="#2563eb"/>
+<text x="334" y="231" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<text x="356" y="224" font-size="13" fill="#1e3a8a">takes the sender's lock; nonce =</text>
+<text x="356" y="242" font-size="13" fill="#1e3a8a">max(cached counter, chain pending count)</text>
+<text x="356" y="276" font-size="12" fill="#64748b">a lost or stale Redis is harmless</text>
+
+<!-- proxy -> coordinator -->
+<line x1="660" y1="200" x2="736" y2="200" stroke="#059669" stroke-width="2" marker-end="url(#aG)"/>
+<circle cx="698" cy="170" r="12" fill="#059669"/>
+<text x="698" y="175" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+
+<!-- coordinator -->
+<rect x="740" y="130" width="280" height="140" rx="14" fill="#ecfdf5" stroke="#059669" stroke-width="2" filter="url(#sh)"/>
+<text x="880" y="160" font-size="16" font-weight="700" fill="#064e3b" text-anchor="middle">MPC coordinator</text>
+<text x="880" y="180" font-size="13" fill="#064e3b" text-anchor="middle">eth_sendTransaction</text>
+<text x="880" y="198" font-size="12" fill="#64748b" text-anchor="middle">VIP .150:9100 · no key material</text>
+<line x1="760" y1="212" x2="1000" y2="212" stroke="#a7f3d0" stroke-width="1"/>
+<text x="880" y="234" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">combines the 2 partial signatures</text>
+<text x="880" y="252" font-size="13" fill="#064e3b" text-anchor="middle">into one normal ECDSA signature</text>
+
+<!-- MPC nodes -->
+<circle cx="1124" cy="104" r="12" fill="#059669"/>
+<text x="1124" y="109" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+<text x="1144" y="109" font-size="15" font-weight="700" fill="#064e3b">2 of the 3 MPC nodes</text>
+<rect x="1110" y="124" width="350" height="56" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.6"/>
+<text x="1128" y="147" font-size="14" font-weight="700" fill="#064e3b">mpc1</text>
+<text x="1128" y="167" font-size="12" fill="#64748b">policy ✓ → partial signature</text>
+<rect x="1110" y="190" width="350" height="56" rx="10" fill="#ffffff" stroke="#059669" stroke-width="1.6"/>
+<text x="1128" y="213" font-size="14" font-weight="700" fill="#064e3b">mpc2</text>
+<text x="1128" y="233" font-size="12" fill="#64748b">policy ✓ → partial signature</text>
+<rect x="1110" y="256" width="350" height="56" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="6 4"/>
+<text x="1128" y="279" font-size="14" font-weight="700" fill="#64748b">mpc3</text>
+<text x="1128" y="299" font-size="12" fill="#64748b">not needed for this signature (any 2 of 3)</text>
+<line x1="1020" y1="170" x2="1106" y2="152" stroke="#059669" stroke-width="2" marker-start="url(#aG)" marker-end="url(#aG)"/>
+<line x1="1020" y1="214" x2="1106" y2="218" stroke="#059669" stroke-width="2" marker-start="url(#aG)" marker-end="url(#aG)"/>
+<text x="1110" y="336" font-size="12" fill="#64748b">each node checks its own policy: chain id, value and gas</text>
+<text x="1110" y="353" font-size="12" fill="#64748b">limits, allowed destinations; signs from a single-use presignature</text>
+
+<!-- coordinator -> RPC VIP -->
+<line x1="880" y1="270" x2="880" y2="426" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>
+<circle cx="904" cy="330" r="12" fill="#7c3aed"/>
+<text x="904" y="335" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+<text x="924" y="335" font-size="13" fill="#4c1d95">signed transaction</text>
+
+<!-- proxy reads pending count -->
+<path d="M 480 300 L 480 475 L 736 475" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#aP)"/>
+<text x="494" y="464" font-size="12" fill="#4c1d95">2 · reads the pending count</text>
+
+<!-- RPC VIP -->
+<rect x="740" y="430" width="280" height="90" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#sh)"/>
+<text x="880" y="460" font-size="16" font-weight="700" fill="#9a3412" text-anchor="middle">Besu RPC · VIP .150:8545</text>
+<text x="880" y="482" font-size="13" fill="#9a3412" text-anchor="middle">HAProxy → rpc1</text>
+<text x="880" y="502" font-size="12" fill="#64748b" text-anchor="middle">(rpc2 if rpc1 is not current)</text>
+<line x1="1020" y1="475" x2="1106" y2="475" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>
+
+<!-- validators -->
+<rect x="1110" y="430" width="190" height="90" rx="14" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="1205" y="460" font-size="16" font-weight="700" fill="#4c1d95" text-anchor="middle">Validators</text>
+<text x="1205" y="482" font-size="13" fill="#4c1d95" text-anchor="middle">val1–val4 (QBFT)</text>
+<text x="1205" y="502" font-size="12" fill="#64748b" text-anchor="middle">3 of 4 sign a block</text>
+<line x1="1300" y1="475" x2="1336" y2="475" stroke="#7c3aed" stroke-width="2" marker-end="url(#aP)"/>
+
+<!-- block -->
+<rect x="1340" y="430" width="120" height="90" rx="14" fill="#7c3aed" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
+<text x="1400" y="466" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">next block</text>
+<text x="1400" y="490" font-size="13" fill="#ffffff" text-anchor="middle">within 1 s</text>
+
+<text x="40" y="590" font-size="13" fill="#475569">Proxy steps 1–2 run on proxy1 (h135); the coordinator is coord1 behind HAProxy (coord2 as backup). The MPC nodes are mpc1 (h135), mpc2 (h137), mpc3 (h138):</text>
+<text x="40" y="610" font-size="13" fill="#475569">any two of them can sign, and the full private key never exists on any of them.</text>
+</svg>
