@@ -365,7 +365,7 @@ ansible-playbook 01-hosts.yml
   `network/`를 `state/network/`로 복사하십시오.
 - **나중에 `besu_nodes`에 추가한 노드:** 5단계가 해당 노드의 enode를 네트워크 파일에 추가하고
   (`add-node.sh`), 파일을 모든 노드에 복사한 다음 노드를 하나씩 재시작합니다. 새 검증자는 그다음
-  `qbft-vote.yml`로 투표하여 추가합니다([노드 추가](../operations/adding-nodes.md)).
+  `qbft-vote.yml`로 투표하여 추가합니다([노드 추가 및 제거](../operations/adding-nodes.md)).
 
 제한 사항:
 
