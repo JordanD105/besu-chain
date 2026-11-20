@@ -1532,15 +1532,16 @@ async function nftAdminCard(collection) {
     const result = el("div", { class: "deploy-error" });
     const tokenInput = el("input", { class: "table-search", type: "password", placeholder: t("sections.token"), "aria-label": t("sections.token"), autocomplete: "off", value: deployToken() });
     tokenInput.addEventListener("input", () => setDeployToken(tokenInput.value.trim()));
+    const labelled = (key, input) => el("label", {}, [el("span", { class: "muted" }, t(key)), input]);
     const field = (key, attrs) => el("input", Object.assign({ class: "table-search", placeholder: t(key), "aria-label": t(key) }, attrs || {}));
-    const mName = field("nft.name");
+    const mName = field("nft.name", { placeholder: "Red dragon" });
     const mDesc = field("nft.description");
-    const mImage = field("nft.image");
+    const mImage = field("nft.image", { placeholder: "https://…/red.png" });
     const mPrice = field("nft.price", { value: "0" });
-    const mAttrs = field("nft.attributes");
+    const mAttrs = field("nft.attributes", { placeholder: '[{"trait_type":"level","value":"1"}]' });
     const mintButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("nft.mint"));
-    const sTokenId = field("nft.tokenId");
-    const sBuyer = field("nft.buyer", { list: "nft-buyers" });
+    const sTokenId = field("nft.tokenId", { placeholder: "1" });
+    const sBuyer = field("nft.buyer", { list: "nft-buyers", placeholder: "0x…" });
     const buyers = el("datalist", { id: "nft-buyers" });
     const sellButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("nft.sell"));
 
@@ -1608,14 +1609,17 @@ async function nftAdminCard(collection) {
         el("div", { class: "deploy-form" }, [
             el("label", {}, [el("span", { class: "muted" }, t("sections.token")), tokenInput]),
             el("h3", {}, t("nft.mint")),
-            el("div", { class: "section-inputs" }, [mName, mPrice]),
-            el("div", { class: "section-inputs" }, [mImage]),
-            el("div", { class: "section-inputs" }, [mDesc]),
-            el("div", { class: "section-inputs" }, [mAttrs]),
+            labelled("nft.name", mName),
+            labelled("nft.price", mPrice),
+            labelled("nft.image", mImage),
+            labelled("nft.description", mDesc),
+            labelled("nft.attributes", mAttrs),
             el("div", { class: "deploy-buttons" }, [mintButton]),
             el("h3", {}, t("nft.sell")),
             el("div", { class: "muted" }, t("nft.sellNote")),
-            el("div", { class: "section-inputs" }, [sTokenId, sBuyer, buyers]),
+            labelled("nft.tokenId", sTokenId),
+            labelled("nft.buyer", sBuyer),
+            buyers,
             el("div", { class: "deploy-buttons" }, [sellButton])
         ]),
         result
