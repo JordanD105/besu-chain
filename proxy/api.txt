@@ -41,12 +41,11 @@ GET /nft/owner/0xB4BD95fee77755E6Eecbd0d2E85893Fb066e095f
 # ---------------------------------------------------------------
 # VERSION 3 (docs/sections.md, step 5), when the sections are configured: /nft/deploy makes a
 # version-3 collection, deployed and minted by the contract account center, registered on chain.
-# /nft/transfer of a version-3 NFT needs no key: the buyer "to" must be a user account of a section
-# (made with /createaccount and that section's key), and the section is taken from the buyer. A first
-# sale pays that section's consumption account, a resale (within the section) pays the seller.
-# X-Section-Key is optional; if sent, the buyer must belong to that section. Version-2 collections
-# keep the behaviour below (SENDER01). The chainlens contract page has the same Mint / Sell forms.
-POST /nft/transfer
+# /nft/transfer of a version-3 NFT needs X-Section-Key: the buyer "to" is a user account of that
+# section; a first sale pays the section's consumption account, a resale (within the section) pays
+# the seller. Version-2 collections keep the behaviour below (SENDER01). The chainlens contract page
+# has Mint / Sell forms (admin): chainlens calls with the admin token, the section is the buyer's.
+POST /nft/transfer         X-Section-Key: sk_...
 { "collection": "DRG", "to": "0xSectionUser", "tokenId": "1" }
 -> { "success": true, "sale": "first sale", "paidTo": "<consumption account>", "price": "3", "txHash": "0x...", ... }
 

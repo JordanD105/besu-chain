@@ -10,7 +10,7 @@ are in [sections.md](sections.md#nft-collections)).
 | 2. Deploy | chainlens **Deploy** page | the contract account center |
 | 3. Mint | `POST /nft/mint`, or **Mint** on the collection's chainlens page | the contract account center |
 | 4. Buyer | `POST /createaccount` with a section's key | — |
-| 5. Sell | `POST /nft/transfer` (no key), or **Sell** on the collection's chainlens page | the buyer |
+| 5. Sell | `POST /nft/transfer` with the section's key, or **Sell** on the collection's chainlens page | the buyer |
 
 The addresses below are the production ones (proxy VIP `192.168.68.151:30000`, chainlens and Remix
 on h139). Run steps 2, 3 and 5 in the browser from the operator machine or a PC in
@@ -102,11 +102,11 @@ The account is funded from that section's upfront account. To give it more ETH l
 **In chainlens:** in the **Mint and sell** card, under **Sell**, enter the token id and the buyer. The buyer
 field suggests the section user accounts, with their section and balance. Click **Sell**.
 
-**Or with curl.** No section key is needed: the section is taken from the buyer's registry entry.
+**Or with curl**, with the key of the buyer's section:
 
 ```bash
 curl -s -X POST http://192.168.68.151:30000/nft/transfer -H 'Content-Type: application/json' \
-  -d '{"collection":"DRG","to":"0xBuyer…","tokenId":"1"}'
+  -H 'X-Section-Key: sk_…' -d '{"collection":"DRG","to":"0xBuyer…","tokenId":"1"}'
 ```
 
 ```
@@ -124,7 +124,8 @@ the token; if any check fails, nothing moves.
   of the **same section** as the seller. The proxy sends the seller's approval if needed, and the price
   goes to the **seller**.
 
-If you send `X-Section-Key`, it is optional, and the buyer must belong to that section.
+Without the key, the proxy answers 401 `X-Section-Key is required`. The chainlens Sell form needs no
+section key: chainlens calls the proxy with the admin token, and the section is the buyer's.
 
 ## 6. Check
 
@@ -142,9 +143,10 @@ If you send `X-Section-Key`, it is optional, and the buyer must belong to that s
 
 | Message | Cause |
 |---|---|
+| `X-Section-Key is required` | no `X-Section-Key` header on `/nft/transfer` |
 | `… is not a user account of a section` | `to` was not created with `/createaccount` and a section key |
 | `section "…" is disabled` | the buyer's section is disabled (Sections page) |
 | `wrong price` / insufficient funds | the buyer has less than the price plus gas: top it up |
-| `… is not an account of section "…"` | a resale to a user of another section, or a buyer outside the `X-Section-Key`'s section |
+| `… is not an account of section "…"` | the buyer is not a user of the key's section (or a resale to another section) |
 | `no NFT collection named …` | wrong name or symbol: use the address, or `GET /nft/collections` |
 | `not minter` | the collection was not deployed by the contract account center (deployed elsewhere) |

@@ -2194,7 +2194,15 @@ async function mintNft(req) {
 // the sale if needed, and the price goes to the seller.
 async function transferNftV3(req, contract, tokenId) {
     const body = req.body || {};
+    // X-Section-Key is required; the admin API's caller (ADMIN_TOKEN from ADMIN_ALLOWED_IPS, e.g. the
+    // chainlens Sell form) may sell without it: the section is then the buyer's.
     const keyed = await sectionFromRequest(req);
+    const admin = !keyed && isAdminCaller(req);
+
+    if (!keyed && !admin) {
+        throw httpError(401, "X-Section-Key is required: the buyer \"to\" must be a user account of that section");
+    }
+
     const to = ethers.getAddress(body.to);
     const owner0 = await accountSection(to);
 
@@ -2842,6 +2850,12 @@ function adminTokenOk(req) {
     const given = Buffer.from(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
     const want = Buffer.from(CONFIG.ADMIN_TOKEN);
     return given.length === want.length && crypto.timingSafeEqual(given, want);
+}
+
+// A request with the admin token from an admin address (the same rules as adminGuard)
+function isAdminCaller(req) {
+    return CONFIG.ADMIN_TOKEN.length >= 16 && CONFIG.ADMIN_ALLOWED_IPS.length > 0
+        && ipMatches(req.socket.remoteAddress, CONFIG.ADMIN_ALLOWED_IPS) && adminTokenOk(req);
 }
 
 function adminGuard(req, res, next) {
