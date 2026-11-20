@@ -124,8 +124,8 @@ ansible-playbook save-images.yml -e image_archives_dir=/opt/000
 ```
 
 It saves the six third-party images (pulled first if missing) and, once a deployment run has
-built them, the MPC signer, proxy, chainlens and Remix images, all ten in `/opt/000` (nine with
-`remix_enabled: false`). Run it again after `site.yml` to refresh them.
+built them, the MPC signer, proxy, chainlens, Remix and documentation site images: eleven in
+`/opt/000` (one fewer for each of `remix_enabled` and `docs_site_enabled` set to `false`). Run it again after `site.yml` to refresh them.
 
 Everything else (chain id 1337, 1 s blocks, funding of `SENDER01`, image versions) is already
 set; each setting is commented in `settings.yml`, and [Ansible deployment](ansible.md), section 2,
@@ -174,7 +174,7 @@ ansible-playbook site.yml
 
 **Run 3** goes to the end in about 5–10 minutes: coordinators, key ceremony, chain, the
 SectionRegistry and the contract account center, proxy, HAProxy + keepalived, a test transfer,
-monitoring, backups. At the end it prints:
+monitoring, chainlens, Remix, the documentation site, backups. At the end it prints:
 
 - Applications: `http://192.168.68.151:30000`
 - Grafana: `http://192.168.68.139:3000`, user `admin`, password in `state/secrets/grafana_admin_password`
@@ -182,7 +182,7 @@ monitoring, backups. At the end it prints:
 - Chainlens Deploy page `#/deploy` and Sections page `#/sections`, when on: token in
   `state/secrets/chainlens_deploy_token`, from `operator_ip` and `chainlens_deploy_ips` only
 - Remix IDE: `http://192.168.68.139:30200` (compile with EVM version `cancun`)
-- The documentation website is at `http://192.168.68.139:30300` (not printed by the run)
+- Documentation website: `http://192.168.68.139:30300`
 - what is still manual (backups, off-site copy, failover tests), and a warning if
   `snapshot_copy_to` is empty
 
@@ -215,7 +215,7 @@ hosts have older code" until it has copied the current code.
 ansible-playbook 01-hosts.yml
 ```
 
-**Contract records:** when contracts were deployed from the chainlens Deploy page, phase 9 copies
+**Contract records:** when contracts were deployed from the chainlens Deploy page, phase 11 (`11-chainlens.yml`) copies
 their records into `contracts/deployments/` and prints the `git add` / `git commit` commands. Commit
 them.
 

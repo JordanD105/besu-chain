@@ -221,7 +221,7 @@ needs `SENDER01` (MPC key ceremony), HAProxy needs the RPC nodes, and keepalived
 | [4.9](#49-proxy-135-136) | .135, .136 | build the proxy (not started) |
 | [4.10](#410-haproxy-and-keepalived-135-136) | .135, .136 | `besu-rpc-health`, HAProxy, keepalived: VIPs up, proxy1 starts |
 | [4.11](#411-check-the-application-path) | any | test account and transfer through the VIPs |
-| [4.12](#412-monitoring-and-chainlens-139) | .139 | Prometheus, Grafana, chainlens (Remix: [its guide](../components/remix.md)) |
+| [4.12](#412-monitoring-chainlens-remix-and-documentation-139) | .139 | Prometheus, Grafana, chainlens, Remix, documentation site |
 | [4.13](#413-backups) | .135–.138 | key backups, MPC backups, daily chain snapshot |
 | [4.14](#414-failover-tests-then-go-live) | — | the failover tests of section 6, then go live |
 
@@ -534,7 +534,7 @@ The last call creates an MPC account and funds it from `SENDER01`. Then send a t
 `POST /transfer` (`from`, `to`, `amount`) and the NFT calls you use
 ([Proxy API reference](../reference/proxy-api.md), [Proxy (application API)](../components/proxy.md)).
 
-### 4.12 Monitoring and chainlens (.139)
+### 4.12 Monitoring, chainlens, Remix and documentation (.139)
 
 ```bash
 cp -r /opt/besu-chain/monitoring /opt/monitoring && cd /opt/monitoring
@@ -556,7 +556,15 @@ sed -i 's|^BESU_RPC=.*|BESU_RPC=http://192.168.68.136:8555|' .env && docker comp
 ```
 
 Explorer: `http://192.168.68.139:30100`. Remix IDE (`:30200`) is built and started by Ansible
-(`02-images.yml`, `12-remix.yml`): [Remix IDE (self-hosted)](../components/remix.md).
+(`02-images.yml`, `12-remix.yml`): [Remix IDE (self-hosted)](../components/remix.md). The
+documentation website (`:30300`):
+
+```bash
+cd /opt/besu-chain && docker compose -f docs-site/docker-compose.yml up -d --build
+```
+
+With Ansible each one has its own phase: `09-monitoring.yml` (Prometheus, Grafana),
+`11-chainlens.yml`, `12-remix.yml`, `13-docs-site.yml` ([Ansible deployment](../deployment/ansible.md)).
 
 ### 4.13 Backups
 

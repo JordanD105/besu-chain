@@ -321,12 +321,27 @@ contract account center, the smoke test.
 Phase 1 copies the committed code to the hosts, and the image builds of phase 2 use that copy.
 Phases 02–13 compare the last commit touching the deployed directories (`deployed_dirs` in
 `layout.yml`: `besu-production`, `ha`, `monitoring`, `mpc-signer/deploy`, `proxy`, `chainlens`,
-`contracts`, `remix`, `docs-site`) with `state/repo.commit`, and stop with "The hosts have older code" if phase 1
+`contracts`, `remix`, `docs-site`, `docs`) with `state/repo.commit`, and stop with "The hosts have older code" if phase 1
 didn't run since. A change to `settings.yml`, `inventory.yml` or the playbooks needs no phase 1.
 
 ```bash
 ansible-playbook 01-hosts.yml
 ```
+
+**Which playbooks to run after a change.** `site.yml` always works; these are the shortest runs.
+Prefix `01-hosts.yml` when the change is committed code (see above).
+
+| You changed | Run |
+|---|---|
+| `proxy/` code | `01-hosts.yml 02-images.yml 06-proxy.yml` |
+| `chainlens/` code, or a chainlens setting (`chainlens_*`) | `01-hosts.yml 02-images.yml 11-chainlens.yml` |
+| Remix (`remix_commit`, `remix_solc_versions`, `remix_enabled`) | `02-images.yml 12-remix.yml` |
+| the documentation (`docs/`, `docs-site/`), `docs_site_enabled` | `01-hosts.yml 02-images.yml 13-docs-site.yml` |
+| `monitoring/` (dashboards, alert rules), Prometheus settings, the IP plan's targets | `01-hosts.yml 09-monitoring.yml` |
+| an access list (`*_ips`, `operator_ip`) | `01-hosts.yml` (the firewall); `chainlens_deploy_ips` also `11-chainlens.yml`, and `operator_ip` also `06-proxy.yml` and `11-chainlens.yml` (their admin allow lists) |
+| `ha/`, the RPC health settings (`rpc_*`) | `01-hosts.yml 07-ha.yml` |
+| Besu settings or `besu-production/` | `01-hosts.yml 05-besu.yml` (one node at a time) |
+| backup settings | `10-backups.yml` |
 
 To change something, edit the setting (or commit the code change) and rerun `site.yml`:
 
@@ -343,7 +358,7 @@ To change something, edit the setting (or commit the code change) and rerun `sit
   older than the code's version (2), it deploys a new registry with the same admin key and keeps the
   old address as `previous` in `state/registry.json`; phase 8 then migrates the old registry's
   sections and user accounts once, through the proxy admin API, and records `migrated: true`.
-- **Contract records:** phase 9 copies the records written by the chainlens Deploy page back to
+- **Contract records:** phase 11 (`11-chainlens.yml`) copies the records written by the chainlens Deploy page back to
   `contracts/deployments/` in the operator's repository and prints the `git` commands when they are
   not committed yet. Commit them (and run phase 1) so every copy of the repository has them.
 - If `state/network` is lost while the nodes have network files, phase 5 stops: copy `network/`
