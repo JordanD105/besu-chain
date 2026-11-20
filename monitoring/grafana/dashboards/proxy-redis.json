@@ -1453,7 +1453,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count((max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) or vector(0)",
+          "expr": "count((max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1515,7 +1515,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count((max by (sender) (proxy_sender_stalled) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) or vector(0)",
+          "expr": "count((max by (sender) (proxy_sender_stalled) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1581,7 +1581,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) or vector(0)",
+          "expr": "count((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1647,7 +1647,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count((max by (sender) (proxy_sender_check_error) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) or vector(0)",
+          "expr": "count((max by (sender) (proxy_sender_check_error) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1713,7 +1713,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum((max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))) or vector(0)",
+          "expr": "sum((max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1775,7 +1775,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))) or vector(0)",
+          "expr": "sum((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1841,7 +1841,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(sum((sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))) or vector(0)",
+          "expr": "round(sum((sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1903,7 +1903,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(sum((sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))) or vector(0)",
+          "expr": "round(sum((sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1965,7 +1965,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "((max by (sender) (proxy_sender_stalled) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 4 or ((max by (sender) (proxy_sender_check_error) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 3 or ((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 2 or ((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 1",
+          "expr": "((max by (sender) (proxy_sender_stalled) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 4 or ((max by (sender) (proxy_sender_check_error) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 3 or ((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 2 or ((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 1",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1977,7 +1977,7 @@
         },
         {
           "refId": "B",
-          "expr": "(max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1989,7 +1989,7 @@
         },
         {
           "refId": "C",
-          "expr": "(max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2001,7 +2001,7 @@
         },
         {
           "refId": "D",
-          "expr": "(max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2013,7 +2013,7 @@
         },
         {
           "refId": "E",
-          "expr": "(max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2025,7 +2025,7 @@
         },
         {
           "refId": "F",
-          "expr": "(sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2037,7 +2037,7 @@
         },
         {
           "refId": "G",
-          "expr": "(sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2049,7 +2049,7 @@
         },
         {
           "refId": "H",
-          "expr": "(sum by (sender) (increase(proxy_sender_stalls_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(sum by (sender) (increase(proxy_sender_stalls_total[$__range])) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2080,7 +2080,7 @@
               "Value #F": "Repairs",
               "Value #G": "Fillers",
               "Value #H": "Stalls",
-              "name": "Sender",
+              "account": "Sender",
               "kind": "Kind",
               "section": "Section",
               "sender": "Address"
@@ -2094,7 +2094,7 @@
               "Value #F": 9,
               "Value #G": 10,
               "Value #H": 8,
-              "name": 0,
+              "account": 0,
               "kind": 2,
               "section": 3,
               "sender": 11
@@ -2278,7 +2278,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "((max by (sender) (proxy_sender_stalled) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 4 or ((max by (sender) (proxy_sender_check_error) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 3 or ((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 2 or ((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 1 or (max by (sender) (proxy_sender_stalled) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) * 0",
+          "expr": "((max by (sender) (proxy_sender_stalled) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 4 or ((max by (sender) (proxy_sender_check_error) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) == 1) * 0 + 3 or ((max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 2 or ((max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0) * 0 + 1 or (max by (sender) (proxy_sender_stalled) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) * 0",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2290,7 +2290,7 @@
         },
         {
           "refId": "B",
-          "expr": "(max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2302,7 +2302,7 @@
         },
         {
           "refId": "C",
-          "expr": "(max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2314,7 +2314,7 @@
         },
         {
           "refId": "D",
-          "expr": "(max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2326,7 +2326,7 @@
         },
         {
           "refId": "E",
-          "expr": "(max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(max by (sender) (proxy_sender_waiting_above_gap) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2338,7 +2338,7 @@
         },
         {
           "refId": "F",
-          "expr": "(sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(sum by (sender) (increase(proxy_sender_nonce_repairs_total[$__range])) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2350,7 +2350,7 @@
         },
         {
           "refId": "G",
-          "expr": "(sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(sum by (sender) (increase(proxy_sender_filler_transactions_total[$__range])) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2362,7 +2362,7 @@
         },
         {
           "refId": "H",
-          "expr": "(sum by (sender) (increase(proxy_sender_stalls_total[$__range])) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "(sum by (sender) (increase(proxy_sender_stalls_total[$__range])) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2393,7 +2393,7 @@
               "Value #F": "Repairs",
               "Value #G": "Fillers",
               "Value #H": "Stalls",
-              "name": "Sender",
+              "account": "Sender",
               "kind": "Kind",
               "section": "Section",
               "sender": "Address"
@@ -2407,7 +2407,7 @@
               "Value #F": 9,
               "Value #G": 10,
               "Value #H": 8,
-              "name": 0,
+              "account": 0,
               "kind": 2,
               "section": 3,
               "sender": 11
@@ -2575,8 +2575,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(10, (max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
-          "legendFormat": "{{name}}",
+          "expr": "topk(10, (max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
+          "legendFormat": "{{account}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -2635,7 +2635,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (kind) ((max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))",
+          "expr": "sum by (kind) ((max by (sender) (proxy_sender_inflight_transactions) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))))",
           "legendFormat": "{{kind}}",
           "datasource": {
             "type": "prometheus",
@@ -2695,8 +2695,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(10, (max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
-          "legendFormat": "not mined {{name}}",
+          "expr": "topk(10, (max by (sender) (proxy_sender_stall_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
+          "legendFormat": "not mined {{account}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -2704,8 +2704,8 @@
         },
         {
           "refId": "B",
-          "expr": "topk(10, (max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(name, kind, section) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
-          "legendFormat": "gap {{name}}",
+          "expr": "topk(10, (max by (sender) (proxy_sender_gap_seconds) * on(sender) group_left(account, kind, section) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"}))) > 0)",
+          "legendFormat": "gap {{account}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -2764,7 +2764,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (kind) (increase(proxy_sender_stalls_total[1h]) * on(sender) group_left(kind) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "sum by (kind) (increase(proxy_sender_stalls_total[1h]) * on(sender) group_left(kind) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "stalls {{kind}}",
           "datasource": {
             "type": "prometheus",
@@ -2773,7 +2773,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum by (kind) (increase(proxy_sender_nonce_repairs_total[1h]) * on(sender) group_left(kind) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "sum by (kind) (increase(proxy_sender_nonce_repairs_total[1h]) * on(sender) group_left(kind) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "repairs {{kind}}",
           "datasource": {
             "type": "prometheus",
@@ -2782,7 +2782,7 @@
         },
         {
           "refId": "C",
-          "expr": "sum by (kind) (increase(proxy_sender_filler_transactions_total[1h]) * on(sender) group_left(kind) (max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",name=~\"(?i).*$search.*\"}) or max by (sender, name, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
+          "expr": "sum by (kind) (increase(proxy_sender_filler_transactions_total[1h]) * on(sender) group_left(kind) (max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (sender, account, kind, section) (proxy_sender_info{kind=~\"$kind\",section=~\"$section\",sender=~\"(?i).*$search.*\"})))",
           "legendFormat": "fillers {{kind}}",
           "datasource": {
             "type": "prometheus",

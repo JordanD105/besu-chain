@@ -133,18 +133,18 @@ y += 9
 
 # ---- Senders: every account the proxy sends from. Named by proxy_sender_info (SENDER01, "Shop B · upfront",
 # "Shop B · user 0x51a9…"), filtered by the Kind / Section / Search variables; tables list the problems first
-SEL = ('(max by (sender, name, kind, section) (proxy_sender_info{kind=~"$kind",section=~"$section",name=~"(?i).*$search.*"})'
-       ' or max by (sender, name, kind, section) (proxy_sender_info{kind=~"$kind",section=~"$section",sender=~"(?i).*$search.*"}))')
+SEL = ('(max by (sender, account, kind, section) (proxy_sender_info{kind=~"$kind",section=~"$section",account=~"(?i).*$search.*"})'
+       ' or max by (sender, account, kind, section) (proxy_sender_info{kind=~"$kind",section=~"$section",sender=~"(?i).*$search.*"}))')
 
 
 def j(metric):
     """metric per sender, with the sender's name, kind and section, filtered by the variables"""
-    return f'(max by (sender) ({metric}) * on(sender) group_left(name, kind, section) {SEL})'
+    return f'(max by (sender) ({metric}) * on(sender) group_left(account, kind, section) {SEL})'
 
 
 def jr(counter):
     """increase of a per-sender counter over the selected time range, named and filtered"""
-    return f'(sum by (sender) (increase({counter}[$__range])) * on(sender) group_left(name, kind, section) {SEL})'
+    return f'(sum by (sender) (increase({counter}[$__range])) * on(sender) group_left(account, kind, section) {SEL})'
 
 
 STATE = (f'({j("proxy_sender_stalled")} == 1) * 0 + 4 or ({j("proxy_sender_check_error")} == 1) * 0 + 3'
@@ -162,7 +162,7 @@ def sender_table(title, state_expr, x, y, h, desc, only_problems):
          ("H", jr("proxy_sender_stalls_total"))]
     names = {"Value #A": "State", "Value #B": "In flight", "Value #C": "Not mined for", "Value #D": "Nonce gap for",
              "Value #E": "Waiting above gap", "Value #F": "Repairs", "Value #G": "Fillers", "Value #H": "Stalls",
-             "name": "Sender", "kind": "Kind", "section": "Section", "sender": "Address"}
+             "account": "Sender", "kind": "Kind", "section": "Section", "sender": "Address"}
     order = ["Sender", "State", "Kind", "Section", "In flight", "Not mined for", "Nonce gap for", "Waiting above gap",
              "Stalls", "Repairs", "Fillers", "Address"]
     transformations = [{"id": "merge", "options": {}},
@@ -225,14 +225,14 @@ sender_table("All senders", f'{STATE} or {j("proxy_sender_stalled")} * 0', 0, y,
              "Every sender matching the filters, problems first; pages at the bottom. Use Search above for a name, "
              "section or address part.", False)
 y += 10
-timeseries("In flight: top 10 senders", [target(f'topk(10, {j("proxy_sender_inflight_transactions")} > 0)', "{{name}}")],
+timeseries("In flight: top 10 senders", [target(f'topk(10, {j("proxy_sender_inflight_transactions")} > 0)', "{{account}}")],
            0, y, w=12, decimals=0, desc="The 10 senders with the most transactions not mined yet, at each moment")
 timeseries("In flight by kind", [target(f'sum by (kind) ({j("proxy_sender_inflight_transactions")})', "{{kind}}")],
            12, y, w=12, decimals=0, stack=True, desc="Platform accounts, section accounts and users, added up")
 y += 8
 timeseries("Not mined / nonce gap: top 10 (seconds)", [
-    target(f'topk(10, {j("proxy_sender_stall_seconds")} > 0)', "not mined {{name}}"),
-    target(f'topk(10, {j("proxy_sender_gap_seconds")} > 0)', "gap {{name}}", ref="B")],
+    target(f'topk(10, {j("proxy_sender_stall_seconds")} > 0)', "not mined {{account}}"),
+    target(f'topk(10, {j("proxy_sender_gap_seconds")} > 0)', "gap {{account}}", ref="B")],
     0, y, w=12, unit="s", desc="Only senders where it is happening; the longest 10 (alert ProxyNonceGap above 120 s)")
 timeseries("Stalls, repairs and fillers per hour, by kind", [
     target(f'sum by (kind) (increase(proxy_sender_stalls_total[1h]) * on(sender) group_left(kind) {SEL})', "stalls {{kind}}"),

@@ -1115,10 +1115,10 @@ app.get("/metrics", (req, res) => {
         [["", redis.status === "ready" ? 1 : 0]]);
     lines.push(...httpMetricLines());
     metric("proxy_senders_tracked", "gauge", "Senders watched by the background chain check.", [["", senders.size]]);
-    metric("proxy_sender_info", "gauge", "What a sender is (always 1): name, kind (platform, upfront, consumption, payment, user, retired, other) and section.",
+    metric("proxy_sender_info", "gauge", "What a sender is (always 1): account (a readable name), kind (platform, upfront, consumption, payment, user, retired, other) and section.",
         all.filter(([sender]) => senderInfo.has(sender)).map(([sender]) => {
             const info = senderInfo.get(sender);
-            return [`sender="${sender}",name="${labelValue(info.name)}",kind="${info.kind}",section="${labelValue(info.section)}",section_id="${info.sectionId}"`, 1];
+            return [`sender="${sender}",account="${labelValue(info.name)}",kind="${info.kind}",section="${labelValue(info.section)}",section_id="${info.sectionId}"`, 1];
         }));
     metric("proxy_sender_next_nonce", "gauge", "Next nonce the proxy will use (absent until first use).",
         all.filter(([sender]) => memNonce.has(sender)).map(([sender]) => [`sender="${sender}"`, memNonce.get(sender)]));
