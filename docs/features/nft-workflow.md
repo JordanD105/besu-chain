@@ -201,4 +201,3 @@ without sections (development) deploys version-2 collections with `/nft/deploy`
 | `no NFT collection named "…"` | wrong name or symbol: use the address, or `GET /nft/collections` |
 | `"…" matches several collections` | use the address |
 | `the collection's minter 0x… is not the contract account center` | the collection was not deployed by the contract account center (deployed elsewhere) |
-| `X-Section-Key is required` on the chainlens Sell form | `sections_required: true`: the proxy then asks every `/nft/transfer` for a key, the admin caller included |

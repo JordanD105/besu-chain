@@ -140,8 +140,11 @@ Collections can also be deployed from chainlens ([contract deployment](../featur
 ### `GET /nft/collections`
 
 ```json
-→ { "collections": [ { "contract": "0x…", "name": "Dragons", "symbol": "DRG", "default": true }, … ] }
+→ { "success": true, "collections": [ { "contract": "0x…", "name": "Dragons", "symbol": "DRG",
+      "version": 3, "minter": "<contract account center>", "default": true }, … ] }
 ```
+
+`version` 3 collections are minted by the contract account center, version 2 by SENDER01.
 
 ### `POST /nft/mint` — mint for sale
 

@@ -2116,9 +2116,11 @@ async function mintNft(req) {
 async function transferNftV3(req, contract, tokenId) {
     const body = req.body || {};
     // X-Section-Key is required; the admin API's caller (ADMIN_TOKEN from ADMIN_ALLOWED_IPS, e.g. the
-    // chainlens Sell form) may sell without it: the section is then the buyer's.
-    const keyed = await sectionFromRequest(req);
-    const admin = !keyed && isAdminCaller(req);
+    // chainlens Sell form) may sell without it: the section is then the buyer's. The admin caller is
+    // checked first, so SECTION_KEY_REQUIRED does not refuse it.
+    const hasKey = String(req.headers["x-section-key"] || "").trim() !== "";
+    const admin = !hasKey && isAdminCaller(req);
+    const keyed = admin ? null : await sectionFromRequest(req);
 
     if (!keyed && !admin) {
         throw httpError(401, "X-Section-Key is required: the buyer \"to\" must be a user account of that section");
@@ -2446,17 +2448,43 @@ app.get("/nft/contract", async (req, res) => {
     }
 });
 
+// The account that mints a collection's NFTs: read from the contract (version 3: the contract
+// account center), SENDER01 for version 2. Cached: it never changes.
+const minterCache = new Map();
+
+async function collectionMinter(address, version) {
+    const key = address.toLowerCase();
+    if (!minterCache.has(key)) {
+        let minter = ethers.getAddress(CONFIG.SENDER01);
+        if (version >= 3) {
+            try {
+                minter = ethers.getAddress((await callNft(address, "minter", []))[0]);
+            } catch (error) {
+                minter = null;
+            }
+        }
+        minterCache.set(key, minter);
+    }
+    return minterCache.get(key);
+}
+
 app.get("/nft/collections", async (req, res) => {
     try {
         const def = await nftContractAddress();
-        const collections = [...(await knownCollections()).entries()].map(([contract, info]) => ({
-            contract,
-            name: info.name,
-            symbol: info.symbol,
-            default: contract === def
-        }));
+        const collections = [];
+        for (const [contract, info] of (await knownCollections()).entries()) {
+            const version = await collectionVersion(contract);
+            collections.push({
+                contract,
+                name: info.name,
+                symbol: info.symbol,
+                version,
+                minter: await collectionMinter(contract, version),
+                default: contract === def
+            });
+        }
 
-        res.json({ success: true, minter: ethers.getAddress(CONFIG.SENDER01), collections });
+        res.json({ success: true, collections });
     } catch (error) {
         console.error(error);
 

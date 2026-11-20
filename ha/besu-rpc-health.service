@@ -1,0 +1,21 @@
+# systemd unit for besu-rpc-health, for a setup without Ansible (Ansible installs the same unit,
+# ansible/07-ha.yml). On both HAProxy hosts:
+#   install -m 755 rpc-health.py /usr/local/bin/besu-rpc-health
+#   cp besu-rpc-health.env.example /etc/besu-rpc-health.env      (then edit it)
+#   cp besu-rpc-health.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now besu-rpc-health
+#   curl -s http://127.0.0.1:8410/                                (status of every RPC node)
+# Start it before HAProxy, which asks it on 127.0.0.1:8411/8412 whether each RPC node is current.
+[Unit]
+Description=Besu RPC node health for HAProxy (ha/rpc-health.py)
+After=network-online.target docker.service
+Before=haproxy.service
+
+[Service]
+EnvironmentFile=/etc/besu-rpc-health.env
+ExecStart=/usr/bin/python3 /usr/local/bin/besu-rpc-health
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -178,47 +178,31 @@ The alert `BesuNodeStalled` fires for a node whose newest block is over 60 s old
 current ([Alerts](../operations/alerts.md)). Symptoms and fixes:
 [Troubleshooting](../operations/troubleshooting.md#rpc-and-the-rpc-vip).
 
-**By hand** (Ansible does this in `07-ha.yml`), on .135 and .136:
+**By hand** (Ansible does this in `07-ha.yml`), on .135 and .136, from the `ha/` folder. The settings
+file and the unit are in the repository: [`ha/besu-rpc-health.env.example`](../../ha/besu-rpc-health.env.example)
+and [`ha/besu-rpc-health.service`](../../ha/besu-rpc-health.service).
 
 ```bash
-install -m 755 ha/rpc-health.py /usr/local/bin/besu-rpc-health
+install -m 755 rpc-health.py /usr/local/bin/besu-rpc-health
 ```
-
-`/etc/besu-rpc-health.env` on .135 (on .136: `LOCAL_NODES="rpc2"`; the container names follow the
-node directories `/opt/besu-rpc1`, `/opt/besu-rpc2`):
 
 ```bash
-RPC_NODES="rpc1=http://192.168.68.135:8555=8411=besu-rpc1-besu-1 rpc2=http://192.168.68.136:8555=8412=besu-rpc2-besu-1"
-LOCAL_NODES="rpc1"
-HEAD_REFERENCE="http://127.0.0.1:8645"
-HOST_HEADER="192.168.68.150"
-MAX_AGE=30
-MAX_BEHIND=10
-CHECK_SECONDS=2
-RESTART_MINUTES=5
-STATUS_PORT=8410
+cp besu-rpc-health.env.example /etc/besu-rpc-health.env
 ```
 
-`/etc/systemd/system/besu-rpc-health.service`:
+Edit `/etc/besu-rpc-health.env`: on .136 set `LOCAL_NODES="rpc2"` (the container names follow the
+node directories `/opt/besu-rpc1`, `/opt/besu-rpc2`). Then:
 
-```ini
-[Unit]
-Description=Besu RPC node health for HAProxy (ha/rpc-health.py)
-After=network-online.target docker.service
-Before=haproxy.service
-
-[Service]
-EnvironmentFile=/etc/besu-rpc-health.env
-ExecStart=/usr/bin/python3 /usr/local/bin/besu-rpc-health
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
+```bash
+cp besu-rpc-health.service /etc/systemd/system/
 ```
 
 ```bash
 systemctl daemon-reload && systemctl enable --now besu-rpc-health
+```
+
+```bash
+curl -s http://127.0.0.1:8410/
 ```
 
 ## 4. HAProxy (both hosts)
@@ -233,8 +217,8 @@ backend besu_rpc
     server rpc2 192.168.68.136:8555 check addr 127.0.0.1 port 8412 inter 2s fall 2 rise 2 backup
 ```
 
-The hand-written `ha/haproxy.cfg` still checks `eth_syncing` directly against the nodes. For a setup
-by hand, replace its `besu_rpc` backend with the one above, then:
+The hand-written `ha/haproxy.cfg` has the same backend. Start `besu-rpc-health` first (section 3),
+then:
 
 ```bash
 cp haproxy.cfg /etc/haproxy/haproxy.cfg
