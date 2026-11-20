@@ -1,0 +1,43 @@
+# The Remix IDE on the monitoring host (.139, :30200), from the image built by 02-images.yml.
+# remix_enabled: false stops it.
+#   ansible-playbook 02-images.yml 12-remix.yml
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
+- name: Remix IDE
+  hosts: monitoring_hosts
+  become: true
+  tasks:
+    - name: Remix settings
+      ansible.builtin.copy:
+        dest: "{{ repo_dir }}/remix/.env"
+        content: "BIND_IP={{ ansible_host }}\n"
+        mode: "0644"
+      when: remix_enabled | bool
+
+    - name: Remix IDE (image from 02-images.yml)
+      ansible.builtin.command: docker compose up -d --no-build
+      args:
+        chdir: "{{ repo_dir }}/remix"
+      register: remix_up
+      changed_when: remix_up.stderr is search('Started|Recreated')
+      when: remix_enabled | bool
+
+    - name: Remix answering, with its compiler list
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:30200/solc-bin/list.json"
+      register: remix_list
+      until: remix_list.status == 200
+      retries: 20
+      delay: 3
+      when: remix_enabled | bool
+
+    - name: Remix stopped (remix_enabled false)
+      ansible.builtin.shell: >-
+        [ ! -f docker-compose.yml ] || [ -z "$(docker compose ps -q 2>/dev/null)" ]
+        || { docker compose down && echo stopped; }
+      args:
+        chdir: "{{ repo_dir }}/remix"
+      register: remix_down
+      changed_when: "'stopped' in remix_down.stdout"
+      when: not remix_enabled | bool

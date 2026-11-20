@@ -46,11 +46,11 @@ Apply (phase 01 copies the code and opens the firewall, 02 builds the image from
 `docs/`, 09 runs it on the monitoring host):
 
 ```bash
-ansible-playbook 01-hosts.yml 02-images.yml 09-monitoring.yml
+ansible-playbook 01-hosts.yml 02-images.yml 13-docs-site.yml
 ```
 
 The site shows the **committed** documentation: commit your changes to `docs/` before running 02.
-To turn it off, set `docs_site_enabled: false` and run `09-monitoring.yml` (it stops the container).
+To turn it off, set `docs_site_enabled: false` and run `13-docs-site.yml` (it stops the container).
 
 ## Any Docker host
 

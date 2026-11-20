@@ -282,7 +282,7 @@ but redundancy is gone until it's back.
 | MPC coordinator (coord1 .135 / coord2 .136) | `mpc-signer/deploy/coordinator`: `.env` (its own `MPC_BIND_IP`, `MPC_RELAY_URL`), `cluster.json`, `docker compose up -d` | log `keys loaded from nodes`; both coordinators UP on the MPC dashboard |
 | Proxy (proxy1 .135 / proxy2 .136) | `proxy/`: `.env`, `docker compose build`; **don't start it by hand**: keepalived starts it on the host holding `.151` | `GET http://192.168.68.151:30000/status/senders`: no gap, no stall; a test transfer |
 | Chainlens (.139) | `chainlens/`: `.env` (`BESU_RPC` = rpc2), `docker compose up -d --build`. With the Deploy page on, keep its records (`/var/lib/chainlens/deployments`) | re-indexes from block 0 by itself |
-| Remix IDE (.139) | Ansible `09-monitoring.yml` ([Remix IDE](../components/remix.md)) | opens on `:30200` |
+| Remix IDE (.139) | Ansible `12-remix.yml` ([Remix IDE](../components/remix.md)) | opens on `:30200` |
 | Monitoring (.139) | `monitoring/`: `setup.sh` with the metrics token, targets, `docker compose up -d` | `./check-targets.sh`; history before the loss is gone |
 
 ### 6.7 Whole site lost

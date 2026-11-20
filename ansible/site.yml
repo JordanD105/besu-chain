@@ -6,7 +6,7 @@
   ansible.builtin.import_playbook: 00-preflight.yml
 - name: Hosts
   ansible.builtin.import_playbook: 01-hosts.yml
-- name: Images (MPC signer, proxy, chainlens)
+- name: Images (MPC signer, proxy, chainlens, Remix, documentation site)
   ansible.builtin.import_playbook: 02-images.yml
 - name: MPC nodes (teams)
   ansible.builtin.import_playbook: 03-mpc-nodes.yml
@@ -20,7 +20,14 @@
   ansible.builtin.import_playbook: 07-ha.yml
 - name: Checks
   ansible.builtin.import_playbook: 08-check.yml
-- name: Monitoring and chainlens
+- name: Monitoring (Prometheus and Grafana)
   ansible.builtin.import_playbook: 09-monitoring.yml
+- name: Chainlens
+  ansible.builtin.import_playbook: 11-chainlens.yml
+- name: Remix IDE
+  ansible.builtin.import_playbook: 12-remix.yml
+- name: Documentation website
+  ansible.builtin.import_playbook: 13-docs-site.yml
+# last: it prints the summary with every URL
 - name: Backups
   ansible.builtin.import_playbook: 10-backups.yml

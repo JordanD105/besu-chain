@@ -36,10 +36,14 @@ All commands below run in `ansible/` on the operator.
 | 6 | `06-proxy.yml` | operator, .135, .136 | the SectionRegistry (once, or an upgrade of an older version), the contract account center (once), proxy settings (the proxy is not started here; a running one is updated), redis-exporter on both hosts |
 | 7 | `07-ha.yml` | .135, .136 | RPC health checker (`besu-rpc-health`), HAProxy, keepalived: VIPs on .135, the proxy started on the host holding the proxy VIP |
 | 8 | `08-check.yml` | operator | Besu, MPC and proxy through the VIPs; the proxy admin API and the SectionRegistry; migration of an older registry (once); once: test account + transfer |
-| 9 | `09-monitoring.yml` | .139 | Prometheus, Grafana (all targets checked), chainlens, Remix IDE ([Remix IDE (self-hosted)](../components/remix.md)), documentation site ([Documentation website](../components/docs-site.md)); copies Deploy page records back to the operator's repository |
+| 9 | `09-monitoring.yml` | .139 | Prometheus and Grafana: files, targets from the IP plan, settings, reload after a rule change; every target checked |
 | 10 | `10-backups.yml` | .135–.138 | daily chain snapshot cron (val3), node key backups (GPG), MPC share backups (opt-in); prints the URLs and what stays manual |
+| 11 | `11-chainlens.yml` | .139 | chainlens ([Chainlens](../components/chainlens.md)); copies Deploy page records back to the operator's repository |
+| 12 | `12-remix.yml` | .139 | Remix IDE ([Remix IDE (self-hosted)](../components/remix.md)); `remix_enabled: false` stops it |
+| 13 | `13-docs-site.yml` | .139 | documentation website ([Documentation website](../components/docs-site.md)); `docs_site_enabled: false` stops it |
 
-`site.yml` runs them in order. Phases 02–10 first check that the hosts have the current code
+`site.yml` runs them in order, except phase 10, which runs last (it prints the summary with every
+URL). Phases 02–13 first check that the hosts have the current code
 (`code-current.yml`, see [5. Running it again](#5-running-it-again)).
 
 **Step-by-step guide for the operator (install, SSH, settings, the three runs):
@@ -199,7 +203,7 @@ Who may open it: `remix_ips`. More: [Remix IDE (self-hosted)](../components/remi
 
 `docs_site_enabled` (default `true`): this documentation as a website on the monitoring host
 (`.139:30300`), built from `docs/` into an image by `02-images.yml` and started by
-`09-monitoring.yml`; `false` stops it. Who may open it: `docs_ips`. More:
+`13-docs-site.yml`; `false` stops it. Who may open it: `docs_ips`. More:
 [Documentation website](../components/docs-site.md).
 
 ### RPC health on the HAProxy hosts
@@ -299,7 +303,7 @@ Restoring everything from these backups after losing the whole site:
 | `smoke-test.json` | the result of the one-time test transfer (its presence stops a second one) | public |
 | `handoff/` | team instructions | public |
 | `key-backups/*.key.gpg` | Besu node keys, encrypted to your GPG public key | readable only with your offline private key |
-| `repo.commit` | the commit phase 1 last copied to the hosts (checked by phases 02–10) | |
+| `repo.commit` | the commit phase 1 last copied to the hosts (checked by phases 02–13) | |
 | `images/`, `build/`, `repo.tar.gz` | build artefacts | can be deleted |
 
 `state/` is mode 700. Keep a copy in your vault after every change: without it a rerun can't
@@ -315,7 +319,7 @@ contract account center, the smoke test.
 
 **After a `git pull` or a new commit, run `01-hosts.yml` first** (or the whole `site.yml`).
 Phase 1 copies the committed code to the hosts, and the image builds of phase 2 use that copy.
-Phases 02–10 compare the last commit touching the deployed directories (`deployed_dirs` in
+Phases 02–13 compare the last commit touching the deployed directories (`deployed_dirs` in
 `layout.yml`: `besu-production`, `ha`, `monitoring`, `mpc-signer/deploy`, `proxy`, `chainlens`,
 `contracts`, `remix`, `docs-site`) with `state/repo.commit`, and stop with "The hosts have older code" if phase 1
 didn't run since. A change to `settings.yml`, `inventory.yml` or the playbooks needs no phase 1.

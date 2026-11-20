@@ -556,7 +556,7 @@ sed -i 's|^BESU_RPC=.*|BESU_RPC=http://192.168.68.136:8555|' .env && docker comp
 ```
 
 Explorer: `http://192.168.68.139:30100`. Remix IDE (`:30200`) is built and started by Ansible
-(`02-images.yml`, `09-monitoring.yml`): [Remix IDE (self-hosted)](../components/remix.md).
+(`02-images.yml`, `12-remix.yml`): [Remix IDE (self-hosted)](../components/remix.md).
 
 ### 4.13 Backups
 

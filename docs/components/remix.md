@@ -27,11 +27,11 @@ Ansible does it all when `remix_enabled: true` (the default):
   --depth 1`, about 400 MB, into `state/build/remix/remix-live`; the operator needs github.com for
   this) and builds `localhost/besu-remix/remix`. Like the other images it is built once and copied to
   the host, and `save-images.yml` saves it as `remix-docker.tar`.
-- `09-monitoring.yml` starts it on the monitoring host and checks the compiler list.
+- `12-remix.yml` starts it on the monitoring host and checks the compiler list.
 - `ha/firewall-layout.sh` opens port 30200 on the monitoring host for `operator_ip` and `remix_ips`.
 
 To add compilers, change `remix_solc_versions` (e.g. `["0.8.24", "0.8.28"]`) and run
-`ansible-playbook 02-images.yml 09-monitoring.yml`. To update Remix, set `remix_commit` to a newer
+`ansible-playbook 02-images.yml 12-remix.yml`. To update Remix, set `remix_commit` to a newer
 commit of `remix-live` (its commit message names the Remix version) and run the same. Turn it off with
 `remix_enabled: false`.
 

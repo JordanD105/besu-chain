@@ -152,6 +152,8 @@
                if chainlens_sections_enabled | bool else '' }}"
           - "{{ ('Remix IDE: http://' ~ ip_of[groups['monitoring_hosts'][0]] ~ ':30200 (evmVersion cancun)')
                if remix_enabled | bool else 'Remix IDE: off (remix_enabled)' }}"
+          - "{{ ('Documentation: http://' ~ ip_of[groups['monitoring_hosts'][0]] ~ ':30300')
+               if docs_site_enabled | bool else 'Documentation website: off (docs_site_enabled)' }}"
           - "{{ ('Node key backups: GPG-encrypted in ' ~ state_dir ~ '/key-backups/ (readable only with your offline private key)')
                if key_backup_gpg_public_key else
                'Node key backups: NOT done. Set key_backup_gpg_public_key in settings.yml and rerun 10-backups.yml' }}"

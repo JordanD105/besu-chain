@@ -1,7 +1,7 @@
 # Documentation website (docs/components/docs-site.md). From the repository root:
 #   docker compose -f docs-site/docker-compose.yml up -d --build      then open http://<host>:30300
 # The Ansible deployment builds the image (02-images.yml) and runs it on the monitoring host
-# (09-monitoring.yml, docs_site_enabled).
+# (13-docs-site.yml, docs_site_enabled).
 services:
   docs-site:
     build:

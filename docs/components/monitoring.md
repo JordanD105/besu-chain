@@ -333,7 +333,7 @@ curl -s localhost:9090/api/v1/targets | grep -oE '"scrapeUrl":"[^"]*","globalUrl
 ## With Ansible
 
 Phase [`ansible/09-monitoring.yml`](../../ansible/09-monitoring.yml) (part of `site.yml`) on the
-monitoring host:
+monitoring host (chainlens, Remix and the documentation site have their own phases, 11–13):
 
 1. copies `monitoring/` to `/opt/monitoring` and runs `setup.sh` with the generated metrics token;
 2. generates the five target files from the IP plan into `prometheus/targets.generated/`

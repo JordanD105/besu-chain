@@ -45,7 +45,7 @@ One file per contract, `<address>.json` (lowercase address), written by `deploy-
 | `abi` | the ABI, for the contract page |
 
 Records written by earlier versions of the Deploy page are in `/var/lib/chainlens/deployments` on the
-monitoring host (`chainlens_local_registry`); `09-monitoring.yml` copies them back here and asks you
+monitoring host (`chainlens_local_registry`); `11-chainlens.yml` copies them back here and asks you
 to commit them.
 
 ## Publish a record

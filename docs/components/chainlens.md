@@ -88,7 +88,7 @@ In `settings.yml`: `chainlens_ips`, `chainlens_deploy_enabled`, `chainlens_secti
 
 ```bash
 # production (from ansible/, after a git pull): copy the code, build the image, deploy
-ansible-playbook 01-hosts.yml 02-images.yml 09-monitoring.yml
+ansible-playbook 01-hosts.yml 02-images.yml 11-chainlens.yml
 ```
 
 ```bash

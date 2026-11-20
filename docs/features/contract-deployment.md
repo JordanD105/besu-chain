@@ -59,7 +59,7 @@ contract account center): without them the page has nothing to deploy with.
 phase 02 uses; phase 06 creates the contract account center):
 
 ```bash
-ansible-playbook 01-hosts.yml 02-images.yml 06-proxy.yml 09-monitoring.yml
+ansible-playbook 01-hosts.yml 02-images.yml 06-proxy.yml 11-chainlens.yml
 ```
 
 **3. The token**, on the operator (you type it into the page):
@@ -116,7 +116,7 @@ the contract is known on every host.
 Contracts deployed with `besu-production/operator/deploy-contract.js` are **not** in the on-chain
 registry: they get a file in `contracts/deployments/` instead (commit it), which only chainlens
 reads ([contract records](contract-records.md)). Records written by earlier versions of this page are
-still copied back to the repository by `09-monitoring.yml`.
+still copied back to the repository by `11-chainlens.yml`.
 
 ## Turn it off
 
@@ -125,10 +125,10 @@ chainlens_deploy_enabled: false
 ```
 
 ```bash
-ansible-playbook 09-monitoring.yml
+ansible-playbook 01-hosts.yml 11-chainlens.yml
 ```
 
-To change the token, delete `state/secrets/chainlens_deploy_token` and run `09-monitoring.yml`.
+To change the token, delete `state/secrets/chainlens_deploy_token` and run `11-chainlens.yml`.
 The Sections page and the Mint and sell card use the same token.
 
 ## If something fails

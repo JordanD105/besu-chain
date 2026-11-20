@@ -208,7 +208,7 @@ ansible-playbook site.yml
 ```
 
 **After a `git pull`:** `site.yml` copies the new code to the hosts first. To run single phases
-instead (e.g. `09-monitoring.yml`), run `01-hosts.yml` first: the other phases stop with "The
+instead (e.g. `11-chainlens.yml`), run `01-hosts.yml` first: the other phases stop with "The
 hosts have older code" until it has copied the current code.
 
 ```bash

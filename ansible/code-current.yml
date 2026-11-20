@@ -1,4 +1,4 @@
-# Imported at the start of phases 02-10: the hosts must have the code of the current checkout.
+# Imported at the start of phases 02-13: the hosts must have the code of the current checkout.
 # 01-hosts.yml copies the committed code to the hosts (and 02-images.yml builds the images from that
 # copy), then records which commit it copied (state/repo.commit). After a git pull or a new commit,
 # run 01-hosts.yml (or site.yml) first, otherwise these phases would deploy the old code.

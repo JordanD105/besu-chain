@@ -1,0 +1,69 @@
+# Chainlens, the block explorer, on the monitoring host (.139, :30100), from the image built by
+# 02-images.yml; then the records of contracts deployed from its Deploy page are copied back to the
+# operator's repository (contracts/deployments).
+#   ansible-playbook 02-images.yml 11-chainlens.yml        (after a change to chainlens/)
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
+- name: Chainlens
+  hosts: monitoring_hosts
+  become: true
+  tasks:
+    - name: Directory for the Deploy page's records (the chainlens container user is uid 1000)
+      ansible.builtin.file:
+        path: "{{ chainlens_local_registry }}"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0750"
+
+    - name: Chainlens settings
+      ansible.builtin.template:
+        src: templates/chainlens.env.j2
+        dest: "{{ repo_dir }}/chainlens/.env"
+        mode: "0600"
+
+    - name: Chainlens (image from 02-images.yml)
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ repo_dir }}/chainlens"
+      register: cl_up
+      changed_when: cl_up.stderr is search('Started|Recreated')
+
+    - name: Chainlens answering
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:30100/"
+      register: cl
+      until: cl.status == 200
+      retries: 20
+      delay: 3
+
+    - name: Contracts deployed from the Deploy page
+      ansible.builtin.find:
+        paths: "{{ chainlens_local_registry }}"
+        patterns: "0x*.json"
+      register: local_records
+
+    - name: Copy their records back to the operator's repository (contracts/deployments)
+      ansible.builtin.fetch:
+        src: "{{ item.path }}"
+        dest: "{{ repo_root }}/contracts/deployments/"
+        flat: true
+      loop: "{{ local_records.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+
+    - name: Records not committed yet
+      ansible.builtin.command: git -C {{ repo_root }} status --porcelain -- contracts/deployments  # noqa: command-instead-of-module
+      delegate_to: localhost
+      become: false
+      register: uncommitted
+      changed_when: false
+
+    - name: Commit them
+      ansible.builtin.debug:
+        msg:
+          - "Contract records not committed yet (from the Deploy page or deploy-contract.js):"
+          - "{{ uncommitted.stdout_lines }}"
+          - "Commit them: git -C {{ repo_root }} add contracts/deployments && git -C {{ repo_root }} commit -m 'Contract deployments'"
+      when: uncommitted.stdout | length > 0
