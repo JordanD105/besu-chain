@@ -721,7 +721,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "One row per Besu node. Peers should be (number of nodes - 1).",
+      "description": "One row per Besu node. Peers should be (number of nodes - 1). Sync: IN SYNC, SYNCING (the node says so), STALLED (says in sync but its newest block is over 60 s old while other nodes are current: it stopped importing), BEHIND (more than 10 blocks below the highest node). Behind: blocks below the highest node.",
       "gridPos": {
         "x": 0,
         "y": 12,
@@ -761,7 +761,7 @@
         },
         {
           "refId": "D",
-          "expr": "max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"})",
+          "expr": "(max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) == 0) or ((max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 2) and (max by (node, role, instance) (timestamp(besu_blockchain_chain_head_timestamp{job=\"besu\",node=~\"$node\"}) - besu_blockchain_chain_head_timestamp{job=\"besu\",node=~\"$node\"}) > 60) and on() (min(timestamp(besu_blockchain_chain_head_timestamp{job=\"besu\"}) - besu_blockchain_chain_head_timestamp{job=\"besu\"}) < 30)) or ((max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 3) and ((scalar(max(ethereum_blockchain_height{job=\"besu\"})) - max by (node, role, instance) (ethereum_blockchain_height{job=\"besu\",node=~\"$node\"})) > 10)) or (max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 1)",
           "format": "table",
           "instant": true,
           "datasource": {
@@ -788,6 +788,17 @@
             "type": "prometheus",
             "uid": "prometheus"
           }
+        },
+        {
+          "refId": "G",
+          "expr": "scalar(max(ethereum_blockchain_height{job=\"besu\"})) - max by (node, role, instance) (ethereum_blockchain_height{job=\"besu\",node=~\"$node\"})",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ],
       "transformations": [
@@ -810,7 +821,8 @@
               "Value #F": "Tx pool",
               "node": "Node",
               "role": "Role",
-              "instance": "Metrics address"
+              "instance": "Metrics address",
+              "Value #G": "Behind"
             },
             "indexByName": {
               "node": 0,
@@ -818,10 +830,11 @@
               "instance": 2,
               "Value #A": 3,
               "Value #B": 4,
-              "Value #C": 5,
-              "Value #D": 6,
-              "Value #E": 7,
-              "Value #F": 8
+              "Value #G": 5,
+              "Value #C": 6,
+              "Value #D": 7,
+              "Value #E": 8,
+              "Value #F": 9
             }
           }
         }
@@ -849,6 +862,32 @@
               {
                 "id": "unit",
                 "value": "s"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 30
+                    },
+                    {
+                      "color": "red",
+                      "value": 60
+                    }
+                  ]
+                }
               }
             ]
           },
@@ -936,25 +975,65 @@
                     "options": {
                       "0": {
                         "text": "SYNCING",
-                        "color": "orange"
+                        "color": "orange",
+                        "index": 0
                       },
                       "1": {
                         "text": "IN SYNC",
-                        "color": "green"
-                      }
-                    }
-                  },
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null",
-                      "result": {
-                        "text": "\u2014",
-                        "color": "transparent"
+                        "color": "green",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "STALLED",
+                        "color": "red",
+                        "index": 2
+                      },
+                      "3": {
+                        "text": "BEHIND",
+                        "color": "orange",
+                        "index": 3
                       }
                     }
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Behind"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 11
+                    },
+                    {
+                      "color": "red",
+                      "value": 100
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "decimals",
+                "value": 0
               }
             ]
           }
