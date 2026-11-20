@@ -1926,7 +1926,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Commands per second",
+      "title": "Commands per second (the proxy's)",
       "id": 31,
       "description": "",
       "datasource": {
@@ -1942,7 +1942,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cmd) (rate(redis_commands_total{job=\"redis\"}[$__rate_interval]))",
+          "expr": "sum by (cmd) (rate(redis_commands_total{job=\"redis\",cmd!~\"info|config.*|client.*|latency.*|slowlog.*|hello|memory.*|select|ping|dbsize|keys|cluster.*|module.*|command.*|scan|type|strlen|pfcount|xinfo.*|ttl|llen|scard|zcard|hlen|lastsave\"}[$__rate_interval]))",
           "legendFormat": "{{cmd}}",
           "datasource": {
             "type": "prometheus",
@@ -2002,7 +2002,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cmd) (rate(redis_commands_duration_seconds_total{job=\"redis\"}[$__rate_interval])) / sum by (cmd) (rate(redis_commands_total{job=\"redis\"}[$__rate_interval]))",
+          "expr": "sum by (cmd) (rate(redis_commands_duration_seconds_total{job=\"redis\",cmd!~\"info|config.*|client.*|latency.*|slowlog.*|hello|memory.*|select|ping|dbsize|keys|cluster.*|module.*|command.*|scan|type|strlen|pfcount|xinfo.*|ttl|llen|scard|zcard|hlen|lastsave\"}[$__rate_interval])) / sum by (cmd) (rate(redis_commands_total{job=\"redis\",cmd!~\"info|config.*|client.*|latency.*|slowlog.*|hello|memory.*|select|ping|dbsize|keys|cluster.*|module.*|command.*|scan|type|strlen|pfcount|xinfo.*|ttl|llen|scard|zcard|hlen|lastsave\"}[$__rate_interval]))",
           "legendFormat": "{{cmd}}",
           "datasource": {
             "type": "prometheus",

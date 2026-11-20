@@ -69,6 +69,9 @@ def table(title, targets, x, y, w, h, renames, units, desc=""):
 UPDOWN = [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]
 CONNECTED = [{"type": "value", "options": {"0": {"text": "NO REDIS", "color": "orange"}, "1": {"text": "CONNECTED", "color": "green"}}}]
 RATE = "$__rate_interval"
+# commands redis-exporter itself sends every scrape: left out so the charts show the proxy's traffic
+EXPORTER_CMDS = 'cmd!~"info|config.*|client.*|latency.*|slowlog.*|hello|memory.*|select|ping|dbsize|keys|cluster.*|module.*|command.*|scan|type|strlen|pfcount|xinfo.*|ttl|llen|scard|zcard|hlen|lastsave"'
+
 y = 0
 
 # ---- Overview
@@ -160,10 +163,10 @@ stat("Last save", 'time() - max(redis_rdb_last_save_timestamp_seconds{job="redis
      desc="Since Redis last wrote its snapshot to disk")
 stat("Uptime", 'max(redis_uptime_in_seconds{job="redis"})', 21, y, w=3, unit="s", decimals=0, color_mode="value")
 y += 5
-timeseries("Commands per second", [target(f'sum by (cmd) (rate(redis_commands_total{{job="redis"}}[{RATE}]))', "{{cmd}}")], 0, y, w=8,
+timeseries("Commands per second (the proxy's)", [target(f'sum by (cmd) (rate(redis_commands_total{{job="redis",{EXPORTER_CMDS}}}[{RATE}]))', "{{cmd}}")], 0, y, w=8,
            unit="ops", stack=True, decimals=2)
 timeseries("Average command time", [
-    target(f'sum by (cmd) (rate(redis_commands_duration_seconds_total{{job="redis"}}[{RATE}])) / sum by (cmd) (rate(redis_commands_total{{job="redis"}}[{RATE}]))', "{{cmd}}")],
+    target(f'sum by (cmd) (rate(redis_commands_duration_seconds_total{{job="redis",{EXPORTER_CMDS}}}[{RATE}])) / sum by (cmd) (rate(redis_commands_total{{job="redis",{EXPORTER_CMDS}}}[{RATE}]))', "{{cmd}}")],
     8, y, w=8, unit="s", decimals=5)
 timeseries("Memory and keys", [
     target('redis_memory_used_bytes{job="redis"}', "used"),
