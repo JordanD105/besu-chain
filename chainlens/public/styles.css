@@ -543,3 +543,5 @@ tr:last-child td { border-bottom: 0; }
 .section-action { display: grid; gap: 4px; }
 .section-inputs { display: flex; gap: 8px; flex-wrap: wrap; }
 .section-inputs .table-search { flex: 1 1 220px; width: auto; }
+.fn-run.danger { border-color: var(--bad, #e5484d); color: var(--bad, #e5484d); }
+.info-key { flex: 0 1 160px !important; }

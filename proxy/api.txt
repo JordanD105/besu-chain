@@ -91,33 +91,43 @@ GET /nft/owner/0xOwner?collection=DRG        (one collection)
 # ---------------------------------------------------------------
 # Header Authorization: Bearer <ADMIN_TOKEN> (Ansible: state/secrets/proxy_admin_token), and only from
 # ADMIN_ALLOWED_IPS (the operator and the monitoring host). Sections live in the on-chain
-# SectionRegistry (REGISTRY_CONTRACT), written by REGISTRY_ADMIN through this proxy.
+# SectionRegistry v2 (REGISTRY_CONTRACT), written by REGISTRY_ADMIN through this proxy.
 
-GET /admin/sections                 (?fresh=1 skips the 10 s cache)
--> { "success": true, "registry": "0x...", "sections": [ { "id": 1, "name": "Section 1", "active": true,
-     "allowedIps": ["10.1.2.3"], "accounts": { "upfront": "0x...", "consumption": "0x...", "payment": "0x..." },
-     "balances": { "upfront": "0.0", "consumption": "0.0", "payment": "0.0" }, "createdAt": 1795129062 } ] }
+GET /admin/sections                 (?fresh=1 skips the 10 s cache, ?archived=1 includes archived ones)
+-> { "success": true, "registry": "0x...", "sections": [ { "id": 1, "name": "Section 1", "active": true, "archived": false,
+     "accounts": { "upfront": "0x...", "consumption": "0x...", "payment": "0x..." },
+     "balances": { "upfront": "97.5", "consumption": "1.0", "payment": "0.0" },
+     "info": { "description": "..." }, "createdAt": 1795129062 } ] }
 
 GET /admin/sections/1
 
 # Create: 3 MPC keys (upfront: big pool, consumption + payment: none), needs all MPC nodes online.
-# The API key is in this answer only. No funding (top up the upfront account later).
+# The API key is in this answer only. No funding (top up the upfront account).
 POST /admin/sections
-{ "name": "Section 1", "allowedIps": ["10.1.2.3", "10.1.5.0/24"] }
+{ "name": "Section 1", "info": { "description": "Shop A" } }
 -> { "success": true, "section": { "id": 1, ... }, "apiKey": "sk_...", "txHash": "0x..." }
 
-# New API key (in this answer only); the old one stops working at once
-POST /admin/sections/1/key
--> { "success": true, "id": 1, "apiKey": "sk_...", "txHash": "0x..." }
+POST /admin/sections/1/name      { "name": "Shop A" }
+POST /admin/sections/1/info      { "key": "contact", "value": "ops@example" }      (value "" removes the field)
+POST /admin/sections/1/key       -> { "apiKey": "sk_..." }   (the old key stops working at once)
+POST /admin/sections/1/active    { "active": false }
 
-POST /admin/sections/1/ips
-{ "allowedIps": ["10.1.2.3", "10.1.2.4"] }
+# Money (each transfer carries a memo naming the operation)
+POST /admin/sections/1/topup     { "amount": "100" }          SENDER01 -> upfront
+POST /admin/sections/1/sweep     { "amount": "all" }          consumption -> payment ("all" or ETH)
+POST /admin/sections/1/payback   { "amount": "all" }          payment -> SENDER01 ("all" or ETH)
 
-POST /admin/sections/1/active
-{ "active": false }
+# A new MPC key for a role; the old account's whole balance moves to it
+POST /admin/sections/1/account   { "role": "payment" }        (upfront | consumption | payment)
+
+# Archive: all money of the 3 accounts back to SENDER01, then closed for good (history stays)
+POST /admin/sections/1/archive   { "confirm": "Shop A" }
+
+# Migration from a version-1 registry (run by Ansible 08-check.yml after an upgrade)
+POST /admin/registry/migrate     { "from": "0xOldRegistry" }
 
 # ---------------------------------------------------------------
-# Section calls (docs/sections.md): header X-Section-Key: sk_... from an allowed address of the section
+# Section calls (docs/sections.md): header X-Section-Key: sk_... (the section must be active)
 # ---------------------------------------------------------------
 # Account of the section, funded from the section's upfront account (not SENDER01)
 POST /createaccount        X-Section-Key: sk_...

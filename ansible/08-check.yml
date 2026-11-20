@@ -35,6 +35,34 @@
       retries: 10
       delay: 3
 
+    - name: Migrate the previous registry's sections (after an upgrade, once)
+      ansible.builtin.uri:
+        url: "http://{{ vip_proxy }}:30000/admin/registry/migrate"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ proxy_admin_token }}"
+        body_format: json
+        body:
+          from: "{{ registry.previous }}"
+          # the old registry's deployment block (its record from deploy-contract.js), to read its events from there
+          fromBlock: "{{ (lookup('ansible.builtin.file', state_dir ~ '/registry-record/' ~ (registry.previous | lower) ~ '.json', errors='ignore')
+                          | default('{}', true) | from_json).blockNumber | default(0) }}"
+        timeout: 600
+      register: migration
+      when: registry.previous | default('') | length > 0 and not registry.migrated | default(false)
+
+    - name: Migration done (state/registry.json)
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/registry.json"
+        content: "{{ registry | combine({'migrated': true}) | to_nice_json }}\n"
+        mode: "0600"
+      when: migration is not skipped
+
+    - name: Migrated sections
+      ansible.builtin.debug:
+        var: migration.json.sections
+      when: migration is not skipped
+
     - name: Sections
       ansible.builtin.debug:
         msg: "SectionRegistry {{ sections.json.registry }}: {{ sections.json.sections | length }} section(s)"

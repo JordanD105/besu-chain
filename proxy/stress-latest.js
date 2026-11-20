@@ -2433,15 +2433,23 @@ app.get("/nft/:tokenId", async (req, res) => {
 // =======================
 // Sections (docs/sections.md)
 // =======================
-// The SectionRegistry contract on chain holds the sections: name, three MPC accounts (upfront pays
-// out, consumption receives, payment collects), the API-key hash, the allowed source IPs, active.
-// Only REGISTRY_ADMIN writes it, through this proxy's send queue (one sender, ordered nonces).
+// The SectionRegistry contract (v2) on chain holds the sections: name, three MPC accounts (upfront
+// pays out, consumption receives, payment collects), the API-key hash, active / archived, and
+// free-form info fields. Only REGISTRY_ADMIN writes it, through this proxy's send queue (one
+// sender, ordered nonces). A section call is identified by its X-Section-Key alone; who may reach
+// the proxy at all is the firewall's proxy_client_ips.
 // The admin API (/admin/*) needs ADMIN_TOKEN and a source address in ADMIN_ALLOWED_IPS.
 
 const registryIface = new ethers.Interface(registryArtifact.abi);
-const SECTION_POOLS = { upfront: "big", consumption: "none", payment: "none" };
+const SECTION_ROLES = {
+    upfront: { kind: 2, pool: "big" },
+    consumption: { kind: 3, pool: "none" },
+    payment: { kind: 4, pool: "none" }
+};
+const ACCOUNT_USER = 1;
 const SECTION_CACHE_MS = 10000;
 const sectionCache = { at: 0, list: null };
+const accountSectionCache = new Map(); // address (lower) -> { id, kind }
 let sectionWriteChain = Promise.resolve();
 
 function sectionsConfigured() {
@@ -2454,10 +2462,10 @@ function requireSections() {
     }
 }
 
-async function registryCall(fn, args = []) {
-    const data = registryIface.encodeFunctionData(fn, args);
-    const result = await ethCall(CONFIG.REGISTRY_CONTRACT, data);
-    return registryIface.decodeFunctionResult(fn, result);
+async function registryCall(fn, args = [], iface = registryIface, address = CONFIG.REGISTRY_CONTRACT) {
+    const data = iface.encodeFunctionData(fn, args);
+    const result = await ethCall(address, data);
+    return iface.decodeFunctionResult(fn, result);
 }
 
 // One registry write at a time, signed by REGISTRY_ADMIN; waits until it is mined.
@@ -2483,22 +2491,32 @@ function registryWrite(fn, args) {
     return run;
 }
 
-function sectionFromTuple(id, s) {
+function sectionFromTuple(id, s, info) {
     return {
         id,
         name: s.name,
         active: s.active,
+        archived: s.archived,
         createdAt: Number(s.createdAt),
-        allowedIps: s.allowedIps ? s.allowedIps.split(" ").filter(Boolean) : [],
         accounts: {
             upfront: ethers.getAddress(s.upfront),
             consumption: ethers.getAddress(s.consumption),
             payment: ethers.getAddress(s.payment)
         },
+        info,
         keyHash: s.keyHash
     };
 }
 
+async function readSection(id) {
+    const [s] = await registryCall("getSection", [id]);
+    const [keys, values] = await registryCall("getInfo", [id]);
+    const info = {};
+    keys.forEach((key, i) => { info[key] = values[i]; });
+    return sectionFromTuple(id, s, info);
+}
+
+// All sections, archived ones included (callers filter)
 async function listSections(fresh = false) {
     requireSections();
 
@@ -2510,8 +2528,7 @@ async function listSections(fresh = false) {
     const list = [];
 
     for (let id = 1; id <= count; id += 1) {
-        const [s] = await registryCall("getSection", [id]);
-        list.push(sectionFromTuple(id, s));
+        list.push(await readSection(id));
     }
 
     sectionCache.list = list;
@@ -2519,12 +2536,16 @@ async function listSections(fresh = false) {
     return list;
 }
 
-async function getSection(id, fresh = false) {
+async function getSection(id, fresh = false, allowArchived = false) {
     const n = Number(id);
     const section = Number.isInteger(n) ? (await listSections(fresh)).find((s) => s.id === n) : null;
 
     if (!section) {
         throw httpError(404, `no section ${id}`);
+    }
+
+    if (section.archived && !allowArchived) {
+        throw httpError(409, `section ${id} is archived`);
     }
 
     return section;
@@ -2556,7 +2577,31 @@ function sectionName(value) {
     return name;
 }
 
-// ---- IPv4 addresses and networks (allowed IPs of sections and of the admin API)
+async function assertNameFree(name, exceptId = 0) {
+    const taken = (await listSections(true)).find((s) => !s.archived && s.id !== exceptId && s.name.toLowerCase() === name.toLowerCase());
+
+    if (taken) {
+        throw httpError(409, `a section named "${taken.name}" exists already`);
+    }
+}
+
+function infoField(key, value) {
+    const k = typeof key === "string" ? key.trim() : "";
+
+    if (!/^[A-Za-z0-9_.-]{1,32}$/.test(k)) {
+        throw httpError(400, "info key: 1 to 32 characters, letters, digits, _ . -");
+    }
+
+    const v = value === undefined || value === null ? "" : String(value);
+
+    if (Buffer.byteLength(v) > 512) {
+        throw httpError(400, "info value: up to 512 bytes");
+    }
+
+    return [k, v];
+}
+
+// ---- IPv4 addresses and networks (the admin API's allowed addresses)
 
 function ipv4ToInt(ip) {
     const parts = String(ip).split(".");
@@ -2566,33 +2611,6 @@ function ipv4ToInt(ip) {
     }
 
     return parts.reduce((acc, p) => ((acc << 8) | Number(p)) >>> 0, 0);
-}
-
-function validIpEntry(entry) {
-    const [net, bits, extra] = String(entry).split("/");
-    return extra === undefined && ipv4ToInt(net) !== null
-        && (bits === undefined || (/^\d{1,2}$/.test(bits) && Number(bits) <= 32));
-}
-
-function allowedIpList(value) {
-    const list = Array.isArray(value) ? value : String(value || "").split(/[\s,]+/);
-    const entries = [...new Set(list.map((e) => String(e).trim()).filter(Boolean))];
-
-    if (!entries.length) {
-        throw httpError(400, "allowedIps: at least one IPv4 address or network, e.g. [\"10.1.2.3\", \"10.1.5.0/24\"]");
-    }
-
-    const bad = entries.filter((e) => !validIpEntry(e));
-
-    if (bad.length) {
-        throw httpError(400, `allowedIps: not an IPv4 address or network: ${bad.join(", ")}`);
-    }
-
-    if (entries.join(" ").length > 1024) {
-        throw httpError(400, "allowedIps: too many entries");
-    }
-
-    return entries;
 }
 
 function ipMatches(ip, entries) {
@@ -2658,10 +2676,10 @@ function adminRoute(handler) {
 // ---- Admin routes: sections
 
 app.get("/admin/sections", adminGuard, adminRoute(async (req) => {
-    const list = await listSections(req.query.fresh === "1");
+    const all = await listSections(req.query.fresh === "1");
     const sections = [];
 
-    for (const section of list) {
+    for (const section of all.filter((s) => req.query.archived === "1" || !s.archived)) {
         sections.push(await withBalances(section));
     }
 
@@ -2670,19 +2688,16 @@ app.get("/admin/sections", adminGuard, adminRoute(async (req) => {
 
 app.get("/admin/sections/:id", adminGuard, adminRoute(async (req) => ({
     success: true,
-    section: await withBalances(await getSection(req.params.id, true))
+    section: await withBalances(await getSection(req.params.id, true, true))
 })));
 
 // Create: three MPC keys (needs all MPC nodes online), the API key (shown only in this answer),
-// the registry entry. No funding: top up the upfront account separately.
+// the registry entry, optional info fields. No funding: top up the upfront account separately.
 app.post("/admin/sections", adminGuard, adminRoute(async (req) => {
     requireSections();
     const name = sectionName(req.body.name);
-    const allowedIps = allowedIpList(req.body.allowedIps);
-
-    if ((await listSections(true)).some((s) => s.name.toLowerCase() === name.toLowerCase())) {
-        throw httpError(409, `a section named "${name}" exists already`);
-    }
+    const info = Object.entries(req.body.info || {}).map(([k, v]) => infoField(k, v)).filter(([, v]) => v !== "");
+    await assertNameFree(name);
 
     if (!CONFIG.MPC_ADMIN_URL) {
         throw httpError(503, "sections need the MPC signer (MPC_ADMIN_URL)");
@@ -2690,18 +2705,21 @@ app.post("/admin/sections", adminGuard, adminRoute(async (req) => {
 
     const accounts = {};
 
-    for (const [role, pool] of Object.entries(SECTION_POOLS)) {
+    for (const [role, { pool }] of Object.entries(SECTION_ROLES)) {
         accounts[role] = await createMpcAccount(pool);
     }
 
     const { key, hash } = newSectionKey();
-    const written = await registryWrite("createSection", [
-        name, accounts.upfront, accounts.consumption, accounts.payment, hash, allowedIps.join(" ")
-    ]);
+    const written = await registryWrite("createSection", [name, accounts.upfront, accounts.consumption, accounts.payment, hash]);
     const created = written.receipt.logs
         .map((log) => { try { return registryIface.parseLog(log); } catch { return null; } })
         .find((log) => log && log.name === "SectionCreated");
-    const id = created ? Number(created.args.id) : (await listSections(true)).find((s) => s.name === name).id;
+    const id = Number(created.args.id);
+
+    for (const [k, v] of info) {
+        await registryWrite("setInfo", [id, k, v]);
+    }
+
     console.log(`section ${id} "${name}" created: upfront ${accounts.upfront}, consumption ${accounts.consumption}, payment ${accounts.payment}`);
 
     return {
@@ -2713,6 +2731,28 @@ app.post("/admin/sections", adminGuard, adminRoute(async (req) => {
     };
 }));
 
+app.post("/admin/sections/:id/name", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    const name = sectionName(req.body.name);
+
+    if (name === section.name) {
+        return { success: true, id: section.id, name };
+    }
+
+    await assertNameFree(name, section.id);
+    const written = await registryWrite("setName", [section.id, name]);
+    console.log(`section ${section.id}: renamed "${section.name}" -> "${name}"`);
+    return { success: true, id: section.id, name, txHash: written.txHash };
+}));
+
+// Info field: { key, value }; an empty value removes the field
+app.post("/admin/sections/:id/info", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    const [key, value] = infoField(req.body.key, req.body.value);
+    const written = await registryWrite("setInfo", [section.id, key, value]);
+    return { success: true, id: section.id, key, value, removed: value === "", txHash: written.txHash };
+}));
+
 // New API key; the old one stops working at once
 app.post("/admin/sections/:id/key", adminGuard, adminRoute(async (req) => {
     const section = await getSection(req.params.id, true);
@@ -2720,13 +2760,6 @@ app.post("/admin/sections/:id/key", adminGuard, adminRoute(async (req) => {
     const written = await registryWrite("setKey", [section.id, hash]);
     console.log(`section ${section.id}: API key rotated`);
     return { success: true, id: section.id, apiKey: key, note: "the API key is shown only now", txHash: written.txHash };
-}));
-
-app.post("/admin/sections/:id/ips", adminGuard, adminRoute(async (req) => {
-    const section = await getSection(req.params.id, true);
-    const allowedIps = allowedIpList(req.body.allowedIps);
-    const written = await registryWrite("setAllowedIps", [section.id, allowedIps.join(" ")]);
-    return { success: true, id: section.id, allowedIps, txHash: written.txHash };
 }));
 
 app.post("/admin/sections/:id/active", adminGuard, adminRoute(async (req) => {
@@ -2740,8 +2773,8 @@ app.post("/admin/sections/:id/active", adminGuard, adminRoute(async (req) => {
     return { success: true, id: section.id, active: req.body.active, txHash: written.txHash };
 }));
 
-// ---- Admin routes: section money (step 3). Each transfer carries a memo naming the operation,
-// so the chain itself shows what it was. "all" moves the whole spendable balance (gas is free).
+// ---- Admin routes: section money. Each transfer carries a memo naming the operation, so the chain
+// itself shows what it was. "all" moves the whole spendable balance (gas is free).
 
 function adminAmount(value, allowAll) {
     const text = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
@@ -2757,7 +2790,8 @@ function adminAmount(value, allowAll) {
     return text;
 }
 
-async function sectionMove(section, from, to, amountInput, memo) {
+// Moves `amountInput` ("all" or ETH) from -> to. With quietIfEmpty, "all" of a zero balance is a no-op.
+async function sectionMove(section, from, to, amountInput, memo, quietIfEmpty = false) {
     let amount = amountInput;
 
     const result = await withSenderLock(from, async () => {
@@ -2765,6 +2799,10 @@ async function sectionMove(section, from, to, amountInput, memo) {
             const available = await availableWei(from);
 
             if (available === 0n) {
+                if (quietIfEmpty) {
+                    return null;
+                }
+
                 throw httpError(400, "nothing to move: the balance is 0");
             }
 
@@ -2774,8 +2812,12 @@ async function sectionMove(section, from, to, amountInput, memo) {
         await assertCanPay(from, amount);
         return pay(from, to, amount, true, memo);
     });
-    console.log(`section ${section.id}: ${memo}: ${amount} ETH ${from} -> ${to} (${result.txHash})`);
 
+    if (!result) {
+        return { success: true, id: section.id, operation: memo, from, to, amount: "0", txHash: null };
+    }
+
+    console.log(`section ${section.id}: ${memo}: ${amount} ETH ${from} -> ${to} (${result.txHash})`);
     return { success: true, id: section.id, operation: memo, from, to, amount, txHash: result.txHash, nonce: result.nonce };
 }
 
@@ -2800,13 +2842,144 @@ app.post("/admin/sections/:id/payback", adminGuard, adminRoute(async (req) => {
         `section ${section.id} pay back`);
 }));
 
-// ---- Section calls (step 2): X-Section-Key + source IP -> section_i
+// Replace an account: { role: upfront | consumption | payment }. A new MPC key takes the role; the
+// whole balance of the previous account moves to it (the previous one stays the section's, retired).
+app.post("/admin/sections/:id/account", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    const role = String(req.body.role || "");
 
-const ACCOUNT_USER = 1;
-const accountSectionCache = new Map(); // address (lower) -> { id, kind }: never changes once registered
+    if (!SECTION_ROLES[role]) {
+        throw httpError(400, "role: upfront, consumption or payment");
+    }
+
+    if (!CONFIG.MPC_ADMIN_URL) {
+        throw httpError(503, "sections need the MPC signer (MPC_ADMIN_URL)");
+    }
+
+    const previous = section.accounts[role];
+    const account = await createMpcAccount(SECTION_ROLES[role].pool);
+    const written = await registryWrite("replaceAccount", [section.id, SECTION_ROLES[role].kind, account]);
+    accountSectionCache.clear();
+    console.log(`section ${section.id}: ${role} account ${previous} -> ${account}`);
+    let moved;
+
+    try {
+        moved = await sectionMove(section, previous, account, "all", `section ${section.id} ${role} account replaced`, true);
+    } catch (error) {
+        moved = { error: `the previous account's balance was not moved (${error.message}); move it with this request again` };
+    }
+
+    return { success: true, id: section.id, role, previous, account, txHash: written.txHash, balanceMoved: moved };
+}));
+
+// Archive: all money back to SENDER01 (upfront, consumption, payment), then the section is closed
+// for good (name and key freed, history kept). Body { confirm: "<section name>" }.
+app.post("/admin/sections/:id/archive", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+
+    if (req.body.confirm !== section.name) {
+        throw httpError(400, `to archive, send { "confirm": "${section.name}" }`);
+    }
+
+    const returned = {};
+
+    for (const role of Object.keys(SECTION_ROLES)) {
+        returned[role] = await sectionMove(section, section.accounts[role], CONFIG.SENDER01, "all",
+            `section ${section.id} archived: ${role} returned`, true);
+    }
+
+    const written = await registryWrite("archive", [section.id]);
+    console.log(`section ${section.id} "${section.name}" archived`);
+    return { success: true, id: section.id, archived: true, returned, txHash: written.txHash };
+}));
+
+// eth_getLogs over [fromBlock, head] in chunks of 1000 blocks (Besu limits the range per call)
+async function registryLogs(address, fromBlock, topics) {
+    const head = parseInt(await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []), 16);
+    const logs = [];
+
+    for (let start = fromBlock; start <= head; start += 1000) {
+        const end = Math.min(start + 999, head);
+        logs.push(...await rpc(CONFIG.BESU_RPC, "eth_getLogs", [{
+            address, fromBlock: ethers.toQuantity(start), toBlock: ethers.toQuantity(end), topics
+        }]));
+    }
+
+    return logs;
+}
+
+// ---- Migration from an earlier registry (v1): sections (name, accounts, key hash, active) and their
+// user accounts are written into this registry. Run once by Ansible after deploying v2.
+// Body { from: <old registry>, fromBlock: <block it was deployed in> }.
+const registryV1Iface = new ethers.Interface(require("./section-registry-v1.json").abi);
+
+app.post("/admin/registry/migrate", adminGuard, adminRoute(async (req) => {
+    requireSections();
+    const from = String(req.body.from || "");
+
+    if (!isAddress(from)) {
+        throw httpError(400, "from: the previous registry's address");
+    }
+
+    const startBlock = Number.isInteger(Number(req.body.fromBlock)) && Number(req.body.fromBlock) >= 0 ? Number(req.body.fromBlock) : 0;
+    const [count] = await registryCall("sectionCount", [], registryV1Iface, from);
+    const existing = await listSections(true);
+    const done = [];
+
+    for (let id = 1; id <= Number(count); id += 1) {
+        const [s] = await registryCall("getSection", [id], registryV1Iface, from);
+
+        // a section created by an earlier, interrupted run: keep it, still copy its user accounts
+        const earlier = existing.find((e) => e.accounts.upfront.toLowerCase() === s.upfront.toLowerCase());
+        let newId;
+
+        if (earlier) {
+            newId = earlier.id;
+        } else {
+            const written = await registryWrite("createSection", [s.name, s.upfront, s.consumption, s.payment, s.keyHash]);
+            const created = written.receipt.logs
+                .map((log) => { try { return registryIface.parseLog(log); } catch { return null; } })
+                .find((log) => log && log.name === "SectionCreated");
+            newId = Number(created.args.id);
+
+            if (!s.active) {
+                await registryWrite("setActive", [newId, false]);
+            }
+        }
+
+        // the section's user accounts, from the old registry's AccountAdded events (in chunks: Besu
+        // limits the block range of one eth_getLogs)
+        const users = [...new Set((await registryLogs(from, startBlock, [
+            registryV1Iface.getEvent("AccountAdded").topicHash, ethers.zeroPadValue(ethers.toBeHex(id), 32)
+        ])).map((log) => ethers.getAddress("0x" + log.topics[2].slice(26))))];
+
+        // only the ones not registered yet (addAccounts skips the others anyway)
+        const missing = [];
+
+        for (const user of users) {
+            const [kind] = await registryCall("accountKind", [user]);
+
+            if (Number(kind) === 0) {
+                missing.push(user);
+            }
+        }
+
+        for (let i = 0; i < missing.length; i += 100) {
+            await registryWrite("addAccounts", [newId, missing.slice(i, i + 100)]);
+        }
+
+        done.push({ id, newId, name: s.name, active: s.active, users: users.length, added: missing.length, resumed: Boolean(earlier) });
+        console.log(`registry migration: section ${id} "${s.name}" -> ${newId}, ${users.length} user account(s)`);
+    }
+
+    accountSectionCache.clear();
+    return { success: true, from: ethers.getAddress(from), to: ethers.getAddress(CONFIG.REGISTRY_CONTRACT), sections: done };
+}));
+
+// ---- Section calls: X-Section-Key -> section_i
 
 // The section of a request, or null for a call without X-Section-Key (SENDER01 behaviour, unless
-// SECTION_KEY_REQUIRED). Both the key and the source address must match an active section.
+// SECTION_KEY_REQUIRED). The key must belong to an active section.
 async function sectionFromRequest(req) {
     const key = String(req.headers["x-section-key"] || "").trim();
 
@@ -2820,22 +2993,18 @@ async function sectionFromRequest(req) {
 
     requireSections();
     const hash = ethers.keccak256(ethers.toUtf8Bytes(key));
-    let section = (await listSections()).find((s) => s.keyHash === hash);
+    const live = (list) => list.find((s) => !s.archived && s.keyHash === hash);
+    let section = live(await listSections());
 
     if (!section) {
         // a key created or rotated a moment ago (by the other proxy, or before the cache refresh)
-        section = (await listSections(true)).find((s) => s.keyHash === hash);
+        section = live(await listSections(true));
     }
 
     if (!section) {
         console.warn(`section call with an unknown key from ${req.socket.remoteAddress}`);
         await new Promise((resolve) => setTimeout(resolve, 1000));
         throw httpError(401, "unknown section key");
-    }
-
-    if (!ipMatches(req.socket.remoteAddress, section.allowedIps)) {
-        console.warn(`section ${section.id}: call from ${req.socket.remoteAddress}, not in its allowed IPs`);
-        throw httpError(403, `section "${section.name}" is not allowed from this address`);
     }
 
     if (!section.active) {
@@ -2984,6 +3153,10 @@ async function checkRegistryAtStart() {
 
         if (ethers.getAddress(admin) !== ethers.getAddress(CONFIG.REGISTRY_ADMIN)) {
             console.error(`sections: the registry's admin is ${admin}, not REGISTRY_ADMIN ${CONFIG.REGISTRY_ADMIN}: writes will fail`);
+        }
+
+        if (Number(version) !== 2) {
+            console.error(`sections: the registry is version ${version}; this proxy needs version 2 (rerun ansible 06-proxy.yml)`);
         }
 
         senderState(CONFIG.REGISTRY_ADMIN).pinned = true;

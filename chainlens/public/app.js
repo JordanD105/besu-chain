@@ -1682,12 +1682,8 @@ function keyBox(name, key) {
     ]);
 }
 
-function ipText(list) {
-    return (list || []).join(", ");
-}
-
-function ipList(text) {
-    return String(text || "").split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+function infoText(info) {
+    return Object.entries(info || {}).map(([k, v]) => k + ": " + v).join(" · ");
 }
 
 async function showSections() {
@@ -1719,7 +1715,7 @@ async function showSections() {
 
     // create
     const nameInput = el("input", { class: "table-search", placeholder: t("sections.name"), "aria-label": t("sections.name") });
-    const ipsInput = el("input", { class: "table-search", placeholder: "10.1.2.3, 10.1.5.0/24", "aria-label": t("sections.ips") });
+    const descInput = el("input", { class: "table-search", placeholder: t("sections.description"), "aria-label": t("sections.description") });
     const createButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("sections.create"));
     const createResult = el("div");
     createButton.addEventListener("click", async () => {
@@ -1730,10 +1726,11 @@ async function showSections() {
         createButton.disabled = true;
         createResult.replaceChildren(el("span", { class: "muted" }, t("sections.creating")));
         try {
-            const r = await deployPost("/api/sections", { name, allowedIps: ipList(ipsInput.value) });
+            const info = descInput.value.trim() ? { description: descInput.value.trim() } : {};
+            const r = await deployPost("/api/sections", { name, info });
             createResult.replaceChildren(keyBox(r.section.name, r.apiKey), el("div", { style: "margin-top:8px" }, el("a", { href: "#/sections/" + r.section.id }, t("sections.open").replace("{name}", r.section.name))));
             nameInput.value = "";
-            ipsInput.value = "";
+            descInput.value = "";
         } catch (error) {
             createResult.replaceChildren(el("span", { class: "bad-text" }, error.message));
         }
@@ -1747,7 +1744,7 @@ async function showSections() {
         { label: "sections.upfront", sort: (row) => Number(row.balances.upfront), cell: (row) => row.balances.upfront },
         { label: "sections.consumption", sort: (row) => Number(row.balances.consumption), cell: (row) => row.balances.consumption },
         { label: "sections.payment", sort: (row) => Number(row.balances.payment), cell: (row) => row.balances.payment },
-        { label: "sections.ips", sort: (row) => ipText(row.allowedIps), search: (row) => ipText(row.allowedIps), cell: (row) => ipText(row.allowedIps) }
+        { label: "sections.info", sort: (row) => infoText(row.info), search: (row) => infoText(row.info), cell: (row) => infoText(row.info) }
     ], data.sections, { sort: 0, dir: "asc", key: "sections" });
 
     show(el("div", {}, [
@@ -1760,7 +1757,7 @@ async function showSections() {
             el("div", { class: "muted", style: "margin-bottom:12px" }, t("sections.newNote")),
             el("div", { class: "deploy-form" }, [
                 el("label", {}, [el("span", { class: "muted" }, t("sections.name")), nameInput]),
-                el("label", {}, [el("span", { class: "muted" }, t("sections.ips")), ipsInput]),
+                el("label", {}, [el("span", { class: "muted" }, t("sections.description")), descInput]),
                 el("div", { class: "deploy-buttons" }, [createButton])
             ]),
             createResult
@@ -1793,6 +1790,12 @@ async function showSection(id) {
     }
     const s = data.section;
     const result = el("div", { class: "deploy-error" });
+    if (s.archived) {
+        return show(el("div", {}, [
+            el("div", { class: "muted", style: "margin-bottom:10px" }, [el("a", { href: "#/sections" }, t("sections.title")), " / ", s.name]),
+            el("section", { class: "card" }, [el("h2", {}, s.name + " (" + t("sections.archivedBadge") + ")"), el("div", { class: "muted" }, t("sections.archivedNote"))])
+        ]));
+    }
     const done = (r, text) => {
         result.replaceChildren(el("span", {}, text), r.txHash ? el("span", {}, [" ", ident(r.txHash, "#/transactions/" + r.txHash)]) : null,
             el("span", { class: "muted" }, " " + t("sections.refreshSoon")));
@@ -1826,9 +1829,51 @@ async function showSection(id) {
         return el("div", { class: "section-action" }, [el("span", { class: "muted" }, label + " (" + from + " → " + to + ")"), el("div", { class: "section-inputs" }, [input, button])]);
     };
 
-    const ipsInput = el("input", { class: "table-search", value: ipText(s.allowedIps), "aria-label": t("sections.ips") });
-    const ipsButton = el("button", { type: "button", class: "fn-run" }, t("sections.saveIps"));
-    ipsButton.addEventListener("click", () => act(ipsButton, "ips", { allowedIps: ipList(ipsInput.value) }, null, (r) => done(r, t("sections.ipsSaved"))));
+    const nameInput = el("input", { class: "table-search", value: s.name, "aria-label": t("sections.name") });
+    const nameButton = el("button", { type: "button", class: "fn-run" }, t("sections.rename"));
+    nameButton.addEventListener("click", () => act(nameButton, "name", { name: nameInput.value.trim() }, null, (r) => done(r, t("sections.renamed").replace("{name}", r.name))));
+
+    // info fields: one row each (edit / remove), plus a row to add one
+    const infoRows = el("div", { class: "section-actions" });
+    const infoRow = (key, value, isNew) => {
+        const keyInput = el("input", { class: "table-search info-key", value: key, placeholder: t("sections.infoKey"), "aria-label": t("sections.infoKey") });
+        if (!isNew) {
+            keyInput.readOnly = true;
+        }
+        const valueInput = el("input", { class: "table-search", value, placeholder: t("sections.infoValue"), "aria-label": t("sections.infoValue") });
+        const save = el("button", { type: "button", class: "fn-run" }, isNew ? t("sections.add") : t("sections.save"));
+        save.addEventListener("click", () => act(save, "info", { key: keyInput.value.trim(), value: valueInput.value }, null, (r) => done(r, t("sections.infoSaved").replace("{key}", r.key))));
+        const parts = [keyInput, valueInput, save];
+        if (!isNew) {
+            const remove = el("button", { type: "button", class: "fn-run" }, t("sections.remove"));
+            remove.addEventListener("click", () => act(remove, "info", { key, value: "" }, t("sections.confirmRemoveInfo").replace("{key}", key), (r) => done(r, t("sections.infoRemoved").replace("{key}", r.key))));
+            parts.push(remove);
+        }
+        return el("div", { class: "section-inputs" }, parts);
+    };
+    for (const [k, v] of Object.entries(s.info || {})) {
+        infoRows.append(infoRow(k, v, false));
+    }
+    infoRows.append(infoRow("", "", true));
+
+    const replaceButtons = ["upfront", "consumption", "payment"].map((role) => {
+        const b = el("button", { type: "button", class: "fn-run" }, t("sections.replace").replace("{role}", t("sections." + role)));
+        b.addEventListener("click", () => act(b, "account", { role }, t("sections.confirmReplace").replace("{role}", t("sections." + role)).replace("{name}", s.name),
+            (r) => done(r, t("sections.replaced").replace("{role}", t("sections." + role)).replace("{account}", r.account))));
+        return b;
+    });
+
+    const archiveButton = el("button", { type: "button", class: "fn-run danger" }, t("sections.archive"));
+    archiveButton.addEventListener("click", () => {
+        const typed = window.prompt(t("sections.confirmArchive").replace(/\{name\}/g, s.name));
+        if (typed === null) {
+            return;
+        }
+        act(archiveButton, "archive", { confirm: typed }, null, () => {
+            result.replaceChildren(el("span", {}, t("sections.archived").replace("{name}", s.name)));
+            setTimeout(() => { location.hash = "#/sections"; }, 2500);
+        });
+    });
     const keyButton = el("button", { type: "button", class: "fn-run" }, t("sections.rotate"));
     keyButton.addEventListener("click", () => act(keyButton, "key", {}, t("sections.confirmRotate").replace("{name}", s.name), (r) => result.replaceChildren(keyBox(s.name, r.apiKey))));
     const activeButton = el("button", { type: "button", class: "fn-run" }, s.active ? t("sections.disable") : t("sections.enable"));
@@ -1857,7 +1902,7 @@ async function showSection(id) {
                 ...accountRow("upfront", t("sections.upfront")),
                 ...accountRow("consumption", t("sections.consumption")),
                 ...accountRow("payment", t("sections.payment")),
-                el("span", { class: "muted" }, t("sections.ips")), el("span", {}, ipText(s.allowedIps) || "—"),
+                ...Object.entries(s.info || {}).flatMap(([k, v]) => [el("span", { class: "muted" }, k), el("span", { style: "word-break:break-word" }, v)]),
                 el("span", { class: "muted" }, t("sections.created")), el("span", {}, stamp(s.createdAt))
             ])
         ]),
@@ -1873,8 +1918,11 @@ async function showSection(id) {
         el("section", { class: "card stack" }, [
             el("h2", {}, t("sections.settings")),
             el("div", { class: "section-actions" }, [
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.ips")), el("div", { class: "section-inputs" }, [ipsInput, ipsButton])]),
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.keyLabel")), el("div", { class: "section-inputs" }, [keyButton, activeButton])])
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.name")), el("div", { class: "section-inputs" }, [nameInput, nameButton])]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.infoFields")), infoRows]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.keyLabel")), el("div", { class: "section-inputs" }, [keyButton, activeButton])]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.accountsLabel")), el("div", { class: "section-inputs" }, replaceButtons)]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.archiveLabel")), el("div", { class: "section-inputs" }, [archiveButton])])
             ])
         ]),
         el("section", { class: "card stack" }, [

@@ -1560,11 +1560,11 @@ app.get("/api/sections/status", (req, res) => {
 });
 
 const sectionsJson = express.json({ limit: "64kb" });
-const SECTION_ACTIONS = ["key", "ips", "active", "topup", "sweep", "payback"];
+const SECTION_ACTIONS = ["name", "info", "key", "active", "topup", "sweep", "payback", "account", "archive"];
 
 app.get("/api/sections", sectionsGuard, async (req, res) => {
     try {
-        const r = await proxyAdmin("GET", "/admin/sections?fresh=1");
+        const r = await proxyAdmin("GET", "/admin/sections?fresh=1" + (req.query.archived === "1" ? "&archived=1" : ""));
         res.status(r.status).json(r.data);
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });
@@ -1573,7 +1573,7 @@ app.get("/api/sections", sectionsGuard, async (req, res) => {
 
 app.post("/api/sections", sectionsJson, sectionsGuard, async (req, res) => {
     try {
-        const r = await proxyAdmin("POST", "/admin/sections", { name: req.body.name, allowedIps: req.body.allowedIps });
+        const r = await proxyAdmin("POST", "/admin/sections", { name: req.body.name, info: req.body.info || {} });
         console.log("sections: create", JSON.stringify(req.body.name), "from", req.socket.remoteAddress, "->", r.status);
         res.status(r.status).json(r.data);
     } catch (error) {

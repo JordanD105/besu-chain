@@ -6,7 +6,9 @@
 # The SectionRegistry (docs/sections.md), once: an MPC admin key, then the contract deployed from
 # it with deploy-contract.js (operator, proxy image), straight to coord1 and rpc1 (the VIPs come up
 # in 07-ha.yml). The address and admin go to state/registry.json, then into the proxy settings.
-- name: Section registry (once)
+# A registry of an older version (v1) is replaced by a new one (same admin); 08-check.yml then
+# migrates its sections and user accounts (registry.json "previous").
+- name: Section registry (once, or upgrade)
   hosts: localhost
   gather_facts: false
   vars:
@@ -19,8 +21,26 @@
         path: "{{ registry_file }}"
       register: registry_stat
 
+    - name: Version of the deployed registry
+      ansible.builtin.uri:
+        url: "{{ rpc1_url }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", id: 1, method: eth_call, params: [{ to: "{{ old_registry.address }}", data: "0xffa1ad74" }, latest] }
+      register: registry_version
+      when: registry_stat.stat.exists
+      vars:
+        old_registry: "{{ lookup('ansible.builtin.file', registry_file) | from_json }}"
+
+    - name: Registry to deploy (none yet, or older than this code's version 2)
+      ansible.builtin.set_fact:
+        registry_deploy_needed: >-
+          {{ not registry_stat.stat.exists or (registry_version.json.result | default('0x0') | int(base=16)) < 2 }}
+        registry_previous: >-
+          {{ (lookup('ansible.builtin.file', registry_file) | from_json).address if registry_stat.stat.exists else '' }}
+
     - name: Deploy the registry
-      when: not registry_stat.stat.exists
+      when: registry_deploy_needed | bool
       block:
         - name: Admin key already created (an earlier run stopped before the deployment)?
           ansible.builtin.stat:
@@ -65,8 +85,12 @@
         - name: Record the registry (state/registry.json)
           ansible.builtin.copy:
             dest: "{{ registry_file }}"
-            content: "{{ {'address': registry_address, 'admin': lookup('ansible.builtin.file', admin_file) | trim} | to_nice_json }}\n"
+            content: "{{ registry_record | to_nice_json }}\n"
             mode: "0600"
+          vars:
+            registry_record: >-
+              {{ {'address': registry_address, 'admin': lookup('ansible.builtin.file', admin_file) | trim}
+                 | combine({'previous': registry_previous, 'migrated': false} if registry_previous else {}) }}
 
     - name: Registry
       ansible.builtin.debug:
