@@ -37,7 +37,7 @@ Dashboards (folder **Production**):
 | **Hosts** | CPU, memory, fullest disk, disk I/O, network per host; **Backups**: age, size, result of every backup |
 | **Sections** | ([`../docs/sections.md`](../docs/sections.md)) active sections, upfront accounts below the threshold, SENDER01; balances of every section's upfront / consumption / payment account (table and over time, with the threshold line); operations and ETH moved per section and kind (create account, +x, −x, NFT first sale / resale, top-up, sweep, pay back) |
 
-Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations](#operations)):
+Alerts (shown on the Prometheus *Alerts* page; to get notified, see [Operations](#operations)). What each one means and what to do: [`../docs/alerts.md`](../docs/alerts.md).
 
 | Alert | Severity | Fires when |
 |---|---|---|
