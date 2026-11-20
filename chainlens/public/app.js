@@ -1136,7 +1136,7 @@ function statsCard() {
         const index = statState.index === null || statState.index > last ? last : statState.index;
         const metric = statState.metric;
 
-        const tabs = el("div", { class: "seg-tabs", role: "tablist" }, ["week", "month", "quarter", "year"].map((p) => {
+        const tabs = el("div", { class: "seg-tabs", role: "tablist" }, ["day", "week", "month", "quarter", "year"].map((p) => {
             const b = el("button", { type: "button", role: "tab", class: "seg-tab" + (p === statState.period ? " on" : ""), "aria-selected": String(p === statState.period) }, t("stats." + p));
             b.addEventListener("click", () => { statState.period = p; statState.index = null; load(); });
             return b;

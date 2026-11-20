@@ -1462,7 +1462,7 @@ setInterval(refreshOverview, 15000).unref();
 
 // ---- Section statistics per week / month / quarter / year (UTC), from the indexed transactions and
 // the registry's AccountAdded events. Money flows are classified by the roles of sender and receiver.
-const STAT_PERIODS = { week: 12, month: 12, quarter: 8, year: 5 };
+const STAT_PERIODS = { day: 14, week: 12, month: 12, quarter: 8, year: 5 };
 const STAT_METRICS = ["newUsers", "income", "fromUsers", "nftSales", "nftFirstSales", "nftEth", "toUsers", "topup", "sweep", "payback", "txs"];
 const statsCache = new Map(); // period -> { at, data }
 
@@ -1480,11 +1480,17 @@ function periodStart(ms, period) {
         return Date.UTC(y, m, 1);
     }
     const day = Date.UTC(y, m, d.getUTCDate());
+    if (period === "day") {
+        return day;
+    }
     return day - ((new Date(day).getUTCDay() + 6) % 7) * 86400000; // Monday
 }
 
 function previousStart(start, period) {
     const d = new Date(start);
+    if (period === "day") {
+        return start - 86400000;
+    }
     if (period === "week") {
         return start - 7 * 86400000;
     }
@@ -1503,6 +1509,9 @@ function periodLabel(start, period) {
     }
     if (period === "month") {
         return y + "-" + String(d.getUTCMonth() + 1).padStart(2, "0");
+    }
+    if (period === "day") {
+        return y + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
     }
     // ISO week number
     const thursday = new Date(start + 3 * 86400000);
@@ -1656,7 +1665,7 @@ function buildSectionStats(period) {
 app.get("/api/sections/stats", (req, res) => {
     const period = String(req.query.period || "month");
     if (!STAT_PERIODS[period]) {
-        return res.status(400).json({ error: "period: week, month, quarter or year" });
+        return res.status(400).json({ error: "period: day, week, month, quarter or year" });
     }
     const cached = statsCache.get(period);
     if (!cached || Date.now() - cached.at > 15000) {

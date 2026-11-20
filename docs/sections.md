@@ -190,10 +190,10 @@ total held by its **user accounts**, stacked, labelled `upfront / consumption / 
 `970 / 0 / 0 / 30`) and its number of user accounts, with a hover tooltip per section and a **Table**
 view. Read from the chain every 15 s (`GET /api/overview`).
 
-Below it, **Section statistics** per **week, month, quarter or year** (UTC; the last 12 weeks or
-months, 8 quarters, 5 years), for all sections or one: a column chart of one measure per period, and,
+Below it, **Section statistics** per **day, week, month, quarter or year** (UTC; the last 14 days,
+12 weeks or months, 8 quarters, 5 years), for all sections or one: a column chart of one measure per period, and,
 for the period you click (default: the current one), totals and a table by section
-(`GET /api/sections/stats?period=week|month|quarter|year`). Computed from chainlens's indexed
+(`GET /api/sections/stats?period=day|week|month|quarter|year`). Computed from chainlens's indexed
 transactions, by the roles of sender and receiver:
 
 | Measure | Counted from |
