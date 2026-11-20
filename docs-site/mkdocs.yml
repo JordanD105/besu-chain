@@ -1,0 +1,99 @@
+# Documentation website (docs/): built by docs-site/Dockerfile, served by nginx on :30300.
+#   docker compose -f docs-site/docker-compose.yml up -d --build      (from the repository root)
+site_name: besu-chain documentation
+site_description: Private Besu (QBFT) chain with MPC signing, sections, NFTs, HA and monitoring
+docs_dir: ../docs
+use_directory_urls: false
+
+theme:
+  name: material
+  font: false            # no Google Fonts: the site works without internet access
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep orange
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep orange
+      toggle: { icon: material/weather-sunny, name: Light mode }
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - toc.follow
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+
+plugins:
+  - search
+
+hooks:
+  - hooks.py
+
+markdown_extensions:
+  - tables
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+      # GitHub's anchor rules, so the same links work on GitHub and on this site
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.superfences
+  - pymdownx.details
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+
+nav:
+  - Home: README.md
+  - Overview:
+      - Introduction: overview/introduction.md
+      - Architecture: overview/architecture.md
+      - Production layout: overview/production-layout.md
+      - Glossary: glossary.md
+  - Getting started:
+      - Development environment: getting-started/development.md
+  - Deployment:
+      - Operator guide: deployment/operator-guide.md
+      - Ansible: deployment/ansible.md
+      - Access control: deployment/access-control.md
+      - High availability: deployment/high-availability.md
+      - Besu manual setup: deployment/besu-manual.md
+      - MPC signer in production: deployment/mpc-signer-production.md
+      - GPG key: deployment/gpg-key.md
+  - Components:
+      - Proxy: components/proxy.md
+      - MPC signer: components/mpc-signer.md
+      - Chainlens: components/chainlens.md
+      - Remix: components/remix.md
+      - Monitoring: components/monitoring.md
+      - Documentation website: components/docs-site.md
+  - Features:
+      - Sections: features/sections.md
+      - Contract deployment: features/contract-deployment.md
+      - Contract records: features/contract-records.md
+      - NFT workflow: features/nft-workflow.md
+  - Operations:
+      - Alerts: operations/alerts.md
+      - Troubleshooting: operations/troubleshooting.md
+      - Disaster recovery: operations/disaster-recovery.md
+      - Restore with Ansible: operations/restore.md
+      - MPC signer upgrade: operations/mpc-signer-upgrade.md
+  - Reference:
+      - Proxy API: reference/proxy-api.md
+  - Development:
+      - MPC benchmarks: development/mpc-benchmarks.md
+      - Vault + Web3Signer: development/vault-web3signer.md
+      - Paladin: development/paladin.md

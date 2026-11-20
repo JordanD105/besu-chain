@@ -85,6 +85,7 @@
              | unique | join(' ') }}
         GRAFANA_USERS: "{{ grafana_ips | join(' ') }}"
         REMIX_USERS: "{{ remix_ips | join(' ') }}"
+        DOCS_USERS: "{{ docs_ips | join(' ') }}"
         ROLE: >-
           {{ 'app' if inventory_hostname in groups['app_hosts'] else
              ('monitoring' if inventory_hostname in groups['monitoring_hosts'] else 'node') }}

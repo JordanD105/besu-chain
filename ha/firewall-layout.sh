@@ -13,6 +13,7 @@
 #   CHAINLENS_USERS  users of chainlens (:30100 on the monitoring host)
 #   GRAFANA_USERS    users of Grafana (:3000 on the monitoring host)
 #   REMIX_USERS      developers using Remix (:30200 on the monitoring host)
+#   DOCS_USERS       readers of the documentation site (:30300 on the monitoring host)
 #   (CLIENTS, the former single list, still sets PROXY_CLIENTS and CHAINLENS_USERS when they're unset)
 # Only the listed sources reach each port; everything else stays closed (firewalld default zone).
 # Review with: firewall-cmd --list-all
@@ -30,6 +31,7 @@ PROXY_CLIENTS="${PROXY_CLIENTS:-$CLIENTS}"
 CHAINLENS_USERS="${CHAINLENS_USERS:-$CLIENTS}"
 GRAFANA_USERS="${GRAFANA_USERS:-}"
 REMIX_USERS="${REMIX_USERS:-}"
+DOCS_USERS="${DOCS_USERS:-}"
 ADMIN="${ADMIN:?set ADMIN to the bastion/operator IP}"
 
 # defaults: the documented layout, chosen by the host number
@@ -77,6 +79,7 @@ case "$ROLE" in
     allow_all 3000/tcp "$ADMIN" $GRAFANA_USERS        # Grafana
     allow_all 30100/tcp "$ADMIN" $CHAINLENS_USERS     # chainlens
     allow_all 30200/tcp "$ADMIN" $REMIX_USERS         # Remix IDE (remix/)
+    allow_all 30300/tcp "$ADMIN" $DOCS_USERS          # documentation site (docs-site/)
     ;;
   *) echo "unknown ROLE $ROLE (app, node or monitoring)" >&2; exit 1 ;;
 esac

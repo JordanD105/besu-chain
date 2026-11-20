@@ -1,0 +1,13 @@
+# Build context = the repository root. Keep secrets, state and large files out.
+.git
+**/.env
+**/node_modules
+ansible/state
+remix/remix-live
+mpc-signer/target
+**/target
+**/*.tar
+**/*.tar.gz
+**/*.zip
+**/*.png.orig
+docs-site/site

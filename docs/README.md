@@ -71,6 +71,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | [Chainlens](components/chainlens.md) | explorer pages, admin pages, settings |
 | [Remix](components/remix.md) | the self-hosted IDE |
 | [Monitoring](components/monitoring.md) | Prometheus, Grafana dashboards, metrics endpoints, alert list |
+| [Documentation website](components/docs-site.md) | this documentation as a self-hosted website (Docker, port 30300) |
 
 ### Features
 | Document | Contents |

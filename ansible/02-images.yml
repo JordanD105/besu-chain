@@ -77,7 +77,7 @@
         force: false
       loop: [proxy, chainlens]
 
-    - name: Build the proxy, chainlens (and remix) images
+    - name: Build the proxy, chainlens (remix, documentation site) images
       ansible.builtin.command: >-
         docker compose -f docker-compose.yml
         {% for f in build_compose_overrides[item] | default([]) %}-f {{ f }} {% endfor %}
@@ -163,6 +163,12 @@
       vars:
         app: remix
       when: remix_enabled | bool
+
+    - name: Documentation site image
+      ansible.builtin.include_tasks: tasks/ship-image.yml
+      vars:
+        app: docs-site
+      when: docs_site_enabled | bool
 
 - name: Third-party images where they run
   hosts: servers

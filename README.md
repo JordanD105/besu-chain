@@ -10,7 +10,10 @@ availability, monitoring, backups and Ansible deployment are included.
 ## Documentation
 
 **All documentation is in [`docs/`](docs/README.md)**: start with the
-[documentation map](docs/README.md), which has reading paths by role and by task.
+[documentation map](docs/README.md), which has reading paths by role and by task. It is also
+served as a website with search ([documentation website](docs/components/docs-site.md)):
+`http://192.168.68.139:30300`, or on any Docker host with
+`docker compose -f docs-site/docker-compose.yml up -d --build`.
 
 | Start here | |
 |---|---|
@@ -37,6 +40,7 @@ availability, monitoring, backups and Ansible deployment are included.
 | `besu-test-network/` | one-host test chain (development) | [Development environment](docs/getting-started/development.md) |
 | `besu-vault-web3signer/` | the retired Vault + Web3Signer signer | [Vault + Web3Signer](docs/development/vault-web3signer.md) |
 | `docs/` | all documentation | [map](docs/README.md) |
+| `docs-site/` | the documentation as a self-hosted website (Docker, :30300) | [Documentation website](docs/components/docs-site.md) |
 
 ## Quick start (development, one host)
 

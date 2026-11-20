@@ -185,6 +185,40 @@
       delay: 3
       when: remix_enabled | bool
 
+    - name: Documentation site settings
+      ansible.builtin.copy:
+        dest: "{{ repo_dir }}/docs-site/.env"
+        content: "BIND_IP={{ ansible_host }}\n"
+        mode: "0644"
+      when: docs_site_enabled | bool
+
+    - name: Documentation site (image from 02-images.yml)
+      ansible.builtin.command: docker compose up -d --no-build
+      args:
+        chdir: "{{ repo_dir }}/docs-site"
+      register: docs_up
+      changed_when: docs_up.stderr is search('Started|Recreated')
+      when: docs_site_enabled | bool
+
+    - name: Documentation site answering
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:30300/index.html"
+      register: docs_page
+      until: docs_page.status == 200
+      retries: 20
+      delay: 3
+      when: docs_site_enabled | bool
+
+    - name: Documentation site stopped (docs_site_enabled false)
+      ansible.builtin.shell: >-
+        [ ! -f docker-compose.yml ] || [ -z "$(docker compose ps -q 2>/dev/null)" ]
+        || { docker compose down && echo stopped; }
+      args:
+        chdir: "{{ repo_dir }}/docs-site"
+      register: docs_down
+      changed_when: "'stopped' in docs_down.stdout"
+      when: not docs_site_enabled | bool
+
     - name: Remix stopped (remix_enabled false)
       ansible.builtin.shell: >-
         [ ! -f docker-compose.yml ] || [ -z "$(docker compose ps -q 2>/dev/null)" ]

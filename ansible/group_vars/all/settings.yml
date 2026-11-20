@@ -14,6 +14,8 @@ chainlens_ips: []
 grafana_ips: []
 # Developers using the Remix IDE (monitoring host :30200, remix_enabled below)
 remix_ips: []
+# Readers of the documentation website (monitoring host :30300, docs_site_enabled below)
+docs_ips: []
 
 # Floating IPs (keepalived) on the HA pair (app_hosts). The host IPs are in inventory.yml.
 # Both VIPs must be UNUSED addresses in the same subnet as the two app hosts (keepalived moves
@@ -78,6 +80,9 @@ mpc_bigint: bigint-rug    # GMP backend (faster, LGPL); "" for the pure-Rust def
 # contracts in the browser, with a local compiler mirror (no internet needed by its users).
 # The operator fetches the prebuilt Remix site once (git, github.com) and builds the image.
 remix_enabled: true
+# Documentation website (docs/ built with MkDocs, served by nginx; docs/components/docs-site.md) on the
+# monitoring host :30300. Who may open it: docs_ips at the top (and operator_ip).
+docs_site_enabled: true
 remix_repo: https://github.com/remix-project-org/remix-live.git   # branch gh-pages = Remix builds
 remix_commit: b694f46a0adad6ff2a54bcf0b0a5340e94631a56            # Remix 2.6.15
 remix_solc_versions: ["0.8.28"]   # compilers offered (Remix's default version is always added)
