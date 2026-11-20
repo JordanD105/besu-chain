@@ -1,4 +1,4 @@
-# The operator's build of `app` (proxy or chainlens) on this host, when its content differs.
+# The operator's build of `app` (proxy, chainlens, remix or docs-site) on this host, when its content differs.
 - name: Image content ID on this host ({{ app }})
   ansible.builtin.shell: >-
     set -o pipefail;

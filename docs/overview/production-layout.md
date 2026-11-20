@@ -45,7 +45,7 @@ any others: set them in `ansible/inventory.yml` (hosts) and `ansible/group_vars/
 
 | VIP | Serves | Used by |
 |---|---|---|
-| `192.168.68.150` | HAProxy: `:8545` → rpc1 `:8555` (rpc2 as backup), `:9100` → coord1 (coord2 as backup) | proxies (`BESU_IP`, `WEB3SIGNER_IP`, `MPC_ADMIN_URL`), coordinators (`MPC_BESU_RPC`) |
+| `192.168.68.150` | HAProxy: `:8545` → rpc1 `:8555` (rpc2 as backup), `:9100` → coord1 (coord2 as backup) | proxies (`BESU_IP`, `SIGNER_IP`, `MPC_ADMIN_URL`), coordinators (`MPC_BESU_RPC`) |
 | `192.168.68.151` | `:30000` → the active proxy; `:9121` → its redis-exporter | applications, Prometheus (proxy and redis jobs) |
 
 ```
@@ -114,8 +114,10 @@ storage holds two shares.
 
 ### Proxy (`proxy/`, on .135 and .136)
 
-Same `.env` on both (`proxy/.env.example`): `BESU_IP=192.168.68.150`, `WEB3SIGNER_IP=192.168.68.150`
-(port 9100), `MPC_ADMIN_URL=http://192.168.68.150:9100`, `SENDER01`, `MPC_ADMIN_TOKEN`. Only the
+Same `.env` on both (`proxy/.env.example`): `BESU_IP=192.168.68.150`, `SIGNER_IP=192.168.68.150`
+and `SIGNER_PORT=9100` (the MPC signer's Ethereum signer JSON-RPC: `eth_accounts`,
+`eth_signTransaction`, `eth_sendTransaction`), `MPC_ADMIN_URL=http://192.168.68.150:9100`,
+`SENDER01`, `MPC_ADMIN_TOKEN`. Only the
 host holding `192.168.68.151` runs it: keepalived starts and stops it (`ha/proxy-start.sh`,
 `ha/proxy-stop.sh`), and `ha/check-proxy.sh` stops a proxy that Docker restarted at boot on the
 host without the VIP. On the standby host a proxy container in state `Exited (137)` is therefore
@@ -175,8 +177,8 @@ see [Access control](../deployment/access-control.md)). Everything not listed st
 | 22 | every host | admin / bastion (`operator_ip`) |
 
 **Ports published by Docker bypass firewalld.** The proxy, coordinators, MPC nodes, Grafana,
-chainlens, Remix, Redis, redis-exporter and the Besu nodes without host networking (val3, val4) are reached through Docker's port
-forwarding (DNAT, then the FORWARD chain), which firewalld's zone rules never see: without more, any
+chainlens, Remix, Redis, redis-exporter and the Besu nodes without host networking (val3, val4) are
+reached through Docker's port forwarding (DNAT, then the FORWARD chain), which firewalld's zone rules never see: without more, any
 host on the network could connect to them. `firewall-layout.sh` therefore applies the same allow list
 to forwarded connections as well, in an nftables table of its own (`inet besu_docker`, installed with
 the systemd unit `besu-docker-firewall`, applied at every boot): the listed sources reach the
@@ -490,7 +492,7 @@ cd /opt/besu-chain/proxy && cp .env.example .env && chmod 600 .env
 ```
 
 In `.env`: `SENDER01=<SENDER01>` and `MPC_ADMIN_TOKEN`; the VIP addresses are already set
-(`BESU_IP`/`WEB3SIGNER_IP=192.168.68.150`, `MPC_ADMIN_URL=http://192.168.68.150:9100`). Build
+(`BESU_IP`/`SIGNER_IP=192.168.68.150`, `MPC_ADMIN_URL=http://192.168.68.150:9100`). Build
 the image, but **don't start** it: keepalived does that on the host holding `.151`.
 
 ```bash

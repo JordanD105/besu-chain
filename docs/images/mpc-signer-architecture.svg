@@ -20,9 +20,9 @@
   <text x="40" y="52" font-size="30" font-weight="700" fill="#0f172a">mpc-signer architecture</text>
   <text x="40" y="82" font-size="16" fill="#475569">Non-exportable 2-of-3 threshold ECDSA (CGGMP24 / LFDT Lockness) for Hyperledger Besu: the private key never exists anywhere</text>
   <g transform="translate(1180,34)">
-    <rect width="380" height="52" rx="10" fill="#fff1f2" stroke="#fda4af"/>
-    <text x="16" y="22" font-size="13" font-weight="700" fill="#9f1239">Replaces</text>
-    <text x="16" y="41" font-size="13" fill="#9f1239"><tspan text-decoration="line-through">Vault KV key</tspan> + <tspan text-decoration="line-through">Web3Signer (key in memory)</tspan></text>
+    <rect width="380" height="52" rx="10" fill="#ecfdf5" stroke="#6ee7b7"/>
+    <text x="16" y="22" font-size="13" font-weight="700" fill="#064e3b">No private key anywhere</text>
+    <text x="16" y="41" font-size="13" fill="#064e3b">not on disk, not in memory, not in backups</text>
   </g>
 
   <!-- ================= row 1 ================= -->
@@ -33,9 +33,9 @@
   <text x="60" y="162" font-size="18" font-weight="700" fill="#0f172a">Clients</text>
   <text x="60" y="190" font-size="14" fill="#334155">• proxy (stress-latest.js)</text>
   <text x="60" y="212" font-size="14" fill="#334155">• dApps / scripts / ethers</text>
-  <text x="60" y="234" font-size="14" fill="#334155">• anything that used Web3Signer</text>
-  <text x="60" y="270" font-size="12.5" fill="#64748b">Switch = change the signer URL</text>
-  <text x="60" y="290" font-size="12.5" fill="#64748b">(WEB3SIGNER_IP / PORT → :9100)</text>
+  <text x="60" y="234" font-size="14" fill="#334155">• any Ethereum JSON-RPC client</text>
+  <text x="60" y="270" font-size="12.5" fill="#64748b">Signer URL: the coordinator :9100</text>
+  <text x="60" y="290" font-size="12.5" fill="#64748b">(proxy: SIGNER_IP / SIGNER_PORT)</text>
 
   <!-- coordinator -->
   <g filter="url(#sh)">
@@ -176,8 +176,8 @@
     <text x="60" y="914" fill="#334155">4. coordinator: combine σ₀+σ₁ → (r, s), verify</text>
     <text x="60" y="938" fill="#334155">5. low-s, recovery id v, encode EIP-155 raw tx</text>
     <text x="60" y="962" fill="#334155">6. eth_sendRawTransaction → Besu → tx hash</text>
-    <text x="60" y="1000" font-size="12.5" fill="#64748b">Measured: same TPS / latency as Web3Signer</text>
-    <text x="60" y="1018" font-size="12.5" fill="#64748b">(see bench/RESULTS.md)</text>
+    <text x="60" y="1000" font-size="12.5" fill="#64748b">Hot path: milliseconds per signature</text>
+    <text x="60" y="1018" font-size="12.5" fill="#64748b">(docs/development/mpc-benchmarks.md)</text>
 
     <g filter="url(#sh)"><rect x="560" y="760" width="480" height="280" rx="14" fill="#ffffff" stroke="#059669" stroke-width="1.5"/></g>
     <text x="580" y="792" font-size="17" font-weight="700" fill="#064e3b">Background &amp; cold path</text>

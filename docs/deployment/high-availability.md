@@ -124,7 +124,7 @@ ip -br addr
 | Where | Setting |
 |---|---|
 | rpc1 and rpc2 `.env` | `BESU_HOST_ALLOWLIST` includes `192.168.68.150` (clients and `besu-rpc-health` send `Host: 192.168.68.150`), then `./start.sh` |
-| proxy `.env` on .135 and .136 | `BESU_IP` and `WEB3SIGNER_IP` = `192.168.68.150`, `MPC_ADMIN_URL=http://192.168.68.150:9100` (`proxy/.env.example`) |
+| proxy `.env` on .135 and .136 | `BESU_IP` and `SIGNER_IP` = `192.168.68.150`, `MPC_ADMIN_URL=http://192.168.68.150:9100` (`proxy/.env.example`) |
 | coord1 and coord2 `.env` | `MPC_BESU_RPC=http://192.168.68.150:8545`; `MPC_RELAY_URL` = each coordinator's **own** address |
 | applications | the proxy at `http://192.168.68.151:30000` |
 

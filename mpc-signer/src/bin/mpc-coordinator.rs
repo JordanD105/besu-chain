@@ -2,7 +2,7 @@
 //!
 //! * WebSocket relay for MPC protocol messages (end-to-end signed/encrypted by the nodes)
 //! * Presignature pool per key, refilled in the background
-//! * Web3Signer-compatible JSON-RPC (`eth_accounts`, `eth_signTransaction`, `eth_sendTransaction`;
+//! * Ethereum signer JSON-RPC (`eth_accounts`, `eth_signTransaction`, `eth_sendTransaction`;
 //!   every other method is proxied to Besu) so existing clients switch by changing a URL
 //! * Admin API: aux-info generation, key generation, pool status
 
@@ -612,7 +612,7 @@ fn finish(tx: &eth::TxIntent, pk_sec1: &[u8], sig: &Signature<E>) -> Result<Vec<
     Ok(tx.encode_signed(recid, &r, &s))
 }
 
-// ============================================================ JSON-RPC (Web3Signer-compatible)
+// ============================================================ JSON-RPC (Ethereum signer API)
 
 #[derive(Deserialize)]
 struct RpcTx {
@@ -708,7 +708,7 @@ async fn handle_rpc(c: &Arc<Coord>, req: Value) -> Value {
                 }
             }
             _ => {
-                // transparent proxy, like Web3Signer
+                // transparent proxy to Besu
                 let r: Value = c.http.post(&c.cli.besu_rpc).json(&req).send().await?.json().await?;
                 return Ok(json!({"__raw": r}));
             }

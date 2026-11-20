@@ -99,8 +99,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 ### Development
 | Document | Contents |
 |---|---|
-| [MPC benchmarks](development/mpc-benchmarks.md) | MPC vs Vault + Web3Signer, sizing; raw runs in `mpc-signer/bench/results/` |
-| [Vault + Web3Signer](development/vault-web3signer.md) | the retired signer, kept for comparison |
+| [MPC benchmarks](development/mpc-benchmarks.md) | signing throughput and latency of the MPC signer, sizing; raw runs in `mpc-signer/bench/results/` |
 | [Paladin](development/paladin.md) | privacy nodes of the test network |
 
 ---

@@ -95,5 +95,4 @@ nav:
       - Proxy API: reference/proxy-api.md
   - Development:
       - MPC benchmarks: development/mpc-benchmarks.md
-      - Vault + Web3Signer: development/vault-web3signer.md
       - Paladin: development/paladin.md

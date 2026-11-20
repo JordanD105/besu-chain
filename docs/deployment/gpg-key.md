@@ -15,7 +15,9 @@
 ---
 
 Phase 10 (`10-backups.yml`) backs up the 6 Besu node keys (val1–val4, rpc1, rpc2). Each key is
-encrypted **on its own host** with your GPG **public** key, and only the encrypted file is kept,
+copied out of its data volume (`backup-key.sh`) into a private temporary directory, encrypted
+**on its own host** with your GPG **public** key (Ansible installs GnuPG there when
+`install_packages` is true), the plain copy is shredded, and only the encrypted file is kept,
 in `ansible/state/key-backups/<node>.key.gpg`. Only the matching **private** key (and its
 passphrase) can decrypt them. So:
 
@@ -97,7 +99,9 @@ cd ansible && ansible-playbook 10-backups.yml
 ls -l state/key-backups/
 ```
 
-Six files, `val1.key.gpg` … `val4.key.gpg`, `rpc1.key.gpg`, `rpc2.key.gpg`. Each must be encrypted
+Six files, `val1.key.gpg` … `val4.key.gpg`, `rpc1.key.gpg`, `rpc2.key.gpg`. Each backup is also
+recorded for monitoring on its host, so the `ValidatorKeyBackupMissing` alert
+([Alerts](../operations/alerts.md)) clears once all four validator keys are recorded. Each must be encrypted
 to your key (this check works without the private key). The `keyid` in the first line:
 
 ```bash
@@ -142,3 +146,7 @@ shred -u val3.key
   the old backups.
 - The backups are made once per key (node keys never change). Delete a file in
   `state/key-backups/` to make Ansible back up that node again.
+- **Rebuilt host:** the record for monitoring is on the host, so after a rebuild the
+  `ValidatorKeyBackupMissing` alert fires although `state/key-backups/` is complete. Move the files
+  aside and rerun `10-backups.yml` ([Restore with Ansible](../operations/restore.md), step 5).
+- Without `key_backup_gpg_public_key`, phase 10 skips the key backups and the alert stays.

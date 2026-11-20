@@ -27,7 +27,8 @@ For a single lost host or node, use the runbook's other sections instead.
 
 | Backup | From |
 |---|---|
-| `ansible/state/` (tokens, `network/`, `cluster.json`, `sender01`, `key-backups/*.key.gpg`) | operator vault |
+| `ansible/state/` (tokens in `secrets/`, `network/`, `cluster.json`, `sender01`, `registry.json`, `registry-admin`, `registry-record/`, `contract-center`, `smoke-test.json`, `key-backups/*.key.gpg`) | operator vault |
+| The repository, with the contract records committed (`contracts/deployments/`) | your git server |
 | GPG **private** key + passphrase (decrypts the node keys, [GPG key for the node-key backups](../deployment/gpg-key.md)) | offline vault |
 | Latest chain snapshot `besu-chain-val3-<time>-b<block>.tgz` **and its `.json`** | `/backup/chain` copy or off-site (`snapshot_copy_to`) |
 | Each MPC node's `mpc-node<N>-<time>.tgz` + its `.env` (with `MPC_NODE_PASSPHRASE`) | each team's own vault |
@@ -35,15 +36,22 @@ For a single lost host or node, use the runbook's other sections instead.
 ## 1. Operator machine and hosts
 
 Rebuild the 5 hosts with the **same IPs** (the node addresses in the network files contain them).
-On the operator: clone the repository, put `ansible/state/` back, then run **only** the
-preparation phases:
+On the operator: clone the repository (the branch you deployed), put `ansible/state/` back, and
+check `group_vars/all/settings.yml` and `inventory.yml` hold your values. Then run **only** the
+preparation phases, in `ansible/`:
 
 ```bash
-cd besu-chain/ansible && ansible-playbook 00-preflight.yml 01-hosts.yml 02-images.yml
+cd besu-chain/ansible
 ```
 
-That gives Docker, the firewall, the repository in `/opt/besu-chain`, node-exporter and all the
-images on the hosts.
+```bash
+ansible-playbook 00-preflight.yml 01-hosts.yml 02-images.yml
+```
+
+That gives Docker, the firewall, the repository in `/opt/besu-chain` (and `state/repo.commit`, so
+the later phases accept it), node-exporter and all the images on the hosts. If `state/build/` was
+not in the vault, `02-images.yml` fetches the Remix site from github.com again
+(`remix_enabled: true`).
 
 ## 2. Besu nodes: key and chain, before anything starts them
 
@@ -117,7 +125,9 @@ In the node folder (`mpc_node_dir`, default `/opt/besu-chain/mpc-signer/deploy/n
    docker compose logs --tail 5
    ```
 
-Signing works again once 2 of the 3 nodes are back; account creation needs all 3.
+Signing works again once 2 of the 3 nodes are back; account creation needs all 3. The backups
+hold every MPC key made before them: `SENDER01`, the SectionRegistry admin, the contract account
+center and the accounts created through the proxy.
 
 ## 4. Everything else: Ansible
 
@@ -130,8 +140,13 @@ Now it's safe:
 - phase 04 starts the coordinators, with no new key ceremony (`state/sender01` exists);
 - phase 05 keeps the restored keys (`init.sh` never replaces an existing key), reuses the genesis
   from `state/network` and leaves the running nodes alone;
-- phases 06–10 bring back the proxy, HAProxy + keepalived, monitoring, chainlens and the backup
-  crons.
+- phase 06 finds `state/registry.json` and reads the registry's version on the restored chain: no
+  new SectionRegistry, and the contract account center (`state/contract-center`) is kept;
+- phases 06–10 bring back the proxy and redis-exporter, the RPC health checker, HAProxy +
+  keepalived, the admin API check (phase 08), monitoring, chainlens, Remix and the backup crons.
+  The smoke test is not repeated (`state/smoke-test.json` exists).
+
+Prometheus starts with an empty history: metrics are not backed up.
 
 ## 5. Check, then reconcile
 
@@ -141,8 +156,30 @@ Now it's safe:
   mints, account fundings. Compare with your business records and redo what's needed.
 - MPC accounts created after the snapshot still have their keys (if the MPC backups are newer),
   but their funding is gone.
-- **Take fresh backups at once:** a chain snapshot, the MPC backups, the key backups of any new
-  node (`ansible-playbook 10-backups.yml`).
+- **Sections** live on chain (the SectionRegistry), so they are back at the snapshot's state too:
+  sections created, changed, topped up or swept after it are gone. Check them on the chainlens
+  Sections page or with the proxy admin API ([Sections](../features/sections.md)).
+- Contracts deployed after the snapshot are gone from the chain; their records may still be in
+  `contracts/deployments/`.
+- **Take fresh backups at once:** the MPC backups (each team, or phase 10 with
+  `mpc_backup_cron: true`) and a chain snapshot. Phase 10 takes a first snapshot only when
+  `snapshot_dir` holds none, and the restored one is there, so take it by hand on .137:
+
+  ```bash
+  cd /opt/besu-val3 && ./snapshot-chain.sh /backup/chain
+  ```
+- **Node key backups:** phase 10 skips every key that has a file in `state/key-backups/`, so on the
+  rebuilt hosts nothing records them for monitoring and `ValidatorKeyBackupMissing` fires. Move the
+  old files aside (keep them until the new ones are checked), then back the keys up again; they are
+  the same keys, so the new files decrypt to the same content:
+
+  ```bash
+  mv state/key-backups state/key-backups.old
+  ```
+
+  ```bash
+  ansible-playbook 10-backups.yml
+  ```
 
 **Practice it before you need it** (runbook section 8): rebuild on spare hosts, time each step and
 write the times into the runbook.

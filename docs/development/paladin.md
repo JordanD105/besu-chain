@@ -6,7 +6,7 @@
 
 ---
 
-This directory contains configuration for three Paladin nodes (`paladin1`, `paladin2`, `paladin3`), each paired with a dedicated Besu sidecar and Postgres instance.
+The test network ([`besu-test-network/`](../../besu-test-network)) contains configuration for three Paladin nodes (`paladin1`, `paladin2`, `paladin3`), each paired with a dedicated Besu sidecar and Postgres instance. Each node's configuration is in `besu-test-network/config/nodes/member<n>/paladin/`.
 
 ## Privacy domain overview
 
@@ -118,7 +118,7 @@ member<n>/paladin/
 Each node uses a self-signed TLS certificate for its gRPC transport. Generate one cert per node:
 
 ```bash
-cd config/paladin
+cd besu-test-network/config/paladin
 
 for node in paladin1 paladin2 paladin3; do
   openssl req -x509 -newkey rsa:2048 \
@@ -235,7 +235,7 @@ If you need the upgradeable version — for example, because you are running a l
 
 **1. Update `get_abis.mjs` to download the non-V0 artifact**
 
-In `smart_contracts/scripts/paladin_bootstrap/get_abis.mjs`, change:
+In `besu-test-network/smart_contracts/scripts/paladin_bootstrap/get_abis.mjs`, change:
 
 ```js
 { src: 'PenteFactory_V0.json', dest: path.join(__dirname, 'PenteFactory.json') },
@@ -250,7 +250,7 @@ to:
 **2. Add the OpenZeppelin upgrades plugin**
 
 ```bash
-cd smart_contracts
+cd besu-test-network/smart_contracts
 npm install --save-dev @openzeppelin/hardhat-upgrades @openzeppelin/contracts
 ```
 
@@ -409,7 +409,7 @@ The three deploy scripts work unchanged against any network. The order (Pente �
 ### Build the deployment scripts
 
 ```bash
-cd smart_contracts
+cd besu-test-network/smart_contracts
 npm install
 npm run compile
 ```
@@ -422,7 +422,7 @@ It then runs `npx hardhat compile` to produce the `ERC1967Proxy` artifact needed
 
 ### Configure the deployer account
 
-The deployer private key and RPC URL are read from `smart_contracts/keys.ts`. For the quickstart the file contains a hardcoded demo key — **do not use that key on any shared or production network**. Before running against a live network, replace the `accountPrivateKey` with a key that controls a funded account on that network:
+The deployer private key and RPC URL are read from `besu-test-network/smart_contracts/keys.ts`. For the quickstart the file contains a hardcoded demo key — **do not use that key on any shared or production network**. Before running against a live network, replace the `accountPrivateKey` with a key that controls a funded account on that network:
 
 ```ts
 // smart_contracts/keys.ts

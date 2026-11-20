@@ -11,7 +11,7 @@
 | **Cold path** | Signing without a ready presignature: the MPC nodes compute one on demand (about 0.6 s instead of milliseconds) |
 | **Consumption account** | A section's account that **receives** money: +x transfers from users and first NFT sales. Swept to the payment account |
 | **Contract account center** (`CONTRACT_CENTER`) | The MPC account that deploys every contract through the proxy (and mints version-3 NFTs). Contracts it deploys are registered on chain with their ABI |
-| **Coordinator** (coord1, coord2) | Combines the MPC nodes' partial signatures; holds **no** key material. Web3Signer-compatible API on port 9100 |
+| **Coordinator** (coord1, coord2) | Combines the MPC nodes' partial signatures; holds **no** key material. Ethereum signer JSON-RPC (`eth_accounts`, `eth_sendTransaction`) on port 9100 |
 | **Floating IP / VIP** | An address that keepalived moves between h135 and h136: `.150` (Besu RPC, MPC signer) and `.151` (the proxy) |
 | **HA pair** | h135 and h136: everything on the application path runs on both; one is active |
 | **MPC** | Multi-party computation: the key is split into 3 **shares** on 3 MPC nodes; any 2 can sign together, none alone. The full key never exists |

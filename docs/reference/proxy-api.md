@@ -182,7 +182,7 @@ curl -s -X POST http://192.168.68.151:30000/nft/transfer -H 'Content-Type: appli
 
 | Endpoint | Answer |
 |---|---|
-| `GET /nft/:tokenId?collection=DRG` | token, owner, price, metadata |
+| `GET /nft/:tokenId?collection=DRG` | token, owner, tokenURI, mint transaction, metadata |
 | `GET /nft/:tokenId/metadata?collection=DRG` | the metadata JSON |
 | `GET /nft/owner/:address` | tokens owned, per collection (`?collection=` for one) |
 | `GET /nft/contract` | the default collection |

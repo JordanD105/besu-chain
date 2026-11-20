@@ -58,7 +58,8 @@ app_images:
   docs-site: localhost/besu-docs/docs
 chainlens_local_registry: /var/lib/chainlens/deployments   # Deploy page records on the monitoring host
 # Directories of the repository that 01-hosts.yml copies to the hosts
-deployed_dirs: [besu-production, ha, monitoring, mpc-signer/deploy, proxy, chainlens, contracts, remix, docs-site]
+# (docs: built into the documentation site image by 02-images.yml)
+deployed_dirs: [besu-production, ha, monitoring, mpc-signer/deploy, proxy, chainlens, contracts, remix, docs-site, docs]
 built_apps: "{{ ['proxy', 'chainlens'] + (['remix'] if remix_enabled | bool else []) + (['docs-site'] if docs_site_enabled | bool else []) }}"
 
 # File names of the images built by 02-images.yml in image_archives_dir (save-images.yml)
@@ -67,6 +68,7 @@ built_image_archives:
   proxy: proxy-docker.tar
   chainlens: chainlens-docker.tar
   remix: remix-docker.tar
+  docs-site: docs-site-docker.tar
 
 # Derived from the IP plan (inventory.yml + settings.yml): used by the generated configs
 ha_primary: "{{ coordinators[0].host }}"     # holds the VIPs normally (keepalived priority 150)

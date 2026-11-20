@@ -40,7 +40,7 @@ backend besu_rpc
     server {{ n.name }} {{ ip_of[n.host] }}:{{ n.rpc_port }} check addr 127.0.0.1 port {{ rpc_health_base_port + loop.index }} inter 2s fall 2 rise 2{{ ' backup' if not loop.first else '' }}
 {% endfor %}
 
-# MPC signer (Web3Signer-compatible JSON-RPC + admin API): coord1 normally, coord2 when coord1 is
+# MPC signer (Ethereum signer JSON-RPC + admin API): coord1 normally, coord2 when coord1 is
 # down. coord2 runs all the time with its own presignature pool full (warm) and
 # re-reads the key list from the MPC nodes, so it signs for every account at once.
 frontend mpc_signer

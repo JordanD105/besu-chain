@@ -14,7 +14,7 @@ internet at use time: the compilers come from a mirror inside the image.
 |---|---|
 | Remix | the prebuilt site of `github.com/remix-project-org/remix-live` (branch `gh-pages`, what remix.ethereum.org serves), pinned by commit: `remix_commit` in `ansible/group_vars/all/settings.yml` (Remix 2.6.15) |
 | Compilers | `remix_solc_versions` (default `0.8.28`) plus the version Remix selects by default (0.8.34 in 2.6.15), from the npm package `solc` (the official Emscripten builds), served at `/solc-bin/` with a `list.json` like binaries.soliditylang.org |
-| Server | `serve.js`, a small static server on `node:22-alpine` (the base image the proxy and chainlens already use) |
+| Server | `serve.js`, a small static server on `node:22-alpine` (the base image the proxy and chainlens already use), port 30200, gzip, no dependencies |
 | Access | the operator (`operator_ip`) and `remix_ips`; everyone else is blocked by the firewall |
 
 ## Deployment
@@ -45,20 +45,33 @@ cd remix && SOLC_VERSIONS="0.8.28" docker compose build && docker compose up -d
 
 ## Using it with this chain
 
-1. **Compiler:** pick a mirrored version (`0.8.28`). **Settings → EVM version: `cancun`.** Remix 2.6.15
-   defaults to `osaka`; this chain (and the Besu version here) has no Prague/Osaka opcodes, so code
+1. **Compiler:** pick a mirrored version (`0.8.28`). **Solidity compiler → Advanced configurations →
+   EVM version: `cancun`.** Remix 2.6.15 defaults to `osaka`; this chain (and the Besu version here) has no Prague/Osaka opcodes, so code
    compiled for them can fail on chain. Turn the optimizer on (200 runs) for deployment builds.
 2. **Test** in *Deploy & run → Remix VM (Cancun)*: an in-browser chain, nothing leaves the browser.
 3. **Export the artifact:** Remix writes `contracts/artifacts/<Name>.json` (ABI + bytecode) when
    *Settings → Generate contract metadata* is on. Download it, together with the source.
 4. **Deploy to production** on the chainlens **Deploy** page
-   ([Contract deployment (chainlens Deploy page)](../features/contract-deployment.md); for an NFT collection, the
-   whole path to a sale is in [NFT workflow](../features/nft-workflow.md)), or from the operator with
-   [Besu production packages (manual setup)](../deployment/besu-manual.md#deploying-a-contract),
-   signed by an MPC account. Remix itself never connects to the production chain and holds no keys.
-   The record it writes makes the contract readable in chainlens.
+   ([Contract deployment (chainlens Deploy page)](../features/contract-deployment.md)): signed by the
+   contract account center and registered on chain, so chainlens and applications (`/contract/call`,
+   `/contract/send`) can use it at once. For an NFT collection, the whole path to a sale is in
+   [NFT workflow](../features/nft-workflow.md). The other way is
+   `besu-production/operator/deploy-contract.js` on the operator
+   ([Besu production packages (manual setup)](../deployment/besu-manual.md#deploying-a-contract)),
+   signed by an MPC account; it writes a record in `contracts/deployments/`
+   ([contract records](../features/contract-records.md)) that makes the contract readable in
+   chainlens, but it is not in the on-chain registry.
 
-Remix keeps files in the browser (IndexedDB) of each user: save the sources in git.
+Remix itself never connects to the production chain and holds no keys: deploy with one of the two
+ways above, not from Remix's *Deploy & run*.
+
+Remix keeps files in the browser (IndexedDB) of each user: save the sources in git. The Remix
+build is patched at image build time to load its compiler list and compilers from `/solc-bin/`
+instead of `binaries.soliditylang.org`; check the mirror with:
+
+```bash
+curl -s http://192.168.68.139:30200/solc-bin/list.json
+```
 
 Features that need Remix's cloud services do nothing here: RemixAI, the plugin directory, GitHub/Gist
 import and sharing, and the compiler versions that are not mirrored. Remix tries to reach them from the

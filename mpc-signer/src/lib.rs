@@ -3,7 +3,7 @@
 //!
 //! * `mpc-node`        – holds one key share, checks policy, runs MPC protocols, issues partial signatures
 //! * `mpc-coordinator` – stateless; relays protocol messages, keeps the presignature pool,
-//!                       exposes a Web3Signer-compatible JSON-RPC API
+//!                       exposes an Ethereum signer JSON-RPC API
 //!
 //! The full private key never exists anywhere: not at key generation, not at signing.
 

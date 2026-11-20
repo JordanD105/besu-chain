@@ -3,6 +3,7 @@
 #   group_vars/all/settings.yml; pulled first when missing on the operator;
 # - built by 02-images.yml (MPC signer, proxy, chainlens, remix): copied from state/images/, so run
 #   site.yml (or 02-images.yml) first. File names: built_image_archives in layout.yml.
+#   (with docs_site_enabled, also the documentation site image)
 # Run it on the operator:
 #   ansible-playbook save-images.yml                          uses image_archives_dir from settings.yml
 #   ansible-playbook save-images.yml -e image_archives_dir=/opt/000
@@ -89,7 +90,7 @@
         mode: "0644"
       when: mpc_image_build | bool
 
-    - name: Copy the built proxy, chainlens (and remix) images (replaced when their content changed)
+    - name: Copy the built proxy, chainlens (remix, documentation site) images (replaced when their content changed)
       ansible.builtin.copy:
         src: "{{ state_dir }}/images/{{ item }}.tar"
         dest: "{{ image_archives_dir }}/{{ built_image_archives[item] }}"

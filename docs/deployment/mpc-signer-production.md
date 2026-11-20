@@ -34,6 +34,18 @@ coord2 on .136; clients reach the coordinators at `192.168.68.150:9100` (coord1,
 Every step below was dry-run end to end: three node "hosts", a coordinator, the key ceremony,
 signing with a node stopped, and a backup → data loss → restore → signing again.
 
+**With the Ansible deployment** ([Ansible deployment](ansible.md)) the operator steps are
+automated, the team steps are not:
+
+| Step | Ansible phase |
+|---|---|
+| 2. image | `02-images.yml` builds `mpc_image` on the operator (`mpc_image_build: true`, backend `mpc_bigint`) and loads it on .135–.138, or pulls it from your registry |
+| 3. tokens | generated once into `ansible/state/secrets/` (`mpc_node_token`, `mpc_admin_token`, `mpc_metrics_token`) |
+| 4., 6. nodes | **the teams**. `03-mpc-nodes.yml` writes each team's instructions to `ansible/state/handoff/mpc1.md` … `mpc3.md` and stops until the node files are in `ansible/state/mpc/` and the nodes answer. The node folder is `mpc_node_dir` (default `/opt/besu-chain/mpc-signer/deploy/node`, the node package in the repository copy) instead of `/opt/mpc-node` |
+| 5. `cluster.json` | `03-mpc-nodes.yml`, from `chain_id`, `mpc_max_value_wei`, `mpc_max_gas`, `mpc_allowed_to` (`ansible/state/cluster.json`) |
+| 7., 8. coordinators, ceremony | `04-coordinators.yml`: both coordinators (one at a time), the ceremony, then `MPC_POOL_KEYS=<SENDER01>` |
+| 11. backups | `10-backups.yml`, only with `mpc_backup_cron: true` (see section 11) |
+
 ```
                       private network, firewall: only the ports below
   proxy ──► VIP .150:9100 (HAProxy) ──► coord1 (.135) | coord2 (.136, warm standby)
@@ -84,7 +96,7 @@ signing with a node stopped, and a backup → data loss → restore → signing 
 |---|---|---|---|
 | coordinator(s) | each node | 7000/tcp | node API |
 | each node | coordinator(s) | 9100/tcp | relay (WebSocket) for MPC protocol messages |
-| proxy, operator | coordinator(s) | 9100/tcp | JSON-RPC (Web3Signer-compatible) + `/admin` |
+| proxy, operator | coordinator(s) | 9100/tcp | JSON-RPC (`eth_accounts`, `eth_signTransaction`, `eth_sendTransaction`) + `/admin` |
 | coordinator(s) | Besu RPC node | 8545/tcp | send signed transactions |
 | each team's bastion | its own node | 22/tcp | administration |
 
@@ -142,7 +154,7 @@ Then run:
 - creates the node identity in the `mpc-data` Docker volume;
 - writes `node<ID>.json`, containing the node's **public** keys and URL.
 
-> Store `MPC_NODE_PASSPHRASE` in **this team's** password vault immediately. Without it, the
+> Store `MPC_NODE_PASSPHRASE` in **this team's** password manager immediately. Without it, the
 > node's sealed share and its backups cannot be opened.
 
 Send `node<ID>.json` to the operator. It contains only public keys.
@@ -192,6 +204,14 @@ Edit `.env`:
 | `MPC_RELAY_URL` | `ws://<this coordinator's OWN IP>:9100/relay`, never the VIP |
 | `MPC_BESU_RPC` | `http://192.168.68.150:8545` (HAProxy: rpc1, rpc2 as backup), never a validator |
 | `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN` | from step 3 |
+| `MPC_METRICS_TOKEN` | the token Prometheus sends to `GET /metrics` ([Monitoring](../components/monitoring.md)); empty = open |
+| `MPC_POOL_KEYS` | empty for now; set to `SENDER01` after the ceremony (step 8) |
+| `MPC_POOL_TARGET`, `MPC_POOL_TARGET_SMALL` | presignatures per `big` / `small` key (`.env.example`: 500 / 20; see step 8) |
+| `MPC_REFILL_CONCURRENCY` | concurrent presign sessions (`.env.example`: 8) |
+
+With Ansible, `04-coordinators.yml` writes this `.env` from
+`ansible/templates/coordinator.env.j2` (`mpc_pool_target`, `mpc_pool_target_small`) into
+`/opt/mpc-coordinator/`.
 
 Then copy in `cluster.json` and start:
 
@@ -271,12 +291,13 @@ coordinators see it):
 
 | Variable | Value |
 |---|---|
-| `WEB3SIGNER_IP` / `WEB3SIGNER_PORT` | `192.168.68.150` / `9100` (HAProxy) |
+| `SIGNER_IP` / `SIGNER_PORT` | `192.168.68.150` / `9100` (HAProxy) |
 | `SENDER01` | the ceremony address |
 | `MPC_ADMIN_URL` | `http://192.168.68.150:9100` |
 | `MPC_ADMIN_TOKEN` | from step 3 |
+| `MPC_NEW_ACCOUNT_POOL` | pool class of accounts from `/createaccount` without `pool`: `small` (default), `big` or `none` (Ansible: `mpc_new_account_pool`) |
 
-  The same `.env` on both proxy hosts (`proxy/.env.example`). Remove every `VAULT_*` line. See
+  The same `.env` on both proxy hosts (`proxy/.env.example`). See
   [Proxy (application API)](../components/proxy.md).
 - **Collections:** deploy your NFT collections with `/nft/deploy`. Their minter is `SENDER01`.
 
@@ -301,10 +322,16 @@ The archive holds the node's sealed identity, aux info and **all key shares**.
 - **When:** after the ceremony and then **regularly**, for example hourly with cron:
   `0 * * * * /opt/mpc-node/backup.sh /secure/backup`. Every `/createaccount` adds a new key
   share, and a share created after the last backup only exists on the live node.
+- **With Ansible (opt-in):** `mpc_backup_cron: true` makes `10-backups.yml` install an hourly
+  cron job at minute **:07** on each MPC host where the team's node is set up (`.env` in
+  `mpc_node_dir`): `backup.sh` into `mpc_backup_dir` (default `/secure/mpc-backup`), logging to
+  `/var/log/mpc-backup.log`. It also runs a first backup when there is none. It is off by default
+  because the nodes belong to their teams. The archives stay on the node's own host: each team
+  still copies them off the host.
 - **Where:** in **this team's** storage only. Never put two nodes' backups in one place,
   because two shares can sign.
 - **Passphrase:** the archive cannot be opened without that node's passphrase. Keep it in the
-  team vault, **not** next to the archive.
+  team's password manager, **not** next to the archive.
 - **Monitoring:** each run records its result for node-exporter (`/var/lib/node_exporter/textfile`,
   see `monitoring/node-exporter`). Prometheus alerts when a node's backup is older than 2 hours,
   missing, or failed (`MpcShareBackupTooOld`, `MpcShareBackupMissing`, `BackupFailed`).
@@ -328,9 +355,9 @@ holds an identity.
 
 | Task | How |
 |---|---|
-| **Upgrade** | new image tag in `.env`, then `docker compose up -d`. **One node at a time:** signing continues on the other two. Then the coordinators: **coord2 first**, then coord1 (HAProxy uses coord2 meanwhile). Run `/admin/pool/clear` on both coordinators after each node restart. |
+| **Upgrade** | [MPC signer upgrade](../operations/mpc-signer-upgrade.md). In short: new image tag in `.env`, then `docker compose up -d`. **The nodes first, one at a time:** signing continues on the other two. Then the coordinators, one at a time (by hand: coord2 first, then coord1; HAProxy uses the other one meanwhile). Run `/admin/pool/clear` on both coordinators after each node restart. |
 | **A node is down** | signing continues with 2 of 3, slower while the pool refills. `/createaccount` **fails** until all 3 are up, because key generation needs all three. Alert on it. |
-| **Monitoring** | Set `MPC_METRICS_TOKEN` on each coordinator and add it to [`monitoring/`](../../monitoring) (`prometheus/targets/mpc.yml`). The coordinator serves Prometheus metrics on `GET /metrics` (signatures hot/cold, latency, failures, policy refusals, pool per hot key, presign rate) and probes every MPC node, so `mpc_node_up` shows a node down before a signature needs it. The MPC signer dashboard and alerts (below threshold, node down, pool empty, policy refusals) come with it. `GET /admin/pool` still gives the same numbers as JSON. |
+| **Monitoring** | Set `MPC_METRICS_TOKEN` on each coordinator and give the same value to the monitoring host (`MPC_METRICS_TOKEN=<token> ./setup.sh`, targets in `prometheus/targets/mpc.yml`; [Monitoring](../components/monitoring.md)). The coordinator serves Prometheus metrics on `GET /metrics` (signatures hot/cold, latency, failures, policy refusals, pool per key and class, presign rate) and probes every MPC node every 10 s, so `mpc_node_up` shows a node down before a signature needs it. The MPC signer dashboard and alerts (below threshold, node down, pool empty, policy refusals, share backups) come with it ([Alerts](../operations/alerts.md)). `GET /admin/pool` gives the pool numbers as JSON. |
 | **Change the policy** | edit `cluster.json`, compare `sha256sum` across all teams, copy it everywhere, restart the nodes one by one, then the coordinators |
 | **Rotate `MPC_NODE_TOKEN`** | set the new value on all nodes and coordinators, then restart them |
 | **Rotate `MPC_ADMIN_TOKEN`** | update the coordinators, the proxy and the operator, then restart |
@@ -354,7 +381,7 @@ To recover redundancy:
 - [ ] 3 nodes on 3 hosts (.135, .137, .138), run by 3 teams; no account can reach two nodes
 - [ ] private encrypted network between all hosts; firewall default-deny with only the ports above
 - [ ] node `.env` files are mode 600, readable by root only; disks encrypted at rest
-- [ ] each node passphrase is in its own team's vault; backups are per team and stored apart from the passphrase
+- [ ] each node passphrase is in its own team's password manager; backups are per team and stored apart from the passphrase
 - [ ] `cluster.json` checksum confirmed by every team; image digest pinned and confirmed
 - [ ] `MPC_ADMIN_TOKEN` held only by the coordinators, the operator and the proxy
 - [ ] the signing policy (`max_value_wei`, `max_gas`, optional `allowed_to`) is as tight as your use allows

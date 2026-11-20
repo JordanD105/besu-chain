@@ -38,7 +38,6 @@ served as a website with search ([documentation website](docs/components/docs-si
 | `monitoring/` | Prometheus, Grafana dashboards, alert rules | [Monitoring](docs/components/monitoring.md) |
 | `contracts/deployments/` | one record per deployed contract | [Contract records](docs/features/contract-records.md) |
 | `besu-test-network/` | one-host test chain (development) | [Development environment](docs/getting-started/development.md) |
-| `besu-vault-web3signer/` | the retired Vault + Web3Signer signer | [Vault + Web3Signer](docs/development/vault-web3signer.md) |
 | `docs/` | all documentation | [map](docs/README.md) |
 | `docs-site/` | the documentation as a self-hosted website (Docker, :30300) | [Documentation website](docs/components/docs-site.md) |
 

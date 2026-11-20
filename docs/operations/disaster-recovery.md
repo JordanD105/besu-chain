@@ -26,7 +26,7 @@ and `ha/`, in the 5-host production layout ([Production layout](../overview/prod
 | 192.168.68.136 | val2, rpc2, coord2, proxy2 (standby), HAProxy + keepalived |
 | 192.168.68.137 | val3, mpc2 (takes the daily chain snapshot) |
 | 192.168.68.138 | val4, mpc3 |
-| 192.168.68.139 | Prometheus, Grafana, chainlens |
+| 192.168.68.139 | Prometheus, Grafana (`:3000`), chainlens (`:30100`), Remix IDE (`:30200`) |
 
 Keep a **printed or offline copy** of this page and of the contact list: during a disaster the
 repository, the wiki or the network may be unavailable.
@@ -50,8 +50,8 @@ Fill in before going live.
 | Item | Loss without a backup | Backup | Where it's kept |
 |---|---|---|---|
 | **MPC key shares** (3 nodes) | 1 node: no redundancy left. **2 nodes: all MPC accounts' funds lost forever.** | `mpc-signer/deploy/node/backup.sh`, **hourly**, per node | that node team's storage + off-site; **passphrase stored separately** |
-| **Validator keys** (4) | 1: replace by vote. **2 of 4 at once: the chain stops for good** (no quorum to vote replacements) | `besu-production/node/backup-key.sh`, **once**, then encrypt | each team's vault + off-site |
-| **RPC node keys** | new key needs new network files on every node | `backup-key.sh` (recorded as `node-key`) | operator vault |
+| **Validator keys** (4) | 1: replace by vote. **2 of 4 at once: the chain stops for good** (no quorum to vote replacements) | `besu-production/node/backup-key.sh`, **once**, then encrypted (Ansible: to your GPG public key) | each team's vault + off-site; Ansible: `ansible/state/key-backups/` |
+| **RPC node keys** | new key needs new network files on every node | `backup-key.sh` (recorded as `node-key`) | operator vault; Ansible: `ansible/state/key-backups/` |
 | **Network files** (`genesis.json`, `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS`) | `genesis.json` can't be regenerated identically | copy of `network/`, after each change | operator vault + off-site |
 | **Chain data** | all nodes lost = every balance and NFT lost | `besu-production/node/snapshot-chain.sh`, **daily** | off-site (`COPY_TO`) |
 | **Settings and secrets** (`.env` of each host, `cluster.json`, proxy `.env`) | services can't be rebuilt identically; a lost MPC passphrase = a lost share | copy after each change | each team's vault |
@@ -65,10 +65,10 @@ write-once** (ransomware encrypts every backup it can reach).
 
 | What | Command (from that host's directory) | When (cron example) |
 |---|---|---|
-| Chain snapshot | on **val3 (.137)**: `./snapshot-chain.sh /backup/chain` with `COPY_TO=user@offsite:/besu-chain` | daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=… ./snapshot-chain.sh /backup/chain` |
-| MPC shares | `./backup.sh /secure/backup` on mpc1 (.135), mpc2 (.137), mpc3 (.138), each by its team | hourly: `0 * * * * /opt/mpc-node/backup.sh /secure/backup` |
-| Node keys | Ansible phase 10 (`key_backup_gpg_public_key`): encrypted to your GPG public key in `ansible/state/key-backups/<node>.key.gpg`. By hand: `./backup-key.sh /secure/dir` on all 6 Besu nodes (val1–4, rpc1–2), then encrypt and delete the plain copy | once per key |
-| Network files | `cp -r network /secure/network-$(date +%F)` (operator) | after every change |
+| Chain snapshot | on **val3 (.137)**: `./snapshot-chain.sh /backup/chain` with `COPY_TO=user@offsite:/besu-chain` | daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=… ./snapshot-chain.sh /backup/chain`. Ansible (`10-backups.yml`) installs this cron at `snapshot_cron_hour`:`snapshot_cron_minute` (03:17) with `snapshot_dir` and `snapshot_copy_to`, and takes a first snapshot when none exists (`snapshot_first_run`) |
+| MPC shares | `./backup.sh /secure/backup` on mpc1 (.135), mpc2 (.137), mpc3 (.138), each by its team | hourly, e.g. `7 * * * * /opt/mpc-node/backup.sh /secure/backup`. Ansible installs it only with `mpc_backup_cron: true` (off by default: the nodes belong to their teams): hourly at :07 into `mpc_backup_dir`, plus a first backup. The archives stay on the node's host: each team copies them off |
+| Node keys | Ansible (`10-backups.yml`, `key_backup_gpg_public_key`): encrypted on the host to your GPG public key, plain copy shredded, fetched to `ansible/state/key-backups/<node>.key.gpg` ([GPG key for the node-key backups](../deployment/gpg-key.md)). By hand: `./backup-key.sh /secure/dir` on all 6 Besu nodes (val1–4, rpc1–2), then encrypt and delete the plain copy | once per key |
+| Network files | `cp -r network /secure/network-$(date +%F)` (operator); with Ansible they are in `ansible/state/` | after every change |
 
 **Which node takes the chain snapshot:** it is **stopped** for a few minutes while its data is
 archived, so the layout uses **val3 on .137**: a validator (the chain continues with the other
@@ -80,9 +80,11 @@ The snapshot contains **no keys** and can be restored onto any node of the same 
 
 ### Is it working? (monitoring)
 
-Each backup script records its result. With node-exporter on the host (with its textfile
-directory, the default in `monitoring/node-exporter`), the **Hosts** dashboard shows a **Backups**
-table, and Prometheus alerts:
+Each backup script (`snapshot-chain.sh`, `backup-key.sh`, MPC `backup.sh`) records its result in
+a file in node-exporter's textfile directory **on its own host** (`/var/lib/node_exporter/textfile`,
+the default in `monitoring/node-exporter`). The **Hosts** dashboard shows a **Backups** table, and
+Prometheus alerts (`monitoring/prometheus/rules/backups.yml`, explained in
+[Alerts](alerts.md#6-backups-backupsyml)):
 
 | Alert | When |
 |---|---|
@@ -90,6 +92,10 @@ table, and Prometheus alerts:
 | `ChainSnapshotTooOld` / `ChainSnapshotMissing` | no chain snapshot in 2 days / ever |
 | `MpcShareBackupTooOld` / `MpcShareBackupMissing` | an MPC node not backed up in 2 hours / fewer than 3 nodes ever backed up |
 | `ValidatorKeyBackupMissing` | a validator key has never been backed up |
+
+Because the results are published by each host's node-exporter, **a host that is down makes its
+backups look missing** (e.g. .137 down: `ChainSnapshotMissing`; an MPC host down:
+`MpcShareBackupMissing`). Check `HostDown` first before chasing a backup alert.
 
 ## 4. Recovery objectives
 
@@ -102,7 +108,9 @@ table, and Prometheus alerts:
 ## 5. First response (any incident)
 
 1. **Look before acting.** Grafana: the Alerts row on any dashboard; Besu: validators up, seconds
-   since last block; MPC: nodes up vs threshold; Hosts: which hosts are down.
+   since last block; MPC: nodes up vs threshold; Hosts: which hosts are down. What each alert
+   means: [Alerts](alerts.md); symptoms and fixes for smaller problems:
+   [Troubleshooting](troubleshooting.md).
 2. On the monitoring host: `./check-targets.sh` lists every node that doesn't answer.
 3. **Classify** with the table below, name an incident lead, **freeze** other changes.
 4. Silence follow-on alerts (if Alertmanager is used) so the real signal isn't buried.
@@ -116,7 +124,7 @@ table, and Prometheus alerts:
 | **blocks stopped**: two validator hosts down | [6.3](#63-two-validator-hosts-lost-blocks-stopped) |
 | `MpcNodeDown`, signing still works | [6.4](#64-one-mpc-node-lost) |
 | `MpcBelowThreshold`, **no signatures** | [6.5](#65-two-mpc-nodes-lost) |
-| rpc1 or rpc2 down | [6.3b](#63b-an-rpc-node-lost) |
+| rpc1 or rpc2 down, or `BesuNodeStalled` on an RPC node | [6.3b](#63b-an-rpc-node-lost) |
 | coordinator / proxy / chainlens down | [6.6](#66-coordinator-proxy-chainlens-or-monitoring-host-lost) |
 | everything down | [6.7](#67-whole-site-lost) |
 | suspected intrusion / ransomware | [6.8](#68-intrusion-or-ransomware) |
@@ -132,7 +140,7 @@ The chain continues with 3 of 4 validators. Don't take another validator down un
 back.
 
 1. Prepare a host with the **same IP** (the enode in the network files contains it), Docker and
-   Compose, firewall rules (`firewall-example.sh`).
+   Compose, firewall rules (`ha/firewall-layout.sh <host number>`, or Ansible: [Restore with Ansible](restore.md)).
 2. Copy the node package, its `.env` (from the vault: same `NODE_NAME`, ports, `BESU_ROLE`) and the
    4 network files into `network/`.
 3. Restore its key (decrypt the backup first) and start. A backup made by Ansible
@@ -144,12 +152,17 @@ back.
    ./restore-key.sh /secure/validator3.key        # prints the enode; must say "OK: … in static-nodes.json"
    ./start.sh                                     # syncs from the other nodes
    ```
-4. Check: `RPC=http://127.0.0.1:<RPC_PORT> ./qbft.sh health` → block number rising, peers = nodes − 1.
+4. Check (`qbft.sh` is in `besu-production/operator/`; on .135/.136 the validator's `RPC_PORT` is 8645):
+   ```bash
+   RPC=http://127.0.0.1:<RPC_PORT> /opt/besu-chain/besu-production/operator/qbft.sh health
+   ```
+   Expect the block number rising and peers = nodes − 1.
 
 **Key lost (no backup):** run `./init.sh` (new key), then on the operator side
 `operator/add-node.sh network/ <new node>.json`, distribute the network files to every node,
 restart them one at a time, and vote: `qbft.sh propose 0x<new address> true` on more than half of
-the validators, then `qbft.sh propose 0x<old address> false`. See `docs/deployment/besu-manual.md`.
+the validators, then `qbft.sh propose 0x<old address> false`. See
+[Besu production packages](../deployment/besu-manual.md#operations).
 
 **New IP (same key):** the operator updates that enode's `@<ip>:<port>` in the network files
 (`static-nodes.json`, `permissions_config.toml`, `SHA256SUMS`):
@@ -169,9 +182,15 @@ is gone.
    `curl -s http://192.168.68.151:30000/status/senders` answers; Grafana shows blocks and signatures.
 2. Rebuild the lost host with the **same IP**: its Besu nodes as in 6.1 (val and rpc, each with
    `restore-key.sh` and `start.sh`; for a large chain `restore-chain.sh` first), mpc1 as in 6.4
-   (.135 only), the coordinator and the proxy (6.6), HAProxy + keepalived (`docs/deployment/high-availability.md`).
-3. The VIPs **stay** on .136 (`nopreempt`). Move them back at a quiet time: on .136
-   `systemctl restart keepalived`.
+   (.135 only), the coordinator and the proxy (6.6), `besu-rpc-health`, HAProxy and keepalived
+   ([High availability](../deployment/high-availability.md)). With Ansible: [Restore with Ansible](restore.md)
+   or `ansible-playbook site.yml`.
+3. The VIPs **stay** on .136 (`nopreempt`). On the rebuilt host the proxy is stopped
+   (`docker ps -a` shows `Exited (137)`): `check-proxy.sh` stops a proxy on the host without
+   `.151`, which is expected. Move the VIPs back at a quiet time, on .136:
+   ```bash
+   systemctl restart keepalived
+   ```
 
 ### 6.3 Two validator hosts lost (blocks stopped)
 
@@ -194,6 +213,18 @@ business decision, not a runbook step. This is why validator key backups are man
 
 Blocks continue. If it is **rpc1**, HAProxy already sends Besu RPC to **rpc2** (within ~6 s);
 if it is **rpc2**, chainlens stops updating (point its `BESU_RPC` at rpc1 temporarily).
+
+**A stalled RPC node** (it answers but stopped importing blocks, alert `BesuNodeStalled`) is
+handled by `besu-rpc-health` on .135/.136: it leaves the RPC VIP once its newest block is older than
+`rpc_max_block_age` (30 s) or it is more than `rpc_max_blocks_behind` (10) blocks behind, and it is
+restarted with `docker restart` after `rpc_auto_restart_minutes` (5). See what it decided:
+
+```bash
+curl -s http://127.0.0.1:8410/
+```
+
+If it keeps stalling, check its peers (`BesuPeersLow`) and
+[Troubleshooting](troubleshooting.md#rpc-and-the-rpc-vip).
 
 Rebuild as 6.1 (same IP, `restore-key.sh` with its backed-up node key, `start.sh`). For a large
 chain, restore the latest snapshot first to skip the full sync:
@@ -223,7 +254,7 @@ fails until all three are up. **Fix it today**: there is no redundancy left.
 
 **No backup or no passphrase for that node:** signing still works with 2 of 3, but redundancy is
 gone for good (the library can't re-share keys). Build a new cluster and move all funds:
-`docs/deployment/mpc-signer-production.md`, step 14.
+[MPC signer in production, step 14](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good).
 
 ### 6.5 Two MPC nodes lost
 
@@ -231,7 +262,8 @@ gone for good (the library can't re-share keys). Build a new cluster and move al
 node). As soon as **two** nodes are up, signing works again.
 
 - If one of the two can't be restored: with the remaining two, **immediately move all funds** to a
-  new cluster (production.md step 14). You are one failure away from losing them.
+  new cluster ([MPC signer in production, step 14](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good)).
+  You are one failure away from losing them.
 - If neither can be restored: the funds on MPC accounts are lost. This is why each node is backed up
   hourly, by its own team, off-site.
 
@@ -239,13 +271,15 @@ node). As soon as **two** nodes are up, signing works again.
 
 All four are stateless: redeploy from git plus the saved `.env` / `cluster.json`. The coordinator
 and the proxy have twins on .135/.136: HAProxy and keepalived switch to the twin automatically
-(`docs/deployment/high-availability.md`), so rebuilding the lost one isn't urgent, but redundancy is gone until it's back.
+([High availability](../deployment/high-availability.md)), so rebuilding the lost one isn't urgent,
+but redundancy is gone until it's back.
 
 | Component | Rebuild | Check |
 |---|---|---|
 | MPC coordinator (coord1 .135 / coord2 .136) | `mpc-signer/deploy/coordinator`: `.env` (its own `MPC_BIND_IP`, `MPC_RELAY_URL`), `cluster.json`, `docker compose up -d` | log `keys loaded from nodes`; both coordinators UP on the MPC dashboard |
 | Proxy (proxy1 .135 / proxy2 .136) | `proxy/`: `.env`, `docker compose build`; **don't start it by hand**: keepalived starts it on the host holding `.151` | `GET http://192.168.68.151:30000/status/senders`: no gap, no stall; a test transfer |
-| Chainlens (.139) | `chainlens/`: `.env` (`BESU_RPC` = rpc2), `docker compose up -d --build` | re-indexes from block 0 by itself |
+| Chainlens (.139) | `chainlens/`: `.env` (`BESU_RPC` = rpc2), `docker compose up -d --build`. With the Deploy page on, keep its records (`/var/lib/chainlens/deployments`) | re-indexes from block 0 by itself |
+| Remix IDE (.139) | Ansible `09-monitoring.yml` ([Remix IDE](../components/remix.md)) | opens on `:30200` |
 | Monitoring (.139) | `monitoring/`: `setup.sh` with the metrics token, targets, `docker compose up -d` | `./check-targets.sh`; history before the loss is gone |
 
 ### 6.7 Whole site lost
@@ -281,16 +315,20 @@ previous one.
 2. Rebuild affected hosts **from clean images**, never from the compromised system.
 3. Restore from **offline / off-site** copies taken **before** the intrusion (6.1–6.7).
 4. **Rotate every secret** the attacker could have read: `MPC_NODE_TOKEN`, `MPC_ADMIN_TOKEN`,
-   `MPC_METRICS_TOKEN`, Grafana password, SSH keys, cloud credentials.
+   `MPC_METRICS_TOKEN`, the other files in `ansible/state/secrets/` (proxy admin token, chainlens
+   deploy token, VRRP passwords), Grafana password, SSH keys, cloud credentials.
 5. **MPC:** if an attacker may have obtained one node's share **and** its passphrase, the funds are
-   still safe (two shares are needed), but move them to a new cluster (production.md step 14) to
-   restore the margin. If two nodes may be compromised, move the funds **immediately**.
+   still safe (two shares are needed), but move them to a new cluster
+   ([MPC signer in production, step 14](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good))
+   to restore the margin. If two nodes may be compromised, move the funds **immediately**.
 6. Validator key stolen: vote that validator out and a new one in (6.1 "Key lost").
 
 ## 7. After any recovery: checklist
 
 - [ ] Grafana: no firing alerts; validators up = 4, nodes up as expected, blocks every period
 - [ ] every Besu node has peers = nodes − 1 (Nodes table)
+- [ ] exactly one host holds each VIP (`ip -br addr | grep -E '68\.15[01]/'` on .135 and .136), and
+      `curl -s http://127.0.0.1:8410/` on both shows the RPC nodes healthy
 - [ ] MPC: 3 nodes up, pool refilling, a test signature (`eth_signTransaction` on the coordinator)
 - [ ] proxy: `GET /status/senders` with no gap or stall; one test transfer mined
 - [ ] chainlens shows the latest blocks

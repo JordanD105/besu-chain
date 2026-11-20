@@ -25,7 +25,7 @@ to run payments and NFTs on it:
 | Component | Folder | Role | Docs |
 |---|---|---|---|
 | **Besu (QBFT)** | `besu-production/` | 4 validators + 2 RPC nodes, 1 s blocks, free gas, node allowlist | [Besu manual setup](../deployment/besu-manual.md) |
-| **MPC signer** | `mpc-signer/` | 2-of-3 threshold ECDSA (CGGMP24): 3 MPC nodes + 2 coordinators; Web3Signer-compatible API | [MPC signer](../components/mpc-signer.md) |
+| **MPC signer** | `mpc-signer/` | 2-of-3 threshold ECDSA (CGGMP24): 3 MPC nodes + 2 coordinators; Ethereum signer JSON-RPC API | [MPC signer](../components/mpc-signer.md) |
 | **Proxy** | `proxy/` | the application API: accounts, transfers, NFTs, contracts, sections, admin API; Redis as an optional cache | [proxy](../components/proxy.md) · [API](../reference/proxy-api.md) |
 | **SectionRegistry** | `proxy/contracts/` | on-chain record of sections, their accounts and registered contracts | [sections](../features/sections.md) |
 | **Chainlens** | `chainlens/` | block explorer with platform overview, statistics and admin pages | [chainlens](../components/chainlens.md) |
@@ -35,8 +35,8 @@ to run payments and NFTs on it:
 | **Ansible** | `ansible/` | deploys and updates everything from the operator machine | [Ansible](../deployment/ansible.md) |
 | **Contract records** | `contracts/deployments/` | one JSON record per deployed contract | [contract records](../features/contract-records.md) |
 
-Development-only: `besu-test-network/` (one-host test chain), `mpc-signer/quickstart/` (3 MPC nodes
-on one host), `besu-vault-web3signer/` (the retired Vault + Web3Signer signer, kept for benchmarks).
+Development-only: `besu-test-network/` (one-host test chain) and `mpc-signer/quickstart/` (3 MPC
+nodes on one host).
 
 ## Two setups
 

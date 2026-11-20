@@ -10,37 +10,38 @@
 - [The SectionRegistry (on chain, version 2)](#the-sectionregistry-on-chain-version-2)
 - [Admin API](#admin-api)
 - [Chainlens Sections page](#chainlens-sections-page)
-- [Contracts (step 4)](#contracts-step-4)
-- [NFT collections (step 5)](#nft-collections-step-5)
+- [Application API: section calls](#application-api-section-calls)
+- [Contracts](#contracts)
+- [NFT collections](#nft-collections)
 - [Sections in the chainlens Accounts page](#sections-in-the-chainlens-accounts-page)
 - [Platform overview on the chainlens Dashboard](#platform-overview-on-the-chainlens-dashboard)
-- [Application API: section calls](#application-api-section-calls)
 - [Flows](#flows)
-- [Monitoring (step 6)](#monitoring-step-6)
-- [Build steps](#build-steps)
+- [Monitoring](#monitoring)
+- [Settings](#settings)
 
 ---
 
 A **section** is a group of applications (section_1 … section_n) with its own accounts and its own
 API key. Money for a section's users comes from the section's own accounts instead of SENDER01.
 
-**Status:** all 6 steps are built: the registry (version 2), the proxy admin API, section-scoped
-`/createaccount` and `/transfer`, the chainlens **Sections** page (with the sections' user
-accounts), contracts deployed by the contract account center with `/contract/call` and
-`/contract/send`, NFT collections version 3 (minted by the center, sales paid to the section), and
-monitoring (alerts and the Grafana **Sections** dashboard).
+What exists: the SectionRegistry (version 2), the proxy admin API, section-scoped `/createaccount`
+and `/transfer`, the chainlens **Sections** page (with the sections' user accounts), contracts
+deployed by the contract account center with `/contract/call` and `/contract/send`, NFT
+collections version 3 (minted by the center, first sales paid to the section), and monitoring
+(alerts and the Grafana **Sections** dashboard).
 
 ## Accounts
 
-| Account | How many | Role | Presignature pool |
-|---|---|---|---|
-| SENDER01 | 1 | Funds the upfront accounts (manual top-up); receives money back from payment accounts | big |
-| `upfront_account_i` | 1 per section | **Pays out:** funds new accounts, `/transfer -x` | big |
-| `consumption_account_i` | 1 per section | **Receives:** `/transfer +x`, first NFT sales; swept to `payment_account_i` | none |
-| `payment_account_i` | 1 per section | **Collects** the swept money; can pay it back to SENDER01 | none |
-| `contract_account_center` | 1 | Deploys all contracts (common and NFT), mints all NFTs | big |
-| registry admin | 1 | The only writer of the SectionRegistry | small |
-| user accounts | many | Created by `/createaccount`, belong to one section | as requested |
+| Account | How many | Role | Kind in the registry | Presignature pool |
+|---|---|---|---|---|
+| SENDER01 | 1 | Funds the upfront accounts (manual top-up); receives money back from payment accounts | – | big |
+| `upfront_account_i` | 1 per section | **Pays out:** funds new accounts, `/transfer -x` | 2 upfront | big |
+| `consumption_account_i` | 1 per section | **Receives:** `/transfer +x`, first NFT sales; swept to `payment_account_i` | 3 consumption | none |
+| `payment_account_i` | 1 per section | **Collects** the swept money; can pay it back to SENDER01 | 4 payment | none |
+| user accounts | many | Created by `/createaccount` with the section's key; belong to one section | 1 user | as requested (default `small`) |
+| retired accounts | after a replacement | A replaced upfront / consumption / payment account: still the section's, no role | 5 retired | unchanged |
+| `contract_account_center` | 1 | Deploys all contracts (common and NFT), mints the NFTs of version-3 collections | – | big |
+| registry admin | 1 | The only writer of the SectionRegistry | – | small |
 
 Every account is an MPC key. **Only the proxy sends transactions** from them (one queue per account,
 ordered nonces); chainlens is the UI and calls the proxy's admin API.
@@ -51,12 +52,12 @@ ordered nonces); chainlens is the UI and calls the proxy's admin API.
   chainlens UI: Sections · Deploy · Contracts · NFTs                       apps of section_i
         │ admin token (operator_ip / chainlens_deploy_ips)                       │ X-Section-Key
         ▼                                                                        ▼
- ┌────────────────────────────────── proxy (active, VIP .151) ──────────────────────────────────┐
- │ Admin API: /admin/sections (create, rename, info, key, active, top-up, sweep, pay back,         │
- │            replace account, archive)                                                           │
- │ App API:   /createaccount, /transfer, /contract/call, /contract/send, /nft/*                     │
- │ sender queues: SENDER01 · upfront_i · consumption_i · payment_i · contract_account_center ·      │
- │                registry admin · user accounts                                                   │
+ ┌────────────────────────────────── proxy (active, VIP .151) ───────────────────────────────────┐
+ │ Admin API: /admin/sections (create, rename, info, key, active, top-up, sweep, pay back,       │
+ │            replace account, archive, user accounts), /admin/contracts                         │
+ │ App API:   /createaccount, /transfer, /contract/call, /contract/send, /nft/*                  │
+ │ sender queues: SENDER01 · upfront_i · consumption_i · payment_i · contract_account_center ·   │
+ │                registry admin · user accounts                                                 │
  └────────────────┬────────────────────────────────────────────────────────────┬─────────────────┘
                   │ sign (MPC, 2 of 3)                                         │ read / send
                   ▼                                                            ▼
@@ -69,64 +70,71 @@ ordered nonces); chainlens is the UI and calls the proxy's admin API.
 [`proxy/section-registry.json`](../../proxy/section-registry.json) (solc 0.8.28, EVM cancun;
 `proxy/scripts/compile-contract.js`). Both proxies and chainlens read it; nothing else stores
 sections, so there is no database to replicate or back up (the chain is), every change is a signed
-transaction, and contracts can check it (NftCollection v3, step 5).
+transaction, and contracts can check it (NftCollection v3).
 
 | Holds | Changed by |
 |---|---|
-| name (unique, 1–64 characters) | `createSection`, `setName` |
-| the 3 accounts | `createSection`, `replaceAccount` (the old account stays the section's, *retired*) |
+| name (unique among live sections, 1–64 bytes) | `createSection`, `setName` |
+| the 3 accounts | `createSection`, `replaceAccount` (the old account stays the section's, kind *retired*) |
 | API-key **hash** (keccak256; the key itself is never stored) | `createSection`, `setKey` |
 | active / archived | `setActive`, `archive` |
-| info fields: any key (1–32 characters) → value (up to 512 bytes), up to 32 per section | `setInfo` (an empty value removes the field) |
-| user accounts of each section, every account's kind | `addAccount`, `addAccounts` |
-| registered contracts and their ABI (in the `ContractRegistered` event) | `registerContract` (step 4) |
-| `isConsumptionAccount(address)`: the payee check of NftCollection v3 | (view) |
+| info fields: a key (1–32 characters: letters, digits, `_ . -`) → a value (up to 512 bytes), up to 32 per section | `setInfo` (an empty value removes the field) |
+| user accounts of each section, every account's kind (1 user … 5 retired) | `addAccount`, `addAccounts` (`AccountAdded` events) |
+| registered contracts (kind 1 common, 2 NFT collection) and their ABI (in the `ContractRegistered` event) | `registerContract` |
+| `isConsumptionAccount(address)`: true only for the consumption account of an active, not archived section; the payee check of NftCollection v3 | (view) |
 
-Only the **registry admin** (an MPC key) writes, through the proxy. New kinds of section
-information go into **info fields** (description, contact, limits, …) without a new contract.
+Only the **registry admin** (an MPC key) writes, through the proxy, one write at a time. New kinds of
+section information go into **info fields** (description, contact, limits, …) without a new
+contract. Sections are identified by their key alone: version 2 has no per-section IP addresses.
 
 Deployed by `ansible/06-proxy.yml`: it creates the admin key on coord1, deploys the contract with
 `besu-production/operator/deploy-contract.js` and writes `ansible/state/registry.json`
-(`address`, `admin`); the proxy gets them as `REGISTRY_CONTRACT` and `REGISTRY_ADMIN`.
+(`address`, `admin`); the proxy gets them as `REGISTRY_CONTRACT` and `REGISTRY_ADMIN`, chainlens as
+`REGISTRY_CONTRACT`. The same playbook creates the contract account center
+(`ansible/state/contract-center`, `CONTRACT_CENTER`).
+
 **Upgrade from version 1:** `06-proxy.yml` sees the older version and deploys version 2 (same
-admin, `previous` recorded in `registry.json`); `08-check.yml` then migrates the sections (name,
-accounts, key hash, active) and their user accounts, once (`migrated: true`). Section keys keep
-working. Version 1's allowed IPs are dropped (sections are identified by their key alone).
+admin, `previous` recorded in `registry.json`); `08-check.yml` then calls
+`POST /admin/registry/migrate` once, which copies the sections (name, accounts, key hash, active) and
+their user accounts (`migrated: true` afterwards). Section keys keep working. Version 1's allowed
+IPs are dropped.
 
 ## Admin API
 
 On the proxy (`http://<vip_proxy>:30000/admin/...`), with `Authorization: Bearer <token>`
-(`ansible/state/secrets/proxy_admin_token`), from `operator_ip` or the monitoring host only
-(chainlens calls it there). Details: [Proxy API reference](../reference/proxy-api.md).
+(`ansible/state/secrets/proxy_admin_token`), from an address in `ADMIN_ALLOWED_IPS`: `operator_ip`
+and the monitoring host (chainlens calls it from there). Bodies and answers:
+[proxy API reference](../reference/proxy-api.md#admin-api-sections).
 
 | Request | Does |
 |---|---|
-| `GET /admin/sections` (`?archived=1`) | sections with the balances of their 3 accounts (archived ones only on request) |
-| `GET /admin/sections/:id` | one section |
+| `GET /admin/sections` (`?archived=1`, `?fresh=1`) | sections with the balances of their 3 accounts (archived ones only on request; `fresh` skips the 10 s cache) |
+| `GET /admin/sections/:id` | one section (archived ones too) |
 | `POST /admin/sections {name, info}` | creates the 3 MPC keys (needs **all 3 MPC nodes** online), the API key (returned **once**), the registry entry, optional info fields. No funding. |
 | `POST /admin/sections/:id/name {name}` | renames |
 | `POST /admin/sections/:id/info {key, value}` | sets an info field; `value: ""` removes it |
-| `POST /admin/sections/:id/key` | new API key (returned once); the old one stops working |
-| `POST /admin/sections/:id/active {active}` | enables / disables |
+| `POST /admin/sections/:id/key` | new API key (returned once); the old one stops working at once |
+| `POST /admin/sections/:id/active {active}` | enables / disables (`true` / `false`) |
 | `POST /admin/sections/:id/topup {amount}` | SENDER01 → `upfront_account_i` |
 | `POST /admin/sections/:id/sweep {amount \| "all"}` | `consumption_account_i` → `payment_account_i` |
 | `POST /admin/sections/:id/payback {amount \| "all"}` | `payment_account_i` → SENDER01 |
-| `POST /admin/sections/:id/account {role}` | a new MPC key for `upfront`, `consumption` or `payment`; the old account's whole balance moves to it |
+| `POST /admin/sections/:id/account {role}` | a new MPC key for `upfront`, `consumption` or `payment`; the old account becomes *retired* and its whole balance moves to the new one |
 | `GET /admin/sections/:id/accounts` | the section's user accounts with their balances |
-| `POST /admin/sections/:id/accounts {amount, pool}` | a new user account of the section, funded from its upfront account |
-| `POST /admin/sections/:id/transfer {account, amount}` | `+x` account → consumption, `−x` upfront → account |
+| `POST /admin/sections/:id/accounts {amount, pool}` | a new user account of the section, funded from its upfront account (as `/createaccount` with its key) |
+| `POST /admin/sections/:id/transfer {account, amount, memo}` | `+x` account → consumption, `−x` upfront → account (as `/transfer` with its key) |
 | `POST /admin/sections/:id/archive {confirm: "<name>"}` | all money of the 3 accounts back to SENDER01, then closed for good: key stops working, name freed, history stays |
 
-Every money move carries a memo (`section 1 top-up`, `section 1 sweep`, …), so the chain itself
-says what it was.
+Every money move carries a memo (`section 1 top-up`, `section 1 sweep`, `section 1 pay back`, …),
+so the chain itself says what it was. Contract deployment (`/admin/contracts/*`) is under
+[Contracts](#contracts).
 
 ## Chainlens Sections page
 
 **Blockchain → Sections** (`http://<monitoring host>:30100/#/sections`), when
 `chainlens_sections_enabled: true`. Same access as the Deploy page: `operator_ip` and
-`chainlens_deploy_ips`, with the same token (`state/secrets/chainlens_deploy_token`); for every other
-address the page and its menu entry don't exist. Chainlens forwards each action to the proxy's admin
-API (the proxy's token never reaches the browser) and logs it with the requester's address.
+`chainlens_deploy_ips`, with the same admin token (`state/secrets/chainlens_deploy_token`); for every
+other address the page and its menu entry don't exist. Chainlens forwards each action to the proxy's
+admin API (the proxy's token never reaches the browser) and logs it with the requester's address.
 
 - **List:** each section with its status, the 3 balances and its info fields; **New section** (name,
   optional description) shows the API key once, with a copy button.
@@ -135,10 +143,46 @@ API (the proxy's token never reaches the browser) and logs it with the requester
   `−amount` upfront → account); **Top up**, **Sweep**, **Pay back** (amount, or
   `all` for sweep and pay back); **Rename**; **info fields** (add, edit, remove); **New API key**;
   **Enable / Disable**; **New upfront / consumption / payment account**; **Archive** (type the
-  name to confirm); and its **history**: every transaction of its 3 accounts, labelled (top-up,
-  upfront → account, account → consumption, sweep, pay back).
+  name to confirm); and its **history**: the last 500 indexed transactions of its 3 accounts, labelled
+  (top-up, upfront → account, account → consumption, sweep, pay back).
 
-## Contracts (step 4)
+## Application API: section calls
+
+An application of section_i sends its key in the header **`X-Section-Key: sk_…`**. The proxy
+accepts the call when the key's hash belongs to a section that is **active** (not disabled or
+archived). Who may reach the proxy at all is the firewall's `proxy_client_ips`
+([access control](../deployment/access-control.md)).
+
+| Request | Section call does |
+|---|---|
+| `POST /createaccount {amount, pool}` | new MPC account, **registered under section_i** on chain, funded **from `upfront_account_i`** |
+| `POST /transfer {account, amount: "x", memo}` | `account` → `consumption_account_i` |
+| `POST /transfer {account, amount: "-x", memo}` | `upfront_account_i` → `account` |
+| `POST /nft/transfer {collection, to, tokenId}` | sale of a version-3 NFT to `to`, a user account of section_i ([NFT collections](#nft-collections)) |
+| `POST /contract/send {contract, function, args, from, value}` | a transaction signed by `from`, a user account of section_i ([Contracts](#contracts)) |
+
+`account` must be a user account of section_i (created with that section's key). `from` / `to`
+are not accepted on a section `/transfer`. The answer names the section, the direction, `from`, `to`
+and the transaction.
+
+**Calls without a key** keep the SENDER01 behaviour while `sections_required: false` (settings.yml),
+for applications not moved yet, with one guard: **they can't move any section's money** — a
+section account (user, upfront, consumption, payment, retired), the registry admin or the contract
+account center as sender is refused. With `sections_required: true` they are refused altogether
+(`X-Section-Key is required`).
+
+| Error | Cause |
+|---|---|
+| 401 `unknown section key` | no live section has this key (rotated? archived?) |
+| 401 `X-Section-Key is required` | `sections_required: true` and no key; or a call that always needs one (`/contract/send`, a version-3 `/nft/transfer`) |
+| 403 `section "…" is disabled` | the section is switched off |
+| 403 `0x… is not an account of section "…"` | the account belongs to another section, or isn't a user account |
+| 403 `0x… belongs to section N: call with that section's X-Section-Key` | a keyless call tried to move a section's money |
+| 403 `the registry admin and contract center accounts can't be used here` | a keyless `/transfer` from one of these system accounts |
+| 400 `insufficient balance` | `upfront_account_i` (or the account for `+x`) can't pay: top up / wait for a pending transfer to be mined |
+| 503 `sections are not configured` | the proxy has no `REGISTRY_CONTRACT` / `REGISTRY_ADMIN` |
+
+## Contracts
 
 Every contract is deployed by **`contract_account_center`** (an MPC key, big pool, created once by
 `ansible/06-proxy.yml`: `state/contract-center`), through the proxy, then **registered in the
@@ -146,14 +190,14 @@ SectionRegistry** with its kind (common / NFT collection), its name and its ABI.
 proxy read the registered contracts from the chain (`ContractRegistered` events), so a deployed
 contract is usable and visible at once, on every host, with nothing to copy.
 
-**Deploy** — chainlens **Deploy** page (`chainlens_deploy_enabled`, same access as before), or the
-proxy admin API:
+**Deploy** — chainlens **Deploy** page ([contract deployment](contract-deployment.md)), or the proxy
+admin API:
 
 | Request | Does |
 |---|---|
 | `GET /admin/contracts` | the center's address and the registered contracts |
-| `POST /admin/contracts/check {kind, name, abi, bytecode, deployedBytecode, immutableReferences, args}` | dry run: arguments, gas, no revert; the address it will get |
-| `POST /admin/contracts/deploy {…same}` | deploys (signed by the center), checks the code on chain against `deployedBytecode`, registers it |
+| `POST /admin/contracts/check {kind, name, abi, bytecode, deployedBytecode, immutableReferences, args}` | dry run: arguments, gas, no revert; the address it will get. Nothing is signed |
+| `POST /admin/contracts/deploy {…same}` | deploys (signed by the center), checks the code on chain against `deployedBytecode`, registers it (signed by the registry admin) |
 
 The contract's `msg.sender` at construction is the center: a contract with an owner or roles should
 take them as constructor arguments when the center must not hold them.
@@ -163,34 +207,39 @@ take them as constructor arguments when the center must not hold them.
 | Request | Does |
 |---|---|
 | `POST /contract/call {contract, function, args}` | runs a **view/pure** function (`eth_call`), returns the decoded outputs. No key needed while `sections_required: false`. |
-| `POST /contract/send {contract, function, args, from, value}` + `X-Section-Key` | sends a **state-changing** function, signed by `from`, a **user account of the caller's section**; waits for the block; returns the status and the contract's decoded events. `value` (ETH) only for payable functions. |
+| `POST /contract/send {contract, function, args, from, value}` + `X-Section-Key` | sends a **state-changing** function, signed by `from`, a **user account of the caller's section**; waits for the block; returns the status, `blockNumber`, `gasUsed` and the contract's decoded events. `value` (ETH) only for payable functions. A transaction mined but reverted answers 400 with `success: false`. |
 
 Only **registered** contracts, only functions of **their ABI**. `function` is a name, or the
 signature (`transfer(address,uint256)`) when the name is overloaded. Arguments: numbers as strings
 or numbers, addresses `0x…`, booleans `true`/`false`, arrays and tuples as JSON (or JSON text). A
 transaction that would revert is refused before it is signed, with the reason (`the transaction
-would revert: …`).
+would revert: …`). `NftCollection.mint` can't be used this way: only the center mints, so it
+reverts with `not minter`; use `/nft/mint`.
 
-## NFT collections (step 5)
+## NFT collections
 
 New collections are **NftCollection version 3** ([`proxy/contracts/NftCollection.sol`](../../proxy/contracts/NftCollection.sol),
 `proxy/nft-collection-v3.json`): deployed and minted by the **contract account center**, registered
-in the SectionRegistry, shared by all sections.
+in the SectionRegistry (kind NFT), shared by all sections. The constructor takes `name_`, `symbol_`
+and `registry_` (the SectionRegistry's address).
 
 | Request | What happens |
 |---|---|
-| `POST /nft/deploy {name, symbol}` | the center deploys a version-3 collection (its minter, with the registry's address) and registers it (kind NFT) |
+| `POST /nft/deploy {name, symbol}` | the center deploys a version-3 collection (its minter, with the registry's address) and registers it |
 | `POST /nft/mint {collection, name, image, …, amount}` | the center mints the NFT to itself, for sale; `amount` is its **price**, fixed for good. Not tied to a section. |
-| `POST /nft/transfer {collection, to, tokenId}` + `X-Section-Key` | a sale to `to`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price. **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user holds it, of the same section): the seller's approval is sent if needed and the price goes to the **seller**. |
+| `POST /nft/transfer {collection, to, tokenId}` + `X-Section-Key` | a sale to `to`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price. **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user of the same section holds it): the seller's approval is sent if needed and the price goes to the **seller**. |
 
 The contract itself enforces where a first sale's money goes: `buy` checks
-`SectionRegistry.isConsumptionAccount(payee)` (a live section's consumption account), so even a
-transaction sent around the proxy can't redirect it. A version-3 sale without a section key is
-refused. The chainlens contract page of a collection has **Mint** and **Sell** forms (admin token
-and IP, as the Deploy page): chainlens calls the proxy with the admin token instead of a section key,
-and the section is the buyer's. Step by step from Remix to a sale:
-[nft-workflow.md](nft-workflow.md). **Version-2 collections** (minted by SENDER01, e.g. those made before) keep working as
-before, without a key.
+`SectionRegistry.isConsumptionAccount(payee)` (the consumption account of an active section), so
+even a transaction sent around the proxy can't redirect it.
+
+A version-3 sale needs the section key. The one exception is the admin API caller (the admin token
+from an address in `ADMIN_ALLOWED_IPS`): the chainlens **Mint and sell** card on a collection's
+contract page (admin token and IP, as the Deploy page) calls the proxy that way, and the section is
+then the buyer's. Step by step from Remix to a sale: [NFT workflow](nft-workflow.md).
+
+**Version-2 collections** (minted by SENDER01, e.g. those made before sections) keep working as
+before, without a key: a sale pays SENDER01 (first sale) or the seller.
 
 ## Sections in the chainlens Accounts page
 
@@ -198,8 +247,8 @@ Visible to every chainlens user (the information is public on chain): the **Acco
 **Section** column (the section's name and the account's role: `user`, `upfront`, `consumption`,
 `payment`, `retired`; system accounts are marked `SENDER01`, `contract center`, `registry admin`)
 and a filter (one section, no section, system accounts); an account's page shows its section, role
-and what the role does. Chainlens reads the section events of the SectionRegistry (new accounts,
-renames, replaced accounts, archives) every 15 s.
+and what the role does. Chainlens reads the section events of the SectionRegistry (new sections and
+accounts, renames, replaced accounts, archives) every 15 s.
 
 ## Platform overview on the chainlens Dashboard
 
@@ -212,12 +261,12 @@ total held by its **user accounts**, stacked, labelled `upfront / consumption / 
 view. Read from the chain every 15 s (`GET /api/overview`).
 
 Below it, **Section statistics** per **day, week, month, quarter or year** (UTC; the last 14 days,
-12 weeks or months, 8 quarters, 5 years), for all sections or one: a column chart of one measure per period, and,
-for the period you click (default: the current one), totals and a table by section
-(`GET /api/sections/stats?period=day|week|month|quarter|year`). **Start** / **End** dates choose
-another duration (UTC days, at most 120 columns; `&from=YYYY-MM-DD&to=YYYY-MM-DD`); **Last periods**
-goes back to the default. Computed from chainlens's indexed
-transactions, by the roles of sender and receiver:
+12 weeks or months, 8 quarters, 5 years; default: month), for all sections or one: a column chart of
+one measure per period, and, for the period you click (default: the current one), totals and a table
+by section (`GET /api/sections/stats?period=day|week|month|quarter|year`). **Start** / **End** dates
+choose another duration (UTC days, at most 120 columns; `&from=YYYY-MM-DD&to=YYYY-MM-DD`); **Last
+periods** goes back to the default. Computed from chainlens's indexed transactions, by the roles of
+sender and receiver:
 
 | Measure | Counted from |
 |---|---|
@@ -226,98 +275,71 @@ transactions, by the roles of sender and receiver:
 | +x from users | user account → the section's consumption account |
 | NFT sales / NFT sales (ETH) | `buy` calls by the section's user accounts (first sales: the center was the seller) |
 | Income | +x from users + first NFT sales (what reaches the consumption account) |
-| To users | upfront → user (new accounts' funding and -x) |
+| To users | upfront → user (new accounts' funding and −x) |
 | Top-ups, Swept, Paid back | SENDER01 → upfront, consumption → payment, payment → SENDER01 |
 | Transactions | every transaction from or to one of the section's accounts |
 
 Roles are today's (a replaced account counts as `retired`); history older than chainlens's index
 start is not included.
 
-## Application API: section calls
-
-An application of section_i sends its key in the header **`X-Section-Key: sk_…`**. The proxy
-accepts the call when the key's hash belongs to a section that is **active** (not disabled or
-archived). Who may reach the proxy at all is the firewall's `proxy_client_ips`.
-
-| Request | Section call does |
-|---|---|
-| `POST /createaccount {amount, pool}` | new MPC account, **registered under section_i** on chain, funded **from `upfront_account_i`** |
-| `POST /transfer {account, amount: "x"}` | `account` → `consumption_account_i` |
-| `POST /transfer {account, amount: "-x"}` | `upfront_account_i` → `account` |
-
-`account` must be a user account of section_i (created by that section's `/createaccount`). The
-answer names the section, the direction, `from`, `to` and the transaction. `memo` works as before.
-
-**Calls without a key** keep the SENDER01 behaviour while `sections_required: false` (settings.yml),
-for applications not moved yet, with one guard: **they can't move any section's money** — a
-section account (user, upfront, consumption, payment, retired) or the registry admin as sender is
-refused. With `sections_required: true` they are refused altogether (`X-Section-Key is required`).
-
-| Error | Cause |
-|---|---|
-| 401 `unknown section key` | no live section has this key (rotated? archived?) |
-| 403 `section "…" is disabled` | the section is switched off |
-| 403 `0x… is not an account of section "…"` | the account belongs to another section, or isn't a user account |
-| 403 `0x… belongs to section N: call with that section's X-Section-Key` | a keyless call tried to move a section's money |
-| 400 `insufficient balance` | `upfront_account_i` (or the account for `+x`) can't pay: top up / wait for a pending transfer to be mined |
-| 401 `X-Section-Key is required` | `sections_required: true` and no key |
-
 ## Flows
 
-| Action | Who | Signed by / what happens | Step |
-|---|---|---|---|
-| **Create section** (UI) | proxy admin API | 3 MPC keys; registry entry (registry admin); API key shown once. No funding. | **built** |
-| **Rename / info / key / enable–disable** (UI) | proxy admin API | registry admin | **built** |
-| **Top up** (UI, amount) | proxy admin API | SENDER01 → `upfront_account_i`, manual only | **built** |
-| **Sweep** (UI, amount or all) | proxy admin API | `consumption_account_i` → `payment_account_i` | **built** |
-| **Pay back** (UI, amount or all) | proxy admin API | `payment_account_i` → SENDER01 | **built** |
-| **Replace an account** (UI) | proxy admin API | new MPC key; registry admin; old account → new account (whole balance) | **built** |
-| **Archive** (UI) | proxy admin API | the 3 accounts → SENDER01 (all), then registry admin | **built** |
-| `/createaccount` (section_i) | proxy | `upfront_account_i` → new user account; registry: account → section_i | **built** |
-| `/transfer +x` (section_i) | proxy | user account → `consumption_account_i` | **built** |
-| `/transfer -x` (section_i) | proxy | `upfront_account_i` → user account | **built** |
-| **Deploy contract** (UI) | proxy admin API → registry | `contract_account_center`; not tied to a section | **built** |
-| **Deploy NFT collection** (UI) | proxy admin API → registry | `contract_account_center` (the minter); shared by all sections (NftCollection v3 in step 5) | **built** (v3: 5) |
-| `/contract/call` | proxy | none (read); any registered contract | **built** |
-| `/contract/send` (section_i) | proxy | a user account of section_i; only registered contracts and their ABI functions | **built** |
-| `/nft/mint` | proxy (center's queue) | `contract_account_center`: `mint(tokenId, uri, price)`; price fixed for good | **built** |
-| `/nft/transfer`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` | **built** |
-| `/nft/transfer`, resale (section_i) | proxy | the seller approves; the buyer `buy(tokenId, …)` at the same mint price; NFT → buyer, price → seller | **built** |
+| Action | Who | Signed by / what happens |
+|---|---|---|
+| **Create section** (UI) | proxy admin API | 3 MPC keys; registry entry (registry admin); API key shown once. No funding. |
+| **Rename / info / key / enable–disable** (UI) | proxy admin API | registry admin |
+| **Top up** (UI, amount) | proxy admin API | SENDER01 → `upfront_account_i`, manual only |
+| **Sweep** (UI, amount or all) | proxy admin API | `consumption_account_i` → `payment_account_i` |
+| **Pay back** (UI, amount or all) | proxy admin API | `payment_account_i` → SENDER01 |
+| **Replace an account** (UI) | proxy admin API | new MPC key; registry admin; old account (now retired) → new account (whole balance) |
+| **Archive** (UI) | proxy admin API | the 3 accounts → SENDER01 (all), then registry admin |
+| `/createaccount` (section_i) | proxy | registry admin: account → section_i; then `upfront_account_i` → new user account |
+| `/transfer +x` (section_i) | proxy | user account → `consumption_account_i` |
+| `/transfer -x` (section_i) | proxy | `upfront_account_i` → user account |
+| **Deploy contract** (UI) | proxy admin API → registry | `contract_account_center`, then registry admin; not tied to a section |
+| **Deploy NFT collection** (UI or `/nft/deploy`) | proxy → registry | `contract_account_center` (the minter), then registry admin; shared by all sections |
+| `/contract/call` | proxy | none (read); any registered contract |
+| `/contract/send` (section_i) | proxy | a user account of section_i; only registered contracts and their ABI functions |
+| `/nft/mint` | proxy (center's queue) | `contract_account_center`: `mint(center, tokenId, uri, price)`; price fixed for good |
+| `/nft/transfer`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` |
+| `/nft/transfer`, resale (section_i) | proxy | the seller approves (if needed); the buyer `buy(tokenId, …)` at the same mint price; NFT → buyer, price → seller |
 
-## Monitoring (step 6)
+## Monitoring
 
-The proxy's `/metrics` (scraped by Prometheus through the proxy VIP) adds:
+The proxy's `/metrics` (scraped by Prometheus through the proxy VIP) has these section metrics
+(the other proxy metrics: [proxy, metrics](../components/proxy.md#metrics-and-monitoring)):
 
 | Metric | |
 |---|---|
-| `proxy_section_balance_eth{section_id, section, role, active}` | each account's balance (role upfront / consumption / payment), refreshed every 15 s |
+| `proxy_section_balance_eth{section_id, section, role, active}` | each account's balance (role upfront / consumption / payment), refreshed every 15 s; archived sections are not listed |
 | `proxy_section_active{section_id, section}` | 1 = enabled |
 | `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | operations and ETH moved since the proxy started (op: `create_account`, `transfer_in`, `transfer_out`, `nft_first_sale`, `nft_resale`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`); they restart at 0 with the proxy (dashboards use `increase()`) |
 | `proxy_sender01_balance_eth` | SENDER01's balance |
 | `proxy_section_low_balance_eth`, `proxy_sender01_low_balance_eth` | the alert thresholds |
+| `proxy_sections_metrics_error`, `proxy_sections_metrics_age_seconds` | 1 = the last refresh of the balances failed; seconds since the last refresh |
 
-Settings (`ansible/group_vars/all/settings.yml`): **`upfront_low_balance_eth`** (default 100; 0 =
-off) and **`sender01_low_balance_eth`** (default 10000). Alerts `SectionUpfrontLow` (warning),
-`SectionUpfrontEmpty` (critical), `Sender01Low`, `SectionMetricsFailing`
-([`monitoring/prometheus/rules/sections.yml`](../../monitoring/prometheus/rules/sections.yml)); the
-**Sections** dashboard in Grafana shows balances, the threshold line and the activity per section.
-Disabled and archived sections don't raise the upfront alerts.
+Alerts `SectionUpfrontLow` (warning), `SectionUpfrontEmpty` (critical), `Sender01Low`,
+`SectionMetricsFailing` ([`monitoring/prometheus/rules/sections.yml`](../../monitoring/prometheus/rules/sections.yml);
+what to do: [alerts](../operations/alerts.md#4-sections-sectionsyml)). Disabled and archived sections
+don't raise the upfront alerts.
 
-Its **Period** variable (Day, Week, Month = 30 days, Quarter = 90 days, Year = 365 days) sets the
-activity panels: totals for the last period, bars of operations and ETH per period, and tables by
-section and operation. Choose a dashboard time range that holds several periods (default: last 30
-days). Prometheus keeps **`prometheus_retention`** (default 400d, so Year works) up to
-**`prometheus_retention_size`** (default 20GB; the oldest data goes first). The counters live in the
-proxy; Prometheus's `increase()` carries them over proxy restarts.
+The **Sections** dashboard in Grafana shows balances, the threshold line and the activity per
+section. Its **Period** variable (Day, Week, Month = 30 days, Quarter = 90 days, Year = 365 days)
+sets the activity panels: totals for the last period, bars of operations and ETH per period, and
+tables by section and operation. Choose a dashboard time range that holds several periods (default:
+last 30 days). The counters live in the proxy; Prometheus's `increase()` carries them over proxy
+restarts.
 
-## Build steps
+## Settings
 
-1. **Registry contract and proxy admin API** — built (version 2: rename, info fields, account
-   replacement, archive; no per-section IPs).
-2. **Section-scoped `/createaccount` and `/transfer`** (+x to consumption, -x from upfront) — built.
-3. **Chainlens Sections page**: create, top up, sweep, pay back, rename, info, keys, accounts,
-   archive, history — built.
-4. **`/contract/call`, `/contract/send`, and Deploy through the proxy as `contract_account_center`** — built.
-5. **NftCollection v3**, `/nft/mint` by the center, `/nft/transfer` by section buyers — built; and the
-   sections' user accounts in chainlens.
-6. **Monitoring**: upfront low-balance alert (fixed amount), SENDER01 alert, Sections dashboard — built.
+In `ansible/group_vars/all/settings.yml`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `sections_required` | `false` | `true`: every `/createaccount`, `/transfer` and `/contract/call` needs `X-Section-Key` (proxy `SECTION_KEY_REQUIRED`) |
+| `chainlens_sections_enabled` | `false` | the chainlens Sections page |
+| `chainlens_deploy_enabled` | `false` | the chainlens Deploy page ([contract deployment](contract-deployment.md)) |
+| `chainlens_deploy_ips` | `[]` | admin PCs allowed to use the admin pages, besides `operator_ip` |
+| `upfront_low_balance_eth` | 100 | `SectionUpfrontLow` threshold (0 = off) |
+| `sender01_low_balance_eth` | 10000 | `Sender01Low` threshold (0 = off) |
+| `prometheus_retention`, `prometheus_retention_size` | `400d`, `20GB` | how long Prometheus keeps the data (the oldest goes first), so the Year period works |

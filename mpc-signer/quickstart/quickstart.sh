@@ -91,7 +91,7 @@ up() {
   load_env
   dc up -d
   for _ in $(seq 1 60); do curl -sf "http://${MPC_PUBLISH:-127.0.0.1:9100}/health" >/dev/null && break; sleep 1; done
-  log "coordinator: http://${MPC_PUBLISH:-127.0.0.1:9100}  (Web3Signer-compatible JSON-RPC)"
+  log "coordinator: http://${MPC_PUBLISH:-127.0.0.1:9100}  (Ethereum signer JSON-RPC)"
 }
 
 setup() {

@@ -82,21 +82,16 @@ app.use(express.json({ limit: "1mb" }));
 // =======================
 
 const BESU_IP = process.env.BESU_IP || process.env.IP;
-const VAULT_IP = process.env.VAULT_IP || process.env.IP;
-const WEB3SIGNER_IP = process.env.WEB3SIGNER_IP || process.env.IP;
+const SIGNER_IP = process.env.SIGNER_IP || process.env.IP;
 
 const CONFIG = {
     PORT: Number(process.env.PORT) || 30000,
     BESU_RPC: `http://${BESU_IP}:${process.env.BESU_PORT || 8545}`,
-    WEB3SIGNER_RPC: `http://${WEB3SIGNER_IP}:${process.env.WEB3SIGNER_PORT || 9000}`,
-    VAULT_ADDR: `http://${VAULT_IP}:${process.env.VAULT_PORT || 8200}`,
-    VAULT_MOUNT: process.env.VAULT_MOUNT || "web3signer",
-    VAULT_ACCOUNT_PREFIX: process.env.VAULT_ACCOUNT_PREFIX || "accounts",
-    VAULT_TOKEN: (process.env.VAULT_TOKEN || "").trim(),
+    // the MPC signer's coordinator (Ethereum signer JSON-RPC: eth_accounts, eth_sendTransaction)
+    SIGNER_RPC: `http://${SIGNER_IP}:${process.env.SIGNER_PORT || 9100}`,
     SENDER01: process.env.SENDER01 || "0xFE3B557E8Fb62b89F4916B721be55cEb828dBd73",
-    // MPC signer: when MPC_ADMIN_URL is set, /createaccount creates the account as an MPC key
-    // (distributed key generation; no private key exists anywhere) instead of storing a
-    // private key in Vault. Point WEB3SIGNER_IP/PORT at the same coordinator for signing.
+    // MPC signer admin API: /createaccount creates every account as an MPC key (distributed key
+    // generation; no private key exists anywhere). SIGNER_IP/PORT point at the same coordinator.
     MPC_ADMIN_URL: (process.env.MPC_ADMIN_URL || "").trim().replace(/\/$/, ""),
     MPC_ADMIN_TOKEN: (process.env.MPC_ADMIN_TOKEN || "").trim(),
     // presignature pool class of accounts created by /createaccount when the request names none:
@@ -264,7 +259,7 @@ function isAddress(address) {
 }
 
 // =======================
-// Check Web3Signer account
+// Accounts held by the MPC signer
 // =======================
 
 // The signer's key list, cached: it only grows when /createaccount adds a key. A sender that is
@@ -280,7 +275,7 @@ async function signerOwns(address) {
         return true;
     }
 
-    const accounts = await rpc(CONFIG.WEB3SIGNER_RPC, "eth_accounts");
+    const accounts = await rpc(CONFIG.SIGNER_RPC, "eth_accounts");
     signerAccounts = { set: new Set(accounts.map((item) => item.toLowerCase())), at: Date.now() };
     return signerAccounts.set.has(key);
 }
@@ -509,10 +504,7 @@ async function poolFutures(address, pending) {
 
 // A 0-value transaction from the sender to itself at `nonce`: fills a gap, nothing else.
 async function sendFiller(state, nonce) {
-    const ownedBySigner = await signerOwns(state.address);
-    const txHash = ownedBySigner
-        ? await sendFromSigner(state.address, state.address, "0", nonce, "0x", 21000n)
-        : await sendFromVault(state.address, state.address, "0", nonce, "0x", 21000n);
+    const txHash = await sendFromSigner(state.address, state.address, "0", nonce, "0x", 21000n);
     await rememberPendingWei(state.address, nonce, 0n);
     return txHash;
 }
@@ -774,7 +766,7 @@ async function rememberPendingWei(address, nonce, wei) {
     afterSend(sender);
 }
 
-async function pay(sender, recipient, amount, ownedBySigner, memo = "") {
+async function pay(sender, recipient, amount, memo = "") {
     const bytes = memoBytes(memo);
     const gas = transferGas(bytes);
     const data = bytes.length === 0 ? "0x" : ethers.hexlify(bytes);
@@ -785,9 +777,7 @@ async function pay(sender, recipient, amount, ownedBySigner, memo = "") {
     let txHash;
 
     try {
-        txHash = ownedBySigner
-            ? await sendFromSigner(sender, recipient, amount, nonce, data, gas)
-            : await sendFromVault(sender, recipient, amount, nonce, data, gas);
+        txHash = await sendFromSigner(sender, recipient, amount, nonce, data, gas);
     } catch (error) {
         await resetNonce(sender);
         throw error;
@@ -810,124 +800,14 @@ function withAccountLock(task) {
     return run;
 }
 
-function vaultToken() {
-    if (!CONFIG.VAULT_TOKEN) {
-        throw new Error("VAULT_TOKEN is not configured");
-    }
-
-    return CONFIG.VAULT_TOKEN;
-}
-
-function accountName(address) {
-    return "acct-" + address.slice(2).toLowerCase();
-}
-
-function vaultDataUrl(name) {
-    return `${CONFIG.VAULT_ADDR}/v1/${CONFIG.VAULT_MOUNT}/data/${CONFIG.VAULT_ACCOUNT_PREFIX}/${name}`;
-}
-
-async function storePrivateKey(name, privateKey) {
-    const response = await fetch(vaultDataUrl(name), {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-Vault-Token": await vaultToken()
-        },
-        body: JSON.stringify({
-            data: {
-                privateKey
-            }
-        })
-    });
-
-    if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(`vault write failed (${response.status}): ${detail.slice(0, 300)}`);
-    }
-}
-
-// The message for a sender that no configured signer holds. Without Vault (MPC deployments) the
-// only signer is the MPC cluster, so say so instead of reporting a missing VAULT_TOKEN.
+// The message for a sender the MPC signer does not hold.
 function notManaged(address) {
-    const signer = CONFIG.MPC_ADMIN_URL ? "the MPC signer" : "Web3Signer";
-    return CONFIG.VAULT_TOKEN
-        ? `sender not managed by ${signer} or Vault: ${address}`
-        : `sender not managed by ${signer}: ${address} (create it with POST /createaccount)`;
-}
-
-async function readPrivateKey(name) {
-    // no Vault configured: no locally stored keys, so the account is simply not managed here
-    if (!CONFIG.VAULT_TOKEN) {
-        return null;
-    }
-
-    const response = await fetch(vaultDataUrl(name), {
-        headers: {
-            "X-Vault-Token": await vaultToken()
-        }
-    });
-
-    if (response.status === 404) {
-        return null;
-    }
-
-    if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(`vault read failed (${response.status}): ${detail.slice(0, 300)}`);
-    }
-
-    const body = await response.json();
-    const privateKey = body.data && body.data.data && body.data.data.privateKey;
-
-    if (!privateKey) {
-        return null;
-    }
-
-    return privateKey.startsWith("0x") ? privateKey : "0x" + privateKey;
-}
-
-async function vaultWallet(from) {
-    const privateKey = await readPrivateKey(accountName(from));
-
-    if (!privateKey) {
-        throw httpError(400, notManaged(from));
-    }
-
-    const wallet = new ethers.Wallet(privateKey);
-
-    if (wallet.address.toLowerCase() !== from.toLowerCase()) {
-        throw new Error("vault key does not match sender");
-    }
-
-    return wallet;
-}
-
-async function sendRawTransaction(wallet, tx) {
-    const chainId = await rpc(CONFIG.BESU_RPC, "eth_chainId");
-    const signed = await wallet.signTransaction({
-        ...tx,
-        chainId: parseInt(chainId, 16),
-        gasPrice: "0x0"
-    });
-
-    return rpc(CONFIG.BESU_RPC, "eth_sendRawTransaction", [signed]);
-}
-
-async function sendFromVault(from, to, amount, nonce, data = "0x", gas = 21000n) {
-    const wallet = await vaultWallet(from);
-
-    return sendRawTransaction(wallet, {
-        to,
-        value: ethToWeiHex(amount),
-        nonce,
-        data,
-        gasLimit: gas
-    });
+    return `sender not managed by the MPC signer: ${address} (create it with POST /createaccount)`;
 }
 
 async function sendFromSigner(from, to, amount, nonce, data = "0x", gas = 21000n) {
     return rpc(
-        CONFIG.WEB3SIGNER_RPC,
+        CONFIG.SIGNER_RPC,
         "eth_sendTransaction",
         [{
             from,
@@ -991,21 +871,16 @@ async function createAccount(amount, pool) {
         throw new Error("sender01 is not managed by the signer");
     }
 
-    const useMpc = Boolean(CONFIG.MPC_ADMIN_URL);
-    const wallet = useMpc ? null : ethers.Wallet.createRandom();
-
-    if (useMpc) {
-        await assertCanPay(CONFIG.SENDER01, amount);
+    if (!CONFIG.MPC_ADMIN_URL) {
+        throw httpError(503, "account creation needs the MPC signer's admin API (MPC_ADMIN_URL)");
     }
 
-    const address = useMpc ? await createMpcAccount(pool) : wallet.address;
+    await assertCanPay(CONFIG.SENDER01, amount);
+    const address = await createMpcAccount(pool);
 
     const payment = await withSenderLock(CONFIG.SENDER01, async () => {
         await assertCanPay(CONFIG.SENDER01, amount);
-        if (!useMpc) {
-            await storePrivateKey(accountName(address), wallet.privateKey.slice(2));
-        }
-        return pay(CONFIG.SENDER01, address, amount, true);
+        return pay(CONFIG.SENDER01, address, amount);
     });
 
     return {
@@ -1013,7 +888,7 @@ async function createAccount(amount, pool) {
         address,
         from: CONFIG.SENDER01,
         amount,
-        ...(useMpc ? { pool } : {}),
+        pool,
         txHash: payment.txHash,
         nonce: payment.nonce
     };
@@ -1144,16 +1019,14 @@ app.post("/transfer", async (req, res) => {
 
         // accounts of a section only move through that section's key (and never the registry admin)
         await assertNotSectionAccount(sender);
-        const ownedBySigner = await signerOwns(sender);
-
-        if (!ownedBySigner && !await readPrivateKey(accountName(sender))) {
+        if (!await signerOwns(sender)) {
             return res.status(400).json({
                 error: notManaged(sender)
             });
         }
 
         const { txHash, nonce } = await withSenderLock(sender, () =>
-            pay(sender, recipient, value, ownedBySigner, memoText)
+            pay(sender, recipient, value, memoText)
         );
 
         res.json({
@@ -1776,26 +1649,10 @@ async function sendDataFromSigner(from, to, data, nonce, gas, valueHex) {
         tx.to = to;
     }
 
-    return rpc(CONFIG.WEB3SIGNER_RPC, "eth_sendTransaction", [tx]);
+    return rpc(CONFIG.SIGNER_RPC, "eth_sendTransaction", [tx]);
 }
 
-async function sendDataFromVault(from, to, data, nonce, gas, valueHex) {
-    const wallet = await vaultWallet(from);
-    const tx = {
-        data,
-        value: valueHex,
-        nonce,
-        gasLimit: gas
-    };
-
-    if (to) {
-        tx.to = to;
-    }
-
-    return sendRawTransaction(wallet, tx);
-}
-
-async function sendData(from, to, data, ownedBySigner, valueWei = 0n) {
+async function sendData(from, to, data, valueWei = 0n) {
     const valueHex = "0x" + valueWei.toString(16);
     const estimateTx = {
         from,
@@ -1813,9 +1670,7 @@ async function sendData(from, to, data, ownedBySigner, valueWei = 0n) {
     let txHash;
 
     try {
-        txHash = ownedBySigner
-            ? await sendDataFromSigner(from, to, data, nonce, gas, valueHex)
-            : await sendDataFromVault(from, to, data, nonce, gas, valueHex);
+        txHash = await sendDataFromSigner(from, to, data, nonce, gas, valueHex);
     } catch (error) {
         await resetNonce(from);
         throw error;
@@ -2050,12 +1905,12 @@ async function deployCollection(name, symbol) {
     }
 
     if (!await signerOwns(CONFIG.SENDER01)) {
-        throw new Error("sender01 is not managed by Web3Signer");
+        throw new Error("sender01 is not managed by the MPC signer");
     }
 
     const data = nftDeployData(name, symbol);
     const sent = await withSenderLock(CONFIG.SENDER01, () =>
-        sendData(CONFIG.SENDER01, null, data, true)
+        sendData(CONFIG.SENDER01, null, data)
     );
     const receipt = await waitForReceipt(sent.txHash);
     const address = receipt.contractAddress;
@@ -2095,7 +1950,7 @@ async function deployCollection(name, symbol) {
 async function deployCollectionV3(name, symbol) {
     const bytecode = nftV3Artifact.bytecode.startsWith("0x") ? nftV3Artifact.bytecode : "0x" + nftV3Artifact.bytecode;
     const data = ethers.concat([bytecode, nftV3Interface.encodeDeploy([name, symbol, CONFIG.REGISTRY_CONTRACT])]);
-    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, data, true));
+    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, data));
     const receipt = await waitForReceipt(sent.txHash);
     const contract = ethers.getAddress(receipt.contractAddress);
     const registered = await registryWrite("registerContract", [contract, CONTRACT_KINDS.nft, name, JSON.stringify(nftV3Artifact.abi)]);
@@ -2125,7 +1980,7 @@ async function deployCollectionV3(name, symbol) {
     };
 }
 
-// Mint: every NFT is minted to SENDER01 (the collection's minter); nothing is paid.
+// Mint (version 2): every NFT is minted to SENDER01 (the collection's minter); nothing is paid.
 // "amount" is the NFT's price, stored on chain in the collection (priceOf); /nft/transfer sells
 // the token with buy(), where the buyer pays exactly that price to SENDER01 in one transaction.
 // Version 3: minted by the contract account center (the collection's minter), which holds the NFT
@@ -2148,7 +2003,7 @@ async function mintNftV3(contract, metadata, tokenURI, price, priceWei) {
 
     try {
         await assertMintFits(center, contract, data);
-        sent = await withSenderLock(center, () => sendData(center, contract, data, true));
+        sent = await withSenderLock(center, () => sendData(center, contract, data));
     } catch (error) {
         await cache(() => redis.del(key));
         throw error;
@@ -2227,7 +2082,7 @@ async function mintNft(req) {
 
     try {
         await assertMintFits(sender, contract, data);
-        sent = await withSenderLock(sender, () => sendData(sender, contract, data, true));
+        sent = await withSenderLock(sender, () => sendData(sender, contract, data));
     } catch (error) {
         await cache(() => redis.del(key));
         throw error;
@@ -2253,8 +2108,8 @@ async function mintNft(req) {
 // ETH goes to SENDER01 atomically; if anything fails the whole sale reverts and no ETH moves.
 // `from` is optional (default: current owner). If the owner is not SENDER01 (a resale), the
 // owner first approves the collection for this token.
-// Version 3 sale: the buyer "to" must be a user account of a section; that section (from the
-// registry; X-Section-Key is optional, and checked when given) is section_i. The buyer signs
+// Version 3 sale: X-Section-Key is required (the admin API's caller may omit it: the section is
+// then the buyer's); the buyer "to" must be a user account of that section, section_i. The buyer signs
 // buy(tokenId, payee) with value = the mint price. First sale (the center holds the NFT): the price
 // goes to section_i's consumption account. Resale: the seller (a user account of section_i) approves
 // the sale if needed, and the price goes to the seller.
@@ -2313,7 +2168,7 @@ async function transferNftV3(req, contract, tokenId) {
 
         if (approved.toLowerCase() !== contract.toLowerCase() && !operator) {
             const approveData = nftV3Interface.encodeFunctionData("approve", [contract, tokenId]);
-            const approval = await withSenderLock(seller, () => sendData(seller, contract, approveData, true));
+            const approval = await withSenderLock(seller, () => sendData(seller, contract, approveData));
             await waitForReceipt(approval.txHash);
             approveTxHash = approval.txHash;
         }
@@ -2324,7 +2179,7 @@ async function transferNftV3(req, contract, tokenId) {
     let sent;
 
     try {
-        sent = await withSenderLock(to, () => sendData(to, contract, buyData, true, priceWei));
+        sent = await withSenderLock(to, () => sendData(to, contract, buyData, priceWei));
     } catch (error) {
         if (/insufficient/i.test(error.message)) {
             throw httpError(400, `insufficient balance: the price of this token is ${price} ETH`);
@@ -2419,7 +2274,7 @@ async function transferNft(req) {
             }
 
             const approveData = nftInterface.encodeFunctionData("approve", [contract, tokenId]);
-            const approval = await withSenderLock(from, () => sendData(from, contract, approveData, true));
+            const approval = await withSenderLock(from, () => sendData(from, contract, approveData));
             const receipt = await waitForReceipt(approval.txHash);
 
             if (!receipt || BigInt(receipt.status) !== 1n) {
@@ -2436,7 +2291,7 @@ async function transferNft(req) {
     let sent;
 
     try {
-        sent = await withSenderLock(to, () => sendData(to, contract, buyData, true, priceWei));
+        sent = await withSenderLock(to, () => sendData(to, contract, buyData, priceWei));
     } catch (error) {
         if (/insufficient/i.test(error.message)) {
             throw httpError(400, `insufficient balance: the price of this token is ${price} ETH`);
@@ -2752,7 +2607,7 @@ function registryWrite(fn, args) {
 
         try {
             sent = await withSenderLock(CONFIG.REGISTRY_ADMIN, () =>
-                sendData(CONFIG.REGISTRY_ADMIN, CONFIG.REGISTRY_CONTRACT, data, true)
+                sendData(CONFIG.REGISTRY_ADMIN, CONFIG.REGISTRY_CONTRACT, data)
             );
         } catch (error) {
             const reason = String(error.message || "").match(/revert(?:ed)?:?\s*(.*)$/i);
@@ -3092,7 +2947,7 @@ async function sectionMove(section, from, to, amountInput, memo, quietIfEmpty = 
         }
 
         await assertCanPay(from, amount);
-        return pay(from, to, amount, true, memo);
+        return pay(from, to, amount, memo);
     });
 
     if (!result) {
@@ -3610,7 +3465,7 @@ app.post("/admin/contracts/deploy", adminGuard, adminRoute(async (req) => {
     requireCenter();
     const input = deployInputOf(req.body);
     await deployCheck(input);
-    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, input.data, true));
+    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, input.data));
     const receipt = await receiptOf(sent.txHash);
 
     if (BigInt(receipt.status) !== 1n || !receipt.contractAddress) {
@@ -3719,7 +3574,7 @@ app.post("/contract/send", async (req, res) => {
         let sent;
 
         try {
-            sent = await withSenderLock(from, () => sendData(from, entry.address, data, true, valueWei));
+            sent = await withSenderLock(from, () => sendData(from, entry.address, data, valueWei));
         } catch (error) {
             if (error.statusCode) {
                 throw error;
@@ -3937,7 +3792,7 @@ async function createSectionAccount(section, amount, pool) {
     accountSectionCache.set(address.toLowerCase(), { id: section.id, kind: ACCOUNT_USER });
     const payment = await withSenderLock(funder, async () => {
         await assertCanPay(funder, amount);
-        return pay(funder, address, amount, true);
+        return pay(funder, address, amount);
     });
     countSectionOp(section, "create_account", amount);
 
@@ -3990,7 +3845,7 @@ async function sectionTransfer(section, body) {
     await assertSectionUser(section, user);
     const sender = negative ? section.accounts.upfront : user;
     const recipient = negative ? user : section.accounts.consumption;
-    const { txHash, nonce } = await withSenderLock(sender, () => pay(sender, recipient, value, true, memoText));
+    const { txHash, nonce } = await withSenderLock(sender, () => pay(sender, recipient, value, memoText));
     countSectionOp(section, negative ? "transfer_out" : "transfer_in", value);
 
     return {

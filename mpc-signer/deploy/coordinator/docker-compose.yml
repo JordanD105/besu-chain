@@ -1,5 +1,5 @@
 # MPC coordinator: stateless, holds NO key material. Run 1..N (each with its own MPC_RELAY_URL).
-# Clients (the proxy) use it like Web3Signer on port 9100. Steps: docs/deployment/mpc-signer-production.md
+# Clients (the proxy) send eth_sendTransaction to it on port 9100 (Ethereum signer JSON-RPC). Steps: docs/deployment/mpc-signer-production.md
 services:
   mpc-coordinator:
     image: ${MPC_IMAGE:?set MPC_IMAGE}

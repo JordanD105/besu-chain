@@ -9,7 +9,7 @@
   <rect width="1600" height="1040" fill="#f8fafc"/>
 
   <text x="40" y="52" font-size="30" font-weight="700" fill="#0f172a">besu-chain: development / test environment</text>
-  <text x="40" y="82" font-size="16" fill="#475569">Private Hyperledger Besu QBFT network, application proxy, explorer, monitoring, and two signing options (current Vault + Web3Signer, new non-exportable MPC signer)</text>
+  <text x="40" y="82" font-size="16" fill="#475569">Private Hyperledger Besu QBFT network, application proxy, explorer, monitoring and the non-exportable 2-of-3 MPC signer</text>
 
   <!-- ============ users ============ -->
   <g filter="url(#sh)"><rect x="40" y="120" width="230" height="150" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/></g>
@@ -40,53 +40,37 @@
 
   <!-- ============ signing tier ============ -->
   <rect x="40" y="420" width="710" height="330" rx="18" fill="#ffffff" stroke="#cbd5e1" stroke-dasharray="6 5"/>
-  <text x="60" y="450" font-size="17" font-weight="700" fill="#0f172a">Signing (pick one)</text>
+  <text x="60" y="450" font-size="17" font-weight="700" fill="#0f172a">Signing</text>
 
-  <!-- old -->
-  <g filter="url(#sh)"><rect x="60" y="468" width="320" height="262" rx="14" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/></g>
-  <text x="80" y="498" font-size="16" font-weight="700" fill="#9f1239">besu-vault-web3signer/</text>
-  <text x="80" y="518" font-size="12.5" fill="#be123c">CURRENT · key is exportable</text>
-  <rect x="80" y="530" width="280" height="62" rx="9" fill="#ffffff" stroke="#fda4af"/>
-  <text x="94" y="553" font-size="13.5" font-weight="700" fill="#9f1239">Web3Signer :9000</text>
-  <text x="94" y="574" font-size="12.5" fill="#334155">loads private key into memory</text>
-  <rect x="80" y="604" width="280" height="62" rx="9" fill="#ffffff" stroke="#fda4af"/>
-  <text x="94" y="627" font-size="13.5" font-weight="700" fill="#9f1239">HashiCorp Vault :8200</text>
-  <text x="94" y="648" font-size="12.5" fill="#334155">KV v2: private keys (readable)</text>
-  <line x1="220" y1="604" x2="220" y2="594" stroke="#e11d48" stroke-width="2" marker-end="url(#aR)"/>
-  <text x="80" y="690" font-size="12" fill="#64748b">proxy sendFromVault: reads key from</text>
-  <text x="80" y="708" font-size="12" fill="#64748b">Vault per tx, signs in proxy memory</text>
-
-  <!-- new -->
-  <g filter="url(#sh)"><rect x="400" y="468" width="330" height="262" rx="14" fill="#ecfdf5" stroke="#059669" stroke-width="2"/></g>
-  <text x="420" y="498" font-size="16" font-weight="700" fill="#064e3b">mpc-signer/</text>
-  <text x="420" y="518" font-size="12.5" fill="#047857">NEW · 2-of-3 threshold ECDSA, non-exportable</text>
-  <rect x="420" y="530" width="290" height="62" rx="9" fill="#ffffff" stroke="#6ee7b7"/>
-  <text x="434" y="553" font-size="13.5" font-weight="700" fill="#064e3b">mpc-coordinator :9100</text>
-  <text x="434" y="574" font-size="12.5" fill="#334155">no key · presig pool · relay</text>
+  <g filter="url(#sh)"><rect x="60" y="468" width="670" height="262" rx="14" fill="#ecfdf5" stroke="#059669" stroke-width="2"/></g>
+  <text x="80" y="498" font-size="16" font-weight="700" fill="#064e3b">mpc-signer/</text>
+  <text x="80" y="518" font-size="12.5" fill="#047857">2-of-3 threshold ECDSA (CGGMP24) · the private key never exists</text>
+  <rect x="80" y="530" width="630" height="62" rx="9" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="94" y="553" font-size="13.5" font-weight="700" fill="#064e3b">mpc-coordinator :9100</text>
+  <text x="94" y="574" font-size="12.5" fill="#334155">no key material · presignature pools · relay between nodes · Ethereum signer JSON-RPC</text>
   <g>
-    <rect x="420" y="604" width="90" height="62" rx="9" fill="#ffffff" stroke="#6ee7b7"/>
-    <text x="465" y="628" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">node 0</text>
-    <text x="465" y="648" font-size="11.5" fill="#92400e" text-anchor="middle">share x₀</text>
-    <rect x="520" y="604" width="90" height="62" rx="9" fill="#ffffff" stroke="#6ee7b7"/>
-    <text x="565" y="628" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">node 1</text>
-    <text x="565" y="648" font-size="11.5" fill="#92400e" text-anchor="middle">share x₁</text>
-    <rect x="620" y="604" width="90" height="62" rx="9" fill="#ffffff" stroke="#6ee7b7"/>
-    <text x="665" y="628" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">node 2</text>
-    <text x="665" y="648" font-size="11.5" fill="#92400e" text-anchor="middle">share x₂</text>
+    <rect x="80" y="604" width="200" height="62" rx="9" fill="#ffffff" stroke="#6ee7b7"/>
+    <text x="180" y="628" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">node 0</text>
+    <text x="180" y="648" font-size="11.5" fill="#92400e" text-anchor="middle">share x₀ · own policy</text>
+    <rect x="295" y="604" width="200" height="62" rx="9" fill="#ffffff" stroke="#6ee7b7"/>
+    <text x="395" y="628" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">node 1</text>
+    <text x="395" y="648" font-size="11.5" fill="#92400e" text-anchor="middle">share x₁ · own policy</text>
+    <rect x="510" y="604" width="200" height="62" rx="9" fill="#ffffff" stroke="#6ee7b7"/>
+    <text x="610" y="628" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">node 2</text>
+    <text x="610" y="648" font-size="11.5" fill="#92400e" text-anchor="middle">share x₂ · own policy</text>
   </g>
   <g stroke="#059669" stroke-width="1.6" fill="none">
-    <path d="M565 592 L565 600"/><path d="M465 600 L465 596 L665 596 L665 600"/>
+    <path d="M395 592 L395 600"/><path d="M180 600 L180 596 L610 596 L610 600"/>
   </g>
-  <text x="420" y="690" font-size="12" fill="#64748b">key never exists; any 2 nodes sign;</text>
-  <text x="420" y="708" font-size="12" fill="#64748b">Web3Signer-compatible (detail: mpc-signer/docs)</text>
+  <text x="80" y="690" font-size="12" fill="#64748b">any 2 of the 3 nodes sign together; key generation needs all 3;</text>
+  <text x="80" y="708" font-size="12" fill="#64748b">quickstart/ runs the whole cluster on one host with Docker Compose</text>
 
-  <!-- proxy -> signers -->
-  <path d="M 450 370 L 450 400 L 300 400 L 300 464" stroke="#e11d48" stroke-width="2" fill="none" marker-end="url(#aR)"/>
-  <path d="M 450 400 L 600 400 L 600 464" stroke="#059669" stroke-width="2" fill="none" marker-end="url(#aG)"/>
-  <text x="610" y="392" font-size="12" fill="#334155">eth_sendTransaction</text>
-  <text x="610" y="408" font-size="12" fill="#334155">(WEB3SIGNER_IP/PORT)</text>
+  <!-- proxy -> signer -->
+  <path d="M 450 370 L 450 464" stroke="#059669" stroke-width="2" fill="none" marker-end="url(#aG)"/>
+  <text x="462" y="400" font-size="12" fill="#334155">eth_sendTransaction</text>
+  <text x="462" y="416" font-size="12" fill="#334155">(SIGNER_IP / SIGNER_PORT)</text>
 
-  <!-- ============ besu network ============ -->
+
   <rect x="820" y="120" width="740" height="320" rx="18" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
   <text x="842" y="152" font-size="19" font-weight="700" fill="#4c1d95">besu-test-network/</text>
   <text x="1036" y="152" font-size="13.5" fill="#6d28d9">Docker Compose · chain id 1337 · QBFT · 1 s blocks · zero gas price</text>
@@ -95,7 +79,7 @@
   <text x="862" y="200" font-size="15" font-weight="700" fill="#4c1d95">rpcnode</text>
   <text x="862" y="222" font-size="13" fill="#334155">JSON-RPC :8545 · WS :8546</text>
   <text x="862" y="242" font-size="13" fill="#334155">ETH, NET, TXPOOL, QBFT, …</text>
-  <text x="862" y="266" font-size="12" fill="#64748b">entry point for proxy &amp; signers</text>
+  <text x="862" y="266" font-size="12" fill="#64748b">entry point for proxy &amp; signer</text>
 
   <g filter="url(#sh)"><rect x="1120" y="172" width="420" height="110" rx="12" fill="#ffffff" stroke="#a78bfa" stroke-width="1.5"/></g>
   <text x="1140" y="200" font-size="15" font-weight="700" fill="#4c1d95">QBFT validators</text>
@@ -131,18 +115,17 @@
   <!-- signers -> besu -->
   <path d="M 380 560 L 395 560" stroke="none"/>
   <path d="M 730 560 L 790 560 L 790 255 L 838 255" stroke="#7c3aed" stroke-width="2" fill="none" marker-end="url(#aP)"/>
-  <path d="M 220 730 L 220 770 L 790 770 L 790 560" stroke="#7c3aed" stroke-width="2" fill="none"/>
   <text x="798" y="410" font-size="12" fill="#5b21b6" transform="rotate(-90 798 410)">signed raw tx → rpcnode</text>
   <!-- users -> explorers -->
 
 
   <!-- ============ bottom: benchmark + legend ============ -->
   <g filter="url(#sh)"><rect x="820" y="580" width="740" height="170" rx="14" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/></g>
-  <text x="842" y="610" font-size="16" font-weight="700" fill="#92400e">mpc-signer/bench: old vs new, same load</text>
-  <text x="842" y="636" font-size="13" fill="#334155">bench.js (closed-loop, verifies every signature) drives the same transactions through:</text>
-  <text x="862" y="660" font-size="13" fill="#334155">① Web3Signer  ② proxy-style Vault read + local sign  ③ MPC coordinator</text>
-  <text x="842" y="686" font-size="13" fill="#334155">Hot path: MPC ≈ Web3Signer TPS/latency · sustained MPC rate = presignature generation</text>
-  <text x="842" y="710" font-size="13" fill="#334155">OLD_STACK=existing benchmarks your running Vault + Web3Signer; results in bench/RESULTS.md</text>
+  <text x="842" y="610" font-size="16" font-weight="700" fill="#92400e">mpc-signer/bench: MPC signer throughput</text>
+  <text x="842" y="636" font-size="13" fill="#334155">bench.js (closed-loop, verifies every signature) drives transactions through the</text>
+  <text x="862" y="660" font-size="13" fill="#334155">MPC coordinator: key generation, hot path (pool), end to end, cold path</text>
+  <text x="842" y="686" font-size="13" fill="#334155">Sustained rate = presignature generation; hot path = milliseconds per signature</text>
+  <text x="842" y="710" font-size="13" fill="#334155">bench/run-bench.sh writes results/&lt;time&gt;.md (docs/development/mpc-benchmarks.md)</text>
   <text x="842" y="734" font-size="12" fill="#64748b">quickstart/ runs the MPC cluster with Docker Compose; deploy/ = one node per host in production</text>
 
   <g transform="translate(40,800)">
@@ -150,7 +133,7 @@
     <text x="20" y="32" font-size="16" font-weight="700" fill="#0f172a">Transaction flow (POST /transfer with the MPC signer)</text>
     <g font-size="13.5" fill="#334155">
       <text x="20" y="64">1. Client calls proxy POST /transfer {from, to, amount}</text>
-      <text x="20" y="88">2. proxy: per-sender lock, nonce = Redis INCR, balance check incl. pending value</text>
+      <text x="20" y="88">2. proxy: per-sender lock, nonce = max(counter, chain pending), balance check incl. pending</text>
       <text x="20" y="112">3. proxy → mpc-coordinator eth_sendTransaction {from, to, value, nonce, gasPrice 0}</text>
       <text x="20" y="136">4. coordinator → 2 MPC nodes: policy check + partial signature from a presignature</text>
       <text x="780" y="64">5. coordinator combines (r, s), adds v, encodes EIP-155 raw transaction</text>
@@ -159,10 +142,9 @@
       <text x="780" y="136">8. chainlens/ shows the block and tx; Grafana / Tempo show metrics, logs, traces</text>
     </g>
     <g font-size="12.5">
-      <line x1="20" y1="172" x2="56" y2="172" stroke="#e11d48" stroke-width="2"/><text x="64" y="176" fill="#334155">current path (exportable key)</text>
-      <line x1="300" y1="172" x2="336" y2="172" stroke="#059669" stroke-width="2"/><text x="344" y="176" fill="#334155">MPC path (non-exportable)</text>
-      <line x1="560" y1="172" x2="596" y2="172" stroke="#7c3aed" stroke-width="2"/><text x="604" y="176" fill="#334155">to Besu</text>
-      <text x="700" y="176" fill="#64748b">Browsers open chainlens/ :30100 and Grafana :3000.</text>
+      <line x1="20" y1="172" x2="56" y2="172" stroke="#059669" stroke-width="2"/><text x="64" y="176" fill="#334155">signing (MPC, non-exportable)</text>
+      <line x1="300" y1="172" x2="336" y2="172" stroke="#7c3aed" stroke-width="2"/><text x="344" y="176" fill="#334155">to Besu</text>
+      <text x="460" y="176" fill="#64748b">Browsers open chainlens/ :30100 and Grafana :3000.</text>
     </g>
   </g>
 </svg>

@@ -26,14 +26,14 @@ All commands below run in `ansible/` on the operator.
 |---|---|---|---|
 | 0 | `00-preflight.yml` | operator, all hosts | settings (access lists, IP plan), tools, each host's IP and OS; creates `state/` and the shared secrets; warns about uncommitted changes |
 | 1 | `01-hosts.yml` | all hosts | Docker, firewalld, nftables, chrony (`ntp_servers`), cron; copies the **committed code** to `/opt/besu-chain` and records which commit it copied (`state/repo.commit`); firewall (`ha/firewall-layout.sh`); node-exporter |
-| 2 | `02-images.yml` | operator → hosts | builds the MPC, proxy, chainlens and Remix images **once** and copies them (identical image on every host); puts the third-party images where they run (Besu; redis and redis-exporter on .135/.136; Prometheus and Grafana on .139) |
+| 2 | `02-images.yml` | operator → hosts | builds the MPC, proxy, chainlens, Remix and documentation site images **once** and copies them (identical image on every host); puts the third-party images where they run (Besu; redis and redis-exporter on .135/.136; Prometheus and Grafana on .139) |
 | 3 | `03-mpc-nodes.yml` | operator | **stops for the MPC teams** (twice): team instructions, `cluster.json`, nodes answering |
 | 4 | `04-coordinators.yml` | .135, .136 | coord1 + coord2, key ceremony → `SENDER01`, presignature pool |
 | 5 | `05-besu.yml` | .135–.138 | 6 node keys (on their hosts), genesis (once) with `SENDER01` funded, validators, then RPC nodes |
 | 6 | `06-proxy.yml` | operator, .135, .136 | the SectionRegistry (once, or an upgrade of an older version), the contract account center (once), proxy settings (the proxy is not started here; a running one is updated), redis-exporter on both hosts |
 | 7 | `07-ha.yml` | .135, .136 | RPC health checker (`besu-rpc-health`), HAProxy, keepalived: VIPs on .135, the proxy started on the host holding the proxy VIP |
 | 8 | `08-check.yml` | operator | Besu, MPC and proxy through the VIPs; the proxy admin API and the SectionRegistry; migration of an older registry (once); once: test account + transfer |
-| 9 | `09-monitoring.yml` | .139 | Prometheus, Grafana (all targets checked), chainlens, Remix IDE ([Remix IDE (self-hosted)](../components/remix.md)); copies Deploy page records back to the operator's repository |
+| 9 | `09-monitoring.yml` | .139 | Prometheus, Grafana (all targets checked), chainlens, Remix IDE ([Remix IDE (self-hosted)](../components/remix.md)), documentation site ([Documentation website](../components/docs-site.md)); copies Deploy page records back to the operator's repository |
 | 10 | `10-backups.yml` | .135–.138 | daily chain snapshot cron (val3), node key backups (GPG), MPC share backups (opt-in); prints the URLs and what stays manual |
 
 `site.yml` runs them in order. Phases 02–10 first check that the hosts have the current code
@@ -99,6 +99,7 @@ then; moving a deployed node to a new IP follows
 | `chainlens_ips` | users of chainlens, the explorer (`.139:30100`) |
 | `grafana_ips` | users of Grafana, the dashboards (`.139:3000`) |
 | `remix_ips` | developers using the Remix IDE (`.139:30200`) |
+| `docs_ips` | readers of the documentation website (`.139:30300`) |
 | `chainlens_deploy_ips` | admin PCs allowed to use the chainlens admin pages (Deploy, Sections), besides `operator_ip`. When one of those pages is on, the firewall opens chainlens for them too |
 
 The lists take addresses and networks (`192.168.68.0/24`, not `192.168.68.*`). Adding, removing
@@ -182,7 +183,7 @@ Both pages need the token in `state/secrets/chainlens_deploy_token` and a source
 the proxy admin token (`state/secrets/proxy_admin_token`). More: [Chainlens](../components/chainlens.md),
 [Proxy API](../reference/proxy-api.md).
 
-### Remix IDE
+### Remix IDE and the documentation site
 
 | Setting | Default | What |
 |---|---|---|
@@ -191,6 +192,11 @@ the proxy admin token (`state/secrets/proxy_admin_token`). More: [Chainlens](../
 | `remix_solc_versions` | `["0.8.28"]` | the compilers offered, served locally (Remix's default version is always added) |
 
 Who may open it: `remix_ips`. More: [Remix IDE (self-hosted)](../components/remix.md).
+
+`docs_site_enabled` (default `true`): this documentation as a website on the monitoring host
+(`.139:30300`), built from `docs/` into an image by `02-images.yml` and started by
+`09-monitoring.yml`; `false` stops it. Who may open it: `docs_ips`. More:
+[Documentation website](../components/docs-site.md).
 
 ### RPC health on the HAProxy hosts
 
@@ -307,7 +313,7 @@ contract account center, the smoke test.
 Phase 1 copies the committed code to the hosts, and the image builds of phase 2 use that copy.
 Phases 02–10 compare the last commit touching the deployed directories (`deployed_dirs` in
 `layout.yml`: `besu-production`, `ha`, `monitoring`, `mpc-signer/deploy`, `proxy`, `chainlens`,
-`contracts`, `remix`) with `state/repo.commit`, and stop with "The hosts have older code" if phase 1
+`contracts`, `remix`, `docs-site`) with `state/repo.commit`, and stop with "The hosts have older code" if phase 1
 didn't run since. A change to `settings.yml`, `inventory.yml` or the playbooks needs no phase 1.
 
 ```bash
@@ -319,7 +325,7 @@ To change something, edit the setting (or commit the code change) and rerun `sit
   one host at a time.
 - HAProxy and keepalived are **reloaded**, not restarted, so the VIPs stay where they are. The RPC
   health checker restarts only when its script or settings changed.
-- New proxy / chainlens / Remix code: rebuilt on the operator, copied only when the image content
+- New proxy / chainlens / Remix / documentation site code: rebuilt on the operator, copied only when the image content
   changed; the running proxy is recreated (seconds).
 - New image versions: Besu nodes are replaced one at a time (validators, then RPC nodes), each in
   sync before the next; in the lab, the chain kept producing blocks during the upgrade (longest
@@ -338,7 +344,7 @@ Limits:
 - Firewall rules are only **added** to firewalld: an IP removed from one of the access lists stays
   allowed to the host's own ports until you remove its rule (`firewall-cmd --permanent
   --remove-rich-rule=…`, `firewall-cmd --reload`). The allow list for the ports Docker publishes
-  (proxy, coordinator, MPC node, Grafana, chainlens, Remix, redis-exporter; nftables table
+  (proxy, coordinator, MPC node, Grafana, chainlens, Remix, documentation site, redis-exporter; nftables table
   `inet besu_docker`) is rewritten completely on every run, so there the IP is removed at once.
   See [Access control](access-control.md).
 - Changing the chain settings after the first run has no effect (the genesis is never recreated).

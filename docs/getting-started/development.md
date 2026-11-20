@@ -41,7 +41,7 @@ Then put `MPC_POOL_KEYS=<SENDER01>` in `mpc-signer/quickstart/.env` and run `./q
 again (keeps presignatures ready for SENDER01).
 
 **3. Proxy and Redis.** In `proxy/.env` (from `proxy/.env.example`): `BESU_IP` / `BESU_PORT`,
-`WEB3SIGNER_IP` / `WEB3SIGNER_PORT` = the coordinator (`:9100`), `SENDER01`, `MPC_ADMIN_URL`,
+`SIGNER_IP` / `SIGNER_PORT` = the coordinator (`:9100`), `SENDER01`, `MPC_ADMIN_URL`,
 `MPC_ADMIN_TOKEN`, `REDIS_*`.
 
 ```bash
@@ -66,11 +66,8 @@ limit, nonce gaps, NFT contract after a chain reset): [proxy](../components/prox
 
 ## Benchmark the MPC signer
 
-Against Vault + Web3Signer (the retired signer):
-
 ```bash
-cd mpc-signer && bench/run-bench.sh                     # starts its own Besu + Vault + Web3Signer
-cd mpc-signer && OLD_STACK=existing bench/run-bench.sh  # uses your running stack
+cd mpc-signer && bench/run-bench.sh
 ```
 
 Each run writes `mpc-signer/bench/results/<time>.md`; the summary and sizing are in
@@ -80,5 +77,4 @@ Each run writes `mpc-signer/bench/results/<time>.md`; the summary and sizing are
 
 | | |
 |---|---|
-| [Vault + Web3Signer](../development/vault-web3signer.md) | the previous signer (exportable keys), kept for comparison |
 | [Paladin](../development/paladin.md) | the privacy nodes bundled with the test network (Pente, Noto, Zeto) |
