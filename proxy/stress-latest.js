@@ -1115,6 +1115,9 @@ app.get("/metrics", (req, res) => {
         [["", redis.status === "ready" ? 1 : 0]]);
     lines.push(...httpMetricLines());
     metric("proxy_senders_tracked", "gauge", "Senders watched by the background chain check.", [["", senders.size]]);
+    metric("proxy_account_info", "gauge", "The platform and section accounts by name (always 1): account, kind (platform, upfront, consumption, payment), section.",
+        [...accountInfo.entries()].map(([address, info]) =>
+            [`address="${address}",account="${labelValue(info.account)}",kind="${info.kind}",section="${labelValue(info.section)}",section_id="${info.sectionId}"`, 1]));
     metric("proxy_sender_info", "gauge", "What a sender is (always 1): account (a readable name), kind (platform, upfront, consumption, payment, user, retired, other) and section.",
         all.filter(([sender]) => senderInfo.has(sender)).map(([sender]) => {
             const info = senderInfo.get(sender);
@@ -3647,6 +3650,9 @@ app.post("/contract/send", async (req, res) => {
 const sectionOps = new Map(); // "id|op" -> { id, name, op, count, wei }
 const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "nft_first_sale", "nft_resale", "topup", "sweep", "payback", "account_replaced", "archive_return"];
 const sectionMetrics = { rows: [], sender01: null, error: 0, at: 0 };
+// Names of the platform and section accounts, whether they send now or not (proxy_account_info): the
+// MPC signer dashboard names each key's presignature pool with it. address (lowercase) -> info
+const accountInfo = new Map();
 
 function countSectionOp(section, op, amountEth) {
     const key = `${section.id}|${op}`;
@@ -3679,12 +3685,19 @@ async function refreshSectionMetrics() {
                 }
 
                 for (const [role, address] of Object.entries(section.accounts)) {
-                    rows.push({ id: section.id, name: section.name, active: section.active, role, eth: Number(ethers.formatEther(await getBalanceWei(address))) });
+                    rows.push({ id: section.id, name: section.name, active: section.active, role, address,
+                        eth: Number(ethers.formatEther(await getBalanceWei(address))) });
                 }
             }
         }
 
         sectionMetrics.rows = rows;
+        const names = new Map([[CONFIG.SENDER01, "SENDER01"], [CONFIG.REGISTRY_ADMIN, "registry admin"], [CONFIG.CONTRACT_CENTER, "contract center"]]
+            .filter(([address]) => isAddress(address))
+            .map(([address, name]) => [address.toLowerCase(), { account: name, kind: "platform", section: "", sectionId: "" }]));
+        rows.forEach((r) => names.set(r.address.toLowerCase(), { account: `${r.name} · ${r.role}`, kind: r.role, section: r.name, sectionId: String(r.id) }));
+        accountInfo.clear();
+        names.forEach((info, address) => accountInfo.set(address, info));
         sectionMetrics.sender01 = isAddress(CONFIG.SENDER01) ? Number(ethers.formatEther(await getBalanceWei(CONFIG.SENDER01))) : null;
         sectionMetrics.error = 0;
         sectionMetrics.at = Date.now();

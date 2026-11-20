@@ -1255,7 +1255,7 @@
     },
     {
       "type": "row",
-      "title": "Presignature pool",
+      "title": "Presignature pools (one per MPC key and coordinator; filter with Class, Section and Search above)",
       "id": 19,
       "collapsed": false,
       "gridPos": {
@@ -1267,25 +1267,1075 @@
       "panels": []
     },
     {
+      "type": "stat",
+      "title": "Pooled keys",
+      "id": 27,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Keys with a presignature pool (classes big and small; 'none' keys always sign the slow way), matching the filters",
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(count by (address) (((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Empty pools",
+      "id": 28,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Pools with no presignature: that key signs the slow way (~0.6-1.5 s) until it refills (alert MpcPoolEmpty for big keys)",
+      "gridPos": {
+        "x": 4,
+        "y": 36,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) == 0) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Below half",
+      "id": 29,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Pools under half of their target: signing faster than presigning",
+      "gridPos": {
+        "x": 8,
+        "y": 36,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count((((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) / on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"} > 0)) < 0.5) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Presignatures ready",
+      "id": 30,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "In the pools matching the filters",
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\"))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pool fill",
+      "id": 31,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Presignatures ready / the targets of these pools",
+      "gridPos": {
+        "x": 16,
+        "y": 36,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\"))) / sum((((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) * 0 + on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"})))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 0.9
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Presigning now",
+      "id": 32,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Presign sessions running for these keys",
+      "gridPos": {
+        "x": 20,
+        "y": 36,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(((max by (address, class, name) (mpc_pool_inflight{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_inflight{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\"))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Keys needing attention",
+      "id": 33,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Only the pools with a problem now: EMPTY (signing the slow way) or LOW (under half of the target). One row per key and coordinator: each coordinator keeps its own pools. Empty table = all pools OK.",
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) == 0) * 0 + 2 or ((((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) / on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"} > 0)) < 0.5) * 0 + 1",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) * 0 + on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"}))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) / on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"} > 0))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "expr": "((max by (address, class, name) (mpc_pool_inflight{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_inflight{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "State",
+              "Value #B": "Ready",
+              "Value #C": "Target",
+              "Value #D": "Fill",
+              "Value #E": "Presigning",
+              "account": "Key",
+              "class": "Class",
+              "name": "Coordinator",
+              "kind": "Kind",
+              "section": "Section",
+              "address": "Address"
+            },
+            "indexByName": {
+              "Value #A": 1,
+              "Value #B": 6,
+              "Value #C": 7,
+              "Value #D": 8,
+              "Value #E": 9,
+              "account": 0,
+              "class": 2,
+              "name": 3,
+              "kind": 4,
+              "section": 5,
+              "address": 10
+            }
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "State",
+                "config": {
+                  "id": "isNotNull",
+                  "options": {}
+                }
+              }
+            ],
+            "type": "include",
+            "match": "any"
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "enablePagination": false
+        },
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": true
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          },
+          "decimals": 0,
+          "noValue": "all pools OK"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "2": {
+                        "text": "EMPTY",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "LOW",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Key"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 240
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fill"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1e-06
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.5
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "All pooled keys",
+      "id": 34,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Every pooled key and coordinator, emptiest first; pages at the bottom. Key: its name from the proxy (SENDER01, 'Shop B \u00b7 upfront', \u2026) or its address. Each column can be sorted or filtered.",
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) == 0) * 0 + 2 or ((((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) / on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"} > 0)) < 0.5) * 0 + 1 or ((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) * 0",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) * 0 + on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"}))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "(((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) / on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"} > 0))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "expr": "((max by (address, class, name) (mpc_pool_inflight{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_inflight{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "State",
+              "Value #B": "Ready",
+              "Value #C": "Target",
+              "Value #D": "Fill",
+              "Value #E": "Presigning",
+              "account": "Key",
+              "class": "Class",
+              "name": "Coordinator",
+              "kind": "Kind",
+              "section": "Section",
+              "address": "Address"
+            },
+            "indexByName": {
+              "Value #A": 1,
+              "Value #B": 6,
+              "Value #C": 7,
+              "Value #D": 8,
+              "Value #E": 9,
+              "account": 0,
+              "class": 2,
+              "name": 3,
+              "kind": 4,
+              "section": 5,
+              "address": 10
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "enablePagination": true
+        },
+        "sortBy": [
+          {
+            "displayName": "Fill",
+            "desc": false
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          },
+          "decimals": 0,
+          "noValue": "\u2014"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "2": {
+                        "text": "EMPTY",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "LOW",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Key"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 240
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fill"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1e-06
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.5
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Lowest pools: 10 keys",
+      "id": 35,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "The 10 pools with the lowest fill (ready / target), with the coordinator",
+      "gridPos": {
+        "x": 0,
+        "y": 58,
+        "w": 10,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "bottomk(10, (((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) / on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"} > 0)))",
+          "legendFormat": "{{account}} ({{name}})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 14
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no pooled keys",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1e-06
+              },
+              {
+                "color": "green",
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
       "type": "timeseries",
-      "title": "Pools of big keys",
+      "title": "Pool fill by class",
+      "id": 36,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Presignatures ready / target, all matching keys of each class added up (per coordinator)",
+      "gridPos": {
+        "x": 10,
+        "y": 58,
+        "w": 14,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (class, name) (((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\"))) / sum by (class, name) ((((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"$class\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")) * 0 + on(class, name) group_left() max by (class, name) (mpc_pool_target{job=\"mpc-coordinator\"})))",
+          "legendFormat": "{{class}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Big keys: the 10 lowest pools",
       "id": 20,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Ready presignatures per big key (SENDER01 and other hot senders), per coordinator. A pool that stays low while signing means signing faster than presigning.",
+      "description": "At each moment the 10 big keys (SENDER01, upfront accounts, other busy senders) with the fewest presignatures ready, by name; the dashed line is the target",
       "gridPos": {
         "x": 0,
-        "y": 36,
+        "y": 67,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"big|\"}",
-          "legendFormat": "{{name}} {{address}}",
+          "expr": "bottomk(10, ((max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"big|\"}) * on(address) group_left(account, kind, section) (max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",account=~\"(?i).*$search.*\"}) or max by (address, account, kind, section) (proxy_account_info{section=~\"$section\",address=~\"(?i).*$search.*\"}))) or label_replace(max by (address, class, name) (mpc_pool_ready{job=\"mpc-coordinator\",instance=~\"$coordinator\",class=~\"big|\",address=~\"(?i).*$search.*\"}) unless on(address) max by (address) (proxy_account_info), \"account\", \"$1\", \"address\", \"(.*)\")))",
+          "legendFormat": "{{account}} ({{name}})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1344,7 +2394,7 @@
       "description": "Small pools (e.g. accounts from /createaccount), summed per coordinator: one line per account would be unreadable. A small key with an empty pool signs cold until its pool refills. A coordinator with MPC_POOL_TARGET_SMALL=0 keeps no small pools.",
       "gridPos": {
         "x": 12,
-        "y": 36,
+        "y": 67,
         "w": 12,
         "h": 8
       },
@@ -1420,7 +2470,7 @@
       "description": "This is the sustained hot-path capacity: signatures/s above it drain the pool.",
       "gridPos": {
         "x": 0,
-        "y": 44,
+        "y": 75,
         "w": 12,
         "h": 8
       },
@@ -1478,7 +2528,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 44,
+        "y": 75,
         "w": 12,
         "h": 8
       },
@@ -1536,7 +2586,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 83,
         "w": 12,
         "h": 8
       },
@@ -1594,7 +2644,7 @@
       "description": "big = MPC_POOL_TARGET presignatures each, small = MPC_POOL_TARGET_SMALL, none = cold signing. Change an account's class: POST /account/pool on the proxy.",
       "gridPos": {
         "x": 12,
-        "y": 52,
+        "y": 83,
         "w": 12,
         "h": 8
       },
@@ -1653,7 +2703,7 @@
       "description": "Each coordinator checks every MPC node, so there is one line per coordinator and node (coord1 \u2192 node 0 ...). 1 = the node answers that coordinator. Node 0 = mpc1 (.135), node 1 = mpc2 (.137), node 2 = mpc3 (.138).",
       "gridPos": {
         "x": 0,
-        "y": 60,
+        "y": 91,
         "w": 24,
         "h": 6
       },
@@ -1730,6 +2780,63 @@
           ]
         },
         "sort": 1
+      },
+      {
+        "name": "class",
+        "label": "Class",
+        "type": "custom",
+        "query": "big,small",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      },
+      {
+        "name": "section",
+        "label": "Section",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(proxy_account_info, section)",
+          "refId": "section"
+        },
+        "definition": "label_values(proxy_account_info, section)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "search",
+        "label": "Search (key name or address)",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
       }
     ]
   },
