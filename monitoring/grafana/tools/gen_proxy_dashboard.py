@@ -179,6 +179,7 @@ y += 8
 dash = {
     "title": "Proxy & Redis", "uid": "proxy-redis",
     "description": "The active proxy (requests, errors, latency, senders, process) and its Redis (through the proxy VIP)",
+    "links": [{"title": "Dashboards", "type": "dashboards", "tags": ["production"], "asDropdown": True, "keepTime": True, "includeVars": False, "icon": "external link", "targetBlank": False}],
     "tags": ["proxy", "redis", "production"], "editable": True, "schemaVersion": 39, "version": 1, "refresh": "30s",
     "time": {"from": "now-6h", "to": "now"}, "timezone": "", "graphTooltip": 1,
     "templating": {"list": []},

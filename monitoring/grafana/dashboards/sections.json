@@ -2,6 +2,20 @@
   "title": "Sections",
   "uid": "sections",
   "description": "Per-section balances, low-balance alerts and activity (docs/features/sections.md)",
+  "links": [
+    {
+      "title": "Dashboards",
+      "type": "dashboards",
+      "tags": [
+        "production"
+      ],
+      "asDropdown": true,
+      "keepTime": true,
+      "includeVars": false,
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
   "tags": [
     "sections",
     "production"

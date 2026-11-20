@@ -1781,5 +1781,19 @@
         "useValueForTime": false
       }
     ]
-  }
+  },
+  "links": [
+    {
+      "title": "Dashboards",
+      "type": "dashboards",
+      "tags": [
+        "production"
+      ],
+      "asDropdown": true,
+      "keepTime": true,
+      "includeVars": false,
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ]
 }

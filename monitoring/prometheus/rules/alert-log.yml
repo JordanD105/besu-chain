@@ -1,0 +1,31 @@
+# Alert log (Grafana "Alert log" dashboard, docs/operations/dashboards.md#alert-log).
+# Two series per FIRING alert, recorded every 15 s while it fires, so the dashboard can list every
+# firing episode over the whole retention (prometheus_retention) with plain range functions:
+#   alert_log:firing_since  value = when this episode started (activeAt, unix seconds); a new value
+#                           = a new episode, so changes(...[range]) + 1 = episodes in the range
+#   alert_log:firing_seen   value = the evaluation time; max_over_time = last time seen firing,
+#                           count_over_time * 15 s = time spent firing
+# Both get two labels for the log: subject (what the alert is about: section, node, sender,
+# address, host or instance, the first that exists in that order) and detail (mountpoint, class or
+# kind). Pending alerts that never fired are not recorded.
+groups:
+  - name: alert-log
+    interval: 15s
+    rules:
+      - record: alert_log:firing_since
+        expr: >-
+          label_replace(label_replace(label_replace(
+          label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(
+            ALERTS_FOR_STATE and ignoring(alertstate) ALERTS{alertstate="firing"},
+          "subject", "$1", "instance", "(.+)"), "subject", "$1", "host", "(.+)"), "subject", "$1", "address", "(.+)"),
+          "subject", "$1", "sender", "(.+)"), "subject", "$1", "node", "(.+)"), "subject", "$1", "section", "(.+)"),
+          "detail", "$1", "kind", "(.+)"), "detail", "$1", "class", "(.+)"), "detail", "$1", "mountpoint", "(.+)")
+
+      - record: alert_log:firing_seen
+        expr: >-
+          label_replace(label_replace(label_replace(
+          label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(
+            timestamp(ALERTS{alertstate="firing"}),
+          "subject", "$1", "instance", "(.+)"), "subject", "$1", "host", "(.+)"), "subject", "$1", "address", "(.+)"),
+          "subject", "$1", "sender", "(.+)"), "subject", "$1", "node", "(.+)"), "subject", "$1", "section", "(.+)"),
+          "detail", "$1", "kind", "(.+)"), "detail", "$1", "class", "(.+)"), "detail", "$1", "mountpoint", "(.+)")

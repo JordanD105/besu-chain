@@ -125,6 +125,7 @@ y += 8
 
 dash = {
     "title": "Sections", "uid": "sections", "description": "Per-section balances, low-balance alerts and activity (docs/features/sections.md)",
+    "links": [{"title": "Dashboards", "type": "dashboards", "tags": ["production"], "asDropdown": True, "keepTime": True, "includeVars": False, "icon": "external link", "targetBlank": False}],
     "tags": ["sections", "production"], "editable": True, "schemaVersion": 39, "version": 1, "refresh": "30s",
     "time": {"from": "now-30d", "to": "now"}, "timezone": "", "graphTooltip": 1,
     "templating": {"list": [{

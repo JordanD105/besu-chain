@@ -2,6 +2,20 @@
   "title": "Proxy & Redis",
   "uid": "proxy-redis",
   "description": "The active proxy (requests, errors, latency, senders, process) and its Redis (through the proxy VIP)",
+  "links": [
+    {
+      "title": "Dashboards",
+      "type": "dashboards",
+      "tags": [
+        "production"
+      ],
+      "asDropdown": true,
+      "keepTime": true,
+      "includeVars": false,
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
   "tags": [
     "proxy",
     "redis",
