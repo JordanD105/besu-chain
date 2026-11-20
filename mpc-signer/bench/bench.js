@@ -1,22 +1,18 @@
 #!/usr/bin/env node
-// Signer throughput benchmark: OLD (Web3Signer + Vault, and the proxy's per-tx Vault read +
-// local ethers signing) vs NEW (MPC 2-of-3 CGGMP24 signer).
+// Signer throughput benchmark for the MPC 2-of-3 CGGMP24 signer (coordinator JSON-RPC).
 //
-//   node bench.js --target w3s|vault|mpc --mode sign|send --concurrency 32 --requests 1000
+//   node bench.js --mode sign|send --concurrency 32 --requests 1000 [--warmup N] [--label L]
 //
 // Closed-loop load: `concurrency` workers each issue requests back-to-back until `requests`
 // are done. Prints one JSON line with throughput and latency percentiles.
 
-const fs = require("fs");
-const path = require("path");
-const { Wallet, Transaction, getAddress } = require("ethers");
+const { Transaction, getAddress } = require("ethers");
 
 const arg = (name, def) => {
     const i = process.argv.indexOf(`--${name}`);
     return i > 0 ? process.argv[i + 1] : def;
 };
 
-const TARGET = arg("target", "mpc");
 const MODE = arg("mode", "sign");
 const CONCURRENCY = Number(arg("concurrency", 16));
 const REQUESTS = Number(arg("requests", 500));
@@ -25,13 +21,7 @@ const VERIFY = arg("verify", "true") === "true";
 const LABEL = arg("label", "");
 
 const BESU = process.env.BESU_RPC || "http://127.0.0.1:8545";
-const W3S = process.env.W3S_RPC || "http://127.0.0.1:9000";
 const MPC = process.env.MPC_RPC || "http://127.0.0.1:9100";
-const VAULT = process.env.VAULT_ADDR || "http://127.0.0.1:8200";
-const ENV_DIR = path.join(__dirname, "env");
-// Vault target: KV v2 path of the key (proxy-style per-transaction read) and a token that can read it.
-// Defaults are the bench stack's; OLD_STACK=existing sets them for your own Vault.
-const VAULT_KEY_PATH = (process.env.VAULT_KEY_PATH || "web3signer/data/accounts/bench-vault").replace(/^\/?(v1\/)?/, "");
 let CHAIN_ID = process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : null;
 const TO = "0x000000000000000000000000000000000000dEaD";
 
@@ -46,38 +36,11 @@ async function rpc(url, method, params = []) {
     return j.result;
 }
 
-async function readVaultKey(token) {
-    const r = await fetch(`${VAULT}/v1/${VAULT_KEY_PATH}`, { headers: { "X-Vault-Token": token } });
-    if (!r.ok) throw new Error(`vault read ${VAULT_KEY_PATH}: HTTP ${r.status}`);
-    const body = await r.json();
-    const k = body.data.data.privateKey;
-    return k.startsWith("0x") ? k : "0x" + k;
-}
-
 async function setup() {
     if (CHAIN_ID === null) CHAIN_ID = Number(await rpc(BESU, "eth_chainId"));
-    if (TARGET === "w3s") {
-        const from = process.env.W3S_FROM || (await rpc(W3S, "eth_accounts"))[0];
-        if (!from) throw new Error("Web3Signer has no accounts");
-        return { from: getAddress(from) };
-    }
-    if (TARGET === "mpc") {
-        const from = process.env.MPC_FROM || (await rpc(MPC, "eth_accounts"))[0];
-        if (!from) throw new Error("MPC coordinator has no keys");
-        return { from: getAddress(from) };
-    }
-    if (TARGET === "vault") {
-        const token = process.env.VAULT_TOKEN || fs.readFileSync(path.join(ENV_DIR, ".secrets/signer-token"), "utf8").trim();
-        const from = new Wallet(await readVaultKey(token)).address;
-        return { from, token };
-    }
-    throw new Error(`unknown target ${TARGET}`);
-}
-
-// Same as proxy/stress-latest.js readPrivateKey()+vaultWallet(): one Vault read per transaction.
-async function vaultSign(ctx, tx) {
-    const wallet = new Wallet(await readVaultKey(ctx.token));
-    return wallet.signTransaction({ ...tx, chainId: CHAIN_ID, type: 0 });
+    const from = process.env.MPC_FROM || (await rpc(MPC, "eth_accounts"))[0];
+    if (!from) throw new Error("MPC coordinator has no keys");
+    return { from: getAddress(from) };
 }
 
 function txFor(ctx, nonce) {
@@ -87,12 +50,7 @@ function txFor(ctx, nonce) {
 async function one(ctx, nonce) {
     const tx = txFor(ctx, nonce);
     if (MODE === "sign") {
-        let raw;
-        if (TARGET === "vault") {
-            raw = await vaultSign(ctx, { to: tx.to, gasLimit: 21000, gasPrice: 0, value: 0, nonce });
-        } else {
-            raw = await rpc(TARGET === "w3s" ? W3S : MPC, "eth_signTransaction", [tx]);
-        }
+        const raw = await rpc(MPC, "eth_signTransaction", [tx]);
         if (VERIFY) {
             const t = Transaction.from(raw);
             if (t.from !== ctx.from || Number(t.nonce) !== nonce || Number(t.chainId) !== CHAIN_ID) {
@@ -101,13 +59,8 @@ async function one(ctx, nonce) {
         }
         return;
     }
-    // send: sign + submit to Besu
-    if (TARGET === "vault") {
-        const raw = await vaultSign(ctx, { to: tx.to, gasLimit: 21000, gasPrice: 0, value: 0, nonce });
-        await rpc(BESU, "eth_sendRawTransaction", [raw]);
-    } else {
-        await rpc(TARGET === "w3s" ? W3S : MPC, "eth_sendTransaction", [tx]);
-    }
+    // send: sign + submit to Besu (the coordinator forwards eth_sendTransaction)
+    await rpc(MPC, "eth_sendTransaction", [tx]);
 }
 
 function pct(sorted, p) {
@@ -162,7 +115,7 @@ async function waitMined(addr, expected, timeoutMs = 300000) {
     const ok = r.lat.length;
     const out = {
         label: LABEL,
-        target: TARGET,
+        target: "mpc",
         mode: MODE,
         concurrency: CONCURRENCY,
         requests: REQUESTS,

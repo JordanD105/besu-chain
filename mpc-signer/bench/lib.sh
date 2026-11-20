@@ -11,7 +11,7 @@ NODE_IMAGE="${NODE_IMAGE:-node:22-bookworm-slim}"
 _node_docker_args() {
   local v
   for v in HTTPS_PROXY HTTP_PROXY NO_PROXY https_proxy http_proxy no_proxy \
-           BESU_RPC W3S_RPC MPC_RPC VAULT_ADDR VAULT_TOKEN VAULT_KEY_PATH W3S_FROM MPC_FROM CHAIN_ID; do
+           BESU_RPC MPC_RPC MPC_FROM CHAIN_ID; do
     [ -n "${!v:-}" ] && printf -- '-e\n%s\n' "$v"
   done
   if [ -n "${NODE_EXTRA_CA_CERTS:-}" ] && [ -r "$NODE_EXTRA_CA_CERTS" ]; then

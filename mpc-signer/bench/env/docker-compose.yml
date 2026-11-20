@@ -1,6 +1,6 @@
-# Benchmark environment: one Besu QBFT node + the OLD signing stack (Vault + Web3Signer),
-# configured like besu-vault-web3signer/. The NEW MPC signer runs next to it
-# (scripts/local-cluster.sh) and talks to the same Besu node.
+# Benchmark environment: one Besu QBFT node (chain id 1337, zero gas price) on localhost:8545.
+# The MPC signer under test runs next to it (quickstart/ or scripts/local-cluster.sh) and its
+# coordinator forwards transactions to this node.
 services:
   besu:
     image: hyperledger/besu:${BESU_VERSION:-latest}
@@ -23,41 +23,6 @@ services:
       - ./besu-net/node.key:/net/key:ro
     ports:
       - "8545:8545"
-    networks: [bench]
-
-  vault:
-    image: hashicorp/vault:${VAULT_VERSION:-1.17}
-    container_name: bench-vault
-    cap_add: [IPC_LOCK]
-    command: vault server -config=/vault/config/vault.hcl
-    environment:
-      VAULT_ADDR: http://127.0.0.1:8200
-      VAULT_API_ADDR: http://127.0.0.1:8200
-    volumes:
-      # same configuration and policy as besu-vault-web3signer/
-      - ../../../besu-vault-web3signer/vault/config:/vault/config:ro
-      - ../../../besu-vault-web3signer/vault/policies:/vault/policies:ro
-    ports:
-      - "8200:8200"
-    networks: [bench]
-
-  web3signer:
-    image: consensys/web3signer:${WEB3SIGNER_VERSION:-latest}
-    container_name: bench-web3signer
-    profiles: [signer]
-    command:
-      - --key-store-path=/opt/web3signer/keys
-      - --http-listen-host=0.0.0.0
-      - --http-listen-port=9000
-      - --http-host-allowlist=*
-      - eth1
-      - --chain-id=1337
-      - --downstream-http-host=besu
-      - --downstream-http-port=8545
-    volumes:
-      - ./web3signer-keys:/opt/web3signer/keys:ro
-    ports:
-      - "9000:9000"
     networks: [bench]
 
 networks:

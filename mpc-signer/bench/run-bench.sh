@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Full benchmark: OLD (Vault + Web3Signer, proxy-style Vault read + local sign) vs NEW (MPC).
-# Everything runs in Docker by default: Besu + Vault + Web3Signer (bench/env) and the MPC
-# cluster (quickstart/: 3 nodes + coordinator). Only Docker and bash/curl are required;
-# the load generator uses the host's Node.js if installed, otherwise the node:22 image.
+# MPC signer benchmark (2-of-3 CGGMP24). Everything runs in Docker by default: a single-node
+# Besu QBFT test chain (bench/env) and the MPC cluster (quickstart/: 3 nodes + coordinator).
+# Only Docker and bash/curl are required; the load generator uses the host's Node.js if
+# installed, otherwise the node:22 image.
 #
-#   bench/run-bench.sh                         # starts its own Besu + Vault + Web3Signer (bench/env)
-#   OLD_STACK=existing bench/run-bench.sh      # use YOUR running Besu + Vault + Web3Signer instead
-#   MPC_RUNTIME=native bench/run-bench.sh      # MPC cluster as host processes (scripts/local-cluster.sh)
+#   bench/run-bench.sh                          # starts its own Besu test chain (bench/env)
+#   BESU_STACK=existing bench/run-bench.sh      # use YOUR running Besu node instead
+#   MPC_RUNTIME=native bench/run-bench.sh       # MPC cluster as host processes (scripts/local-cluster.sh)
 #
-# OLD_STACK=existing reads bench/existing.env if present (see existing.env.example). Defaults match
-# ../besu-test-network + ../besu-vault-web3signer on this host. Nothing is deployed for the old
-# stack; phase C (which submits real transactions) only runs with BENCH_SEND=1.
+# BESU_STACK=existing reads bench/existing.env if present (see existing.env.example); the default
+# BESU_RPC (http://127.0.0.1:8545) matches ../besu-test-network on this host. Nothing is deployed
+# for Besu; phase C (which submits real transactions) only runs with BENCH_SEND=1.
 #
 # Phases
 #   A  presignature generation capacity (the MPC's sustained signing ceiling)
-#   B  signing throughput, pool pre-filled, refill paused   (MPC "hot" path vs old stack)
+#   B  signing throughput, pool pre-filled, refill paused   (MPC "hot" path)
 #   C  end-to-end: sign + submit to Besu + wait until mined
 #   D  MPC cold path (no presignature: full interactive signing)
 #   E  MPC sustained: pool empty at start, refill running during the load
@@ -35,38 +35,23 @@ COLD_CONCURRENCIES="${COLD_CONCURRENCIES:-1 4}"
 SUSTAINED_REQUESTS="${SUSTAINED_REQUESTS:-150}"
 SUSTAINED_CONCURRENCY="${SUSTAINED_CONCURRENCY:-16}"
 
-# ------------------------------------------------------------------ old stack
-if [ -z "${OLD_STACK:-}" ] && [ -f "$BENCH/existing.env" ]; then OLD_STACK=existing; fi
-OLD_STACK="${OLD_STACK:-bench}"
-REPO="$(cd "$ROOT/.." && pwd)"
-case "$OLD_STACK" in
+# ------------------------------------------------------------------ Besu
+if [ -z "${BESU_STACK:-}" ] && [ -f "$BENCH/existing.env" ]; then BESU_STACK=existing; fi
+BESU_STACK="${BESU_STACK:-bench}"
+case "$BESU_STACK" in
   bench)
-    TARGETS="w3s vault mpc"
     BENCH_SEND="${BENCH_SEND:-1}"
     ;;
   existing)
     # shellcheck disable=SC1091
     [ -f "$BENCH/existing.env" ] && { set -a; . "$BENCH/existing.env"; set +a; }
-    BESU_RPC="${BESU_RPC:-http://127.0.0.1:8545}"
-    W3S_RPC="${W3S_RPC:-http://127.0.0.1:9000}"
-    VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
-    VAULT_TOKEN_FILE="${VAULT_TOKEN_FILE:-$REPO/besu-vault-web3signer/.secrets/web3signer-token}"
-    if [ -z "${VAULT_TOKEN:-}" ] && [ -r "$VAULT_TOKEN_FILE" ]; then VAULT_TOKEN="$(tr -d '\r\n' < "$VAULT_TOKEN_FILE")"; fi
-    if [ -z "${VAULT_KEY_PATH:-}" ]; then
-      VAULT_KEY_PATH="$(grep -sh 'keyPath:' "$REPO"/besu-vault-web3signer/web3signer/keys/*.yaml | head -n1 \
-        | sed -E 's/.*"\/?v1\/([^"]+)".*/\1/' || true)"
-    fi
-    TARGETS="w3s"
-    if [ -n "${VAULT_TOKEN:-}" ] && [ -n "${VAULT_KEY_PATH:-}" ]; then TARGETS="$TARGETS vault"; fi
-    TARGETS="$TARGETS mpc"
     BENCH_SEND="${BENCH_SEND:-0}"
-    export BESU_RPC W3S_RPC VAULT_ADDR VAULT_KEY_PATH
-    [ -n "${VAULT_TOKEN:-}" ] && export VAULT_TOKEN
-    [ -n "${W3S_FROM:-}" ] && export W3S_FROM
     ;;
-  *) echo "OLD_STACK must be bench or existing"; exit 1 ;;
+  *) echo "BESU_STACK must be bench or existing"; exit 1 ;;
 esac
 BESU_RPC="${BESU_RPC:-http://127.0.0.1:8545}"
+export BESU_RPC
+[ -n "${MPC_FROM:-}" ] && export MPC_FROM
 # the coordinator container reaches host-published services via host.docker.internal
 MPC_BESU_RPC="${MPC_BESU_RPC:-$(printf '%s' "$BESU_RPC" | sed -E 's#//(127\.0\.0\.1|localhost)([:/]|$)#//host.docker.internal\2#')}"
 
@@ -85,7 +70,7 @@ case "$MPC_RUNTIME" in
     admin() { "$QS" admin "$@"; }
     mpc_start() {
       [ -f "$ROOT/quickstart/cluster.json" ] || MPC_BESU_RPC="$MPC_BESU_RPC" CHAIN_ID="$CHAIN_ID" "$QS" init
-      # point the coordinator at the same Besu the old stack uses
+      # point the coordinator at the benchmark's Besu node
       sed -i "s#^MPC_BESU_RPC=.*#MPC_BESU_RPC=$MPC_BESU_RPC#" "$ROOT/quickstart/.env"
       "$QS" up >/dev/null
       "$QS" setup >/dev/null
@@ -134,20 +119,13 @@ rpc_result() { # URL METHOD -> result string
   curl -sf -H 'content-type: application/json' "$1" \
     --data "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$2\",\"params\":[]}" | sed -E 's/.*"result":"?([^"}]*)"?.*/\1/'
 }
-if [ "$OLD_STACK" = bench ]; then
-  log "environment: bench Besu + Vault + Web3Signer (docker), MPC cluster ($MPC_RUNTIME)"
+bench_deps
+if [ "$BESU_STACK" = bench ]; then
+  log "environment: bench Besu test chain (docker), MPC cluster ($MPC_RUNTIME)"
   "$BENCH/env/up.sh" >/dev/null
 else
-  log "environment: EXISTING stack - Besu $BESU_RPC, Web3Signer $W3S_RPC, Vault $VAULT_ADDR; MPC cluster ($MPC_RUNTIME)"
-  bench_deps
+  log "environment: EXISTING Besu $BESU_RPC; MPC cluster ($MPC_RUNTIME)"
   rpc_result "$BESU_RPC" eth_chainId >/dev/null || { log "Besu not reachable at $BESU_RPC (set BESU_RPC)"; exit 1; }
-  curl -sf "$W3S_RPC/upcheck" >/dev/null || { log "Web3Signer not reachable at $W3S_RPC (set W3S_RPC)"; exit 1; }
-  if [[ " $TARGETS " == *" vault "* ]]; then
-    curl -s -o /dev/null "$VAULT_ADDR/v1/sys/health" || { log "Vault not reachable at $VAULT_ADDR (set VAULT_ADDR)"; exit 1; }
-    log "vault target: reads $VAULT_KEY_PATH per transaction (like proxy sendFromVault)"
-  else
-    log "vault target skipped: set VAULT_TOKEN (or VAULT_TOKEN_FILE) and VAULT_KEY_PATH to include it"
-  fi
   [ "$BENCH_SEND" = 1 ] || log "phase C skipped (it submits real transactions); set BENCH_SEND=1 to run it"
 fi
 CHAIN_ID="${CHAIN_ID:-$(( $(rpc_result "$BESU_RPC" eth_chainId) ))}"
@@ -161,7 +139,7 @@ BIGINT="$(grep -s '^MPC_BIGINT=' "$ROOT/quickstart/.env" | cut -d= -f2 || true)"
 emit "$(nodejs -e '
 const os=require("os"), [rt, bi]=process.argv.slice(1);
 console.log(JSON.stringify({label:"machine",cpus:os.cpus().length,cpu:os.cpus()[0].model,mem_gb:Math.round(os.totalmem()/2**30),
-  mpc_runtime:rt, mpc_bigint:bi||null, old_stack:process.argv[3]}))' "$MPC_RUNTIME" "${BIGINT:-}" "$OLD_STACK")"
+  mpc_runtime:rt, mpc_bigint:bi||null, besu_stack:process.argv[3], besu_rpc:process.argv[4]}))' "$MPC_RUNTIME" "${BIGINT:-}" "$BESU_STACK" "$BESU_RPC")"
 
 # ------------------------------------------------------------------ A
 log "A: presignature generation capacity"
@@ -181,9 +159,7 @@ emit "$(awk -v n=$((g1 - g0)) -v t0="$t0" -v t1="$t1" -v c0="$cpu0" -v c1="$cpu1
 # ------------------------------------------------------------------ B
 log "B: signing throughput (refill paused)"
 for c in $CONCURRENCIES; do
-  for t in $TARGETS; do
-    emit "$(bench --label "B sign" --target "$t" --mode sign --concurrency "$c" --requests "$REQUESTS" --warmup "$WARMUP")"
-  done
+  emit "$(bench --label "B sign" --mode sign --concurrency "$c" --requests "$REQUESTS" --warmup "$WARMUP")"
 done
 
 # ------------------------------------------------------------------ C
@@ -192,22 +168,20 @@ if [ "$BENCH_SEND" = 1 ]; then
   set_target $((SEND_REQUESTS + 100))
   while [ "$(ready)" -lt $((SEND_REQUESTS + 50)) ]; do sleep 2; done
   pause_refill
-  for t in $TARGETS; do
-    emit "$(bench --label "C send" --target "$t" --mode send --concurrency "$SEND_CONCURRENCY" --requests "$SEND_REQUESTS" --warmup 50)"
-  done
+  emit "$(bench --label "C send" --mode send --concurrency "$SEND_CONCURRENCY" --requests "$SEND_REQUESTS" --warmup 50)"
 fi
 
 # ------------------------------------------------------------------ D
 log "D: MPC cold path (no presignatures)"
 admin POST /admin/pool/clear >/dev/null
 for c in $COLD_CONCURRENCIES; do
-  emit "$(bench --label "D cold" --target mpc --mode sign --concurrency "$c" --requests "$COLD_REQUESTS")"
+  emit "$(bench --label "D cold" --mode sign --concurrency "$c" --requests "$COLD_REQUESTS")"
 done
 
 # ------------------------------------------------------------------ E
 log "E: MPC sustained (empty pool, refill running)"
 set_target 200
-emit "$(bench --label "E sustained" --target mpc --mode sign --concurrency "$SUSTAINED_CONCURRENCY" --requests "$SUSTAINED_REQUESTS")"
+emit "$(bench --label "E sustained" --mode sign --concurrency "$SUSTAINED_CONCURRENCY" --requests "$SUSTAINED_REQUESTS")"
 emit "$(pool | sed -E 's/.*"stats":(\{[^}]*\}).*/\1/; s/^\{/{"label":"E pool stats",/')"
 
 nodejs "$BENCH/report.js" "$OUT" > "results/$STAMP.md"

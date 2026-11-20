@@ -4,7 +4,6 @@
 /deploy/local/
 # benchmark environment secrets and generated files
 /bench/node_modules/
-/bench/env/.secrets/
 /bench/env/besu-net/
 
 # quick start secrets and generated cluster config

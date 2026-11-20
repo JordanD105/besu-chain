@@ -2,14 +2,13 @@
 // Render a benchmark .jsonl file as a markdown report.
 const fs = require("fs");
 const rows = fs.readFileSync(process.argv[2], "utf8").trim().split("\n").map((l) => JSON.parse(l));
-const name = { w3s: "OLD Web3Signer (key from Vault)", vault: "OLD proxy: Vault read + local sign", mpc: "NEW MPC 2-of-3" };
 const out = [];
 const m = rows.find((r) => r.label === "machine");
-out.push(`# Signer throughput: Vault + Web3Signer vs MPC (CGGMP24)\n`);
+out.push(`# MPC signer throughput (2-of-3 CGGMP24)\n`);
 if (m) {
     const how = m.mpc_runtime ? `MPC cluster: ${m.mpc_runtime}${m.mpc_bigint ? ` (${m.mpc_bigint})` : ""}` : `MPC binary: \`${m.mpc_bin}\``;
-    const old = m.old_stack === "existing" ? " Old stack: your existing Besu + Vault + Web3Signer." : "";
-    out.push(`Host: ${m.cpus} vCPU (${m.cpu}), ${m.mem_gb} GB. ${how}.${old} Load generated from this host.\n`);
+    const besu = m.besu_stack === "existing" ? `your existing node (${m.besu_rpc})` : "bench single-node QBFT test chain";
+    out.push(`Host: ${m.cpus} vCPU (${m.cpu}), ${m.mem_gb} GB. ${how}. Besu: ${besu}. Load generated from this host.\n`);
 }
 
 const a = rows.find((r) => r.label === "A presign capacity");
@@ -24,12 +23,12 @@ const table = (label, title, extra = false) => {
     const rs = rows.filter((r) => r.label === label);
     if (!rs.length) return;
     out.push(`## ${title}\n`);
-    out.push(`| signer | concurrency | ok/requests | TPS | p50 ms | p95 ms | p99 ms |${extra ? " mined after (s) | end-to-end TPS |" : ""}`);
-    out.push(`|---|---:|---:|---:|---:|---:|---:|${extra ? "---:|---:|" : ""}`);
+    out.push(`| concurrency | ok/requests | TPS | p50 ms | p95 ms | p99 ms |${extra ? " mined after (s) | end-to-end TPS |" : ""}`);
+    out.push(`|---:|---:|---:|---:|---:|---:|${extra ? "---:|---:|" : ""}`);
     for (const r of rs) {
         const errs = Object.keys(r.errors || {}).length ? ` ⚠ ${JSON.stringify(r.errors)}` : "";
         out.push(
-            `| ${name[r.target]} | ${r.concurrency} | ${r.ok}/${r.requests}${errs} | **${r.tps}** | ${r.p50_ms} | ${r.p95_ms} | ${r.p99_ms} |` +
+            `| ${r.concurrency} | ${r.ok}/${r.requests}${errs} | **${r.tps}** | ${r.p50_ms} | ${r.p95_ms} | ${r.p99_ms} |` +
                 (extra ? ` ${r.all_mined_after_s} | ${r.end_to_end_tps ?? "-"} |` : "")
         );
     }

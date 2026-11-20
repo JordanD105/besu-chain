@@ -20,7 +20,10 @@ From `mpc-signer/`. It needs only Docker, bash and curl:
 bench/run-bench.sh
 ```
 
-It starts the quick-start cluster (3 MPC nodes + coordinator, `quickstart/`) and runs five phases.
+It starts a single-node Besu QBFT chain (`bench/env/`) and the quick-start cluster (3 MPC nodes +
+coordinator, `quickstart/`), then runs five phases. To use a Besu you already run instead, set
+`BESU_RPC` in `bench/existing.env` (from `existing.env.example`) or run
+`BESU_STACK=existing bench/run-bench.sh`.
 Each run writes its report to `mpc-signer/bench/results/<time>.md` and the raw measurements to
 `mpc-signer/bench/results/<time>.jsonl`. Options (request counts, concurrency, GMP backend, host
 processes instead of Docker): "Benchmark" in [MPC signer](../components/mpc-signer.md#benchmark).
