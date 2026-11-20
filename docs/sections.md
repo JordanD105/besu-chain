@@ -193,7 +193,9 @@ view. Read from the chain every 15 s (`GET /api/overview`).
 Below it, **Section statistics** per **day, week, month, quarter or year** (UTC; the last 14 days,
 12 weeks or months, 8 quarters, 5 years), for all sections or one: a column chart of one measure per period, and,
 for the period you click (default: the current one), totals and a table by section
-(`GET /api/sections/stats?period=day|week|month|quarter|year`). Computed from chainlens's indexed
+(`GET /api/sections/stats?period=day|week|month|quarter|year`). **Start** / **End** dates choose
+another duration (UTC days, at most 120 columns; `&from=YYYY-MM-DD&to=YYYY-MM-DD`); **Last periods**
+goes back to the default. Computed from chainlens's indexed
 transactions, by the roles of sender and receiver:
 
 | Measure | Counted from |
@@ -279,6 +281,13 @@ off) and **`sender01_low_balance_eth`** (default 10000). Alerts `SectionUpfrontL
 ([`../monitoring/prometheus/rules/sections.yml`](../monitoring/prometheus/rules/sections.yml)); the
 **Sections** dashboard in Grafana shows balances, the threshold line and the activity per section.
 Disabled and archived sections don't raise the upfront alerts.
+
+Its **Period** variable (Day, Week, Month = 30 days, Quarter = 90 days, Year = 365 days) sets the
+activity panels: totals for the last period, bars of operations and ETH per period, and tables by
+section and operation. Choose a dashboard time range that holds several periods (default: last 30
+days). Prometheus keeps **`prometheus_retention`** (default 400d, so Year works) up to
+**`prometheus_retention_size`** (default 20GB; the oldest data goes first). The counters live in the
+proxy; Prometheus's `increase()` carries them over proxy restarts.
 
 ## Build steps
 

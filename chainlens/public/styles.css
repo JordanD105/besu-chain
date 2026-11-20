@@ -597,6 +597,11 @@ body.light { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s0: #868b95; }
 .seg-tab + .seg-tab { border-left: 1px solid var(--line); }
 .seg-tab.on { background: var(--raised); color: var(--text); font-weight: 600; }
 .stat-note { font-size: 12px; }
+.stat-range { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); }
+.stat-range label { display: inline-flex; gap: 6px; align-items: center; }
+.stat-date { background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font: inherit; color-scheme: dark; }
+body.light .stat-date { color-scheme: light; }
+.stat-clear[hidden] { display: none; }
 .col-chart { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; height: 190px; align-items: stretch; border-bottom: 1px solid var(--line); padding-top: 6px; }
 .col { display: grid; grid-template-rows: 18px 1fr 22px; background: transparent; border: 0; padding: 0 2px; cursor: pointer; color: var(--muted); font: inherit; border-radius: 6px; min-width: 0; }
 .col:hover, .col.on { background: var(--raised); }

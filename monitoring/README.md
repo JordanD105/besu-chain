@@ -248,7 +248,7 @@ curl -s localhost:9090/api/v1/targets | grep -oE '"scrapeUrl":"[^"]*","globalUrl
 | Look at Prometheus itself | it listens on `127.0.0.1:9090` only: `ssh -L 9090:127.0.0.1:9090 <monitoring host>` |
 | Send alerts (mail, Slack, PagerDuty) | add an Alertmanager and uncomment `alerting:` in `prometheus.yml`, or use Grafana *Alerting → Contact points* |
 | Change a dashboard | provisioned dashboards can't be saved from the UI: *Export → JSON*, replace the file in `grafana/dashboards/`, Grafana reloads it |
-| Retention | `PROMETHEUS_RETENTION` in `.env` (default 30 days) |
+| Retention | `PROMETHEUS_RETENTION` in `.env` (default 30 days; Ansible: `prometheus_retention`, 400d) and the disk cap `PROMETHEUS_RETENTION_SIZE` (Ansible: `prometheus_retention_size`, 20GB) |
 | Rotate the metrics token | new `MPC_METRICS_TOKEN` on the coordinator(s), restart them, then `MPC_METRICS_TOKEN=<new> ./setup.sh` here (Prometheus re-reads the file) |
 | Backups | nothing critical: dashboards and rules are files in this folder; metrics history is in the `prometheus-data` volume |
 

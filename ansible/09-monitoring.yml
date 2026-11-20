@@ -51,6 +51,8 @@
         - { key: PROMETHEUS_IMAGE, value: "{{ prometheus_image }}" }
         - { key: GRAFANA_IMAGE, value: "{{ grafana_image }}" }
         - { key: PROMETHEUS_TARGETS_DIR, value: ./prometheus/targets.generated }
+        - { key: PROMETHEUS_RETENTION, value: "{{ prometheus_retention | default('400d') }}" }
+        - { key: PROMETHEUS_RETENTION_SIZE, value: "{{ prometheus_retention_size | default('20GB') }}" }
       loop_control:
         label: "{{ item.key }}"
 

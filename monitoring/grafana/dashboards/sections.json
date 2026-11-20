@@ -11,7 +11,7 @@
   "version": 1,
   "refresh": "30s",
   "time": {
-    "from": "now-6h",
+    "from": "now-30d",
     "to": "now"
   },
   "timezone": "",
@@ -45,6 +45,46 @@
           ]
         },
         "sort": 1
+      },
+      {
+        "name": "period",
+        "label": "Period",
+        "type": "custom",
+        "query": "Day : 1d,Week : 1w,Month : 30d,Quarter : 90d,Year : 365d",
+        "options": [
+          {
+            "text": "Day",
+            "value": "1d",
+            "selected": true
+          },
+          {
+            "text": "Week",
+            "value": "1w",
+            "selected": false
+          },
+          {
+            "text": "Month",
+            "value": "30d",
+            "selected": false
+          },
+          {
+            "text": "Quarter",
+            "value": "90d",
+            "selected": false
+          },
+          {
+            "text": "Year",
+            "value": "365d",
+            "selected": false
+          }
+        ],
+        "current": {
+          "selected": true,
+          "text": "Day",
+          "value": "1d"
+        },
+        "multi": false,
+        "includeAll": false
       }
     ]
   },
@@ -748,7 +788,7 @@
     },
     {
       "type": "row",
-      "title": "Activity (since the proxy started; resets on a proxy restart or failover)",
+      "title": "Activity per $period (Period: Day, Week, Month = 30 days, Quarter = 90 days, Year = 365 days)",
       "id": 13,
       "collapsed": false,
       "gridPos": {
@@ -760,10 +800,10 @@
       "panels": []
     },
     {
-      "type": "timeseries",
-      "title": "Operations per 5 min",
+      "type": "stat",
+      "title": "New accounts, last $period",
       "id": 14,
-      "description": "create_account, transfer_in (+x), transfer_out (-x), nft_first_sale, nft_resale, topup, sweep, payback",
+      "description": "Accounts created by the selected sections in the last period",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -771,19 +811,267 @@
       "gridPos": {
         "x": 0,
         "y": 25,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(proxy_section_operations_total{op=\"create_account\",section=~\"$section\"}[$period])) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "+x from users, last $period (ETH)",
+      "id": 15,
+      "description": "Paid by users into the consumption accounts (+x)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 25,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(proxy_section_amount_eth_total{op=\"transfer_in\",section=~\"$section\"}[$period])) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "NFT first sales, last $period (ETH)",
+      "id": 16,
+      "description": "First NFT sales, paid into the consumption accounts",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 25,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(proxy_section_amount_eth_total{op=\"nft_first_sale\",section=~\"$section\"}[$period])) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Top-ups, last $period (ETH)",
+      "id": 17,
+      "description": "SENDER01 -> upfront accounts",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 25,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(proxy_section_amount_eth_total{op=\"topup\",section=~\"$section\"}[$period])) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Operations per $period",
+      "id": 18,
+      "description": "create_account, transfer_in (+x), transfer_out (-x), nft_first_sale, nft_resale, topup, sweep, payback. One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 30,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (section, op) (increase(proxy_section_operations_total{section=~\"$section\"}[5m]))",
+          "expr": "sum by (section, op) (increase(proxy_section_operations_total{section=~\"$section\"}[$period]))",
           "legendFormat": "{{section}} {{op}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "interval": "5m"
+          "interval": "$period"
         }
       ],
       "options": {
@@ -820,29 +1108,29 @@
     },
     {
       "type": "timeseries",
-      "title": "ETH moved per 5 min",
-      "id": 15,
-      "description": "ETH moved by each kind of operation (all selected sections)",
+      "title": "ETH moved per $period",
+      "id": 19,
+      "description": "ETH moved by each kind of operation (all selected sections). One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "x": 12,
-        "y": 25,
+        "y": 30,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (op) (increase(proxy_section_amount_eth_total{section=~\"$section\"}[5m]))",
+          "expr": "sum by (op) (increase(proxy_section_amount_eth_total{section=~\"$section\"}[$period]))",
           "legendFormat": "{{op}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "interval": "5m"
+          "interval": "$period"
         }
       ],
       "options": {
@@ -879,8 +1167,118 @@
     },
     {
       "type": "table",
+      "title": "ETH moved in the last $period",
+      "id": 20,
+      "description": "Per section and operation, over the last period",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (section, op) (increase(proxy_section_amount_eth_total{section=~\"$section\"}[$period]))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "rowField": "section",
+            "columnField": "op",
+            "valueField": "Value",
+            "emptyValue": "zero"
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Operations in the last $period",
+      "id": 21,
+      "description": "Per section and operation, over the last period",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 38,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (section, op) (increase(proxy_section_operations_total{section=~\"$section\"}[$period]))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "rowField": "section",
+            "columnField": "op",
+            "valueField": "Value",
+            "emptyValue": "zero"
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
       "title": "ETH moved in the selected time range",
-      "id": 16,
+      "id": 22,
       "description": "Per section and operation, over the dashboard's time range",
       "datasource": {
         "type": "prometheus",
@@ -888,7 +1286,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 33,
+        "y": 46,
         "w": 24,
         "h": 8
       },

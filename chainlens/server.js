@@ -1463,6 +1463,7 @@ setInterval(refreshOverview, 15000).unref();
 // ---- Section statistics per week / month / quarter / year (UTC), from the indexed transactions and
 // the registry's AccountAdded events. Money flows are classified by the roles of sender and receiver.
 const STAT_PERIODS = { day: 14, week: 12, month: 12, quarter: 8, year: 5 };
+const STAT_MAX_PERIODS = 120; // a date range shows at most this many columns
 const STAT_METRICS = ["newUsers", "income", "fromUsers", "nftSales", "nftFirstSales", "nftEth", "toUsers", "topup", "sweep", "payback", "txs"];
 const statsCache = new Map(); // period -> { at, data }
 
@@ -1484,6 +1485,15 @@ function periodStart(ms, period) {
         return day;
     }
     return day - ((new Date(day).getUTCDay() + 6) % 7) * 86400000; // Monday
+}
+
+function nextStart(start, period) {
+    const d = new Date(start);
+    if (period === "day" || period === "week") {
+        return start + (period === "day" ? 1 : 7) * 86400000;
+    }
+    const months = period === "year" ? 12 : period === "quarter" ? 3 : 1;
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1);
 }
 
 function previousStart(start, period) {
@@ -1520,15 +1530,25 @@ function periodLabel(start, period) {
     return thursday.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
 }
 
-function buildSectionStats(period) {
-    const count = STAT_PERIODS[period];
-    const starts = [periodStart(Date.now(), period)];
-    while (starts.length < count) {
-        starts.unshift(previousStart(starts[0], period));
+// range: { from, to } in ms (the periods holding them), or null for the last STAT_PERIODS periods
+function buildSectionStats(period, range) {
+    let starts;
+    if (range) {
+        starts = [periodStart(range.from, period)];
+        const last = periodStart(Math.min(range.to, Date.now()), period);
+        while (starts[starts.length - 1] < last && starts.length < STAT_MAX_PERIODS) {
+            starts.push(nextStart(starts[starts.length - 1], period));
+        }
+    } else {
+        starts = [periodStart(Date.now(), period)];
+        while (starts.length < STAT_PERIODS[period]) {
+            starts.unshift(previousStart(starts[0], period));
+        }
     }
     const first = starts[0];
+    const lastEnd = nextStart(starts[starts.length - 1], period);
     const indexOf = (ms) => {
-        if (ms < first) {
+        if (ms < first || ms >= lastEnd) {
             return -1;
         }
         let i = starts.length - 1;
@@ -1636,7 +1656,10 @@ function buildSectionStats(period) {
 
     // closing balances: today's, minus every change after the period's end
     const current = new Map(((overview.data && overview.data.sections) || []).map((x) => [x.id, x.balances || {}]));
-    const ends = starts.slice(1).concat([Infinity]);
+    const ends = starts.map((start) => {
+        const end = nextStart(start, period);
+        return end > Date.now() ? Infinity : end;
+    });
     for (const [id] of sections) {
         const now = current.get(id) || {};
         const mine = deltas.filter((d) => d.id === id);
@@ -1654,6 +1677,8 @@ function buildSectionStats(period) {
         period,
         updatedAt: Date.now(),
         metrics: STAT_METRICS,
+        range: range ? { from: new Date(first).toISOString().slice(0, 10), to: new Date(Math.min(lastEnd, Date.now()) - 1).toISOString().slice(0, 10) } : null,
+        truncated: Boolean(range) && starts.length >= STAT_MAX_PERIODS,
         periods: starts.map((start) => ({ start, label: periodLabel(start, period) })),
         sections: sections.map(([id, s]) => ({
             id, name: s.name, active: s.active,
@@ -1667,11 +1692,26 @@ app.get("/api/sections/stats", (req, res) => {
     if (!STAT_PERIODS[period]) {
         return res.status(400).json({ error: "period: day, week, month, quarter or year" });
     }
-    const cached = statsCache.get(period);
-    if (!cached || Date.now() - cached.at > 15000) {
-        statsCache.set(period, { at: Date.now(), data: buildSectionStats(period) });
+    // optional date range: from / to as YYYY-MM-DD (UTC days, both included)
+    let range = null;
+    if (req.query.from || req.query.to) {
+        const day = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? Date.parse(v + "T00:00:00Z") : NaN);
+        const from = day(req.query.from);
+        const to = day(req.query.to);
+        if (Number.isNaN(from) || Number.isNaN(to) || from > to) {
+            return res.status(400).json({ error: "from and to: dates YYYY-MM-DD, from <= to" });
+        }
+        range = { from, to: to + 86400000 - 1 };
     }
-    res.json(statsCache.get(period).data);
+    const key = period + "|" + (range ? range.from + "-" + range.to : "");
+    const cached = statsCache.get(key);
+    if (!cached || Date.now() - cached.at > 15000) {
+        if (statsCache.size > 50) {
+            statsCache.clear();
+        }
+        statsCache.set(key, { at: Date.now(), data: buildSectionStats(period, range) });
+    }
+    res.json(statsCache.get(key).data);
 });
 
 app.get("/api/overview", async (req, res) => {

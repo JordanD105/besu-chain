@@ -90,6 +90,10 @@ sections_required: false
 upfront_low_balance_eth: 100
 # Alert Sender01Low: SENDER01 (it funds every top-up) below this many ETH. 0 = off.
 sender01_low_balance_eth: 10000
+# How long Prometheus keeps metrics (Grafana Sections "Period": Year needs > 365d), and a disk cap:
+# above it the oldest data goes first (0B = no cap).
+prometheus_retention: 400d
+prometheus_retention_size: 20GB
 
 # Deploy page in chainlens (#/deploy, ansible/CHAINLENS-DEPLOY.md): deploy compiled contracts (common
 # or NFT collections) from the browser, through the proxy, signed by the contract account center and

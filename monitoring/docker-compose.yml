@@ -11,6 +11,7 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-0B}
       # POST /-/reload after editing prometheus.yml or rules/ (target files reload by themselves)
       - --web.enable-lifecycle
     volumes:

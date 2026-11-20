@@ -1076,7 +1076,11 @@ function balancesTable(sections) {
 // in a column chart (one series, one axis); click a column for that period's table by section.
 const STAT_UNITS = { newUsers: "count", nftSales: "count", nftFirstSales: "count", txs: "count" };
 const STAT_COLUMNS = ["newUsers", "income", "fromUsers", "nftSales", "nftEth", "toUsers", "topup", "sweep", "payback", "txs"];
-const statState = { period: "month", section: "all", metric: "balances", index: null };
+const statState = { period: "month", section: "all", metric: "balances", index: null, from: "", to: "" };
+
+function statQuery() {
+    return "period=" + statState.period + (statState.from && statState.to ? "&from=" + statState.from + "&to=" + statState.to : "");
+}
 const statCache = new Map(); // period -> the last answer (drawn at once on the dashboard's refresh)
 
 function statValue(value, metric) {
@@ -1108,14 +1112,15 @@ function balanceColumn(stats, i, max) {
 function statsCard() {
     const holder = el("section", { class: "card stack stats-card" });
     const load = async () => {
-        const cached = statCache.get(statState.period);
+        const query = statQuery();
+        const cached = statCache.get(query);
         if (cached) {
             render(cached);
         }
         try {
-            const stats = await api("/api/sections/stats?period=" + statState.period);
-            statCache.set(stats.period, stats);
-            if (stats.period === statState.period && holder.isConnected) {
+            const stats = await api("/api/sections/stats?" + query);
+            statCache.set(query, stats);
+            if (query === statQuery() && holder.isConnected) {
                 render(stats);
             }
         } catch (error) {
@@ -1147,6 +1152,33 @@ function statsCard() {
         ]);
         sectionSelect.value = statState.section;
         sectionSelect.addEventListener("change", () => { statState.section = sectionSelect.value; load(); });
+        // duration: a date range (UTC days); empty = the last periods
+        const today = new Date().toISOString().slice(0, 10);
+        const fromInput = el("input", { type: "date", class: "stat-date", max: today, value: statState.from, "aria-label": t("dash.start") });
+        const toInput = el("input", { type: "date", class: "stat-date", max: today, value: statState.to, "aria-label": t("dash.end") });
+        const applyRange = () => {
+            const from = fromInput.value;
+            const to = toInput.value;
+            if ((from && to && from <= to) || (!from && !to)) {
+                statState.from = from;
+                statState.to = to;
+                statState.index = null;
+                load();
+            }
+        };
+        fromInput.addEventListener("change", applyRange);
+        toInput.addEventListener("change", applyRange);
+        const clearRange = el("button", { type: "button", class: "fn-run stat-clear" }, t("stats.lastPeriods"));
+        clearRange.hidden = !statState.from;
+        clearRange.addEventListener("click", () => { statState.from = ""; statState.to = ""; statState.index = null; load(); });
+        const rangeRow = el("div", { class: "stat-range" }, [
+            el("label", {}, [t("dash.start"), fromInput]),
+            el("label", {}, [t("dash.end"), toInput]),
+            clearRange,
+            el("span", { class: "muted" }, stats.range
+                ? t("stats.rangeShown").replace("{n}", String(stats.periods.length)) + (stats.truncated ? " " + t("stats.truncated") : "")
+                : t("stats.lastShown").replace("{n}", String(stats.periods.length)))
+        ]);
         const metricSelect = el("select", { "aria-label": t("stats.measure") }, ["balances", ...STAT_COLUMNS].map((m) => el("option", { value: m }, t("stats." + m))));
         const stacked = metric === "balances";
         metricSelect.value = metric;
@@ -1203,6 +1235,7 @@ function statsCard() {
 
         holder.replaceChildren(
             el("div", { class: "card-head" }, [el("h2", {}, t("stats.title")), el("div", { class: "stat-controls" }, [tabs, sectionSelect, metricSelect])]),
+            rangeRow,
             el("div", { class: "muted stat-note" }, t(stacked ? "stats.noteBalances" : "stats.note")),
             stacked ? vizLegend() : null,
             columns,
@@ -1211,7 +1244,7 @@ function statsCard() {
             table
         );
     };
-    if (!statCache.has(statState.period)) {
+    if (!statCache.has(statQuery())) {
         holder.append(el("div", { class: "muted" }, "…"));
     }
     load();
@@ -1246,7 +1279,8 @@ function platformSection(o) {
                 ? [balancesTable(o.sections)]
                 : [el("div", { class: "split" }, [
                     el("div", {}, [el("h3", {}, t("platform.balances")), vizLegend(), balanceChart(o.sections)]),
-                    el("div", {}, [el("h3", {}, t("platform.userAccounts")), usersChart(o.sections)])
+                    // an empty legend line, so both charts' rows line up
+                    el("div", {}, [el("h3", {}, t("platform.userAccounts")), el("div", { class: "viz-legend", "aria-hidden": "true" }, "\u00a0"), usersChart(o.sections)])
                 ])])
             : [el("div", { class: "empty" }, t("sections.none"))]));
     };
