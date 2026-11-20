@@ -87,6 +87,7 @@ nav:
       - NFT workflow: features/nft-workflow.md
   - Operations:
       - Alerts: operations/alerts.md
+      - Alert runbook: operations/alert-runbook.md
       - Grafana dashboards: operations/dashboards.md
       - Troubleshooting: operations/troubleshooting.md
       - Disaster recovery: operations/disaster-recovery.md

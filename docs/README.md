@@ -31,6 +31,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | deploy a contract from the browser | [contract deployment](features/contract-deployment.md) |
 | go from Solidity to an NFT sale | [NFT workflow](features/nft-workflow.md) |
 | understand an alert | [alerts](operations/alerts.md) |
+| fix an alert | [alert runbook](operations/alert-runbook.md) |
 | read a Grafana dashboard | [Grafana dashboards](operations/dashboards.md) |
 | recover a lost host or site | [disaster recovery](operations/disaster-recovery.md) · [restore with Ansible](operations/restore.md) |
 | upgrade the MPC signer | [MPC upgrade](operations/mpc-signer-upgrade.md) |
@@ -86,6 +87,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | Document | Contents |
 |---|---|
 | [Alerts](operations/alerts.md) | every alert: when, meaning, what to do |
+| [Alert runbook](operations/alert-runbook.md) | the solution for every alert, step by step with commands |
 | [Grafana dashboards](operations/dashboards.md) | every dashboard and panel: what it shows, healthy values, what to do |
 | [Troubleshooting](operations/troubleshooting.md) | symptoms → cause → check → fix |
 | [Disaster recovery](operations/disaster-recovery.md) | backups, schedule, recovery per scenario, drills |
