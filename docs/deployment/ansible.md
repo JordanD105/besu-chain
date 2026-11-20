@@ -344,6 +344,7 @@ Prefix `01-hosts.yml` when the change is committed code (see above).
 | `ha/`, the RPC health settings (`rpc_*`) | `01-hosts.yml 07-ha.yml` |
 | Besu settings or `besu-production/` | `01-hosts.yml 05-besu.yml` (one node at a time) |
 | backup settings | `10-backups.yml` |
+| a Besu node added to or removed from `besu_nodes` / `besu_hosts`, an MPC node moved | see [adding and removing nodes](../operations/adding-nodes.md): `01`, `02`, `05`, `qbft-vote.yml`, `09`, `10` |
 
 To change something, edit the setting (or commit the code change) and rerun `site.yml`:
 
@@ -365,6 +366,9 @@ To change something, edit the setting (or commit the code change) and rerun `sit
   not committed yet. Commit them (and run phase 1) so every copy of the repository has them.
 - If `state/network` is lost while the nodes have network files, phase 5 stops: copy `network/`
   from a node into `state/network/`.
+- **A node added to `besu_nodes` later:** phase 5 adds its enode to the network files
+  (`add-node.sh`), copies them to every node and restarts the nodes one at a time; a new validator
+  is then voted in with `qbft-vote.yml` ([adding nodes](../operations/adding-nodes.md)).
 
 Limits:
 

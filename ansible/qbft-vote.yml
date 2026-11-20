@@ -1,0 +1,78 @@
+# Vote a Besu node into or out of the QBFT validator set, on every current validator.
+#   ansible-playbook qbft-vote.yml -e node=val5 -e vote=add      (after 05-besu.yml started val5)
+#   ansible-playbook qbft-vote.yml -e node=val5 -e vote=remove
+# The node's address comes from state/besu/<node>.json. A change needs the votes of more than half of
+# the validators; this playbook votes on all of them, waits until the set has changed, then withdraws
+# the votes (otherwise a validator keeps proposing them). docs/operations/adding-nodes.md
+- name: QBFT validator vote
+  hosts: besu_hosts
+  become: true
+  gather_facts: false
+  vars:
+    target_file: "{{ state_dir }}/besu/{{ node }}.json"
+    target_address: "{{ (lookup('ansible.builtin.file', target_file) | from_json).address | lower }}"
+    want: "{{ vote == 'add' }}"
+    # Voters: the validators on this host, never the node being voted on
+    voters: "{{ besu_nodes | selectattr('host', 'equalto', inventory_hostname) | selectattr('role', 'equalto', 'validator')
+                | rejectattr('name', 'equalto', node) | list }}"
+    rpc_of: "{{ 'http://127.0.0.1:' }}"
+  tasks:
+    - name: Arguments
+      ansible.builtin.assert:
+        that:
+          - node is defined and vote is defined
+          - vote in ['add', 'remove']
+          - target_file is file
+        fail_msg: "usage: ansible-playbook qbft-vote.yml -e node=<name> -e vote=add|remove (state/besu/<name>.json must exist)"
+      when: inventory_hostname == ansible_play_hosts[0]
+      delegate_to: localhost
+      become: false
+
+    - name: Current validator set
+      ansible.builtin.uri:
+        url: "{{ rpc_of }}{{ voters[0].rpc_port }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", id: 1, method: qbft_getValidatorsByBlockNumber, params: ["latest"] }
+      register: before
+      when: voters | length > 0
+
+    - name: Vote on {{ node }}
+      ansible.builtin.uri:
+        url: "{{ rpc_of }}{{ item.rpc_port }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", id: 1, method: qbft_proposeValidatorVote, params: "{{ [target_address, want | bool] }}" }
+      register: voted
+      failed_when: voted.json.error is defined or voted.json.result is not true
+      loop: "{{ voters }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: (target_address in (before.json.result | map('lower') | list)) != (want | bool)
+
+    - name: Validator set changed
+      ansible.builtin.uri:
+        url: "{{ rpc_of }}{{ voters[0].rpc_port }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", id: 1, method: qbft_getValidatorsByBlockNumber, params: ["latest"] }
+      register: after
+      until: after.json.result is defined and ((target_address in (after.json.result | map('lower') | list)) == (want | bool))
+      retries: 60
+      delay: 2
+      when: voters | length > 0
+
+    - name: Withdraw the votes
+      ansible.builtin.uri:
+        url: "{{ rpc_of }}{{ item.rpc_port }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", id: 1, method: qbft_discardValidatorVote, params: ["{{ target_address }}"] }
+      loop: "{{ voters }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Validators now
+      ansible.builtin.debug:
+        msg: "{{ after.json.result | length }} validators; {{ node }} {{ 'is' if want | bool else 'is not' }} one of them"
+      when: after.json is defined and inventory_hostname == ansible_play_hosts[0]

@@ -23,6 +23,8 @@
 
 ## 규칙 {#conventions}
 
+![프록시 호출자 세 종류: 키 없음, X-Section-Key, 관리자 토큰](../images/diagrams/api-callers.svg)
+
 | | |
 |---|---|
 | **기본 URL** | `http://<proxy VIP>:30000` — 프로덕션 `http://192.168.68.151:30000`(활성 프록시). 개발: `http://localhost:30000` |

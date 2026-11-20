@@ -69,6 +69,8 @@ cat state/secrets/chainlens_deploy_token
 
 ## 배포 {#deploy}
 
+![컨트랙트 배포 흐름: 브라우저, chainlens Deploy 페이지, 프록시 관리자 API, MPC 서명, 코드 확인, SectionRegistry 등록](../images/diagrams/contract-deploy-flow.svg)
+
 1. **EVM version cancun**으로 컴파일하고(Remix: [Remix IDE(자체 호스팅)](../components/remix.md)) 컴파일러
    아티팩트(ABI와 바이트코드가 포함된 `.json`: Remix `contracts/artifacts/<Name>.json`, Hardhat, Foundry 또는
    solc 출력)를 보관합니다.
@@ -86,6 +88,8 @@ cat state/secrets/chainlens_deploy_token
 9. **Deploy:** 확인합니다. MPC 노드가 서명하고, 페이지는 블록을 기다린 뒤 체인상의 코드를 아티팩트의
    런타임 바이트코드와 비교하고(immutable 값 제외), 컨트랙트를 등록합니다. 그런 다음 컨트랙트 페이지로
    연결되며, 그곳에서 읽기 함수를 바로 사용할 수 있습니다.
+
+![chainlens Deploy 페이지](../images/screenshots/chainlens-deploy.png)
 
 코드 검사 결과는 `matches the artifact`, `matches the artifact (immutable values excluded)`,
 `same length as the artifact, not identical`, `DIFFERS from the artifact`, 또는 아티팩트에 런타임

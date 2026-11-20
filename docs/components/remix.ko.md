@@ -12,6 +12,8 @@
 브라우저에서 컨트랙트를 작성, 컴파일, 테스트하는 데 사용합니다. 사용 시점에 인터넷에서 아무것도
 다운로드하지 않습니다. 컴파일러는 이미지 내부의 미러에서 제공됩니다.
 
+![자체 호스팅 Remix IDE](../images/screenshots/remix.png)
+
 | | |
 |---|---|
 | Remix | `github.com/remix-project-org/remix-live`(브랜치 `gh-pages`, remix.ethereum.org가 제공하는 것)의 사전 빌드된 사이트로, 커밋으로 고정됩니다: `ansible/group_vars/all/settings.yml`의 `remix_commit` (Remix 2.6.15) |

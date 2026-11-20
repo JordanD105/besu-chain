@@ -309,6 +309,8 @@ curl -s http://192.168.68.130:9100/admin/pool                              # hot
 
 ## 논스와 잔액 검사: 빠른 경로 + 주기적인 체인 검사 {#nonces-and-balance-checks-fast-path--periodic-chain-check}
 
+![프록시의 논스 선택: 빠른 경로와 2초마다의 백그라운드 점검](../images/diagrams/nonce-management.svg)
+
 한 송신자의 트랜잭션은 연속된 논스를 사용해야 하므로, 프록시는 트랜잭션을 **송신자별로 한 번에
 하나씩** 보냅니다(송신자별 잠금). 이 잠금을 짧게 유지하기 위해 잠금 동안 **서명 왕복 한 번**만 수행합니다.
 

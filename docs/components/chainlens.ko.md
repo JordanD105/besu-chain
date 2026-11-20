@@ -29,6 +29,8 @@
 | **쓰는 데이터** | 자체적으로는 없습니다. 관리자 페이지는 요청을 프록시의 관리자 API로 전달합니다 |
 | **언어 / 테마** | 영어와 중국어(EN / 中文 전환), 다크 및 라이트 |
 
+![chainlens 대시보드: 합계, 플랫폼 개요, 섹션 잔액](../images/screenshots/chainlens-dashboard.png)
+
 ## 페이지 {#pages}
 
 | 페이지 | URL | 표시 내용 |
@@ -44,6 +46,12 @@
 관리자 페이지를 제외한 모든 내용은 chainlens에 접속할 수 있는 모든 사용자에게 표시됩니다. 이 정보는
 어차피 체인에 공개되어 있습니다.
 
+![chainlens Accounts 페이지와 Section 열](../images/screenshots/chainlens-accounts.png)
+
+![대시보드의 기간별 섹션 통계](../images/screenshots/chainlens-statistics.png)
+
+![등록된 컨트랙트 페이지와 읽기 전용 함수](../images/screenshots/chainlens-contract.png)
+
 ## 관리자 페이지 {#admin-pages}
 
 활성화하기 전까지는 숨겨져 있으며, `operator_ip`와 `chainlens_deploy_ips`에서만 관리자 토큰
@@ -55,6 +63,10 @@
 | **Deploy** (`#/deploy`) | `chainlens_deploy_enabled: true` | 컴파일된 컨트랙트(Remix / Hardhat / Foundry 아티팩트)를 컨트랙트 계정 센터로 배포하고, 먼저 검사한 뒤 등록합니다 | [컨트랙트 배포](../features/contract-deployment.md) |
 | **Sections** (`#/sections`) | `chainlens_sections_enabled: true` | 섹션 생성, 충전, 스윕, 반환, 이름 변경, 정보 필드, 키, 계정 교체, 보관; 섹션의 사용자 계정 | [섹션](../features/sections.md) |
 | **Mint and sell** (NFT 컬렉션 페이지) | 위 둘 중 하나 | NFT 민팅(가격은 민팅 시 확정); 섹션의 사용자 계정에 판매 | [NFT 워크플로](../features/nft-workflow.md) |
+
+![chainlens Sections 페이지: 섹션 목록과 New section 양식](../images/screenshots/chainlens-sections.png)
+
+![chainlens Deploy 페이지](../images/screenshots/chainlens-deploy.png)
 
 ## 동작 방식 {#how-it-works}
 

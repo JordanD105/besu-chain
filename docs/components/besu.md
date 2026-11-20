@@ -168,10 +168,10 @@ Quick checks from the operator:
 curl -s -X POST -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' http://192.168.68.150:8545
 ```
 
-On a validator host (its RPC is local):
+On a validator host (its RPC is local; on h135 / h136 prefix `RPC=http://127.0.0.1:8645`):
 
 ```bash
-cd /opt/besu-val3 && ./qbft.sh validators
+cd /opt/besu-chain/besu-production/operator && ./qbft.sh validators
 ```
 
 ```bash
@@ -186,7 +186,7 @@ cd /opt/besu-val3 && ./qbft.sh validators
 | Restart one node | `docker restart besu-<node>-besu-1` on its host |
 | A node stopped importing (STALLED) | RPC node: removed from the VIP and restarted after 5 min automatically; validator: restart it ([runbook](../operations/alert-runbook.md#besunodestalled)) |
 | Chain halted with quorum back | restart all validators together ([runbook](../operations/alert-runbook.md#besunonewblocks)) |
-| Add or remove a validator | `add-node.sh`, then `qbft.sh propose <address> true/false` on more than half of the validators ([Besu manual setup](../deployment/besu-manual.md)) |
+| Add or remove a validator | `besu_nodes` in `layout.yml`, `05-besu.yml`, then `qbft-vote.yml` ([adding and removing nodes](../operations/adding-nodes.md)) |
 | Move a node to another host | `move-node.sh` ([disaster recovery](../operations/disaster-recovery.md)) |
 | Back up node keys | `10-backups.yml` (GPG-encrypted, [GPG key](../deployment/gpg-key.md)) |
 | Daily chain snapshot | on val3 at 03:17 (`snapshot-chain.sh`); restore with `restore-chain.sh` |
@@ -200,8 +200,9 @@ cd /opt/besu-val3 && ./qbft.sh validators
 | `besu-production/node/validator.toml`, `rpc.toml` | node configuration per role |
 | `besu-production/node/docker-compose.yml`, `docker-compose.host.yml`, `start.sh`, `init.sh` | running a node |
 | `besu-production/node/backup-key.sh`, `restore-key.sh`, `snapshot-chain.sh`, `restore-chain.sh`, `reset-chain.sh` | keys and chain data |
-| `besu-production/operator/make-network.sh`, `add-node.sh`, `move-node.sh` | network files |
+| `besu-production/operator/make-network.sh`, `add-node.sh`, `remove-node.sh`, `move-node.sh` | network files |
 | `besu-production/operator/qbft.sh` | validator votes, peers, health |
 | `besu-production/operator/deploy-contract.js` | deploy a contract signed by an MPC account |
-| `ansible/05-besu.yml` | the Ansible phase for all of the above |
+| `ansible/05-besu.yml` | the Ansible phase for all of the above (also adds nodes listed later) |
+| `ansible/qbft-vote.yml` | votes a validator in or out |
 | `ansible/state/network/` | the network files (operator) |

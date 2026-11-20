@@ -28,6 +28,8 @@
 
 ## 개요 {#overview}
 
+![장애 조치: 평소에는 h135가 두 VIP를 갖고, h135가 다운되면 h136으로 옮겨지고 proxy2가 시작됨](../images/diagrams/ha-failover.svg)
+
 플로팅 IP(VIP) 두 개는 평상시에는 **192.168.68.135**가, 장애 조치 후에는 **192.168.68.136**이
 보유합니다. 따라서 .135를 잃어도 결제가 멈추지 않습니다. 구성과 설정:
 [운영 환경 구성](../overview/production-layout.md).
@@ -132,6 +134,8 @@ ip -br addr
 | 애플리케이션 | `http://192.168.68.151:30000`의 프록시 |
 
 ## 3. RPC 상태 점검 (besu-rpc-health) {#3-rpc-health-besu-rpc-health}
+
+![besu-rpc-health가 RPC 노드의 정상 여부를 판단하는 방법과 HAProxy의 사용](../images/diagrams/rpc-health.svg)
 
 **이유:** 한 RPC 노드가 (피어를 잃은 후) 블록 가져오기를 멈췄지만 여전히 `eth_syncing: false`로
 응답한 적이 있습니다. `eth_syncing`만 점검했기 때문에 이 노드가 RPC VIP에 남아 오래된 체인을 제공했습니다.

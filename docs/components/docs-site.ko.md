@@ -29,6 +29,8 @@
 | **인터넷 필요 여부** | 필요 없음: 외부 글꼴이나 스크립트가 없으며, 검색은 브라우저에서 실행됩니다 |
 | **파일** | `docs-site/` (`Dockerfile`, `mkdocs.yml`, `hooks.py`, `nginx.conf`, `docker-compose.yml`) |
 
+![문서 웹사이트](../images/screenshots/docs-site.png)
+
 사이트는 `docs/`와 같은 구조입니다. Overview, Getting started, Deployment, Components, Features,
 Operations, Reference, Development 탭이 있으며, 전문 검색, 라이트 / 다크 전환, 모든 코드 블록의 복사
 버튼을 제공합니다.
@@ -68,6 +70,8 @@ docker compose -f docs-site/docker-compose.yml up -d --build
 ```
 
 ## 빌드 방식 {#how-it-is-built}
+
+![문서 사이트: Docker 빌드 단계에서 MkDocs로 영어/한국어 정적 사이트를 만들고 h139:30300의 nginx가 제공](../images/diagrams/docs-site-build.svg)
 
 1. **빌드 단계** (`python:3.12.8-slim`): `mkdocs 1.6.1`과 `mkdocs-material 9.5.49`를 설치하고(빌드 시에만
    PyPI에서), 저장소를 복사한 뒤(비밀 정보, 상태, 대용량 파일은 `Dockerfile.dockerignore`로 제외)

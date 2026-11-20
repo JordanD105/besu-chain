@@ -31,6 +31,8 @@
 - 세 호스트에 있는 **MPC 노드 3개**, **서로 다른 세 관리자 팀**이 운영합니다.
 - 플로팅 IP의 HAProxy 뒤에 있는 **코디네이터 2개**.
 
+![세 MPC 팀과 두 코디네이터](../images/diagrams/mpc-teams.svg)
+
 운영 환경 구성([운영 환경 구성](../overview/production-layout.md))에서는:
 mpc1(`MPC_NODE_ID=0`)은 192.168.68.135, mpc2(1)는 .137, mpc3(2)는 .138에 있고, coord1은 .135,
 coord2는 .136에 있습니다. 클라이언트는 `192.168.68.150:9100`(coord1, 백업으로 coord2)에서 코디네이터에 접근합니다.

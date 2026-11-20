@@ -32,6 +32,8 @@
 | 4. 구매자 | 섹션의 키로 `POST /createaccount`, 또는 chainlens Sections 페이지에서 **Create account** | — (섹션의 선지급 계정에서 자금 공급) |
 | 5. 판매 | 컬렉션의 chainlens 페이지에서 **Sell**, 또는 섹션의 키로 `POST /nft/transfer` | 구매자 (재판매의 경우 판매자의 승인 포함) |
 
+![NFT 워크플로: Remix에서 컴파일, chainlens에서 배포, 고정 가격으로 민팅, 섹션 사용자 계정이 구매](../images/diagrams/nft-lifecycle.svg)
+
 아래 주소는 프로덕션 주소입니다(프록시 VIP `192.168.68.151:30000`, chainlens와 Remix는
 h139). 2, 3, 5단계는 운영자 머신 또는 `chainlens_deploy_ips`에 있는 PC의 브라우저에서 실행하십시오
 ([컨트랙트 배포 (chainlens Deploy 페이지)](contract-deployment.md)).
@@ -100,6 +102,8 @@ curl -s -X POST http://192.168.68.151:30000/nft/deploy -H 'Content-Type: applica
 **chainlens에서:** 컬렉션 페이지(`#/contracts/0x…`)에서 **Mint and sell** 카드를 엽니다.
 이름, ETH 단위 가격, 이미지 URL을 입력합니다. 설명과 속성(JSON)은 선택 사항입니다.
 **Mint**를 클릭합니다. 결과에 새 토큰 ID와 NFT 링크가 표시됩니다.
+
+![NFT 컬렉션 페이지의 Mint and sell 카드](../images/screenshots/chainlens-mint-sell.png)
 
 **또는 curl 사용**(`collection` = 주소, 이름 또는 심볼):
 

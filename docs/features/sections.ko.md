@@ -68,6 +68,8 @@
 
 ## SectionRegistry (온체인, 버전 2) {#the-sectionregistry-on-chain-version-2}
 
+![섹션과 SectionRegistry: 섹션마다 sk_ 키, 계정 3개, 사용자 계정](../images/diagrams/section-model.svg)
+
 [`proxy/contracts/SectionRegistry.sol`](../../proxy/contracts/SectionRegistry.sol)을
 [`proxy/section-registry.json`](../../proxy/section-registry.json)으로 컴파일합니다(solc 0.8.28, EVM cancun,
 `proxy/scripts/compile-contract.js`). 두 프록시와 chainlens가 이를 읽습니다. 섹션을 저장하는 곳은 이것뿐이므로
@@ -137,6 +139,8 @@ IP는 폐기됩니다.
 `chainlens_deploy_ips`에서 같은 관리 토큰(`state/secrets/chainlens_deploy_token`)을 사용합니다. 그 밖의
 주소에서는 페이지와 메뉴 항목이 존재하지 않습니다. chainlens는 각 작업을 프록시의
 관리 API로 전달하며(프록시의 토큰은 브라우저에 전달되지 않음), 요청자의 주소와 함께 로그를 남깁니다.
+
+![chainlens Sections 페이지: 섹션 목록과 New section 양식](../images/screenshots/chainlens-sections.png)
 
 - **목록:** 각 섹션의 상태, 3개 잔액, 정보 필드를 표시합니다. **New section**(이름,
   선택적 설명)은 API 키를 복사 버튼과 함께 한 번만 표시합니다.
@@ -261,6 +265,8 @@ Remix에서 판매까지의 단계별 안내: [NFT 워크플로](nft-workflow.md
 `970 / 0 / 0 / 30`)과 사용자 계정 수가 섹션별 마우스오버 툴팁 및 **Table**
 보기와 함께 표시됩니다. 체인에서 15초마다 읽습니다(`GET /api/overview`).
 
+![chainlens 대시보드: 합계, 플랫폼 개요, 섹션 잔액](../images/screenshots/chainlens-dashboard.png)
+
 그 아래에는 **day, week, month, quarter, year**별 **Section statistics**(섹션 통계)가 있습니다(UTC, 최근 14일,
 12주 또는 12개월, 8분기, 5년, 기본값: month). 전체 섹션 또는 섹션 하나에 대해 기간별
 측정값 하나의 막대 차트를 표시하고, 클릭한 기간(기본값: 현재 기간)의 합계와 섹션별 표를
@@ -284,6 +290,8 @@ periods**는 기본값으로 돌아갑니다. chainlens가 인덱싱한 트랜�
 이력은 포함되지 않습니다.
 
 ## 흐름 {#flows}
+
+![섹션의 자금 순환: 충전, -x, +x와 첫 NFT 판매, 스윕, 반환](../images/diagrams/section-money-flow.svg)
 
 | 작업 | 처리 주체 | 서명 주체 / 동작 |
 |---|---|---|

@@ -123,6 +123,8 @@ Redis, 섹션, 호스트, 백업의 여섯 파일).
 
 ## 장애 상황 읽기 {#reading-an-incident}
 
+![알림 대응 순서: 원인 먼저, 그다음 런북, 대시보드 패널, 해제](../images/diagrams/alert-triage.svg)
+
 장애 하나는 보통 여러 알림을 발생시킵니다. **critical** 알림부터 시작한 다음, 나머지를 설명하는
 `HostDown` 또는 `BesuNodeDown`을 찾으십시오. 예: HA 쌍의 호스트(h135)가 종료된 경우입니다.
 

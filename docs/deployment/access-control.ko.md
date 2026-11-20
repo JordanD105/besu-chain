@@ -17,6 +17,8 @@
 
 ---
 
+![누가 어떤 포트에 접속할 수 있는가: 허용 목록, 열리는 서비스, 두 단계의 방화벽](../images/diagrams/access-control.svg)
+
 모든 호스트의 방화벽(`ha/firewall-layout.sh`, `01-hosts.yml`이 적용)은 각 서비스를
 `group_vars/all/settings.yml`의 해당 목록에 있는 IP에만 엽니다. 그 외에는 모두 차단됩니다.
 

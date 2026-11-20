@@ -10,6 +10,8 @@
 
 ## 개요 {#what-it-is}
 
+![시스템 한눈에 보기: 애플리케이션, 프록시, MPC 서명기, Besu 체인, 모니터링 호스트](../images/diagrams/system-overview.svg)
+
 조직이 결제와 NFT를 운영하는 데 필요한 모든 것을 갖춘 **프라이빗 Hyperledger Besu 블록체인(QBFT 합의)**입니다.
 
 - **애플리케이션**은 하나의 HTTP API(**프록시**)를 호출하여 계정을 생성하고, ETH를 이동하고, NFT를 판매하고,

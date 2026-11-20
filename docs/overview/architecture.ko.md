@@ -64,6 +64,8 @@
 
 ## 요청 시 일어나는 일 {#what-happens-on-a-request}
 
+![POST /transfer 한 건의 경로: 프록시, MPC 코디네이터, MPC 노드 3개 중 2개, RPC VIP, 검증자](../images/diagrams/transfer-flow.svg)
+
 **섹션 키를 사용한 `POST /transfer`** (+x: 사용자가 자신의 섹션에 지불):
 1. 프록시가 키를 확인하고, 섹션을 찾고, 해당 계정이 섹션의 사용자인지 확인합니다.
 2. 발신자의 잠금을 획득하고 논스를 계산합니다: max(캐시된 카운터, 체인의 pending 수). 따라서

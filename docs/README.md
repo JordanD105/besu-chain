@@ -33,6 +33,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | understand an alert | [alerts](operations/alerts.md) |
 | fix an alert | [alert runbook](operations/alert-runbook.md) |
 | read a Grafana dashboard | [Grafana dashboards](operations/dashboards.md) |
+| add a Besu validator, remove one, move an MPC node | [adding and removing nodes](operations/adding-nodes.md) |
 | recover a lost host or site | [disaster recovery](operations/disaster-recovery.md) · [restore with Ansible](operations/restore.md) |
 | upgrade the MPC signer | [MPC upgrade](operations/mpc-signer-upgrade.md) |
 | run everything on one machine | [development environment](getting-started/development.md) |
@@ -93,6 +94,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | [Troubleshooting](operations/troubleshooting.md) | symptoms → cause → check → fix |
 | [Disaster recovery](operations/disaster-recovery.md) | backups, schedule, recovery per scenario, drills |
 | [Restore with Ansible](operations/restore.md) | rebuilding the whole site from the backups |
+| [Adding and removing nodes](operations/adding-nodes.md) | a Besu validator in or out (Ansible, tested), RPC nodes, why a 4th MPC node isn't possible, moving an MPC node |
 | [MPC signer upgrade](operations/mpc-signer-upgrade.md) | rolling upgrade and rollback |
 
 ### Reference

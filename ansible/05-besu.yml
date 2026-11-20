@@ -102,6 +102,21 @@
         chdir: "{{ state_dir }}/network"
       changed_when: false
 
+    # A node added to besu_nodes after the chain started: its enode goes into static-nodes.json and
+    # permissions_config.toml (the genesis never changes). The plays below copy the files to every
+    # node and restart the nodes one at a time. A new validator then needs the votes: qbft-vote.yml.
+    - name: Add nodes that joined later to the network files
+      ansible.builtin.command: >-
+        {{ repo_root }}/besu-production/operator/add-node.sh {{ state_dir }}/network
+        {{ state_dir }}/besu/{{ item.name }}.json
+      loop: "{{ besu_nodes }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: >-
+        (lookup('ansible.builtin.file', state_dir ~ '/besu/' ~ item.name ~ '.json') | from_json).enode.split('@')[0]
+        not in lookup('ansible.builtin.file', state_dir ~ '/network/static-nodes.json')
+      changed_when: true
+
 - name: Network files to every node
   hosts: besu_hosts
   become: true
