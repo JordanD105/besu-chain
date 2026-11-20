@@ -721,7 +721,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "One row per Besu node. Peers should be (number of nodes - 1). Sync: IN SYNC, SYNCING (the node says so), STALLED (says in sync but its newest block is over 60 s old while other nodes are current: it stopped importing), BEHIND (more than 10 blocks below the highest node). Behind: blocks below the highest node.",
+      "description": "One row per Besu node. Peers should be (number of nodes - 1). Sync: IN SYNC; SYNCING (the node says so); STALLED (says in sync but its newest block is over 60 s old while other nodes are current: it stopped importing); BEHIND (more than 30 blocks below the highest node and its newest block over 30 s old). Behind: blocks below the highest node; up to ~15 is normal, because Prometheus reads the nodes a few seconds apart.",
       "gridPos": {
         "x": 0,
         "y": 12,
@@ -761,7 +761,7 @@
         },
         {
           "refId": "D",
-          "expr": "(max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) == 0) or ((max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 2) and (max by (node, role, instance) (timestamp(besu_blockchain_chain_head_timestamp{job=\"besu\",node=~\"$node\"}) - besu_blockchain_chain_head_timestamp{job=\"besu\",node=~\"$node\"}) > 60) and on() (min(timestamp(besu_blockchain_chain_head_timestamp{job=\"besu\"}) - besu_blockchain_chain_head_timestamp{job=\"besu\"}) < 30)) or ((max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 3) and ((scalar(max(ethereum_blockchain_height{job=\"besu\"})) - max by (node, role, instance) (ethereum_blockchain_height{job=\"besu\",node=~\"$node\"})) > 10)) or (max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 1)",
+          "expr": "(max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) == 0) or ((max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 2) and (max by (node, role, instance) (timestamp(besu_blockchain_chain_head_timestamp{job=\"besu\",node=~\"$node\"}) - besu_blockchain_chain_head_timestamp{job=\"besu\",node=~\"$node\"}) > 60) and on() (min(timestamp(besu_blockchain_chain_head_timestamp{job=\"besu\"}) - besu_blockchain_chain_head_timestamp{job=\"besu\"}) < 30)) or ((max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 3) and ((scalar(max(ethereum_blockchain_height{job=\"besu\"})) - max by (node, role, instance) (ethereum_blockchain_height{job=\"besu\",node=~\"$node\"})) > 30) and (max by (node, role, instance) (timestamp(besu_blockchain_chain_head_timestamp{job=\"besu\",node=~\"$node\"}) - besu_blockchain_chain_head_timestamp{job=\"besu\",node=~\"$node\"}) > 30)) or (max by (node, role, instance) (besu_synchronizer_in_sync{job=\"besu\",node=~\"$node\"}) * 0 + 1)",
           "format": "table",
           "instant": true,
           "datasource": {
@@ -1022,11 +1022,11 @@
                     },
                     {
                       "color": "orange",
-                      "value": 11
+                      "value": 31
                     },
                     {
                       "color": "red",
-                      "value": 100
+                      "value": 300
                     }
                   ]
                 }
