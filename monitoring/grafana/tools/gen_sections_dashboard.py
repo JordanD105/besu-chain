@@ -108,9 +108,10 @@ stat("NFT first sales, last $period (ETH)", f'sum(increase(proxy_section_amount_
 stat("Top-ups, last $period (ETH)", f'sum(increase(proxy_section_amount_eth_total{{op="topup",{SEL}}}[$period])) or vector(0)', 18, y, w=6, decimals=2,
      desc="SENDER01 -> upfront accounts")
 y += 5
-timeseries("Operations per $period", [target(f'sum by (section, op) (increase(proxy_section_operations_total{{{SEL}}}[$period]))', "{{section}} {{op}}")],
+# each bar counts the period that STARTS at its time (offset -$period), so today's bar shows today so far
+timeseries("Operations per $period", [target(f'sum by (section, op) (increase(proxy_section_operations_total{{{SEL}}}[$period] offset -$period))', "{{section}} {{op}}")],
            0, y, bars=True, desc="create_account, transfer_in (+x), transfer_out (-x), nft_first_sale, nft_resale, topup, sweep, payback." + NOTE)
-timeseries("ETH moved per $period", [target(f'sum by (op) (increase(proxy_section_amount_eth_total{{{SEL}}}[$period]))', "{{op}}")],
+timeseries("ETH moved per $period", [target(f'sum by (op) (increase(proxy_section_amount_eth_total{{{SEL}}}[$period] offset -$period))', "{{op}}")],
            12, y, bars=True, desc="ETH moved by each kind of operation (all selected sections)." + NOTE)
 y += 8
 table("ETH moved in the last $period", f'sum by (section, op) (increase(proxy_section_amount_eth_total{{{SEL}}}[$period]))', 0, y, 12, 8,

@@ -1065,7 +1065,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (section, op) (increase(proxy_section_operations_total{section=~\"$section\"}[$period]))",
+          "expr": "sum by (section, op) (increase(proxy_section_operations_total{section=~\"$section\"}[$period] offset -$period))",
           "legendFormat": "{{section}} {{op}}",
           "datasource": {
             "type": "prometheus",
@@ -1124,7 +1124,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (op) (increase(proxy_section_amount_eth_total{section=~\"$section\"}[$period]))",
+          "expr": "sum by (op) (increase(proxy_section_amount_eth_total{section=~\"$section\"}[$period] offset -$period))",
           "legendFormat": "{{op}}",
           "datasource": {
             "type": "prometheus",
