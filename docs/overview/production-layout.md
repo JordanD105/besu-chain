@@ -38,7 +38,7 @@ any others: set them in `ansible/inventory.yml` (hosts) and `ansible/group_vars/
 | **192.168.68.136** | val2, **rpc2**, **coord2** (warm standby), **proxy2** (standby, stopped), HAProxy + keepalived | takes over the application path when .135 fails |
 | **192.168.68.137** | val3, mpc2 | validator + MPC node; daily chain snapshot |
 | **192.168.68.138** | val4, mpc3 | validator + MPC node |
-| **192.168.68.139** | Prometheus, Grafana, chainlens | monitoring and explorer (not on the payment path) |
+| **192.168.68.139** | Prometheus, Grafana (`:3000`), chainlens (`:30100`), Remix IDE (`:30200`) | monitoring, explorer and contract tools (not on the payment path) |
 | every host | node-exporter (`:9101`) | host metrics and backup results |
 
 **Floating IPs** (keepalived, on .135 normally, .136 after a failover):
@@ -46,7 +46,7 @@ any others: set them in `ansible/inventory.yml` (hosts) and `ansible/group_vars/
 | VIP | Serves | Used by |
 |---|---|---|
 | `192.168.68.150` | HAProxy: `:8545` → rpc1 `:8555` (rpc2 as backup), `:9100` → coord1 (coord2 as backup) | proxies (`BESU_IP`, `WEB3SIGNER_IP`, `MPC_ADMIN_URL`), coordinators (`MPC_BESU_RPC`) |
-| `192.168.68.151` | `:30000` → the active proxy | applications, Prometheus (proxy job) |
+| `192.168.68.151` | `:30000` → the active proxy; `:9121` → its redis-exporter | applications, Prometheus (proxy and redis jobs) |
 
 ```
                 applications ──► 192.168.68.151:30000 (proxy VIP)
@@ -61,7 +61,7 @@ any others: set them in `ansible/inventory.yml` (hosts) and `ansible/group_vars/
      └──────────────────────────┘              └───────────────────────────┘
      ┌── .137 ──────┐  ┌── .138 ──────┐  ┌── .139 ─────────────────────────┐
      │ val3  mpc2   │  │ val4  mpc3   │  │ Prometheus  Grafana  chainlens  │
-     └──────────────┘  └──────────────┘  │ (chainlens reads rpc2)          │
+     └──────────────┘  └──────────────┘  │ Remix  (chainlens reads rpc2)   │
                                          └─────────────────────────────────┘
      QBFT: 4 validators, quorum 3 · MPC: 3 nodes, threshold 2 · one of each per host (.135–.138)
 ```
@@ -83,7 +83,7 @@ Every node: `NODE_NAME` = the node's name, `P2P_HOST` and `BIND_IP` = its host's
 The RPC nodes listen on **8555**, not 8545: HAProxy holds 8545 on the VIP `.150` on the same hosts,
 and Besu refuses to start when its port is taken on any address of the host (after a reboot,
 HAProxy starts first). Clients always use the VIP `192.168.68.150:8545`.
-`BESU_HOST_ALLOWLIST` on the RPC nodes:
+`BESU_HOST_ALLOWLIST` on the RPC nodes (clients and `besu-rpc-health` send `Host: 192.168.68.150`):
 
 - rpc1: `192.168.68.135,192.168.68.150,localhost,127.0.0.1`
 - rpc2: `192.168.68.136,192.168.68.150,localhost,127.0.0.1` (chainlens calls it on `.136`)
@@ -117,24 +117,44 @@ storage holds two shares.
 Same `.env` on both (`proxy/.env.example`): `BESU_IP=192.168.68.150`, `WEB3SIGNER_IP=192.168.68.150`
 (port 9100), `MPC_ADMIN_URL=http://192.168.68.150:9100`, `SENDER01`, `MPC_ADMIN_TOKEN`. Only the
 host holding `192.168.68.151` runs it: keepalived starts and stops it (`ha/proxy-start.sh`,
-`ha/proxy-stop.sh`). A starting proxy takes its nonces from the chain, so a failover needs no state.
+`ha/proxy-stop.sh`), and `ha/check-proxy.sh` stops a proxy that Docker restarted at boot on the
+host without the VIP. On the standby host a proxy container in state `Exited (137)` is therefore
+expected. A starting proxy takes its nonces from the chain, so a failover needs no state.
+Redis and redis-exporter (`:9121`) run next to the proxy on both hosts; Prometheus scrapes the
+active one through `.151`.
 
 ### HAProxy and keepalived (.135, .136)
 
-`ha/haproxy.cfg` (identical on both), `ha/keepalived-135.conf` / `ha/keepalived-136.conf`, and the
-three scripts. Steps: [High availability (HAProxy and keepalived)](../deployment/high-availability.md).
+`ha/haproxy.cfg` (identical on both), `ha/keepalived-135.conf` / `ha/keepalived-136.conf`, the
+three keepalived scripts, and `besu-rpc-health` (`ha/rpc-health.py`, a systemd service). HAProxy
+sends RPC to rpc1 only while `besu-rpc-health` reports it current: not syncing, at most
+`rpc_max_blocks_behind` (10) blocks behind the best head, newest block younger than
+`rpc_max_block_age` (30 s). A local RPC node stalled for `rpc_auto_restart_minutes` (5) while the
+chain moves on is restarted. With Ansible all of it is generated from the IP plan (`07-ha.yml`).
+Steps: [High availability (HAProxy and keepalived)](../deployment/high-availability.md).
 
 ### Chainlens and monitoring (.139)
 
-- chainlens: `BESU_RPC=http://192.168.68.136:8555` (rpc2, so explorer polling stays off rpc1).
-- monitoring: `BIND_IP=192.168.68.139`; the target files in `monitoring/prometheus/targets/` are set
-  for this layout (6 Besu nodes, coord1 and coord2 on their own IPs, the proxy on its VIP, 5 hosts).
+- chainlens (`:30100`): `BESU_RPC=http://192.168.68.136:8555` (rpc2, so explorer polling stays off
+  rpc1). Its Deploy page can deploy contracts from the browser (`chainlens_deploy_enabled`, off by
+  default; [Contract deployment](../features/contract-deployment.md)).
+- monitoring: Prometheus and Grafana (`:3000`), `BIND_IP=192.168.68.139`; the target files in
+  `monitoring/prometheus/targets/` are set for this layout (6 Besu nodes, coord1 and coord2 on their
+  own IPs, the proxy and its redis-exporter on the proxy VIP, node-exporter on 5 hosts).
+- Remix IDE (`:30200`, `remix_enabled`): [Remix IDE (self-hosted)](../components/remix.md).
 
 ## 3. Ports and firewall
 
-`ha/firewall-layout.sh` applies these rules with firewalld on each host
-(`PROXY_CLIENTS="…" ADMIN=… ./firewall-layout.sh 135`; with Ansible the lists come from
-`ansible/group_vars/all/settings.yml`, named in the table):
+`ha/firewall-layout.sh` applies these rules on each host: with firewalld for the host's own ports,
+and in the nftables table `inet besu_docker` for the ports Docker publishes (below). Run it with the
+host's last number:
+
+```bash
+PROXY_CLIENTS="…" ADMIN=… ./firewall-layout.sh 135
+```
+
+With Ansible the lists come from `ansible/group_vars/all/settings.yml` (named in the table;
+see [Access control](../deployment/access-control.md)). Everything not listed stays closed.
 
 | Port | On | From |
 |---|---|---|
@@ -145,30 +165,36 @@ three scripts. Steps: [High availability (HAProxy and keepalived)](../deployment
 | 9100 | coord1 / coord2 (and the VIP `.150`) | .135, .136, the MPC nodes (relay), .139 (metrics), admin |
 | 7000 | mpc1 / mpc2 / mpc3 | .135, .136 (coordinators) |
 | 30000 | proxy (and the VIP `.151`) | applications (`proxy_client_ips`), .139, admin |
+| 9121 | redis-exporter on .135, .136 (through the VIP `.151`) | .139 |
 | VRRP (protocol 112) | .135 ↔ .136 | each other |
 | 9101 | node-exporter on every host | .139 |
 | 3000 | Grafana on .139 | admin, `grafana_ips` |
 | 30100 | chainlens on .139 | admin, `chainlens_ips` |
 | 30200 | Remix IDE on .139 ([Remix IDE (self-hosted)](../components/remix.md)) | admin, `remix_ips` |
+| 30300 | documentation site on .139 (`docs_site_enabled`) | admin, `docs_ips` |
 | 22 | every host | admin / bastion (`operator_ip`) |
 
 **Ports published by Docker bypass firewalld.** The proxy, coordinators, MPC nodes, Grafana,
-chainlens, Redis and the Besu nodes without host networking are reached through Docker's port
+chainlens, Remix, Redis, redis-exporter and the Besu nodes without host networking (val3, val4) are reached through Docker's port
 forwarding (DNAT, then the FORWARD chain), which firewalld's zone rules never see: without more, any
 host on the network could connect to them. `firewall-layout.sh` therefore applies the same allow list
 to forwarded connections as well, in an nftables table of its own (`inet besu_docker`, installed with
 the systemd unit `besu-docker-firewall`, applied at every boot): the listed sources reach the
 listed ports, every other new connection to a published port is dropped. Docker and firewalld never
 touch that table, so neither a Docker restart nor `firewall-cmd --reload` opens a gap (Docker's own
-`DOCKER-USER` chain is not used because Docker re-orders its jumps for a few seconds on every
-firewalld reload). Check it:
+`DOCKER-USER` chain is not used because Docker re-orders its jumps on every firewalld reload). The
+allow list is in `/etc/besu-docker-firewall.rules`; `besu-docker-firewall.service` applies it at
+boot. Check it:
 
 ```bash
 nft list table inet besu_docker
 ```
 
-From a host that is **not** in the list, every published port must time out, e.g.
-`timeout 3 bash -c '</dev/tcp/<host>/9100' || echo blocked`.
+From a host that is **not** in the list, every published port must time out:
+
+```bash
+timeout 3 bash -c '</dev/tcp/<host>/9100' || echo blocked
+```
 
 ## 4. Deploying from scratch
 
@@ -188,9 +214,9 @@ needs `SENDER01` (MPC key ceremony), HAProxy needs the RPC nodes, and keepalived
 | [4.7](#47-besu-network-files-operator) | operator | genesis and network files (`SENDER01` funded) |
 | [4.8](#48-start-besu-135138) | .135–.138 | validators, then the RPC nodes |
 | [4.9](#49-proxy-135-136) | .135, .136 | build the proxy (not started) |
-| [4.10](#410-haproxy-and-keepalived-135-136) | .135, .136 | HAProxy, keepalived: VIPs up, proxy1 starts |
+| [4.10](#410-haproxy-and-keepalived-135-136) | .135, .136 | `besu-rpc-health`, HAProxy, keepalived: VIPs up, proxy1 starts |
 | [4.11](#411-check-the-application-path) | any | test account and transfer through the VIPs |
-| [4.12](#412-monitoring-and-chainlens-139) | .139 | Prometheus, Grafana, chainlens |
+| [4.12](#412-monitoring-and-chainlens-139) | .139 | Prometheus, Grafana, chainlens (Remix: [its guide](../components/remix.md)) |
 | [4.13](#413-backups) | .135–.138 | key backups, MPC backups, daily chain snapshot |
 | [4.14](#414-failover-tests-then-go-live) | — | the failover tests of section 6, then go live |
 
@@ -473,16 +499,21 @@ docker compose build
 
 ### 4.10 HAProxy and keepalived (.135, .136)
 
-Follow [High availability (HAProxy and keepalived)](../deployment/high-availability.md), sections 1, 3 and 4: `ip_nonlocal_bind`, SELinux,
-`haproxy.cfg`, then keepalived (`INTERFACE`, the two `auth_pass` values, `PROXY_DIR=/opt/besu-chain/proxy`).
-Start keepalived on **.135 first**, then on .136. Check on .135:
+Follow [High availability (HAProxy and keepalived)](../deployment/high-availability.md), sections 1
+and 3–5: `ip_nonlocal_bind`, SELinux, `besu-rpc-health`, `haproxy.cfg` (with the `besu_rpc` backend
+that asks `besu-rpc-health`), then keepalived (`INTERFACE`, the two `auth_pass` values,
+`PROXY_DIR=/opt/besu-chain/proxy`). Start keepalived on **.135 first**, then on .136. Check on .135:
 
 ```bash
 ip -br addr | grep -E '68\.15[01]/'
 ```
 
 Both VIPs are on .135, and keepalived started proxy1 (`docker ps` shows the proxy;
-`journalctl -t besu-ha`). .136 holds no VIP and its proxy is stopped.
+`journalctl -t besu-ha`). .136 holds no VIP and its proxy is stopped. Both RPC nodes are healthy:
+
+```bash
+curl -s http://127.0.0.1:8410/
+```
 
 ### 4.11 Check the application path
 
@@ -519,18 +550,21 @@ cd /opt/besu-chain/chainlens && cp .env.example .env
 sed -i 's|^BESU_RPC=.*|BESU_RPC=http://192.168.68.136:8555|' .env && docker compose up -d --build
 ```
 
-Explorer: `http://192.168.68.139:30100`.
+Explorer: `http://192.168.68.139:30100`. Remix IDE (`:30200`) is built and started by Ansible
+(`02-images.yml`, `09-monitoring.yml`): [Remix IDE (self-hosted)](../components/remix.md).
 
 ### 4.13 Backups
 
-| What | Where | How |
-|---|---|---|
-| Besu node keys | all 6 node directories | once: `./backup-key.sh /secure/dir`, then `gpg --symmetric` and delete the plain copy |
-| MPC shares | `/opt/mpc-node` on .135, .137, .138 (each team) | cron, hourly: `0 * * * * /opt/mpc-node/backup.sh /secure/backup` |
-| Chain snapshot | `/opt/besu-val3` on .137 | cron, daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=user@offsite:/besu-chain ./snapshot-chain.sh /backup/chain` |
-| Network files, `cluster.json`, tokens | operator | after every change, to the vault |
+| What | Where | How | With Ansible (`10-backups.yml`) |
+|---|---|---|---|
+| Besu node keys | all 6 node directories | once: `./backup-key.sh /secure/dir`, then encrypt and delete the plain copy | encrypted on the host to your GPG public key (`key_backup_gpg_public_key`), fetched to `ansible/state/key-backups/<node>.key.gpg` ([GPG key](../deployment/gpg-key.md)) |
+| MPC shares | `/opt/mpc-node` on .135, .137, .138 (each team) | cron, hourly: `7 * * * * /opt/mpc-node/backup.sh /secure/backup` | opt-in (`mpc_backup_cron: true`): hourly at :07 into `mpc_backup_dir`; each team still copies the archives off its host |
+| Chain snapshot | `/opt/besu-val3` on .137 | cron, daily: `17 3 * * * cd /opt/besu-val3 && COPY_TO=user@offsite:/besu-chain ./snapshot-chain.sh /backup/chain` | daily at `snapshot_cron_hour`:`snapshot_cron_minute` (03:17) into `snapshot_dir`, off-site copy to `snapshot_copy_to` |
+| Network files, `cluster.json`, tokens | operator | after every change, to the vault | in `ansible/state/`: copy it to your vault |
 
-Prometheus alerts when a backup is too old or failed. Details and restore steps:
+Each backup script records its result in node-exporter's textfile directory on its own host, and
+Prometheus alerts when a backup is too old, missing or failed ([Alerts](../operations/alerts.md)).
+A host that is down therefore makes its backups look missing. Details and restore steps:
 [Disaster recovery](../operations/disaster-recovery.md).
 
 ### 4.14 Failover tests, then go live
@@ -544,7 +578,7 @@ applications at `http://192.168.68.151:30000`.
 |---|---|---|---|---|
 | **.135** | ✅ val2–val4 | ✅ mpc2 + mpc3 via coord2 | ✅ VIPs move to .136: HAProxy → rpc2 + coord2, proxy2 starts | a few seconds of failed requests |
 | **.136** | ✅ | ✅ | ✅ already on .135 | none (redundancy lost until it's back) |
-| **.137** | ✅ | ✅ mpc1 + mpc3 | ✅ | none; the daily snapshot moves to another validator meanwhile |
+| **.137** | ✅ | ✅ mpc1 + mpc3 | ✅ | no daily chain snapshot until it's back (it runs only on val3); its backups look missing in monitoring |
 | **.138** | ✅ | ✅ mpc1 + mpc2 | ✅ | none |
 | **.139** | ✅ | ✅ | ✅ | no monitoring, no explorer |
 | **two of .135–.138** | ❌ halts (2 of 4) | ❌ if both had MPC nodes | — | [Disaster recovery](../operations/disaster-recovery.md) |
@@ -556,13 +590,15 @@ Planned maintenance: never take two of .135–.138 down at once.
 
 | Test | Do | Expect |
 |---|---|---|
-| RPC | stop rpc1 | HAProxy uses rpc2 within ~6 s; transfers keep working |
+| RPC | stop rpc1 | HAProxy uses rpc2 within ~6 s; transfers keep working; `curl -s http://127.0.0.1:8410/` on .135 shows rpc1 unreachable |
 | Coordinator | stop coord1 | signing via coord2 at once (warm pool); new accounts sign too |
-| Proxy | stop proxy1 | VIP `.151` moves to .136, proxy2 starts, `/status/senders` answers on `.151` |
+| Proxy | stop proxy1 | VIP `.151` moves to .136, proxy2 starts, `/status/senders` answers on `.151`; the VIPs stay there (move back: [HA operations](../deployment/high-availability.md#6-operations)) |
 | HAProxy | `systemctl stop haproxy` on .135 | VIP `.150` moves to .136 |
 | Host | power off .135 | both VIPs on .136; chain continues; a few seconds of errors |
 | Validator | stop one validator | blocks continue; `BesuNodeDown` alert |
 | MPC node | stop mpc2 | signing continues; `MpcNodeDown` alert |
 
 After each test, start the component again and wait until Grafana shows everything up before the
-next one.
+next one. Don't start a proxy by hand on the host without `.151`: `check-proxy.sh` stops it. What
+each alert means: [Alerts](../operations/alerts.md); symptoms and fixes:
+[Troubleshooting](../operations/troubleshooting.md).
