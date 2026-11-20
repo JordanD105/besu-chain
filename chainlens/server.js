@@ -1780,6 +1780,44 @@ async function proxyAdmin(method, pathname, body) {
     return { status: response.status, data };
 }
 
+// ---- NFT mint and sale from the contract page (admin pages' gate), forwarded to the proxy's
+// /nft/mint and /nft/transfer
+function nftAdminEnabled() {
+    return (DEPLOY.enabled || SECTIONS.enabled) && Boolean(SECTIONS.proxy);
+}
+
+function nftGuard(req, res, next) {
+    if (!nftAdminEnabled()) {
+        return res.status(404).json({ error: "NFT mint and sale need the Deploy or Sections page on" });
+    }
+    if (!ipAllowed(req.socket.remoteAddress)) {
+        return res.status(403).json({ error: "only allowed from operator_ip and chainlens_deploy_ips" });
+    }
+    if (!tokenOk(req)) {
+        console.warn("nft: wrong token from", req.socket.remoteAddress);
+        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
+    }
+    next();
+}
+
+app.get("/api/nftadmin/status", (req, res) => {
+    res.json({ enabled: nftAdminEnabled() && ipAllowed(req.socket.remoteAddress) });
+});
+
+app.post("/api/nftadmin/:action", express.json({ limit: "256kb" }), nftGuard, async (req, res) => {
+    const action = req.params.action;
+    if (action !== "mint" && action !== "transfer") {
+        return res.status(404).json({ error: "unknown NFT action" });
+    }
+    try {
+        const r = await proxyAdmin("POST", "/nft/" + action, req.body || {});
+        console.log("nft:", action, JSON.stringify({ collection: req.body.collection, tokenId: req.body.tokenId, to: req.body.to }), "from", req.socket.remoteAddress, "->", r.status);
+        res.status(r.status).json(r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+});
+
 app.get("/api/sections/status", (req, res) => {
     res.json({ enabled: SECTIONS.enabled && ipAllowed(req.socket.remoteAddress) });
 });

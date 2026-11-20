@@ -217,6 +217,9 @@ Results are in [`mpc-signer/bench/RESULTS.md`](mpc-signer/bench/RESULTS.md).
 | `GET /status/senders` | | per sender: next nonce vs. Besu, value in flight, nonce gaps and stalls, corrections made by the background chain check |
 | `GET /metrics` | | the same in Prometheus format (scraped by `monitoring/`) |
 
+With sections, collections are version 3 (a first sale pays the buyer's section): Remix → chainlens
+Deploy → mint → sell, step by step in [`docs/nft-workflow.md`](docs/nft-workflow.md).
+
 `collection` accepts a collection's name, symbol or address; without it the default (first)
 collection is used. Full examples: [`proxy/api.txt`](proxy/api.txt).
 

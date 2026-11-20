@@ -1517,6 +1517,111 @@ async function showContracts(page, type, status) {
 // A contract: details, and its functions when the contract is in the registry
 // (contracts/deployments). View/pure functions can be run (eth_call); state-changing functions are
 // only listed: transactions are signed by the MPC signer through the proxy or the deploy tools.
+// Mint and sell NFTs of a collection (admin pages' gate), through the proxy's /nft/mint and
+// /nft/transfer. The buyer must be a user account of a section; its section receives a first sale.
+async function nftAdminCard(collection) {
+    let status;
+    try {
+        status = await api("/api/nftadmin/status");
+    } catch (error) {
+        return null;
+    }
+    if (!status.enabled) {
+        return null;
+    }
+    const result = el("div", { class: "deploy-error" });
+    const tokenInput = el("input", { class: "table-search", type: "password", placeholder: t("sections.token"), "aria-label": t("sections.token"), autocomplete: "off", value: deployToken() });
+    tokenInput.addEventListener("input", () => setDeployToken(tokenInput.value.trim()));
+    const field = (key, attrs) => el("input", Object.assign({ class: "table-search", placeholder: t(key), "aria-label": t(key) }, attrs || {}));
+    const mName = field("nft.name");
+    const mDesc = field("nft.description");
+    const mImage = field("nft.image");
+    const mPrice = field("nft.price", { value: "0" });
+    const mAttrs = field("nft.attributes");
+    const mintButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("nft.mint"));
+    const sTokenId = field("nft.tokenId");
+    const sBuyer = field("nft.buyer", { list: "nft-buyers" });
+    const buyers = el("datalist", { id: "nft-buyers" });
+    const sellButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("nft.sell"));
+
+    // the section user accounts, as suggestions for the buyer
+    api("/api/accounts?limit=20000").then((d) => {
+        buyers.replaceChildren(...d.items.filter((a) => a.role === "user").map((a) => el("option", { value: a.address }, a.section + " · " + a.balance + " ETH")));
+    }).catch(() => {});
+
+    const run = async (button, action, body, confirmText, onDone) => {
+        if (!window.confirm(confirmText)) {
+            return;
+        }
+        button.disabled = true;
+        result.replaceChildren(el("span", { class: "muted" }, "…"));
+        try {
+            onDone(await deployPost("/api/nftadmin/" + action, body));
+        } catch (error) {
+            result.replaceChildren(el("span", { class: "bad-text" }, error.message));
+        }
+        button.disabled = false;
+    };
+    mintButton.addEventListener("click", () => {
+        let attributes;
+        if (mAttrs.value.trim()) {
+            try {
+                attributes = JSON.parse(mAttrs.value);
+            } catch (error) {
+                result.replaceChildren(el("span", { class: "bad-text" }, t("nft.attributesJson")));
+                return;
+            }
+        }
+        if (!mName.value.trim() || !mImage.value.trim()) {
+            result.replaceChildren(el("span", { class: "bad-text" }, t("nft.nameImage")));
+            return;
+        }
+        const body = { collection, name: mName.value.trim(), image: mImage.value.trim(), amount: mPrice.value.trim() || "0" };
+        if (mDesc.value.trim()) {
+            body.description = mDesc.value.trim();
+        }
+        if (attributes) {
+            body.attributes = attributes;
+        }
+        run(mintButton, "mint", body, t("nft.confirmMint").replace("{name}", body.name).replace("{price}", body.amount), (r) => {
+            sTokenId.value = r.tokenId;
+            result.replaceChildren(el("span", {}, t("nft.minted").replace("{id}", r.tokenId).replace("{price}", r.price) + " "),
+                el("a", { href: "#/nfts/" + r.contract + "/" + r.tokenId }, t("nft.open")), " ", ident(r.txHash, "#/transactions/" + r.txHash));
+        });
+    });
+    sellButton.addEventListener("click", () => {
+        const tokenId = sTokenId.value.trim();
+        const to = sBuyer.value.trim();
+        if (!/^\d+$/.test(tokenId) || !/^0x[0-9a-fA-F]{40}$/.test(to)) {
+            result.replaceChildren(el("span", { class: "bad-text" }, t("nft.sellFields")));
+            return;
+        }
+        run(sellButton, "transfer", { collection, tokenId, to }, t("nft.confirmSell").replace("{id}", tokenId).replace("{to}", short(to)), (r) => {
+            result.replaceChildren(el("span", {}, t("nft.sold").replace("{sale}", r.sale || "sale").replace("{price}", r.price).replace("{paidTo}", short(r.paidTo || r.from)) + " "),
+                el("a", { href: "#/nfts/" + r.contract + "/" + r.tokenId }, t("nft.open")), " ", ident(r.txHash, "#/transactions/" + r.txHash));
+        });
+    });
+
+    return el("section", { class: "card stack" }, [
+        el("h2", {}, t("nft.adminTitle")),
+        el("div", { class: "muted", style: "margin-bottom:12px" }, t("nft.adminNote")),
+        el("div", { class: "deploy-form" }, [
+            el("label", {}, [el("span", { class: "muted" }, t("sections.token")), tokenInput]),
+            el("h3", {}, t("nft.mint")),
+            el("div", { class: "section-inputs" }, [mName, mPrice]),
+            el("div", { class: "section-inputs" }, [mImage]),
+            el("div", { class: "section-inputs" }, [mDesc]),
+            el("div", { class: "section-inputs" }, [mAttrs]),
+            el("div", { class: "deploy-buttons" }, [mintButton]),
+            el("h3", {}, t("nft.sell")),
+            el("div", { class: "muted" }, t("nft.sellNote")),
+            el("div", { class: "section-inputs" }, [sTokenId, sBuyer, buyers]),
+            el("div", { class: "deploy-buttons" }, [sellButton])
+        ]),
+        result
+    ]);
+}
+
 async function showContract(address) {
     const token = showToken;
     const data = await api("/api/contracts/" + address);
@@ -1554,6 +1659,16 @@ async function showContract(address) {
             facts
         ])
     ];
+
+    if (data.type === "ERC721" || (data.record && data.record.kind === "NFT collection")) {
+        const nftCard = await nftAdminCard(data.address);
+        if (token !== showToken) {
+            return;
+        }
+        if (nftCard) {
+            parts.push(nftCard);
+        }
+    }
 
     if (!data.registered) {
         parts.push(el("section", { class: "card stack" }, [

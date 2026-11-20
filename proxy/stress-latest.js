@@ -2187,19 +2187,27 @@ async function mintNft(req) {
 // ETH goes to SENDER01 atomically; if anything fails the whole sale reverts and no ETH moves.
 // `from` is optional (default: current owner). If the owner is not SENDER01 (a resale), the
 // owner first approves the collection for this token.
-// Version 3 sale, for section_i (X-Section-Key): the buyer "to" is a user account of section_i and
-// signs buy(tokenId, payee) with value = the mint price. First sale (the center holds the NFT): the
-// price goes to section_i's consumption account. Resale: the seller (a user account of section_i)
-// approves the sale if needed, and the price goes to the seller.
+// Version 3 sale: the buyer "to" must be a user account of a section; that section (from the
+// registry; X-Section-Key is optional, and checked when given) is section_i. The buyer signs
+// buy(tokenId, payee) with value = the mint price. First sale (the center holds the NFT): the price
+// goes to section_i's consumption account. Resale: the seller (a user account of section_i) approves
+// the sale if needed, and the price goes to the seller.
 async function transferNftV3(req, contract, tokenId) {
     const body = req.body || {};
-    const section = await sectionFromRequest(req);
+    const keyed = await sectionFromRequest(req);
+    const to = ethers.getAddress(body.to);
+    const owner0 = await accountSection(to);
 
-    if (!section) {
-        throw httpError(401, "X-Section-Key is required: this collection's NFTs are sold to accounts of a section");
+    if (owner0.kind !== ACCOUNT_USER) {
+        throw httpError(403, `${to} is not a user account of a section: this collection's NFTs are sold to section accounts (create one with /createaccount and the section's key)`);
     }
 
-    const to = ethers.getAddress(body.to);
+    const section = keyed || await getSection(owner0.id, false);
+
+    if (!section.active) {
+        throw httpError(403, `section "${section.name}" is disabled`);
+    }
+
     await assertSectionUser(section, to);
     const owner = await readOwner(contract, tokenId);
 

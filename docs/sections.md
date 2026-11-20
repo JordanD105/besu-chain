@@ -160,12 +160,14 @@ in the SectionRegistry, shared by all sections.
 |---|---|
 | `POST /nft/deploy {name, symbol}` | the center deploys a version-3 collection (its minter, with the registry's address) and registers it (kind NFT) |
 | `POST /nft/mint {collection, name, image, …, amount}` | the center mints the NFT to itself, for sale; `amount` is its **price**, fixed for good. Not tied to a section. |
-| `POST /nft/transfer {collection, to, tokenId}` + `X-Section-Key` | a sale to `to`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price. **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user holds it, of the same section): the seller's approval is sent if needed and the price goes to the **seller**. |
+| `POST /nft/transfer {collection, to, tokenId}` (no key) | a sale to `to`, a **user account of a section** (the section is taken from the buyer's registry entry; an optional `X-Section-Key` must match it), who signs `buy(tokenId, payee)` paying the mint price. **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user holds it, of the same section): the seller's approval is sent if needed and the price goes to the **seller**. |
 
 The contract itself enforces where a first sale's money goes: `buy` checks
 `SectionRegistry.isConsumptionAccount(payee)` (a live section's consumption account), so even a
-transaction sent around the proxy can't redirect it. A version-3 sale without a section key is
-refused. **Version-2 collections** (minted by SENDER01, e.g. those made before) keep working as
+transaction sent around the proxy can't redirect it. A version-3 sale to an address that is not a
+section user account is refused. The chainlens contract page of a collection has **Mint** and
+**Sell** forms (admin token and IP, as the Deploy page). Step by step from Remix to a sale:
+[nft-workflow.md](nft-workflow.md). **Version-2 collections** (minted by SENDER01, e.g. those made before) keep working as
 before, without a key.
 
 ## Sections in the chainlens Accounts page

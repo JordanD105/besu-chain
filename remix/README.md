@@ -45,7 +45,9 @@ cd remix && SOLC_VERSIONS="0.8.28" docker compose build && docker compose up -d
 2. **Test** in *Deploy & run → Remix VM (Cancun)*: an in-browser chain, nothing leaves the browser.
 3. **Export the artifact:** Remix writes `contracts/artifacts/<Name>.json` (ABI + bytecode) when
    *Settings → Generate contract metadata* is on. Download it, together with the source.
-4. **Deploy to production** from the operator with
+4. **Deploy to production** on the chainlens **Deploy** page
+   ([`../ansible/CHAINLENS-DEPLOY.md`](../ansible/CHAINLENS-DEPLOY.md); for an NFT collection, the
+   whole path to a sale is in [`../docs/nft-workflow.md`](../docs/nft-workflow.md)), or from the operator with
    [`besu-production/operator/deploy-contract.js`](../besu-production/README.md#deploying-a-contract),
    signed by an MPC account. Remix itself never connects to the production chain and holds no keys.
    The record it writes makes the contract readable in chainlens.
