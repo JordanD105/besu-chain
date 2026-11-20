@@ -26,7 +26,7 @@ to run payments and NFTs on it:
 
 | Component | Folder | Role | Docs |
 |---|---|---|---|
-| **Besu (QBFT)** | `besu-production/` | 4 validators + 2 RPC nodes, 1 s blocks, free gas, node allowlist | [Besu manual setup](../deployment/besu-manual.md) |
+| **Besu (QBFT)** | `besu-production/` | 4 validators + 2 RPC nodes, 1 s blocks, free gas, node allowlist | [Besu chain](../components/besu.md) · [manual setup](../deployment/besu-manual.md) |
 | **MPC signer** | `mpc-signer/` | 2-of-3 threshold ECDSA (CGGMP24): 3 MPC nodes + 2 coordinators; Ethereum signer JSON-RPC API | [MPC signer](../components/mpc-signer.md) |
 | **Proxy** | `proxy/` | the application API: accounts, transfers, NFTs, contracts, sections, admin API; Redis as an optional cache | [proxy](../components/proxy.md) · [API](../reference/proxy-api.md) |
 | **SectionRegistry** | `proxy/contracts/` | on-chain record of sections, their accounts and registered contracts | [sections](../features/sections.md) |

@@ -68,6 +68,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 ### Components
 | Document | Contents |
 |---|---|
+| [Hyperledger Besu chain](components/besu.md) | the chain: nodes, QBFT consensus, genesis, configuration, ports, permissioning, operations |
 | [Proxy](components/proxy.md) | the application API on the MPC signer, Redis-optional design, troubleshooting |
 | [MPC signer](components/mpc-signer.md) | design, quick start, security |
 | [Chainlens](components/chainlens.md) | explorer pages, admin pages, settings |

@@ -68,6 +68,7 @@ plugins:
             MPC signer in production: 운영 환경의 MPC 서명기
             GPG key: GPG 키
             Components: 구성 요소
+            Hyperledger Besu chain: Hyperledger Besu 체인
             Proxy: 프록시
             MPC signer: MPC 서명기
             Chainlens: Chainlens
@@ -133,6 +134,7 @@ nav:
       - MPC signer in production: deployment/mpc-signer-production.md
       - GPG key: deployment/gpg-key.md
   - Components:
+      - Hyperledger Besu chain: components/besu.md
       - Proxy: components/proxy.md
       - MPC signer: components/mpc-signer.md
       - Chainlens: components/chainlens.md
