@@ -58,7 +58,7 @@
 <text x="658" y="340" font-size="14.5" fill="#334155" font-weight="700" font-family="'JetBrains Mono', Consolas, Menlo, monospace">rules/</text>
 <text x="658" y="366" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">besu.yml · mpc.yml · proxy.yml</text>
 <text x="658" y="388" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">sections.yml · hosts.yml</text>
-<text x="658" y="410" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">backups.yml</text>
+<text x="658" y="410" font-size="13" fill="#334155" font-family="'JetBrains Mono', Consolas, Menlo, monospace">backups.yml · alert-log.yml</text>
 <polyline points="820.0,278 820.0,309" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
 <rect x="640" y="478" width="360" height="126" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/>
 <text x="658" y="506" font-size="15" fill="#9f1239" font-weight="700">Alerts</text>
@@ -91,6 +91,9 @@
 <rect x="1160" y="564" width="380" height="72" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
 <text x="1178" y="592" font-size="14.5" fill="#92400e" font-weight="700">Hosts</text>
 <text x="1178" y="616" font-size="13" fill="#334155">CPU, memory, disk, network, Backups</text>
+<rect x="1160" y="648" width="380" height="58" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/>
+<text x="1178" y="672" font-size="14.5" fill="#9f1239" font-weight="700">Alert log</text>
+<text x="1178" y="694" font-size="13" fill="#334155">every alert that fired: when, how often, how long</text>
 <polyline points="1137,236 1022,236" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
 <text x="1080.0" y="226" font-size="12.5" fill="#64748b" text-anchor="middle" font-style="italic">queries</text>
 <polyline points="1137,541 1002,541" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>

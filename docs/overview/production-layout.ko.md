@@ -21,7 +21,7 @@
 처음부터 수행하는 전체 배포, 어떤 장애에서 무엇이 유지되는지를 다룹니다. 자세한 내용은 각 구성 요소의
 가이드에 있습니다:
 [Besu 프로덕션 패키지 (수동 설정)](../deployment/besu-manual.md),
-[프로덕션 환경의 MPC 서명기](../deployment/mpc-signer-production.md),
+[운영 환경의 MPC 서명기](../deployment/mpc-signer-production.md),
 [프록시 (애플리케이션 API)](../components/proxy.md), [고가용성 (HAProxy와 keepalived)](../deployment/high-availability.md),
 [모니터링 (Prometheus와 Grafana)](../components/monitoring.md),
 [재해 복구](../operations/disaster-recovery.md).

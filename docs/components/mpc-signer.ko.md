@@ -4,7 +4,7 @@
 >
 > **대상:** MPC 노드 팀, 개발자, 검토자.
 >
-> **관련 문서:** [MPC 운영 환경](../deployment/mpc-signer-production.md) · [MPC 업그레이드](../operations/mpc-signer-upgrade.md) · [벤치마크](../development/mpc-benchmarks.md)
+> **관련 문서:** [운영 환경의 MPC 서명기](../deployment/mpc-signer-production.md) · [MPC 업그레이드](../operations/mpc-signer-upgrade.md) · [벤치마크](../development/mpc-benchmarks.md)
 
 **목차**
 

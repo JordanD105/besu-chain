@@ -670,7 +670,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Every alert that fired in the selected time range, newest first. Now: FIRING or resolved. Last started / First started: when its latest / earliest episode in the range began. Last seen firing: for a resolved alert, about when it ended. Times fired: episodes in the range. Time firing: total.",
+      "description": "Every alert that fired in the selected time range, the latest start first. Now: FIRING or resolved. Last started / First started: when its latest / earliest episode in the range began. Last seen firing: for a resolved alert, about when it ended. Times fired: episodes in the range. Time firing: total.",
       "gridPos": {
         "x": 0,
         "y": 29,
@@ -775,16 +775,16 @@
               "detail": "Detail"
             },
             "indexByName": {
-              "Severity": 0,
-              "Alert": 1,
-              "Subject": 2,
-              "Detail": 3,
-              "Now": 4,
-              "Last started": 5,
-              "Last seen firing": 6,
-              "Times fired": 7,
-              "Time firing": 8,
-              "First started": 9
+              "Value #A": 4,
+              "Value #B": 7,
+              "Value #C": 9,
+              "Value #D": 5,
+              "Value #E": 6,
+              "Value #F": 8,
+              "alertname": 1,
+              "severity": 0,
+              "subject": 2,
+              "detail": 3
             }
           }
         },
@@ -809,7 +809,7 @@
           "options": {
             "sort": [
               {
-                "field": "Last seen firing",
+                "field": "Last started",
                 "desc": true
               }
             ]
@@ -824,7 +824,7 @@
         },
         "sortBy": [
           {
-            "displayName": "Last seen firing",
+            "displayName": "Last started",
             "desc": true
           }
         ]
@@ -946,7 +946,11 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "dateTimeAsLocal"
+                "value": "dateTimeAsIso"
+              },
+              {
+                "id": "custom.width",
+                "value": 175
               }
             ]
           },
@@ -958,7 +962,11 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "dateTimeAsLocal"
+                "value": "dateTimeAsIso"
+              },
+              {
+                "id": "custom.width",
+                "value": 175
               }
             ]
           },
@@ -970,7 +978,11 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "dateTimeAsLocal"
+                "value": "dateTimeAsIso"
+              },
+              {
+                "id": "custom.width",
+                "value": 175
               }
             ]
           },

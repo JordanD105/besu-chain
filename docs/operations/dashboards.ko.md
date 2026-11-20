@@ -16,6 +16,7 @@
 - [Proxy & Redis](#proxy--redis)
 - [Sections](#sections)
 - [Hosts](#hosts)
+- [Alert log (알림 로그)](#alert-log)
 - [질문별 대시보드](#which-dashboard-for-which-question)
 
 ---
@@ -31,12 +32,13 @@
 | 상단의 **Alerts 행** (Besu, MPC, Hosts) | *Critical firing*과 *Warnings firing*은 이 대시보드만이 아니라 플랫폼 전체의 모든 알림 수를 셉니다. *Firing alerts* 표는 critical부터 순서대로 노드, 발신자 또는 호스트와 *Firing for*(규칙의 대기 시간을 포함하여 조건이 시작된 시점부터 계산)를 함께 나열합니다. 모든 알림은 [알림](alerts.md)에 설명되어 있습니다 |
 | 시간 차트의 **점선이 있는 주황색 음영 띠** | 알림이 발생 중이던 기간입니다. 점선은 시작과 끝입니다. 선 위에 마우스를 올리면 알림 이름이 보입니다 |
 | 상단의 **변수** (`node`, `coordinator`, `host`, `section`, `period`) | 필터입니다. 기본값은 *All*이며, 하나 또는 여러 개를 선택하면 모든 패널이 좁혀집니다 |
+| **Dashboards** 메뉴(변수 오른쪽) | 시간 범위를 유지한 채 모든 대시보드로 이동합니다. [Alert log](#alert-log)로 가는 가장 빠른 길입니다 |
 | **시간** | 브라우저의 현지 시간입니다. 호스트의 로그(`docker logs`, `journalctl`)는 UTC일 수 있습니다 |
 | **노드 간의 작은 차이** | Prometheus는 각 대상을 15 s마다 서로 약간 다른 시점에 읽습니다. 1 s 블록에서는 정상인 두 노드가 한 번의 읽기에서 10–15블록 차이 날 수 있습니다 |
 | **"No data"** | 아직 아무 일도 일어나지 않았거나(한 번도 움직이지 않은 카운터), 쿼리에 비해 시간 범위가 너무 짧거나(Sections 기간), 대상이 다운되었습니다 |
 
 대시보드는 `monitoring/grafana/dashboards/*.json`에서 프로비저닝되며 브라우저에서 저장할 수
-없습니다. 변경하려면 파일(Sections와 Proxy & Redis는 생성기 `monitoring/grafana/tools/`)을 수정하고
+없습니다. 변경하려면 파일(Sections, Proxy & Redis, Alert log는 생성기 `monitoring/grafana/tools/`)을 수정하고
 커밋한 다음 `01-hosts.yml 09-monitoring.yml`을 실행하십시오.
 
 ---
@@ -342,6 +344,65 @@ Prometheus는 `prometheus_retention`(기본값 400일) 동안 보관합니다. c
 
 ---
 
+## Alert log (알림 로그) {#alert-log}
+
+배포 이후 발생한 모든 알림: 언제 시작했는지, 몇 번, 얼마나 오래, 지금도 발생 중인지를 보여 줍니다.
+파일: `alert-log.json`(`monitoring/grafana/tools/gen_alert_log_dashboard.py`로 생성). 변수: **Severity**와
+**Alert**(하나, 여러 개 또는 전체). 기본 시간 범위는 최근 30일입니다. 더 이전을 보려면 더 긴 범위를
+선택하십시오(최대 `prometheus_retention`, Ansible에서는 400일).
+
+![Alert log 대시보드(실습 환경): 요약, 심각도별 발생 중인 알림 추이, 알림별 타임라인, 로그 표](../images/screenshots/grafana-alert-log.png)
+
+### Summary (요약) {#summary}
+
+**선택한 시간 범위** 기준입니다(처음 두 패널은 현재 시점).
+
+| 패널 | 표시 내용 | 정상 |
+|---|---|---|
+| *Firing now* | 지금 발생 중인 알림(선택한 심각도) | 0(초록) |
+| *Critical firing now* | 지금 발생 중인 critical 알림 | 0. 빨간색이면 [알림 런북](alert-runbook.md) |
+| *Alerts that fired* | 한 번 이상 발생한 서로 다른 알림(이름 + 대상 + 세부): 아래 로그의 행 수 | 적고, 원인이 설명됨 |
+| *Firing episodes* | 알림이 발생을 시작한 횟수(세 번 발생한 알림은 3) | |
+| *Time firing (sum)* | 각 알림이 발생 중이던 시간의 합(겹치는 알림은 더해짐) | |
+
+### Timeline (타임라인) {#timeline}
+
+| 패널 | 표시 내용 |
+|---|---|
+| *Firing alerts by severity* | 막대: 구간마다 발생 중이던 알림 수. 빨강 critical, 주황 warning, 파랑 info. 높은 막대 = 장애이며, 아래에서 찾으십시오 |
+| *When each alert fired* | 알림(이름, 대상, 세부)마다 한 줄, 발생 중인 동안 색이 칠해집니다. 긴 시간 범위에서는 한 칸이 한 구간이므로 짧은 알림도 한 칸 전체로 보입니다. 정확한 시각은 확대(차트 위에서 드래그)하여 확인하십시오 |
+
+### Log (로그) {#log}
+
+**Alert log** 표: 시간 범위 안에 발생한 알림마다 한 행이며, 가장 최근에 시작한 것이 먼저 나옵니다.
+모든 열은 필터(깔때기 아이콘)하거나 정렬(제목 클릭)할 수 있습니다.
+
+| 열 | 의미 |
+|---|---|
+| **Severity**, **Alert** | 알림과 심각도. 의미와 조치: [알림](alerts.md), [알림 런북](alert-runbook.md) |
+| **Subject** | 알림의 대상: 섹션, 노드, 발신자, MPC 키 주소, 호스트 또는 수집 대상 중 알림에 있는 첫 번째 |
+| **Detail** | 대상에 여러 부분이 있을 때 어느 부분인지: 디스크(`mountpoint`), 풀 클래스, 백업 종류 |
+| **Now** | **FIRING**(빨강) 또는 *resolved*(초록) |
+| **Last started** | 범위 안의 마지막 발생이 시작된 시각(규칙의 대기 시간을 포함하여 조건이 시작된 시점) |
+| **Last seen firing** | 해제된 알림이라면 대략 끝난 시각(15 s 이내) |
+| **Times fired** | 범위 안의 발생 횟수 |
+| **Time firing** | 범위 안에서 발생 중이던 총 시간 |
+| **First started** | 범위 안의 첫 발생이 시작된 시각 |
+
+**기록 방식.** Prometheus는 모든 알림의 상태를 `ALERTS`와 `ALERTS_FOR_STATE`(각 발생의 시작)로
+보관합니다. 두 기록 규칙(`monitoring/prometheus/rules/alert-log.yml`)이 알림이 발생 중인 동안 15 s마다
+`alert_log:firing_since`(발생의 시작)와 `alert_log:firing_seen`(시각)을 `subject`, `detail` 레이블과 함께
+기록합니다. 표와 요약은 이 값을 읽으므로 1년 범위에서도 빠릅니다. *pending*까지만 가고 발생하지 않은
+알림은 로그에 없습니다.
+
+- 표의 열은 기록 규칙이 설치된 시점(`09-monitoring.yml`)부터 시작합니다. 기존 배포에서는 *Time firing*과
+  *Times fired*가 그때부터 계산됩니다. 두 타임라인 차트는 `ALERTS`를 읽으므로 Prometheus가 보관하고 있는
+  모든 기간을 보여 줍니다.
+- 보관 기간: `prometheus_retention`(기본 400일)과 `prometheus_retention_size`(20 GB). 더 오래된 데이터는
+  삭제됩니다. 더 오래 남기려면 표를 내보내십시오(패널 메뉴 → *Inspect* → *Data* → *Download CSV*).
+- 스크린샷의 실습 환경에서는 rpc2의 `BesuNodeDown` 발생 두 번(1분씩 두 번 중지)이 보입니다: *Times fired*
+  2, *Time firing* 1분, *resolved*. `HostDiskFull` 행은 실습 환경 때문에 생긴 것입니다.
+
 ## 질문별 대시보드 {#which-dashboard-for-which-question}
 
 | 질문 | 대시보드 → 패널 |
@@ -356,3 +417,5 @@ Prometheus는 `prometheus_retention`(기본값 400일) 동안 보관합니다. c
 | 이번 주 각 섹션은 얼마를 벌었습니까? | Sections, Period = Week → *ETH moved per period* |
 | 호스트의 메모리나 디스크가 부족합니까? | Hosts → *Hosts* 표 |
 | 백업이 실행되고 있습니까? | Hosts → *Backups* |
+| 어젯밤 무엇이 얼마나 오래 발생했습니까? | Alert log → *Alert log* 표 |
+| 이 알림이 이번 달 몇 번 발생했습니까? | Alert log, Alert = 해당 알림, 최근 30일 → *Times fired* |

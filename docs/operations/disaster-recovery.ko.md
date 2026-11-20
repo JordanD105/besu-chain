@@ -257,7 +257,7 @@ curl -s http://127.0.0.1:8410/
 
 **해당 노드의 백업 또는 암호문이 없는 경우:** 3개 중 2개로 서명은 계속 가능하지만, 이중화는 영구히
 사라집니다(라이브러리가 키를 다시 분배할 수 없음). 새 클러스터를 구축하고 모든 자금을 옮기십시오:
-[프로덕션 MPC 서명기, 14단계](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good).
+[운영 환경의 MPC 서명기, 14단계](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good).
 
 ### 6.5 MPC 노드 두 개 손실 {#65-two-mpc-nodes-lost}
 
@@ -265,7 +265,7 @@ curl -s http://127.0.0.1:8410/
 **두** 노드가 가동되는 즉시 서명이 다시 작동합니다.
 
 - 둘 중 하나를 복원할 수 없는 경우: 남은 두 노드로 **즉시 모든 자금을** 새 클러스터로 옮기십시오
-  ([프로덕션 MPC 서명기, 14단계](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good)).
+  ([운영 환경의 MPC 서명기, 14단계](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good)).
   장애 한 번이면 자금을 잃게 됩니다.
 - 둘 다 복원할 수 없는 경우: MPC 계정의 자금은 손실됩니다. 그래서 각 노드는 자체 팀이 매시간 외부
   보관으로 백업합니다.
@@ -320,7 +320,7 @@ curl -s http://127.0.0.1:8410/
    VRRP 비밀번호), Grafana 비밀번호, SSH 키, 클라우드 자격 증명.
 5. **MPC:** 공격자가 한 노드의 키 조각 **과** 그 암호문을 얻었을 수 있다면, 자금은 여전히 안전하지만
    (키 조각 두 개가 필요함) 여유를 되찾기 위해 새 클러스터로 옮기십시오
-   ([프로덕션 MPC 서명기, 14단계](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good)).
+   ([운영 환경의 MPC 서명기, 14단계](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good)).
    두 노드가 침해되었을 수 있다면 **즉시** 자금을 옮기십시오.
 6. 검증자 키 도난: 해당 검증자를 투표로 제외하고 새 검증자를 투표로 추가하십시오(6.1 "키 분실").
 

@@ -15,7 +15,7 @@
 | **프로젝트를 처음 접하는 분** | [소개](overview/introduction.md) · [아키텍처](overview/architecture.md) · [용어집](glossary.md) |
 | **애플리케이션 개발자** (API 호출) | [프록시 API](reference/proxy-api.md) · [섹션](features/sections.md) · [NFT 워크플로](features/nft-workflow.md) · [개발 환경](getting-started/development.md) |
 | **운영자** (배포, 프로덕션 운영) | [운영자 가이드](deployment/operator-guide.md) · [Ansible](deployment/ansible.md) · [접근 제어](deployment/access-control.md) · [알림](operations/alerts.md) · [대시보드](operations/dashboards.md) · [문제 해결](operations/troubleshooting.md) |
-| **MPC 노드 팀** (세 팀 중 하나) | [MPC 서명기](components/mpc-signer.md) · [MPC 프로덕션](deployment/mpc-signer-production.md) · [MPC 업그레이드](operations/mpc-signer-upgrade.md) |
+| **MPC 노드 팀** (세 팀 중 하나) | [MPC 서명기](components/mpc-signer.md) · [운영 환경의 MPC 서명기](deployment/mpc-signer-production.md) · [MPC 업그레이드](operations/mpc-signer-upgrade.md) |
 | **비즈니스 관리자** (섹션, 자금, NFT) | [섹션](features/sections.md) · [chainlens](components/chainlens.md) · [NFT 워크플로](features/nft-workflow.md) |
 | **컨트랙트 개발자** | [Remix](components/remix.md) · [컨트랙트 배포](features/contract-deployment.md) · [컨트랙트 기록](features/contract-records.md) |
 | **당직 중, 문제가 발생한 경우** | [문제 해결](operations/troubleshooting.md) · [알림](operations/alerts.md) · [재해 복구](operations/disaster-recovery.md) |
@@ -63,7 +63,7 @@
 | [접근 제어](deployment/access-control.md) | 각 서비스에 연결할 수 있는 대상; 주소와 네트워크; 방화벽 |
 | [고가용성](deployment/high-availability.md) | HAProxy, keepalived, 플로팅 IP, RPC 상태 검사, 장애 조치 테스트 |
 | [Besu 수동 설정](deployment/besu-manual.md) | Besu 패키지 수동 설치: 네트워크 파일, 시작, 검증자 추가 / 제거 |
-| [MPC 서명기 프로덕션](deployment/mpc-signer-production.md) | 세 팀, 토큰, 키 세레모니, 백업, 운영 |
+| [운영 환경의 MPC 서명기](deployment/mpc-signer-production.md) | 세 팀, 토큰, 키 세레모니, 백업, 운영 |
 | [GPG 키](deployment/gpg-key.md) | 노드 키 백업을 암호화하는 키 |
 
 ### 구성 요소 {#components}

@@ -77,6 +77,7 @@ Prometheus는 사설 네트워크를 통해 15초마다 수집합니다. 행마�
 | **MPC signer** | `mpc-signer.json` | 코디네이터 가동 여부, 임계값 대비 가동 중인 MPC 노드, 키, 준비된 사전 서명, 초당 서명 수; **MPC nodes** 표; 초당 서명 수(hot/cold), 서명 지연 시간, 실패 및 정책 거부, 열린 중계 세션; big 키(개별) 및 small 키(합계)의 풀, 사전 서명 생성 속도, 소요 시간 및 실행 중인 세션, 풀 클래스별 키, 노드 도달 가능성 |
 | **Proxy & Redis** | `proxy-redis.json` | 활성 프록시: 가동 여부, 초당 요청 수, 5xx 비율, p95 지연 시간, 처리 중, Redis 연결, 가동 시간; 경로별 요청 및 오류(4xx / 5xx), 응답 시간 p50/p95/p99(`/createaccount`와 `/admin` 제외)와 경로별 p95, 경로별 표; 송신자별 처리 중인 트랜잭션, 논스 공백, 정지 및 복구; 메모리, 이벤트 루프 지연, 처리 중인 요청; **Redis**: 가동 여부, 클라이언트, 메모리, 키, 적중률, 마지막 저장, 가동 시간, 초당 명령 수 및 평균 명령 시간 |
 | **Hosts** | `hosts.json` | 호스트별 표, CPU, 메모리, 디스크 사용량, 디스크 I/O, 네트워크 송수신; **Backups**: 백업 및 노드별 마지막 성공, 마지막 실행, 크기, (체인 스냅샷의) 블록 |
+| **Alert log** | `alert-log.json` | 배포 이후 발생한 모든 알림: 지금 발생 중인 알림, 범위 안의 알림과 발생 횟수, 심각도별 발생 중인 알림 추이, 알림별 타임라인, 로그 표(심각도, 알림, 대상, 현재 상태, 마지막 시작, 마지막 발생 확인, 발생 횟수, 발생 시간). [패널별 설명](../operations/dashboards.md#alert-log) |
 | **Sections** | `sections.json` | ([섹션](../features/sections.md)) 활성 섹션, 임계값 미만인 선지급 계정, 임계값, SENDER01, 전체 선지급, 전체 소비 + 결제; 각 섹션의 선지급 / 소비 / 결제 계정 잔액(표 및 시계열); **Period**별, 섹션 및 종류별 작업 수와 이동한 ETH |
 
 **Nodes 표(Besu production).** 노드당 한 행: Node, Role, Metrics address, Up, Height, Behind, Peers,
@@ -93,7 +94,7 @@ Sync, Last block age, Tx pool.
 "last period" 통계, 기간별 차트와 표의 범위를 설정합니다. `Year`에는 365일이 넘는 데이터가 필요합니다.
 [운영](#operations)의 *Retention*을 참조하십시오.
 
-**생성되는 대시보드.** 두 대시보드는 스크립트로 생성됩니다. JSON이 아니라 스크립트를 수정한 다음 다시
+**생성되는 대시보드.** 세 대시보드는 스크립트로 생성됩니다. JSON이 아니라 스크립트를 수정한 다음 다시
 생성하십시오.
 
 ```bash
@@ -102,6 +103,10 @@ python3 monitoring/grafana/tools/gen_sections_dashboard.py monitoring/grafana/da
 
 ```bash
 python3 monitoring/grafana/tools/gen_proxy_dashboard.py monitoring/grafana/dashboards/proxy-redis.json
+```
+
+```bash
+python3 monitoring/grafana/tools/gen_alert_log_dashboard.py monitoring/grafana/dashboards/alert-log.json
 ```
 
 ## 알림 {#alerts}
@@ -119,6 +124,7 @@ Prometheus *Alerts* 페이지와 모든 대시보드의 Alerts 행에 표시됩�
 | `proxy.yml` | critical: `ProxyDown`, `ProxySenderStalled`. warning: `ProxyNonceGap`, `ProxySenderCheckFailing`, `ProxyHttpErrors`, `ProxySlow`, `ProxyEventLoopBlocked`, `ProxyRedisDisconnected`, `RedisDown`, `RedisMemoryHigh`. info: `ProxyNonceRepaired` |
 | `sections.yml` | critical: `SectionUpfrontEmpty`. warning: `SectionUpfrontLow`, `Sender01Low`, `SectionMetricsFailing` |
 | `hosts.yml` | warning: `HostDown`, `HostDiskFull`, `HostMemoryHigh`, `HostClockNotSynced` |
+| `alert-log.yml` | 알림 없음: [Alert log](../operations/dashboards.md#alert-log) 대시보드를 위한 기록 규칙 2개(`alert_log:firing_since`, `alert_log:firing_seen`) |
 | `backups.yml` | warning: `BackupFailed`, `ChainSnapshotTooOld`, `ChainSnapshotMissing`, `MpcShareBackupTooOld`, `MpcShareBackupMissing`, `ValidatorKeyBackupMissing` |
 
 설정에서 가져오는 임계값: `SectionUpfrontLow` / `SectionUpfrontEmpty`는 `upfront_low_balance_eth`를,

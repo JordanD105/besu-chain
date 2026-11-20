@@ -168,7 +168,7 @@ ansible-playbook save-images.yml -e image_archives_dir=/opt/000
 
 `mpc_pool_target`(`SENDER01` 같은 큰 키), `mpc_pool_target_small`(작은 키),
 `mpc_new_account_pool`(클래스를 지정하지 않은 `/createaccount` 계정의 클래스: `big`, `small`,
-`none`). [프로덕션의 MPC 서명기](mpc-signer-production.md)의 "Presignature pools"를 참고하십시오.
+`none`). [운영 환경의 MPC 서명기](mpc-signer-production.md)의 "Presignature pools"를 참고하십시오.
 MPC 이미지 버전이 변경되면 MPC 노드 팀은 `site.yml`을 다시 실행하기 **전에** 노드를 업그레이드해야
 합니다: [MPC 서명기 업그레이드](../operations/mpc-signer-upgrade.md).
 

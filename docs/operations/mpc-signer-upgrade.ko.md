@@ -4,7 +4,7 @@
 >
 > **대상:** MPC 노드 팀, 운영자.
 >
-> **관련 문서:** [운영 환경의 MPC](../deployment/mpc-signer-production.md) · [MPC 서명기](../components/mpc-signer.md)
+> **관련 문서:** [운영 환경의 MPC 서명기](../deployment/mpc-signer-production.md) · [MPC 서명기](../components/mpc-signer.md)
 
 **목차**
 

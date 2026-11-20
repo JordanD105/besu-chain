@@ -133,7 +133,7 @@ def unit_override(name, props):
 
 panels.append({
     "type": "table", "title": "Alert log", "id": nid(), "datasource": DS,
-    "description": "Every alert that fired in the selected time range, newest first. Now: FIRING or resolved. Last started / "
+    "description": "Every alert that fired in the selected time range, the latest start first. Now: FIRING or resolved. Last started / "
                    "First started: when its latest / earliest episode in the range began. Last seen firing: for a resolved "
                    "alert, about when it ended. Times fired: episodes in the range. Time firing: total.",
     "gridPos": {"x": 0, "y": y, "w": 24, "h": 18},
@@ -141,13 +141,13 @@ panels.append({
     "transformations": [
         {"id": "merge", "options": {}},
         {"id": "organize", "options": {"excludeByName": {"Time": True}, "renameByName": names,
-                                       "indexByName": {n: i for i, n in enumerate(order)}}},
+                                       "indexByName": {orig: order.index(names[orig]) for orig in names}}},
         {"id": "filterByValue", "options": {"filters": [{"fieldName": "Times fired", "config": {"id": "isNotNull", "options": {}}}],
                                             "type": "include", "match": "any"}},
-        {"id": "sortBy", "options": {"sort": [{"field": "Last seen firing", "desc": True}]}},
+        {"id": "sortBy", "options": {"sort": [{"field": "Last started", "desc": True}]}},
     ],
     "options": {"showHeader": True, "cellHeight": "sm", "footer": {"show": False},
-                "sortBy": [{"displayName": "Last seen firing", "desc": True}]},
+                "sortBy": [{"displayName": "Last started", "desc": True}]},
     "fieldConfig": {"defaults": {"custom": {"align": "auto", "filterable": True}, "mappings": []},
                     "overrides": [
                         unit_override("Severity", [
@@ -163,9 +163,9 @@ panels.append({
                             {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                             {"id": "mappings", "value": [{"type": "value", "options": {"1": {"text": "FIRING", "color": "red", "index": 0}}},
                                                          {"type": "special", "options": {"match": "null", "result": {"text": "resolved", "color": "green", "index": 1}}}]}]),
-                        unit_override("Last started", [{"id": "unit", "value": "dateTimeAsLocal"}]),
-                        unit_override("First started", [{"id": "unit", "value": "dateTimeAsLocal"}]),
-                        unit_override("Last seen firing", [{"id": "unit", "value": "dateTimeAsLocal"}]),
+                        unit_override("Last started", [{"id": "unit", "value": "dateTimeAsIso"}, {"id": "custom.width", "value": 175}]),
+                        unit_override("First started", [{"id": "unit", "value": "dateTimeAsIso"}, {"id": "custom.width", "value": 175}]),
+                        unit_override("Last seen firing", [{"id": "unit", "value": "dateTimeAsIso"}, {"id": "custom.width", "value": 175}]),
                         unit_override("Times fired", [{"id": "custom.width", "value": 110}]),
                         unit_override("Time firing", [{"id": "unit", "value": "dtdurations"}]),
                     ]}})

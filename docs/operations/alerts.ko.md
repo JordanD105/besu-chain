@@ -28,6 +28,8 @@ Redis, 섹션, 호스트, 백업의 여섯 파일).
 - **표시 위치:** 모든 Grafana 대시보드 상단의 **Alerts** 표(critical 및 warning 개수, 그다음 발생 중인
   알림마다 한 행), 차트 위의 점선이 있는 주황색 음영 띠(알림이 발생하고 해제된 시점), 그리고 Prometheus
   *Alerts* 페이지에 표시됩니다.
+- **이력:** Grafana의 **Alert log** 대시보드는 배포 이후 발생한 모든 알림을 언제 시작했는지, 몇 번, 얼마나
+  오래와 함께 나열합니다([Alert log](dashboards.md#alert-log)).
 - **통지:** 기본값은 없습니다. 메일, Slack 또는 PagerDuty로 받으려면 Alertmanager를 추가하거나
   Grafana *Alerting → Contact points*를 사용하십시오([모니터링 (Prometheus 및 Grafana)](../components/monitoring.md)).
 - **심각도:**

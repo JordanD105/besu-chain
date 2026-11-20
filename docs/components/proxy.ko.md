@@ -168,7 +168,7 @@ curl -s http://192.168.68.130:9100/admin/pool
 
 자주 송금하는 계정이 더 있다면(예: 두 번째 자금 공급 계정) 쉼표로 구분하여 `MPC_POOL_KEYS`에
 추가하십시오. 풀 등급은
-[프로덕션 환경의 MPC 서명기](../deployment/mpc-signer-production.md#presignature-pools-big-small-and-none)에서 설명합니다.
+[운영 환경의 MPC 서명기](../deployment/mpc-signer-production.md#presignature-pools-big-small-and-none)에서 설명합니다.
 
 ## 4단계: MPC 서명기용 프록시 구성 {#step-4-configure-the-proxy-for-the-mpc-signer}
 

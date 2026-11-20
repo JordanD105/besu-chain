@@ -28,6 +28,8 @@ and Redis, sections, hosts, backups).
 - **Where they show:** the **Alerts** table at the top of every Grafana dashboard (critical and
   warning counts, then one row per firing alert), the orange shaded bands with dashed lines on the
   charts (when an alert fired and cleared), and the Prometheus *Alerts* page.
+- **History:** the Grafana **Alert log** dashboard lists every alert that fired since the
+  deployment, with when it started, how often and how long ([Alert log](dashboards.md#alert-log)).
 - **Notifications:** none by default. For mail, Slack or PagerDuty, add an Alertmanager or use
   Grafana *Alerting → Contact points* ([Monitoring (Prometheus and Grafana)](../components/monitoring.md)).
 - **Severity:**
