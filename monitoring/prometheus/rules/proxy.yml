@@ -34,3 +34,50 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "{{ $labels.sender }}: the proxy cannot read Besu for its background check"
+
+      - alert: ProxyHttpErrors
+        # answers with status 5xx (the proxy failed, not the caller's mistake)
+        expr: sum(rate(proxy_http_requests_total{code=~"5.."}[5m])) / clamp_min(sum(rate(proxy_http_requests_total[5m])), 1e-9) > 0.05 and sum(rate(proxy_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the proxy's answers are 5xx errors (Grafana Proxy & Redis: by route)"
+
+      - alert: ProxySlow
+        # 95th percentile of all routes except the slow-by-design ones (account creation and sections: MPC key generation)
+        expr: histogram_quantile(0.95, sum by (le) (rate(proxy_http_request_duration_seconds_bucket{route!~"/createaccount|/admin/.*"}[5m]))) > 5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "The proxy's 95th-percentile answer time is {{ $value | humanizeDuration }}"
+
+      - alert: ProxyEventLoopBlocked
+        expr: proxy_event_loop_lag_max_seconds > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "The proxy's event loop was blocked for {{ $value | humanizeDuration }}: requests wait (CPU or a long synchronous task)"
+
+      - alert: ProxyRedisDisconnected
+        # the proxy keeps working without Redis (memory + chain), but loses its nonce cache on a restart
+        expr: proxy_redis_up == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "The active proxy has no Redis connection (it continues with memory + chain)"
+
+  - name: redis
+    rules:
+      - alert: RedisDown
+        expr: redis_up{job="redis"} == 0 or up{job="redis"} == 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "The active proxy's Redis is not answering"
+
+      - alert: RedisMemoryHigh
+        expr: (redis_memory_used_bytes{job="redis"} / redis_memory_max_bytes{job="redis"} > 0.9) and redis_memory_max_bytes{job="redis"} > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis uses {{ $value | humanizePercentage }} of its maxmemory"

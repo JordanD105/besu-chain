@@ -39,6 +39,11 @@ scrape_configs:
     file_sd_configs:
       - files: [/etc/prometheus/targets/proxy.yml]
 
+  # Redis of the active proxy (redis-exporter, through the proxy VIP)
+  - job_name: redis
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/redis.yml]
+
   # Host CPU / memory / disk (node-exporter on every host, see node-exporter/)
   - job_name: hosts
     file_sd_configs:

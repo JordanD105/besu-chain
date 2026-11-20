@@ -53,6 +53,7 @@ node_exporter_image: prom/node-exporter:v1.12.1
 prometheus_image: prom/prometheus:v3.16.0
 grafana_image: grafana/grafana:13.2
 redis_image: redis:8.10.3
+redis_exporter_image: oliver006/redis_exporter:v1.67.0
 
 # Optional: load the images above from `docker save` archives instead of pulling them from Docker
 # Hub (hosts without Docker Hub access, or to avoid its rate limit). A directory on the operator
@@ -64,6 +65,7 @@ image_archives:
   prometheus: prometheus-3.16.0-docker.tar
   grafana: grafana-13.2-docker.tar
   redis: redis-8.10.3-docker.tar
+  redis_exporter: redis-exporter-v1.67.0-docker.tar
 
 besu_java_opts: -Xmx4g
 mpc_image: registry.example.com/mpc-signer:1.3.0

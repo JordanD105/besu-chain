@@ -172,7 +172,7 @@
       ansible.builtin.include_tasks: tasks/ensure-image.yml
       loop: >-
         {{ (['besu'] if inventory_hostname in groups['besu_hosts'] else [])
-           + (['redis'] if inventory_hostname in groups['app_hosts'] else [])
+           + (['redis', 'redis_exporter'] if inventory_hostname in groups['app_hosts'] else [])
            + (['prometheus', 'grafana'] if inventory_hostname in groups['monitoring_hosts'] else []) }}
       loop_control:
         loop_var: key

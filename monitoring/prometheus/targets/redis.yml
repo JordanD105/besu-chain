@@ -1,0 +1,4 @@
+# The ACTIVE proxy's Redis, through the proxy floating IP: redis-exporter (proxy/docker-compose.yml)
+# runs on both HA hosts, but only the active one's Redis runs.
+- targets: ["192.168.68.151:9121"]
+  labels: { name: redis }

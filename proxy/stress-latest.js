@@ -12,6 +12,69 @@ require("dotenv").config({
 });
 
 const app = express();
+
+// ---- HTTP and process metrics (GET /metrics, Grafana "Proxy & Redis"): requests per route, method
+// and status, latency, requests in flight, memory and event-loop lag
+const { monitorEventLoopDelay } = require("perf_hooks");
+const LATENCY_BUCKETS = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60];
+const httpStats = { requests: new Map(), durations: new Map(), inFlight: 0, started: Date.now() };
+const loopDelay = monitorEventLoopDelay({ resolution: 20 });
+loopDelay.enable();
+
+app.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+    httpStats.inFlight += 1;
+    res.once("close", () => {
+        httpStats.inFlight -= 1;
+        // the route pattern (/nft/:tokenId), never the raw URL: label values stay few
+        const route = req.route ? (req.baseUrl || "") + req.route.path : "unmatched";
+        const code = res.writableFinished ? String(res.statusCode) : "aborted";
+        const key = route + "|" + req.method + "|" + code;
+        httpStats.requests.set(key, (httpStats.requests.get(key) || 0) + 1);
+        const seconds = Number(process.hrtime.bigint() - start) / 1e9;
+        let d = httpStats.durations.get(route);
+        if (!d) {
+            d = { buckets: LATENCY_BUCKETS.map(() => 0), count: 0, sum: 0 };
+            httpStats.durations.set(route, d);
+        }
+        LATENCY_BUCKETS.forEach((le, i) => { if (seconds <= le) { d.buckets[i] += 1; } });
+        d.count += 1;
+        d.sum += seconds;
+    });
+    next();
+});
+
+function httpMetricLines() {
+    const esc = (v) => String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const lines = [
+        "# HELP proxy_http_requests_total HTTP requests answered, per route pattern, method and status code.",
+        "# TYPE proxy_http_requests_total counter"
+    ];
+    for (const [key, value] of httpStats.requests) {
+        const [route, method, code] = key.split("|");
+        lines.push(`proxy_http_requests_total{route="${esc(route)}",method="${method}",code="${code}"} ${value}`);
+    }
+    lines.push("# HELP proxy_http_request_duration_seconds Time to answer, per route pattern.",
+        "# TYPE proxy_http_request_duration_seconds histogram");
+    for (const [route, d] of httpStats.durations) {
+        const r = esc(route);
+        LATENCY_BUCKETS.forEach((le, i) => lines.push(`proxy_http_request_duration_seconds_bucket{route="${r}",le="${le}"} ${d.buckets[i]}`));
+        lines.push(`proxy_http_request_duration_seconds_bucket{route="${r}",le="+Inf"} ${d.count}`,
+            `proxy_http_request_duration_seconds_sum{route="${r}"} ${d.sum}`,
+            `proxy_http_request_duration_seconds_count{route="${r}"} ${d.count}`);
+    }
+    const mem = process.memoryUsage();
+    const gauge = (name, help, value) => lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} gauge`, `${name} ${value}`);
+    gauge("proxy_http_in_flight", "Requests being answered now.", httpStats.inFlight);
+    gauge("proxy_process_resident_memory_bytes", "Resident memory of the proxy process.", mem.rss);
+    gauge("proxy_process_heap_used_bytes", "V8 heap in use.", mem.heapUsed);
+    gauge("proxy_process_start_time_seconds", "When the proxy started (unix time).", Math.floor(httpStats.started / 1000));
+    gauge("proxy_event_loop_lag_p99_seconds", "Event-loop delay, 99th percentile since the last scrape.", loopDelay.percentile(99) / 1e9);
+    gauge("proxy_event_loop_lag_max_seconds", "Event-loop delay, maximum since the last scrape.", loopDelay.max / 1e9);
+    loopDelay.reset();
+    return lines;
+}
+
 app.use(express.json({ limit: "1mb" }));
 
 // =======================
@@ -1175,6 +1238,9 @@ app.get("/metrics", (req, res) => {
     };
 
     metric("proxy_up", "gauge", "Proxy is running.", [["", 1]]);
+    metric("proxy_redis_up", "gauge", "1 while the proxy's Redis connection is ready (it works without Redis: memory + chain).",
+        [["", redis.status === "ready" ? 1 : 0]]);
+    lines.push(...httpMetricLines());
     metric("proxy_senders_tracked", "gauge", "Senders watched by the background chain check.", [["", senders.size]]);
     metric("proxy_sender_next_nonce", "gauge", "Next nonce the proxy will use (absent until first use).",
         all.filter(([sender]) => memNonce.has(sender)).map(([sender]) => [`sender="${sender}"`, memNonce.get(sender)]));

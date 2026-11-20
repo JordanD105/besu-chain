@@ -153,6 +153,13 @@
       register: proxy_up
       changed_when: proxy_up.stderr is search('Recreated|Started')
 
+    - name: Redis exporter (both HA hosts; Prometheus reads the active one through the proxy VIP)
+      ansible.builtin.command: docker compose up -d redis-exporter
+      args:
+        chdir: "{{ repo_dir }}/proxy"
+      register: exporter_up
+      changed_when: exporter_up.stderr is search('Recreated|Started|Created')
+
     - name: Redis running here without the proxy? (left from an earlier failover)
       ansible.builtin.command: docker compose ps -q --status running redis
       args:

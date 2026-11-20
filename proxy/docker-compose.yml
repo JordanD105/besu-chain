@@ -12,6 +12,16 @@ services:
       timeout: 3s
       retries: 10
 
+  # Redis metrics for Prometheus (job "redis", through the proxy VIP: the active proxy's Redis).
+  # Runs on both HA hosts; it reports redis_up 0 while this host's Redis is stopped (standby).
+  redis-exporter:
+    image: ${REDIS_EXPORTER_IMAGE:-oliver006/redis_exporter:v1.67.0}
+    restart: unless-stopped
+    ports:
+      - "${REDIS_EXPORTER_PORT:-9121}:9121"
+    environment:
+      REDIS_ADDR: redis://redis:6379
+
   proxy:
     # docker compose up -d --build   builds this image from ./Dockerfile and starts it
     build: .

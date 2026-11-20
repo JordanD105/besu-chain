@@ -67,6 +67,7 @@ case "$ROLE" in
     allow_all 8555/tcp $COORDS $MON "$ADMIN"       # rpc node direct (HAProxy, chainlens -> rpc2, operator)
     allow_all 9100/tcp $COORDS $MPC_HOSTS $MON "$ADMIN"  # coordinator: HAProxy, MPC relay, metrics, admin
     allow_all 30000/tcp $PROXY_CLIENTS $MON "$ADMIN"   # proxy (VIP and this host)
+    allow_all 9121/tcp $MON                            # redis-exporter (Prometheus, through the proxy VIP)
     ;;
   node)
     for p in 30303/tcp 30303/udp; do allow_all "$p" $BESU_HOSTS; done                     # validator p2p
