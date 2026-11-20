@@ -949,9 +949,157 @@ function chartBar(bucket, percent) {
     return el("div", { class: "bar", style: "height:" + (parts.length ? percent.toFixed(2) : "0") + "%" }, parts);
 }
 
+// ---- Platform overview on the dashboard (docs/sections.md): system accounts, contracts, sections.
+// Charts follow the dataviz rules: categorical slots 1-3 (validated), one axis, thin bars with a 2px
+// gap and a 4px rounded end, value labels at the bar ends, a hover tooltip per row, a table view.
+function ethText(value) {
+    if (value === null || value === undefined) {
+        return "—";
+    }
+    return Number(value).toLocaleString(getLocale() === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 2 });
+}
+
+function idCard(label, value, unit, lines, accent) {
+    return el("div", { class: "id-card" + (accent ? " accent" : "") }, [
+        el("div", { class: "id-label" }, label),
+        el("div", { class: "id-value" }, [el("b", {}, value), unit ? el("span", {}, " " + unit) : null]),
+        ...lines.filter(Boolean).map((line) => el("div", { class: "id-line" }, line))
+    ]);
+}
+
+let vizTip = null;
+
+function showVizTip(event, rows) {
+    if (!vizTip) {
+        vizTip = el("div", { class: "viz-tip", role: "tooltip" });
+        document.body.append(vizTip);
+    }
+    vizTip.replaceChildren(...rows.map(([key, value, swatch]) => el("div", { class: "viz-tip-row" }, [
+        swatch ? el("i", { class: "viz-swatch " + swatch }) : null,
+        el("span", {}, key),
+        value !== undefined ? el("b", {}, value) : null
+    ])));
+    vizTip.hidden = false;
+    const x = Math.min(event.clientX + 14, window.innerWidth - vizTip.offsetWidth - 8);
+    const y = Math.min(event.clientY + 14, window.innerHeight - vizTip.offsetHeight - 8);
+    vizTip.style.left = x + "px";
+    vizTip.style.top = y + "px";
+}
+
+function hideVizTip() {
+    if (vizTip) {
+        vizTip.hidden = true;
+    }
+}
+
+const ROLE_SLOTS = [["upfront", "s1"], ["consumption", "s2"], ["payment", "s3"]];
+
+function balanceChart(sections) {
+    const totals = sections.map((s) => ROLE_SLOTS.reduce((sum, [role]) => sum + (s.balances[role] || 0), 0));
+    const max = Math.max(0, ...totals);
+    const rows = sections.map((s, i) => {
+        const segments = ROLE_SLOTS.map(([role, slot]) => {
+            const v = s.balances[role] || 0;
+            return v > 0 && max > 0 ? el("i", { class: "viz-seg " + slot, style: "width:" + (v / max * 100) + "%" }) : null;
+        }).filter(Boolean);
+        const row = el("div", { class: "viz-row" + (s.active ? "" : " off") }, [
+            el("a", { class: "viz-name", href: "#/accounts?section=" + encodeURIComponent("s:" + s.name) }, s.name),
+            el("div", { class: "viz-track" }, [el("div", { class: "viz-bar" }, segments), el("span", { class: "viz-end" }, ethText(totals[i]))])
+        ]);
+        row.addEventListener("mousemove", (event) => showVizTip(event, [
+            [s.name + (s.active ? "" : " (" + t("sections.disabled") + ")")],
+            ...ROLE_SLOTS.map(([role, slot]) => [t("role." + role), ethText(s.balances[role]) + " ETH", slot]),
+            [t("platform.total"), ethText(totals[i]) + " ETH"]
+        ]));
+        row.addEventListener("mouseleave", hideVizTip);
+        return row;
+    });
+    return el("div", { class: "viz" }, rows);
+}
+
+function usersChart(sections) {
+    const max = Math.max(0, ...sections.map((s) => s.users));
+    return el("div", { class: "viz" }, sections.map((s) => {
+        const row = el("div", { class: "viz-row" + (s.active ? "" : " off") }, [
+            el("a", { class: "viz-name", href: "#/accounts?section=" + encodeURIComponent("s:" + s.name) }, s.name),
+            el("div", { class: "viz-track" }, [
+                el("div", { class: "viz-bar" }, s.users > 0 ? [el("i", { class: "viz-seg s1", style: "width:" + (s.users / max * 100) + "%" })] : []),
+                el("span", { class: "viz-end" }, formatCount(s.users))
+            ])
+        ]);
+        row.addEventListener("mousemove", (event) => showVizTip(event, [[s.name], [t("platform.userAccounts"), formatCount(s.users), "s1"]]));
+        row.addEventListener("mouseleave", hideVizTip);
+        return row;
+    }));
+}
+
+function vizLegend() {
+    return el("div", { class: "viz-legend" }, ROLE_SLOTS.map(([role, slot]) => el("span", {}, [el("i", { class: "viz-swatch " + slot }), t("role." + role)])));
+}
+
+function balancesTable(sections) {
+    return dataTable([
+        { label: "col.section", sort: (row) => row.name, cell: (row) => row.name },
+        { label: "role.upfront", sort: (row) => row.balances.upfront || 0, cell: (row) => ethText(row.balances.upfront) },
+        { label: "role.consumption", sort: (row) => row.balances.consumption || 0, cell: (row) => ethText(row.balances.consumption) },
+        { label: "role.payment", sort: (row) => row.balances.payment || 0, cell: (row) => ethText(row.balances.payment) },
+        { label: "platform.userAccounts", sort: (row) => row.users, cell: (row) => formatCount(row.users) }
+    ], sections, { key: "platform-balances" });
+}
+
+let platformTableView = false;
+
+function platformSection(o) {
+    if (!o || (!o.sender01 && !o.registry)) {
+        return null;
+    }
+    const c = o.sectionCounts;
+    const cards = el("div", { class: "id-cards" }, [
+        o.sender01 ? idCard(t("role.sender01"), ethText(o.sender01.balance), "ETH",
+            [addr(o.sender01.address), t("platform.sender01Note")], true) : null,
+        o.center ? idCard(t("role.contract center"), formatCount(o.center.contracts), t("platform.contracts"),
+            [t("platform.kinds").replace("{common}", formatCount(o.center.common)).replace("{nft}", formatCount(o.center.nft)), addr(o.center.address)]) : null,
+        o.registry ? idCard(t("platform.registry"), formatCount(c.total), t("platform.sectionsUnit"),
+            [el("span", {}, [t("platform.contract") + " ", addr(o.registry.address, "#/contracts/" + o.registry.address)]),
+                o.registry.admin ? el("span", {}, [t("role.registry admin") + " ", addr(o.registry.admin)]) : null]) : null,
+        idCard(t("sections.title"), formatCount(c.active), t("sections.active"),
+            [t("platform.sectionStates").replace("{disabled}", formatCount(c.disabled)).replace("{archived}", formatCount(c.archived)),
+                t("platform.usersLine").replace("{users}", formatCount(c.users)).replace("{inSections}", formatCount(o.accounts.inSections)).replace("{indexed}", formatCount(o.accounts.indexed))])
+    ]);
+    const body = el("div");
+    const toggle = el("button", { type: "button", class: "fn-run viz-toggle" });
+    const draw = () => {
+        toggle.textContent = platformTableView ? t("platform.chartView") : t("platform.tableView");
+        body.replaceChildren(...(o.sections.length
+            ? (platformTableView
+                ? [balancesTable(o.sections)]
+                : [el("div", { class: "split" }, [
+                    el("div", {}, [el("h3", {}, t("platform.balances")), vizLegend(), balanceChart(o.sections)]),
+                    el("div", {}, [el("h3", {}, t("platform.userAccounts")), usersChart(o.sections)])
+                ])])
+            : [el("div", { class: "empty" }, t("sections.none"))]));
+    };
+    toggle.addEventListener("click", () => { platformTableView = !platformTableView; draw(); });
+    draw();
+    return el("section", { class: "platform" }, [
+        el("div", { class: "card-head" }, [
+            el("h2", {}, t("platform.title")),
+            el("span", { class: "muted" }, t("platform.updated") + " " + (o.updatedAt ? new Date(o.updatedAt).toLocaleTimeString() : "—"))
+        ]),
+        cards,
+        el("section", { class: "card stack" }, [
+            el("div", { class: "card-head" }, [el("h2", {}, t("platform.sections")), toggle]),
+            body
+        ])
+    ]);
+}
+
 async function showDashboard(status) {
     const token = showToken;
-    const data = await api("/api/dashboard?from=" + encodeURIComponent(chartStart) + "&to=" + encodeURIComponent(chartEnd));
+    const [data, platform] = await Promise.all([
+        api("/api/dashboard?from=" + encodeURIComponent(chartStart) + "&to=" + encodeURIComponent(chartEnd)),
+        api("/api/overview").catch(() => null)
+    ]);
 
     if (token !== showToken) {
         return;
@@ -1059,6 +1207,7 @@ async function showDashboard(status) {
             stat(data.contracts, t("dash.contracts")),
             stat(data.peers, t("dash.peers"))
         ]),
+        platformSection(platform),
         el("section", { class: "card" }, [
             el("div", { class: "card-head" }, [el("h2", {}, t("dash.txCount")), el("div", { class: "chart-range" }, [
                 el("label", {}, [t("dash.start"), startInput]),

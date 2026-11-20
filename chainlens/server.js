@@ -1374,6 +1374,91 @@ function chartFor(fromText, toText) {
     return buckets.map(({ key, ...bucket }) => bucket);
 }
 
+// ---- Platform overview (dashboard): system accounts, contracts, sections. Balances are read every
+// 15 s in the background, so the page answers at once.
+const overview = { data: null, at: 0, running: null };
+
+async function balanceEth(address) {
+    try {
+        return Number(ethers.formatEther(BigInt(await rpc("eth_getBalance", [address, "latest"]))));
+    } catch (error) {
+        return null;
+    }
+}
+
+async function buildOverview() {
+    const sender01 = ethers.isAddress(process.env.SENDER01 || "") ? ethers.getAddress(process.env.SENDER01) : null;
+    const center = ethers.isAddress(CONTRACT_CENTER) ? ethers.getAddress(CONTRACT_CENTER) : null;
+    const registered = [...chainRegistry.byAddress.values()].map((e) => e.record);
+    const byRole = new Map(); // "id|role" -> address
+    const users = new Map(); // id -> count
+    for (const [address, entry] of sectionBook.accounts) {
+        if (entry.role === "user") {
+            users.set(entry.id, (users.get(entry.id) || 0) + 1);
+        } else if (entry.role !== "retired") {
+            byRole.set(entry.id + "|" + entry.role, address);
+        }
+    }
+    const sections = [];
+    for (const [id, s] of [...sectionBook.sections.entries()].sort((a, b) => a[0] - b[0])) {
+        const row = { id, name: s.name, active: s.active, archived: s.archived, users: users.get(id) || 0, balances: {} };
+        if (!s.archived) {
+            for (const role of ["upfront", "consumption", "payment"]) {
+                const address = byRole.get(id + "|" + role);
+                row.balances[role] = address ? await balanceEth(address) : null;
+            }
+        }
+        sections.push(row);
+    }
+    const live = sections.filter((s) => !s.archived);
+    const accountRows = [...db.accounts.values()].filter((row) => !db.contracts.has(row.address.toLowerCase()));
+    return {
+        updatedAt: Date.now(),
+        sender01: sender01 ? { address: sender01, balance: await balanceEth(sender01) } : null,
+        center: center ? {
+            address: center,
+            balance: await balanceEth(center),
+            contracts: registered.length,
+            common: registered.filter((r) => r.kind === "common").length,
+            nft: registered.filter((r) => r.kind !== "common").length
+        } : null,
+        registry: ethers.isAddress(REGISTRY_CONTRACT) ? { address: ethers.getAddress(REGISTRY_CONTRACT), admin: sectionBook.admin } : null,
+        sectionCounts: {
+            total: sections.length,
+            active: live.filter((s) => s.active).length,
+            disabled: live.filter((s) => !s.active).length,
+            archived: sections.length - live.length,
+            users: [...users.values()].reduce((a, b) => a + b, 0)
+        },
+        sections: live,
+        accounts: {
+            indexed: accountRows.length,
+            inSections: accountRows.filter((row) => sectionBook.accounts.has(row.address.toLowerCase())).length
+        },
+        contracts: { indexed: db.contracts.size, registered: registered.length, files: registry.byAddress.size }
+    };
+}
+
+function refreshOverview() {
+    if (!overview.running) {
+        overview.running = buildOverview()
+            .then((data) => { overview.data = data; overview.at = Date.now(); })
+            .catch((error) => console.error("overview:", error.message))
+            .finally(() => { overview.running = null; });
+    }
+    return overview.running;
+}
+
+setTimeout(refreshOverview, 6000).unref();
+setInterval(refreshOverview, 15000).unref();
+
+app.get("/api/overview", async (req, res) => {
+    if (!overview.data) {
+        await refreshOverview();
+    }
+    res.json(overview.data || { updatedAt: 0, sections: [], sectionCounts: { total: 0, active: 0, disabled: 0, archived: 0, users: 0 } });
+});
+
 app.get("/api/dashboard", (req, res) => {
     const tokenContracts = [...db.contracts.values()].filter((row) => row.isErc721 || row.isErc20);
     const erc721 = tokenContracts.filter((row) => row.isErc721).length;

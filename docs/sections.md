@@ -177,6 +177,15 @@ and a filter (one section, no section, system accounts); an account's page shows
 and what the role does. Chainlens reads the section events of the SectionRegistry (new accounts,
 renames, replaced accounts, archives) every 15 s.
 
+## Platform overview on the chainlens Dashboard
+
+Visible to everyone, under the Dashboard's totals: four cards (**SENDER01** with its balance, the
+**contract center** with the contracts it deployed, common and NFT, the **section registry** with its
+contract and admin, and the **sections**: active, disabled, archived, user accounts), then a
+**Sections** card with each section's balances (upfront / consumption / payment, stacked) and its
+number of user accounts, with a hover tooltip per section and a **Table** view. Read from the chain
+every 15 s (`GET /api/overview`).
+
 ## Application API: section calls
 
 An application of section_i sends its key in the header **`X-Section-Key: sk_…`**. The proxy

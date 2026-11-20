@@ -555,3 +555,41 @@ tr:last-child td { border-bottom: 0; }
 .section-cell { white-space: nowrap; }
 .account-section { margin-top: 10px; }
 .badge.role-sender01, .badge.role-contract-center, .badge.role-registry-admin { background: var(--type); }
+
+/* ---- Platform overview (dashboard). Categorical slots 1-3 of the validated reference palette:
+   dark steps on the dark card surface, light steps on the light one (validate_palette.js). */
+:root { --s1: #3987e5; --s2: #d95926; --s3: #199e70; }
+body.light { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; }
+.platform { margin-top: var(--gap); }
+.platform > .card-head { margin-bottom: 10px; }
+.id-cards { display: grid; gap: var(--gap); grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.id-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.id-card.accent { border-color: rgba(255, 106, 44, .45); }
+.id-label { color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.id-value b { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.id-value span { color: var(--muted); }
+.id-line { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.viz { display: grid; gap: 6px; margin-top: 8px; }
+.viz-row { display: grid; grid-template-columns: minmax(80px, 140px) 1fr; gap: 10px; align-items: center; padding: 4px 0; border-radius: 6px; }
+.viz-row:hover { background: var(--raised); }
+.viz-row.off .viz-name { color: var(--muted); }
+.viz-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.viz-track { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.viz-bar { flex: 1; display: flex; gap: 2px; height: 14px; min-width: 0; }
+.viz-seg { display: block; height: 100%; min-width: 2px; }
+.viz-seg:last-child { border-radius: 0 4px 4px 0; }
+.viz-seg.s1, .viz-swatch.s1 { background: var(--s1); }
+.viz-seg.s2, .viz-swatch.s2 { background: var(--s2); }
+.viz-seg.s3, .viz-swatch.s3 { background: var(--s3); }
+.viz-end { color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 48px; text-align: right; }
+.viz-legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.viz-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.viz-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.viz-tip { position: fixed; z-index: 50; pointer-events: none; background: var(--pop); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); font-size: 12px; display: grid; gap: 4px; min-width: 170px; }
+.viz-tip[hidden] { display: none; }
+.viz-tip-row { display: flex; align-items: center; gap: 8px; }
+.viz-tip-row b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.viz-tip-row:first-child { font-weight: 600; }
+.platform h3 { margin: 0 0 4px; font-size: 14px; color: var(--muted); font-weight: 600; }
+@media (max-width: 1100px) { .id-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .id-cards { grid-template-columns: 1fr; } .viz-row { grid-template-columns: 90px 1fr; } }
