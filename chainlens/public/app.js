@@ -993,22 +993,36 @@ function hideVizTip() {
 }
 
 const ROLE_SLOTS = [["upfront", "s1"], ["consumption", "s2"], ["payment", "s3"]];
+// the section's money in its user accounts: a neutral gray after the three role hues
+const BALANCE_SLOTS = [...ROLE_SLOTS, ["users", "s0"]];
+
+function balanceLabel(key) {
+    return key === "users" ? t("platform.usersSeg") : t("role." + key);
+}
 
 function balanceChart(sections) {
-    const totals = sections.map((s) => ROLE_SLOTS.reduce((sum, [role]) => sum + (s.balances[role] || 0), 0));
+    const totals = sections.map((s) => BALANCE_SLOTS.reduce((sum, [role]) => sum + (s.balances[role] || 0), 0));
     const max = Math.max(0, ...totals);
     const rows = sections.map((s, i) => {
-        const segments = ROLE_SLOTS.map(([role, slot]) => {
+        const segments = BALANCE_SLOTS.map(([role, slot]) => {
             const v = s.balances[role] || 0;
             return v > 0 && max > 0 ? el("i", { class: "viz-seg " + slot, style: "width:" + (v / max * 100) + "%" }) : null;
         }).filter(Boolean);
+        // upfront / consumption / payment / users, in the legend's order
+        const parts = [];
+        BALANCE_SLOTS.forEach(([role], j) => {
+            if (j) {
+                parts.push(el("span", { class: "viz-sep" }, "/"));
+            }
+            parts.push(el("span", {}, ethText(s.balances[role] || 0)));
+        });
         const row = el("div", { class: "viz-row" + (s.active ? "" : " off") }, [
             el("a", { class: "viz-name", href: "#/accounts?section=" + encodeURIComponent("s:" + s.name) }, s.name),
-            el("div", { class: "viz-track" }, [el("div", { class: "viz-bar" }, segments), el("span", { class: "viz-end" }, ethText(totals[i]))])
+            el("div", { class: "viz-track" }, [el("div", { class: "viz-bar" }, segments), el("span", { class: "viz-end viz-parts" }, parts)])
         ]);
         row.addEventListener("mousemove", (event) => showVizTip(event, [
             [s.name + (s.active ? "" : " (" + t("sections.disabled") + ")")],
-            ...ROLE_SLOTS.map(([role, slot]) => [t("role." + role), ethText(s.balances[role]) + " ETH", slot]),
+            ...BALANCE_SLOTS.map(([role, slot]) => [balanceLabel(role), ethText(s.balances[role]) + " ETH", slot]),
             [t("platform.total"), ethText(totals[i]) + " ETH"]
         ]));
         row.addEventListener("mouseleave", hideVizTip);
@@ -1034,7 +1048,7 @@ function usersChart(sections) {
 }
 
 function vizLegend() {
-    return el("div", { class: "viz-legend" }, ROLE_SLOTS.map(([role, slot]) => el("span", {}, [el("i", { class: "viz-swatch " + slot }), t("role." + role)])));
+    return el("div", { class: "viz-legend" }, BALANCE_SLOTS.map(([role, slot]) => el("span", {}, [el("i", { class: "viz-swatch " + slot }), balanceLabel(role)])));
 }
 
 function balancesTable(sections) {
@@ -1043,8 +1057,121 @@ function balancesTable(sections) {
         { label: "role.upfront", sort: (row) => row.balances.upfront || 0, cell: (row) => ethText(row.balances.upfront) },
         { label: "role.consumption", sort: (row) => row.balances.consumption || 0, cell: (row) => ethText(row.balances.consumption) },
         { label: "role.payment", sort: (row) => row.balances.payment || 0, cell: (row) => ethText(row.balances.payment) },
+        { label: "platform.usersSeg", sort: (row) => row.balances.users || 0, cell: (row) => ethText(row.balances.users) },
         { label: "platform.userAccounts", sort: (row) => row.users, cell: (row) => formatCount(row.users) }
     ], sections, { key: "platform-balances" });
+}
+
+
+// ---- Section statistics: week / month / quarter / year (/api/sections/stats). One measure at a time
+// in a column chart (one series, one axis); click a column for that period's table by section.
+const STAT_UNITS = { newUsers: "count", nftSales: "count", nftFirstSales: "count", txs: "count" };
+const STAT_COLUMNS = ["newUsers", "income", "fromUsers", "nftSales", "nftEth", "toUsers", "topup", "sweep", "payback", "txs"];
+const statState = { period: "month", section: "all", metric: "income", index: null };
+const statCache = new Map(); // period -> the last answer (drawn at once on the dashboard's refresh)
+
+function statValue(value, metric) {
+    return STAT_UNITS[metric] === "count" ? formatCount(value) : ethText(value);
+}
+
+function statSum(stats, metric, index) {
+    return stats.sections
+        .filter((s) => statState.section === "all" || String(s.id) === statState.section)
+        .reduce((sum, s) => sum + s.values[index][metric], 0);
+}
+
+function statsCard() {
+    const holder = el("section", { class: "card stack stats-card" });
+    const load = async () => {
+        const cached = statCache.get(statState.period);
+        if (cached) {
+            render(cached);
+        }
+        try {
+            const stats = await api("/api/sections/stats?period=" + statState.period);
+            statCache.set(stats.period, stats);
+            if (stats.period === statState.period && holder.isConnected) {
+                render(stats);
+            }
+        } catch (error) {
+            if (!cached) {
+                holder.replaceChildren(el("div", { class: "empty" }, error.message));
+            }
+        }
+    };
+    const render = (stats) => {
+        if (!stats.sections.length) {
+            holder.remove();
+            return;
+        }
+        if (statState.section !== "all" && !stats.sections.some((s) => String(s.id) === statState.section)) {
+            statState.section = "all";
+        }
+        const last = stats.periods.length - 1;
+        const index = statState.index === null || statState.index > last ? last : statState.index;
+        const metric = statState.metric;
+
+        const tabs = el("div", { class: "seg-tabs", role: "tablist" }, ["week", "month", "quarter", "year"].map((p) => {
+            const b = el("button", { type: "button", role: "tab", class: "seg-tab" + (p === statState.period ? " on" : ""), "aria-selected": String(p === statState.period) }, t("stats." + p));
+            b.addEventListener("click", () => { statState.period = p; statState.index = null; load(); });
+            return b;
+        }));
+        const sectionSelect = el("select", { "aria-label": t("col.section") }, [
+            el("option", { value: "all" }, t("stats.allSections")),
+            ...stats.sections.map((s) => el("option", { value: String(s.id) }, s.name))
+        ]);
+        sectionSelect.value = statState.section;
+        sectionSelect.addEventListener("change", () => { statState.section = sectionSelect.value; load(); });
+        const metricSelect = el("select", { "aria-label": t("stats.measure") }, STAT_COLUMNS.map((m) => el("option", { value: m }, t("stats." + m))));
+        metricSelect.value = metric;
+        metricSelect.addEventListener("change", () => { statState.metric = metricSelect.value; load(); });
+
+        // column chart of the measure per period
+        const sums = stats.periods.map((p, i) => statSum(stats, metric, i));
+        const max = Math.max(0, ...sums);
+        const peak = sums.indexOf(max);
+        const columns = el("div", { class: "col-chart", role: "img", "aria-label": t("stats." + metric) },
+            stats.periods.map((p, i) => {
+                const label = i === index || (i === peak && max > 0) ? statValue(sums[i], metric) : "";
+                const col = el("button", { type: "button", class: "col" + (i === index ? " on" : ""), "aria-label": p.label + ": " + statValue(sums[i], metric) }, [
+                    el("span", { class: "col-value" }, label),
+                    el("span", { class: "col-track" }, [el("i", { class: "col-bar", style: "height:" + (max > 0 ? Math.max(sums[i] > 0 ? 2 : 0, sums[i] / max * 100) : 0) + "%" })]),
+                    el("span", { class: "col-label" }, p.label)
+                ]);
+                col.addEventListener("click", () => { statState.index = i; load(); });
+                col.addEventListener("mousemove", (event) => showVizTip(event, [
+                    [p.label + (statState.section === "all" ? "" : " · " + sectionSelect.selectedOptions[0].textContent)],
+                    ...STAT_COLUMNS.map((m) => [t("stats." + m), statValue(statSum(stats, m, i), m), m === metric ? "s1" : null])
+                ]));
+                col.addEventListener("mouseleave", hideVizTip);
+                return col;
+            }));
+
+        // the selected period, by section
+        const rows = stats.sections
+            .filter((s) => statState.section === "all" || String(s.id) === statState.section)
+            .map((s) => Object.assign({ name: s.name }, s.values[index]));
+        const table = dataTable([
+            { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
+            ...STAT_COLUMNS.map((m) => ({ label: "stats." + m, sort: (r) => r[m], cell: (r) => statValue(r[m], m) }))
+        ], rows, { key: "section-stats" });
+        const totals = el("div", { class: "stat-totals" }, STAT_COLUMNS.slice(0, 6).map((m) =>
+            el("div", { class: "stat-total" + (m === metric ? " on" : "") }, [el("span", {}, t("stats." + m)), el("b", {}, statValue(statSum(stats, m, index), m))])));
+
+        holder.replaceChildren(
+            el("div", { class: "card-head" }, [el("h2", {}, t("stats.title")), el("div", { class: "stat-controls" }, [tabs, sectionSelect, metricSelect])]),
+            el("div", { class: "muted stat-note" }, t("stats.note")),
+            columns,
+            el("h3", { class: "stat-period" }, stats.periods[index].label + (statState.section === "all" ? "" : " · " + sectionSelect.selectedOptions[0].textContent)),
+            totals,
+            table
+        );
+    };
+    if (!statCache.has(statState.period)) {
+        holder.append(el("div", { class: "muted" }, "…"));
+    }
+    load();
+    return holder;
 }
 
 let platformTableView = false;
@@ -1208,6 +1335,7 @@ async function showDashboard(status) {
             stat(data.peers, t("dash.peers"))
         ]),
         platformSection(platform),
+        platform && platform.sections && platform.sections.length ? statsCard() : null,
         el("section", { class: "card" }, [
             el("div", { class: "card-head" }, [el("h2", {}, t("dash.txCount")), el("div", { class: "chart-range" }, [
                 el("label", {}, [t("dash.start"), startInput]),

@@ -185,9 +185,29 @@ renames, replaced accounts, archives) every 15 s.
 Visible to everyone, under the Dashboard's totals: four cards (**SENDER01** with its balance, the
 **contract center** with the contracts it deployed, common and NFT, the **section registry** with its
 contract and admin, and the **sections**: active, disabled, archived, user accounts), then a
-**Sections** card with each section's balances (upfront / consumption / payment, stacked) and its
-number of user accounts, with a hover tooltip per section and a **Table** view. Read from the chain
-every 15 s (`GET /api/overview`).
+**Sections** card with each section's balances (upfront / consumption / payment, and in gray the
+total held by its **user accounts**, stacked, labelled `upfront / consumption / payment / users`, e.g.
+`970 / 0 / 0 / 30`) and its number of user accounts, with a hover tooltip per section and a **Table**
+view. Read from the chain every 15 s (`GET /api/overview`).
+
+Below it, **Section statistics** per **week, month, quarter or year** (UTC; the last 12 weeks or
+months, 8 quarters, 5 years), for all sections or one: a column chart of one measure per period, and,
+for the period you click (default: the current one), totals and a table by section
+(`GET /api/sections/stats?period=week|month|quarter|year`). Computed from chainlens's indexed
+transactions, by the roles of sender and receiver:
+
+| Measure | Counted from |
+|---|---|
+| New users | the registry's `AccountAdded` (or the account's first funding, if earlier) |
+| +x from users | user account → the section's consumption account |
+| NFT sales / NFT sales (ETH) | `buy` calls by the section's user accounts (first sales: the center was the seller) |
+| Income | +x from users + first NFT sales (what reaches the consumption account) |
+| To users | upfront → user (new accounts' funding and -x) |
+| Top-ups, Swept, Paid back | SENDER01 → upfront, consumption → payment, payment → SENDER01 |
+| Transactions | every transaction from or to one of the section's accounts |
+
+Roles are today's (a replaced account counts as `retired`); history older than chainlens's index
+start is not included.
 
 ## Application API: section calls
 

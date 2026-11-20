@@ -558,8 +558,9 @@ tr:last-child td { border-bottom: 0; }
 
 /* ---- Platform overview (dashboard). Categorical slots 1-3 of the validated reference palette:
    dark steps on the dark card surface, light steps on the light one (validate_palette.js). */
-:root { --s1: #3987e5; --s2: #d95926; --s3: #199e70; }
-body.light { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; }
+:root { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s0: #7c818b; }
+body.light { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s0: #868b95; }
+/* --s0: neutral gray (>= 3:1 on both card surfaces) for the money held in the sections' user accounts */
 .platform { margin-top: var(--gap); }
 .platform > .card-head { margin-bottom: 10px; }
 .id-cards { display: grid; gap: var(--gap); grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -581,6 +582,38 @@ body.light { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; }
 .viz-seg.s1, .viz-swatch.s1 { background: var(--s1); }
 .viz-seg.s2, .viz-swatch.s2 { background: var(--s2); }
 .viz-seg.s3, .viz-swatch.s3 { background: var(--s3); }
+.viz-seg.s0, .viz-swatch.s0 { background: var(--s0); }
+.viz-parts { display: inline-flex; gap: 4px; min-width: 132px; justify-content: flex-end; }
+.viz-sep { color: var(--muted); }
+.platform .split > div:first-child .viz-row { grid-template-columns: minmax(80px, 120px) 1fr; }
+
+/* ---- Section statistics (dashboard) */
+.stats-card { margin-top: var(--gap); }
+.stats-card .card-head { flex-wrap: wrap; gap: 10px; }
+.stat-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.stat-controls select { background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.seg-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg-tab { background: transparent; color: var(--muted); border: 0; padding: 6px 12px; cursor: pointer; font: inherit; }
+.seg-tab + .seg-tab { border-left: 1px solid var(--line); }
+.seg-tab.on { background: var(--raised); color: var(--text); font-weight: 600; }
+.stat-note { font-size: 12px; }
+.col-chart { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; height: 190px; align-items: stretch; border-bottom: 1px solid var(--line); padding-top: 6px; }
+.col { display: grid; grid-template-rows: 18px 1fr 22px; background: transparent; border: 0; padding: 0 2px; cursor: pointer; color: var(--muted); font: inherit; border-radius: 6px; min-width: 0; }
+.col:hover, .col.on { background: var(--raised); }
+.col-value { font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; align-self: end; text-align: center; }
+.col-track { display: flex; align-items: flex-end; justify-content: center; min-height: 0; }
+.col-bar { display: block; width: min(28px, 70%); background: var(--s1); border-radius: 4px 4px 0 0; opacity: .7; }
+.col.on .col-bar { opacity: 1; }
+.col-label { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: center; text-align: center; }
+.col.on .col-label { color: var(--text); font-weight: 600; }
+.stat-period { margin: 6px 0 0; font-size: 14px; }
+.stat-totals { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.stat-total { background: var(--raised); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.stat-total span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-total b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat-total.on { box-shadow: inset 3px 0 0 var(--s1); }
+@media (max-width: 900px) { .stat-totals { grid-template-columns: repeat(3, minmax(0, 1fr)); } .col-label { font-size: 10px; } }
+@media (max-width: 640px) { .stat-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .col-value { font-size: 10px; } .viz-parts { min-width: 0; gap: 2px; } }
 .viz-end { color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 48px; text-align: right; }
 .viz-legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 4px; }
 .viz-legend span { display: inline-flex; align-items: center; gap: 6px; }

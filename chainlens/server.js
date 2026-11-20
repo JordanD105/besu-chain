@@ -135,7 +135,7 @@ const registryEvents = new ethers.Interface([
 const chainRegistry = { byAddress: new Map(), scannedTo: -1, running: null };
 // Sections (docs/sections.md), from the same registry: id -> { name, active, archived }, and
 // address -> { id, role } for every section account (user, upfront, consumption, payment, retired)
-const sectionBook = { sections: new Map(), accounts: new Map(), admin: null };
+const sectionBook = { sections: new Map(), accounts: new Map(), admin: null, added: [] };
 const SECTION_ROLE_NAMES = { 2: "upfront", 3: "consumption", 4: "payment" };
 const CONTRACT_CENTER = (process.env.CONTRACT_CENTER || "").trim();
 
@@ -216,6 +216,9 @@ function chainRegistryScan() {
                         const parsed = registryEvents.parseLog(log);
                         if (parsed.name !== "ContractRegistered") {
                             applySectionEvent(parsed);
+                            if (parsed.name === "AccountAdded") {
+                                sectionBook.added.push({ id: Number(parsed.args.id), account: parsed.args.account.toLowerCase(), txHash: log.transactionHash.toLowerCase() });
+                            }
                             continue;
                         }
                         const abi = JSON.parse(parsed.args.abiJson);
@@ -1392,9 +1395,12 @@ async function buildOverview() {
     const registered = [...chainRegistry.byAddress.values()].map((e) => e.record);
     const byRole = new Map(); // "id|role" -> address
     const users = new Map(); // id -> count
+    const usersWei = new Map(); // id -> the user accounts' balances (indexed, refreshed with every block scan)
     for (const [address, entry] of sectionBook.accounts) {
         if (entry.role === "user") {
             users.set(entry.id, (users.get(entry.id) || 0) + 1);
+            const account = db.accounts.get(address);
+            usersWei.set(entry.id, (usersWei.get(entry.id) || 0n) + (account && account.balanceWei ? BigInt(account.balanceWei) : 0n));
         } else if (entry.role !== "retired") {
             byRole.set(entry.id + "|" + entry.role, address);
         }
@@ -1407,6 +1413,7 @@ async function buildOverview() {
                 const address = byRole.get(id + "|" + role);
                 row.balances[role] = address ? await balanceEth(address) : null;
             }
+            row.balances.users = Number(ethers.formatEther(usersWei.get(id) || 0n));
         }
         sections.push(row);
     }
@@ -1451,6 +1458,173 @@ function refreshOverview() {
 
 setTimeout(refreshOverview, 6000).unref();
 setInterval(refreshOverview, 15000).unref();
+
+
+// ---- Section statistics per week / month / quarter / year (UTC), from the indexed transactions and
+// the registry's AccountAdded events. Money flows are classified by the roles of sender and receiver.
+const STAT_PERIODS = { week: 12, month: 12, quarter: 8, year: 5 };
+const STAT_METRICS = ["newUsers", "income", "fromUsers", "nftSales", "nftFirstSales", "nftEth", "toUsers", "topup", "sweep", "payback", "txs"];
+const statsCache = new Map(); // period -> { at, data }
+
+function periodStart(ms, period) {
+    const d = new Date(ms);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    if (period === "year") {
+        return Date.UTC(y, 0, 1);
+    }
+    if (period === "quarter") {
+        return Date.UTC(y, m - (m % 3), 1);
+    }
+    if (period === "month") {
+        return Date.UTC(y, m, 1);
+    }
+    const day = Date.UTC(y, m, d.getUTCDate());
+    return day - ((new Date(day).getUTCDay() + 6) % 7) * 86400000; // Monday
+}
+
+function previousStart(start, period) {
+    const d = new Date(start);
+    if (period === "week") {
+        return start - 7 * 86400000;
+    }
+    const months = period === "year" ? 12 : period === "quarter" ? 3 : 1;
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - months, 1);
+}
+
+function periodLabel(start, period) {
+    const d = new Date(start);
+    const y = d.getUTCFullYear();
+    if (period === "year") {
+        return String(y);
+    }
+    if (period === "quarter") {
+        return y + " Q" + (Math.floor(d.getUTCMonth() / 3) + 1);
+    }
+    if (period === "month") {
+        return y + "-" + String(d.getUTCMonth() + 1).padStart(2, "0");
+    }
+    // ISO week number
+    const thursday = new Date(start + 3 * 86400000);
+    const firstThursday = Date.UTC(thursday.getUTCFullYear(), 0, 4);
+    const week = 1 + Math.round((thursday.getTime() - periodStart(firstThursday, "week")) / (7 * 86400000));
+    return thursday.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
+}
+
+function buildSectionStats(period) {
+    const count = STAT_PERIODS[period];
+    const starts = [periodStart(Date.now(), period)];
+    while (starts.length < count) {
+        starts.unshift(previousStart(starts[0], period));
+    }
+    const first = starts[0];
+    const indexOf = (ms) => {
+        if (ms < first) {
+            return -1;
+        }
+        let i = starts.length - 1;
+        while (i > 0 && ms < starts[i]) {
+            i -= 1;
+        }
+        return i;
+    };
+    const sections = [...sectionBook.sections.entries()].filter(([, s]) => !s.archived).sort((a, b) => a[0] - b[0]);
+    const data = new Map(sections.map(([id]) => [id, starts.map(() => Object.fromEntries(STAT_METRICS.map((k) => [k, 0])))]));
+    const add = (id, ms, metric, amount) => {
+        const rows = data.get(id);
+        const i = indexOf(ms);
+        if (rows && i >= 0) {
+            rows[i][metric] += amount;
+        }
+    };
+    const center = CONTRACT_CENTER.toLowerCase();
+    const firstFunding = new Map(); // user -> first time its section's upfront account paid it
+
+    for (const tx of db.txs) {
+        if (tx.status !== "success") {
+            continue;
+        }
+        const ms = tx.timestamp * 1000;
+        const f = sectionOf(tx.from);
+        const t = tx.to ? sectionOf(tx.to) : null;
+        if (!f && !t) {
+            continue;
+        }
+        const fid = f && f.sectionId;
+        const tid = t && t.sectionId;
+        if (fid) {
+            add(fid, ms, "txs", 1);
+        }
+        if (tid && tid !== fid) {
+            add(tid, ms, "txs", 1);
+        }
+        const eth = Number(ethers.formatEther(BigInt(tx.value || "0x0")));
+        const fr = f && f.role;
+        const tr = t && t.role;
+        if (fr === "sender01" && tr === "upfront") {
+            add(tid, ms, "topup", eth);
+        } else if (fr === "upfront" && tr === "user" && fid === tid) {
+            add(fid, ms, "toUsers", eth);
+            const key = tx.to.toLowerCase();
+            if (!firstFunding.has(key)) {
+                firstFunding.set(key, ms);
+            }
+        } else if (fr === "user" && tr === "consumption" && fid === tid) {
+            add(fid, ms, "fromUsers", eth);
+            add(fid, ms, "income", eth);
+        } else if (fr === "consumption" && tr === "payment" && fid === tid) {
+            add(fid, ms, "sweep", eth);
+        } else if (fr === "payment" && tr === "sender01") {
+            add(fid, ms, "payback", eth);
+        } else if (fr === "user" && tx.functionName === "buy" && eth > 0) {
+            const firstSale = (tx.events || []).some((e) => e.name === "Transfer" && e.args[0] && String(e.args[0].value).toLowerCase() === center);
+            add(fid, ms, "nftSales", 1);
+            add(fid, ms, "nftEth", eth);
+            if (firstSale) {
+                add(fid, ms, "nftFirstSales", 1);
+                add(fid, ms, "income", eth);
+            }
+        }
+    }
+
+    // a new user: the earlier of its registration (AccountAdded) and its first funding
+    const seen = new Set();
+    for (const a of sectionBook.added) {
+        if (seen.has(a.account)) {
+            continue;
+        }
+        seen.add(a.account);
+        const registered = db.txByHash.get(a.txHash);
+        const times = [registered ? registered.timestamp * 1000 : null, firstFunding.get(a.account) || null].filter((x) => x !== null);
+        if (times.length) {
+            add(a.id, Math.min(...times), "newUsers", 1);
+        }
+    }
+
+    const round = (v) => Math.round(v * 1e6) / 1e6;
+    return {
+        period,
+        updatedAt: Date.now(),
+        metrics: STAT_METRICS,
+        periods: starts.map((start) => ({ start, label: periodLabel(start, period) })),
+        sections: sections.map(([id, s]) => ({
+            id, name: s.name, active: s.active,
+            values: data.get(id).map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, round(v)])))
+        }))
+    };
+}
+
+app.get("/api/sections/stats", (req, res) => {
+    const period = String(req.query.period || "month");
+    if (!STAT_PERIODS[period]) {
+        return res.status(400).json({ error: "period: week, month, quarter or year" });
+    }
+    const cached = statsCache.get(period);
+    if (!cached || Date.now() - cached.at > 15000) {
+        statsCache.set(period, { at: Date.now(), data: buildSectionStats(period) });
+    }
+    res.json(statsCache.get(period).data);
+});
 
 app.get("/api/overview", async (req, res) => {
     if (!overview.data) {
