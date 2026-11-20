@@ -25,7 +25,7 @@
 
 | 구성 요소 | 폴더 | 역할 | 문서 |
 |---|---|---|---|
-| **Besu (QBFT)** | `besu-production/` | 검증자 4개 + RPC 노드 2개, 1초 블록, 무료 가스, 노드 허용 목록 | [Besu 수동 설정](../deployment/besu-manual.md) |
+| **Besu (QBFT)** | `besu-production/` | 검증자 4개 + RPC 노드 2개, 1초 블록, 무료 가스, 노드 허용 목록 | [Besu 체인](../components/besu.md) · [수동 설정](../deployment/besu-manual.md) |
 | **MPC 서명기** | `mpc-signer/` | 2-of-3 임계값 ECDSA(CGGMP24): MPC 노드 3개 + 코디네이터 2개; 이더리움 서명기 JSON-RPC API | [MPC 서명기](../components/mpc-signer.md) |
 | **프록시** | `proxy/` | 애플리케이션 API: 계정, 이체, NFT, 컨트랙트, 섹션, Admin API; 선택적 캐시로 Redis 사용 | [프록시](../components/proxy.md) · [API](../reference/proxy-api.md) |
 | **SectionRegistry** | `proxy/contracts/` | 섹션, 섹션의 계정, 등록된 컨트랙트의 온체인 기록 | [섹션](../features/sections.md) |

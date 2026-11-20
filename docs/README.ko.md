@@ -68,6 +68,7 @@
 ### 구성 요소 {#components}
 | 문서 | 내용 |
 |---|---|
+| [Hyperledger Besu 체인](components/besu.md) | 체인: 노드, QBFT 합의, 제네시스, 구성, 포트, 권한 관리, 운영 |
 | [프록시](components/proxy.md) | MPC 서명기 위의 애플리케이션 API, Redis 선택 사용 설계, 문제 해결 |
 | [MPC 서명기](components/mpc-signer.md) | 설계, 빠른 시작, 보안 |
 | [Chainlens](components/chainlens.md) | 탐색기 페이지, 관리자 페이지, 설정 |
