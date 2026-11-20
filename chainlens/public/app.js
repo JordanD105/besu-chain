@@ -430,7 +430,12 @@ function dataTable(columns, rows, options) {
         }
     }
     const host = el("div");
-    root.append(el("div", { class: "table-bar" }, input), host);
+    // compact: a short table (one page) without search and pager, scrolling sideways when narrow
+    const compact = settings.compact && rows.length <= limit;
+    if (!compact) {
+        root.append(el("div", { class: "table-bar" }, input));
+    }
+    root.append(host);
 
     function paint() {
         const needle = query.trim().toLowerCase();
@@ -492,7 +497,11 @@ function dataTable(columns, rows, options) {
             limit,
             page
         }, turn, place);
-        host.replaceChildren(pager("top"), table, pager());
+        if (compact) {
+            host.replaceChildren(el("div", { class: "table-scroll" }, table));
+        } else {
+            host.replaceChildren(pager("top"), table, pager());
+        }
         remember();
     }
 
@@ -1154,7 +1163,7 @@ function statsCard() {
         const table = dataTable([
             { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
             ...STAT_COLUMNS.map((m) => ({ label: "stats." + m, sort: (r) => r[m], cell: (r) => statValue(r[m], m) }))
-        ], rows, { key: "section-stats" });
+        ], rows, { key: "section-stats", compact: true });
         const totals = el("div", { class: "stat-totals" }, STAT_COLUMNS.slice(0, 6).map((m) =>
             el("div", { class: "stat-total" + (m === metric ? " on" : "") }, [el("span", {}, t("stats." + m)), el("b", {}, statValue(statSum(stats, m, index), m))])));
 

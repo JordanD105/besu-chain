@@ -607,6 +607,8 @@ body.light { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s0: #868b95; }
 .col-label { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: center; text-align: center; }
 .col.on .col-label { color: var(--text); font-weight: 600; }
 .stat-period { margin: 6px 0 0; font-size: 14px; }
+.table-scroll { overflow-x: auto; }
+.table-scroll table { min-width: 760px; }
 .stat-totals { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .stat-total { background: var(--raised); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
 .stat-total span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
