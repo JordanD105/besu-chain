@@ -62,6 +62,15 @@ chainlens_local_registry: /var/lib/chainlens/deployments   # Deploy page records
 deployed_dirs: [besu-production, ha, monitoring, mpc-signer/deploy, proxy, chainlens, contracts, remix, docs-site, docs]
 built_apps: "{{ ['proxy', 'chainlens'] + (['remix'] if remix_enabled | bool else []) + (['docs-site'] if docs_site_enabled | bool else []) }}"
 
+# Dockerfiles of the images 02-images.yml builds: their FROM lines are the base images, saved by
+# save-images.yml as base-<image>.tar in image_archives_dir and loaded from there when missing
+build_dockerfiles: "{{ (['mpc-signer/Dockerfile'] if mpc_image_build | bool else []) + built_apps | map('regex_replace', '$', '/Dockerfile') | list }}"
+# Offline build (offline_build, docs/deployment/offline-build.md): package archives in the repository,
+# Remix's site and compilers in image_archives_dir (offline/make-offline.sh)
+offline_package_archives: "{{ (['mpc-signer/offline/cargo-vendor.tgz'] if mpc_image_build | bool else []) + ['proxy/offline/npm-cache.tgz', 'chainlens/offline/npm-cache.tgz'] + (['docs-site/offline/wheels.tgz'] if docs_site_enabled | bool else []) }}"
+remix_site_archive: "remix-live-{{ remix_commit }}.tgz"
+remix_solc_archive: remix-solc-npm-cache.tgz
+
 # File names of the images built by 02-images.yml in image_archives_dir (save-images.yml)
 built_image_archives:
   mpc: "mpc-signer-{{ mpc_image.split(':') | last }}-docker.tar"

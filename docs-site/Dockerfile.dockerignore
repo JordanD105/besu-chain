@@ -11,3 +11,8 @@ mpc-signer/target
 **/*.zip
 **/*.png.orig
 docs-site/site
+# the other images' offline archives (the documentation build needs only docs-site/offline/)
+chainlens/offline
+proxy/offline
+mpc-signer/offline
+remix/offline

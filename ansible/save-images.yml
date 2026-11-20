@@ -4,6 +4,9 @@
 # - built by 02-images.yml (MPC signer, proxy, chainlens, remix): copied from state/images/, so run
 #   site.yml (or 02-images.yml) first. File names: built_image_archives in layout.yml.
 #   (with docs_site_enabled, also the documentation site image)
+# - the base images of those builds (the FROM lines of their Dockerfiles: node, python, nginx, rust,
+#   debian) as base-<image>.tar, for building without internet (offline_build); pulled first when
+#   missing. Remix's site and compilers for an offline build: offline/make-offline.sh --remix DIR.
 # Run it on the operator:
 #   ansible-playbook save-images.yml                          uses image_archives_dir from settings.yml
 #   ansible-playbook save-images.yml -e image_archives_dir=/opt/000
@@ -67,6 +70,30 @@
         label: "{{ item.item.file }}"
       when: item.rc != 0
       changed_when: true
+
+    - name: Base images of the builds (the FROM lines of their Dockerfiles)
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        grep -hoE '^FROM [^ ]+' {{ build_dockerfiles | join(' ') }} | awk '{print $2}' | sort -u
+      args:
+        chdir: "{{ repo_root }}"
+        executable: /bin/bash
+      register: base_images
+      changed_when: false
+
+    - name: Save the base images (base-<image>.tar; pulled first when missing, kept when unchanged)
+      ansible.builtin.shell: |
+        set -eo pipefail
+        f={{ (image_archives_dir ~ '/base-' ~ (item | regex_replace('[/:]', '_')) ~ '.tar') | quote }}
+        docker image inspect {{ item | quote }} >/dev/null 2>&1 || docker pull --quiet {{ item | quote }} >/dev/null
+        id=$(docker image inspect -f '{% raw %}{{.Id}}{% endraw %}' {{ item | quote }})
+        if [ -f "$f" ] && tar -xOf "$f" manifest.json | grep -qF "${id#sha256:}"; then echo "kept $(du -h "$f" | cut -f1)"; exit 0; fi
+        docker save -o "$f.tmp" {{ item | quote }} && mv "$f.tmp" "$f" && echo "saved $(du -h "$f" | cut -f1)"
+      args:
+        executable: /bin/bash
+      loop: "{{ base_images.stdout_lines }}"
+      register: base_saved
+      changed_when: "'saved' in base_saved.stdout"
 
     - name: Built images from 02-images.yml (MPC signer, proxy, chainlens, remix)
       ansible.builtin.stat:

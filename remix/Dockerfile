@@ -8,11 +8,18 @@ WORKDIR /build
 COPY make-solc-bin.js ./
 # plus the version Remix selects by default (from its bundle), so it loads without a choice
 COPY remix-live/main.*.js /tmp/remix-main/
-RUN default=$(grep -o '"defaultVersion":"soljson-v[0-9.]*' /tmp/remix-main/*.js | head -1 | sed 's/.*soljson-v//') \
+# Offline: when offline/solc-npm-cache.tgz is in the context (Ansible puts it there from
+# image_archives_dir; offline/make-offline.sh makes it), solc comes from that npm cache without network.
+RUN --mount=type=bind,source=offline,target=/offline \
+    if [ -f /offline/solc-npm-cache.tgz ]; then \
+      mkdir -p /tmp/npm-cache && tar -xzf /offline/solc-npm-cache.tgz -C /tmp/npm-cache \
+      && npmargs="--offline --cache /tmp/npm-cache"; \
+    fi \
+    && default=$(grep -o '"defaultVersion":"soljson-v[0-9.]*' /tmp/remix-main/*.js | head -1 | sed 's/.*soljson-v//') \
     && SOLC_VERSIONS=$(printf '%s\n' $SOLC_VERSIONS $default | sort -u -V | tr '\n' ' ') \
     && echo "solc versions: $SOLC_VERSIONS" \
     && for v in $SOLC_VERSIONS; do \
-      npm install --silent --no-audit --no-fund --prefix "/build/solc-$v" "solc@$v" || exit 1; \
+      npm install --silent --no-audit --no-fund $npmargs --prefix "/build/solc-$v" "solc@$v" || exit 1; \
     done && node make-solc-bin.js /out $SOLC_VERSIONS
 
 FROM node:22-alpine

@@ -2,7 +2,8 @@
 # runs the identical image: the MPC signer (coordinators + MPC node hosts), the proxy (.135, .136)
 # and chainlens + Remix (.139). Proxy and chainlens are built from the committed HEAD (state/build/).
 # Third-party images (Besu, redis, Prometheus, Grafana) come from image_archives_dir when set,
-# otherwise from Docker Hub.
+# otherwise from Docker Hub. The base images of the builds (FROM lines) too: base-<image>.tar.
+# offline_build: true builds everything without network (docs/deployment/offline-build.md).
 - name: Hosts have the current code
   ansible.builtin.import_playbook: code-current.yml
 
@@ -12,6 +13,52 @@
   vars:
     mpc_tar: "{{ state_dir }}/images/{{ mpc_image | regex_replace('[/:]', '_') }}.tar"
   tasks:
+    - name: Offline build, the package archives are in the repository (offline/make-offline.sh)
+      ansible.builtin.assert:
+        that: (repo_root ~ '/' ~ item) is file
+        fail_msg: >-
+          {{ item }} is missing: run offline/make-offline.sh on a machine with internet, commit the
+          archives, then run 01-hosts.yml and this playbook again (docs/deployment/offline-build.md).
+        quiet: true
+      loop: "{{ offline_package_archives }}"
+      when: offline_build | bool
+
+    - name: Offline build, the package archives match offline/SHA256SUMS
+      ansible.builtin.command: sha256sum -c --quiet offline/SHA256SUMS
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: false
+      when: offline_build | bool
+
+    - name: Base images of the builds (the FROM lines of their Dockerfiles)
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        grep -hoE '^FROM [^ ]+' {{ build_dockerfiles | join(' ') }} | awk '{print $2}' | sort -u
+      args:
+        chdir: "{{ repo_root }}"
+        executable: /bin/bash
+      register: base_images
+      changed_when: false
+
+    - name: Base images present, or loaded from image_archives_dir (base-<image>.tar)
+      ansible.builtin.shell: |
+        docker image inspect {{ item | quote }} >/dev/null 2>&1 && { echo present; exit 0; }
+        f={{ (image_archives_dir ~ '/base-' ~ (item | regex_replace('[/:]', '_')) ~ '.tar') | quote }}
+        if [ -n {{ image_archives_dir | quote }} ] && [ -f "$f" ]; then
+          docker load -q -i "$f" >/dev/null && docker image inspect {{ item | quote }} >/dev/null 2>&1 && { echo loaded; exit 0; }
+          echo "$f does not hold {{ item }}" >&2; exit 1
+        fi
+        {% if offline_build | bool %}
+        echo "{{ item }} is missing and $f does not exist: run save-images.yml on a machine with internet" >&2; exit 1
+        {% else %}
+        echo "pulled by the build"
+        {% endif %}
+      args:
+        executable: /bin/bash
+      loop: "{{ base_images.stdout_lines }}"
+      register: base_loaded
+      changed_when: "'loaded' in base_loaded.stdout"
+
     - name: MPC image present?
       ansible.builtin.command: docker image inspect {{ mpc_image }}
       register: img
@@ -22,6 +69,7 @@
     - name: Build the MPC image (several minutes)
       ansible.builtin.command: >-
         docker build {{ ('--build-arg BIGINT=' ~ mpc_bigint) if mpc_bigint else '' }}
+        {{ '--network none' if offline_build | bool else '' }}
         -t {{ mpc_image }} {{ repo_root }}/mpc-signer
       when: mpc_image_build | bool and img.rc != 0
       changed_when: true
@@ -54,11 +102,20 @@
         src: "{{ state_dir }}/repo.tar.gz"
         dest: "{{ state_dir }}/build"
 
-    - name: Remix site (remix-live at remix_commit; fetched once per commit)
+    - name: Remix site (remix-live at remix_commit; from image_archives_dir when there, otherwise fetched; once per commit)
       ansible.builtin.shell: |
         set -e
         d={{ (state_dir ~ '/build/remix/remix-live') | quote }}
-        if [ "$(git -C "$d" rev-parse HEAD 2>/dev/null)" = {{ remix_commit | quote }} ]; then echo current; exit 0; fi
+        a={{ (image_archives_dir ~ '/' ~ remix_site_archive) | quote }}
+        if [ "$(cat "$d/.remix-commit" 2>/dev/null || git -C "$d" rev-parse HEAD 2>/dev/null)" = {{ remix_commit | quote }} ]; then echo current; exit 0; fi
+        if [ -n {{ image_archives_dir | quote }} ] && [ -f "$a" ]; then
+          rm -rf "$d" && mkdir -p "$d" && tar -xzf "$a" -C "$d" && echo {{ remix_commit | quote }} > "$d/.remix-commit"
+          echo extracted; exit 0
+        fi
+        {% if offline_build | bool %}
+        echo "$a is missing: run offline/make-offline.sh --remix <image_archives_dir> on a machine with internet" >&2; exit 1
+        {% endif %}
+        rm -f "$d/.remix-commit"
         mkdir -p "$d" && cd "$d"
         [ -d .git ] || git init -q
         git fetch -q --depth 1 {{ remix_repo | quote }} {{ remix_commit | quote }}
@@ -68,6 +125,34 @@
       register: remix_src
       changed_when: "'current' not in remix_src.stdout"
       when: remix_enabled | bool
+
+    - name: Remix compilers from image_archives_dir (remix/Dockerfile installs solc from this npm cache)
+      ansible.builtin.copy:
+        src: "{{ image_archives_dir }}/{{ remix_solc_archive }}"
+        dest: "{{ state_dir }}/build/remix/offline/{{ remix_solc_archive }}"
+        mode: "0644"
+      when: remix_enabled | bool and image_archives_dir | length > 0 and (image_archives_dir ~ '/' ~ remix_solc_archive) is file
+
+    - name: Offline build, Remix's compilers are there
+      ansible.builtin.assert:
+        that: (state_dir ~ '/build/remix/offline/' ~ remix_solc_archive) is file
+        fail_msg: >-
+          {{ image_archives_dir }}/{{ remix_solc_archive }} is missing: run offline/make-offline.sh --remix
+          <image_archives_dir> on a machine with internet (docs/deployment/offline-build.md).
+      when: remix_enabled | bool and offline_build | bool
+
+    - name: Offline build, no network for the compose builds
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/build/{{ item }}/offline-build.yml"
+        content: |
+          # written by 02-images.yml (offline_build): build without network
+          services:
+            {{ item }}:
+              build:
+                network: none
+        mode: "0644"
+      loop: "{{ built_apps }}"
+      when: offline_build | bool
 
     - name: Empty .env for the builds (compose reads env_file even when building)
       ansible.builtin.copy:
@@ -81,6 +166,7 @@
       ansible.builtin.command: >-
         docker compose -f docker-compose.yml
         {% for f in build_compose_overrides[item] | default([]) %}-f {{ f }} {% endfor %}
+        {{ '-f offline-build.yml' if offline_build | bool else '' }}
         build {{ item }}
       args:
         chdir: "{{ state_dir }}/build/{{ item }}"

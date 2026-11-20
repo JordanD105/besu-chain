@@ -69,6 +69,14 @@ image_archives:
   redis: redis-8.10.3-docker.tar
   redis_exporter: redis-exporter-v1.67.0-docker.tar
 
+# Build the images WITHOUT internet (docs/deployment/offline-build.md). The packages come from the
+# archives committed in chainlens/, proxy/, docs-site/ and mpc-signer/offline/ (offline/make-offline.sh);
+# the base images (the FROM lines of the Dockerfiles) and Remix's site and compilers from
+# image_archives_dir (save-images.yml, make-offline.sh --remix). Every build then runs with no network,
+# so a missing or stale archive stops the build instead of downloading. false: the builds still use
+# the archives that are there and download the rest.
+offline_build: false
+
 besu_java_opts: -Xmx4g
 mpc_image: registry.example.com/mpc-signer:1.3.0
 # true: build mpc_image on the operator and copy it to the hosts (docker save/load).
