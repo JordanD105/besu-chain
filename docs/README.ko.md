@@ -33,6 +33,7 @@
 | 알림 이해 | [알림](operations/alerts.md) |
 | 알림 해결 | [알림 런북](operations/alert-runbook.md) |
 | Grafana 대시보드 읽기 | [Grafana 대시보드](operations/dashboards.md) |
+| Besu 검증자 추가 또는 제거, MPC 노드 이동 | [노드 추가 및 제거](operations/adding-nodes.md) |
 | 손실된 호스트나 사이트 복구 | [재해 복구](operations/disaster-recovery.md) · [Ansible로 복원](operations/restore.md) |
 | MPC 서명기 업그레이드 | [MPC 업그레이드](operations/mpc-signer-upgrade.md) |
 | 모든 것을 한 대의 머신에서 실행 | [개발 환경](getting-started/development.md) |
@@ -93,6 +94,7 @@
 | [문제 해결](operations/troubleshooting.md) | 증상 → 원인 → 확인 → 해결 |
 | [재해 복구](operations/disaster-recovery.md) | 백업, 일정, 시나리오별 복구, 훈련 |
 | [Ansible로 복원](operations/restore.md) | 백업으로 전체 사이트 재구축 |
+| [노드 추가 및 제거](operations/adding-nodes.md) | Besu 검증자 추가 및 제거(Ansible, 테스트 완료), RPC 노드, 4번째 MPC 노드가 불가능한 이유, MPC 노드 이동 |
 | [MPC 서명기 업그레이드](operations/mpc-signer-upgrade.md) | 롤링 업그레이드와 롤백 |
 
 ### 참조 {#reference}

@@ -54,6 +54,7 @@
 | `node/` | 모든 Besu 호스트 | `docker-compose.yml`(호스트당 여러 노드는 `docker-compose.host.yml`), `.env.example`, `validator.toml`, `rpc.toml`, `init.sh`, `start.sh`, `backup-key.sh`, `restore-key.sh`, `snapshot-chain.sh`, `restore-chain.sh`, `reset-chain.sh` |
 | `operator/make-network.sh` | 운영자, 한 번 | 제네시스(QBFT 검증자 집합), `static-nodes.json`, `permissions_config.toml`, `SHA256SUMS` |
 | `operator/add-node.sh` | 운영자, 나중에 | **실행 중인** 네트워크에 노드 추가(제네시스는 변경하지 않음) |
+| `operator/remove-node.sh` | 운영자, 나중에 | **실행 중인** 네트워크에서 노드 제거(투표로 제외된 후) |
 | `operator/move-node.sh` | 운영자, 나중에 | 노드가 키는 유지하고 새 IP/포트를 받는 경우(예: 교체 호스트): 네트워크 파일에서 해당 노드의 주소를 업데이트 |
 | `operator/deploy-contract.js` | 운영자 | MPC 계정으로 서명하여 컴파일된 컨트랙트를 배포하고 chainlens용으로 기록([컨트랙트 배포](#deploying-a-contract), 브라우저에서는 chainlens의 Deploy 페이지를 대신 사용할 수 있음) |
 | `operator/qbft.sh` | 검증자 호스트에서 | 검증자 집합, 추가/제거 투표, 피어, 상태 |
@@ -302,7 +303,7 @@ Chainlens는 15초 안에 이를 반영합니다:
 | **노드가 새 IP를 받는 경우**(같은 키, 예: 교체 호스트) | 운영자: `operator/move-node.sh network/ <node>.json <new IP:port>`, 파일 4개를 모든 노드에 복사하고 나머지 노드를 하나씩 재시작합니다. 새 호스트에서 `restore-key.sh`로 노드를 시작합니다. **하나의 키를 두 호스트에서 동시에 실행하지 마십시오.** [재해 복구](../operations/disaster-recovery.md), 6.1 참조 |
 | **RPC 노드 추가** | 새 호스트에서 `init.sh`, 그다음 `operator/add-node.sh network/ rpcN.json`. 파일 4개를 **모든** 노드에 복사하고 노드를 하나씩 재시작한 후(`./start.sh && docker compose restart`) 새 노드를 시작합니다. |
 | **검증자 추가** | RPC 노드와 같은 절차 후, 현재 검증자의 **과반수**에서 `operator/qbft.sh propose 0x<new address> true`를 실행합니다. `qbft.sh validators`에 표시되면 해당 검증자들에서 `qbft.sh discard 0x<address>`를 실행합니다. |
-| **검증자 제거** | 검증자의 과반수에서 `qbft.sh propose 0x<address> false`, 그다음 `discard`. 이후 네트워크 파일에서 해당 enode를 주의하여 제거하고 다시 배포합니다. |
+| **검증자 제거** | 검증자의 과반수에서 `qbft.sh propose 0x<address> false`, 그다음 `discard`. 이후 `operator/remove-node.sh network/ <node>.json`을 실행하고, 파일 4개를 다시 배포한 다음 노드를 하나씩 재시작합니다. Ansible 사용 시: [노드 추가 및 제거](../operations/adding-nodes.md). |
 | **잃어버린 검증자 키 교체** | 새 노드(새 키)를 시작하고 투표로 추가한 다음, 이전 주소를 투표로 제거합니다 |
 | **블록은 계속되는데 한 발신자의 트랜잭션이 채굴되지 않음**(프록시 알림 `ProxySenderStalled`, RPC 노드의 풀이 계속 커짐) | RPC 노드에는 트랜잭션이 있지만 검증자에는 없습니다: 바쁜 발신자의 트랜잭션을 논스 순서가 아니게 받은 검증자는 그중 `tx-pool-max-future-by-sender`개(Besu 기본값 200)만 보관하고 나머지는 버리며, 버려진 트랜잭션은 다시 전송되지 않습니다. **해결:** 검증자 **하나**를 재시작합니다(`docker compose restart`): 다시 연결될 때 RPC 노드의 풀을 가져옵니다. **예방:** 모든 검증자의 `validator.toml`에 `tx-pool-max-future-by-sender=2000`(이 패키지의 기본값). |
 | **체인이 정지된 후 쿼럼이 돌아왔지만 새 블록이 없음** | 쿼럼을 잃은 동안 모든 검증자는 더 높은 QBFT 라운드로 계속 이동하고, 라운드마다 타임아웃이 두 배가 됩니다(`REQUEST_TIMEOUT` × 2^round). 다운되었던 검증자는 라운드 0에서 재시작하므로, 오랜 장애 후에는 같은 라운드에서 만나기까지 몇 분이 걸립니다(사전 테스트: 약 8분 장애는 스스로 재개하는 데 **8분 20초**, 3분 장애는 45초 안에 재개). 쿼럼이 돌아온 후 약 1분 안에 블록이 생성되지 않으면 **모든 검증자를 동시에 재시작**하십시오(각각에서 `docker compose restart`). 라운드 상태는 메모리에만 있으므로 잃는 것은 없습니다. 사전 테스트에서는 재시작 **25초** 후에 블록이 재개되었습니다. |

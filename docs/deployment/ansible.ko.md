@@ -46,6 +46,8 @@ Ansible은 전체 프로덕션 구성([프로덕션 구성](../overview/producti
 출력하기 때문입니다). 02~13단계는 먼저 호스트에 현재 코드가 있는지 확인합니다
 (`code-current.yml`, [5. 다시 실행하기](#5-running-it-again) 참고).
 
+![site.yml이 실행하는 Ansible 단계의 순서](../images/diagrams/ansible-phases.svg)
+
 **운영자를 위한 단계별 가이드(설치, SSH, 설정, 세 차례 실행):
 [운영자 가이드](operator-guide.md).**
 
@@ -339,6 +341,7 @@ ansible-playbook 01-hosts.yml
 | `ha/`, RPC 상태 설정(`rpc_*`) | `01-hosts.yml 07-ha.yml` |
 | Besu 설정 또는 `besu-production/` | `01-hosts.yml 05-besu.yml`(한 번에 노드 하나씩) |
 | 백업 설정 | `10-backups.yml` |
+| `besu_nodes` / `besu_hosts`에 Besu 노드를 추가하거나 제거한 경우, MPC 노드를 옮긴 경우 | [노드 추가 및 제거](../operations/adding-nodes.md) 참고: `01`, `02`, `05`, `qbft-vote.yml`, `09`, `10` |
 
 무언가를 변경하려면 설정을 편집하고(또는 코드 변경을 커밋하고) `site.yml`을 다시 실행하십시오.
 
@@ -360,6 +363,9 @@ ansible-playbook 01-hosts.yml
   모든 저장소 사본에 기록이 있도록 커밋하십시오(그리고 1단계를 실행하십시오).
 - 노드에 네트워크 파일이 있는데 `state/network`를 잃어버린 경우 5단계가 멈춥니다. 노드에서
   `network/`를 `state/network/`로 복사하십시오.
+- **나중에 `besu_nodes`에 추가한 노드:** 5단계가 해당 노드의 enode를 네트워크 파일에 추가하고
+  (`add-node.sh`), 파일을 모든 노드에 복사한 다음 노드를 하나씩 재시작합니다. 새 검증자는 그다음
+  `qbft-vote.yml`로 투표하여 추가합니다([노드 추가](../operations/adding-nodes.md)).
 
 제한 사항:
 
