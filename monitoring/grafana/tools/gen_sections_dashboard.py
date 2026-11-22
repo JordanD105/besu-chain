@@ -129,7 +129,8 @@ STATE_MAP = [{"type": "value", "options": {
 PERIOD_OPS = [("I", "create_account", "operations_total", "New accounts"), ("J", "transfer_in", "amount_eth_total", "+x in"),
               ("K", "transfer_out", "amount_eth_total", "-x out"), ("L", "nft_first_sale", "amount_eth_total", "NFT sales"),
               ("M", "topup", "amount_eth_total", "Top-ups"), ("N", "sweep", "amount_eth_total", "Swept"),
-              ("O", "payback", "amount_eth_total", "Paid back")]
+              ("O", "payback", "amount_eth_total", "Paid back"), ("P", "nickname_sale", "amount_eth_total", "Nicknames"),
+              ("Q", "edge_upgrade", "amount_eth_total", "Edge upgrades")]
 
 
 def section_table(title, state_expr, y, h, desc, only_problems):
@@ -224,9 +225,9 @@ stat("NFT first sales, last $period (ETH)", f'sum(increase(proxy_section_amount_
 stat("Top-ups, last $period (ETH)", f'sum(increase(proxy_section_amount_eth_total{{op="topup",{SEL}}}[$period])) or vector(0)', 18, y, w=6, decimals=2,
      color_mode="value", desc="SENDER01 -> upfront accounts")
 y += 5
-INCOME = f'sum by (section) (increase(proxy_section_amount_eth_total{{op=~"transfer_in|nft_first_sale",{SEL}}}[$period]))'
+INCOME = f'sum by (section) (increase(proxy_section_amount_eth_total{{op=~"transfer_in|nft_first_sale|nickname_sale|edge_upgrade",{SEL}}}[$period]))'
 bargauge("Most income, last $period: 10 sections", f'topk(10, {INCOME} > 0)', 0, y, 8, 10,
-         desc="+x from users and first NFT sales, per section, in the last period")
+         desc="+x from users, first NFT sales, nicknames and edge upgrades, per section, in the last period")
 bargauge("Most new accounts, last $period: 10 sections",
          f'topk(10, round(sum by (section) (increase(proxy_section_operations_total{{op="create_account",{SEL}}}[$period]))) > 0)', 8, y, 8, 10,
          decimals=0, desc="Accounts created per section in the last period")
@@ -237,13 +238,13 @@ y += 10
 # each bar counts the period that STARTS at its time (offset -$period), so today's bar shows today so far
 timeseries("Operations per $period", [target(f'sum by (op) (increase(proxy_section_operations_total{{{SEL}}}[$period] offset -$period))', "{{op}}")],
            0, y, bars=True, desc="All selected sections, per kind of operation: create_account, transfer_in (+x), transfer_out (-x), "
-                                 "nft_first_sale, nft_resale, topup, sweep, payback." + NOTE)
+                                 "nft_first_sale, nft_resale, nickname_sale, edge_upgrade, topup, sweep, payback." + NOTE)
 timeseries("ETH moved per $period", [target(f'sum by (op) (increase(proxy_section_amount_eth_total{{{SEL}}}[$period] offset -$period))', "{{op}}")],
            12, y, bars=True, desc="ETH moved by each kind of operation (all selected sections)." + NOTE)
 y += 8
 timeseries("Income per $period: top 10 sections", [
-    target(f'topk(10, sum by (section) (increase(proxy_section_amount_eth_total{{op=~"transfer_in|nft_first_sale",{SEL}}}[$period] offset -$period)))', "{{section}}")],
-    0, y, w=24, bars=True, desc="+x and first NFT sales; the 10 sections with the most income in each period." + NOTE)
+    target(f'topk(10, sum by (section) (increase(proxy_section_amount_eth_total{{op=~"transfer_in|nft_first_sale|nickname_sale|edge_upgrade",{SEL}}}[$period] offset -$period)))', "{{section}}")],
+    0, y, w=24, bars=True, desc="+x, first NFT sales, nicknames and edge upgrades; the 10 sections with the most income in each period." + NOTE)
 y += 8
 matrix_table("ETH moved in the selected time range", f'sum by (section, op) (increase(proxy_section_amount_eth_total{{{SEL}}}[$__range]))', 0, y, 24, 9,
              "section", "op", desc="Per section and operation, over the dashboard's time range; pages at the bottom")

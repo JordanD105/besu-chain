@@ -1613,6 +1613,11 @@ function buildSectionStats(period, range) {
                     move(sectionOf(seller), ms, eth);
                 }
             }
+            if ((tx.functionName === "buyNickname" || tx.functionName === "upgradeEdge") && fr === "user") {
+                // a nickname or an edge upgrade: the collection passes the price to the buyer's section's
+                // consumption account (contracts/NicknameCollection.sol)
+                move({ sectionId: fid, role: "consumption" }, ms, eth);
+            }
         }
         if (fr === "sender01" && tr === "upfront") {
             add(tid, ms, "topup", eth);
@@ -1629,6 +1634,8 @@ function buildSectionStats(period, range) {
             add(fid, ms, "sweep", eth);
         } else if (fr === "payment" && tr === "sender01") {
             add(fid, ms, "payback", eth);
+        } else if (fr === "user" && (tx.functionName === "buyNickname" || tx.functionName === "upgradeEdge") && eth > 0) {
+            add(fid, ms, "income", eth);
         } else if (fr === "user" && tx.functionName === "buy" && eth > 0) {
             const firstSale = (tx.events || []).some((e) => e.name === "Transfer" && e.args[0] && String(e.args[0].value).toLowerCase() === center);
             add(fid, ms, "nftSales", 1);
@@ -2130,6 +2137,37 @@ app.post("/api/sections/:id/:action", sectionsJson, sectionsGuard, async (req, r
         res.status(502).json({ error: "proxy: " + error.message });
     }
 });
+
+// ---- Nicknames page (docs/features/nicknames.md): the nickname collection's edge levels, prices and
+// reserved nicknames, forwarded to the proxy's /admin/nickname API. Same gate as the Sections page.
+async function nicknameForward(req, res, method, pathname, body) {
+    try {
+        const r = await proxyAdmin(method, pathname, body);
+        if (method !== "GET") {
+            console.log("nicknames:", method, pathname, JSON.stringify(body || {}).slice(0, 300), "from", req.socket.remoteAddress, "->", r.status);
+        }
+        res.status(r.status).json(r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+}
+
+app.get("/api/nicknames", sectionsGuard, (req, res) =>
+    nicknameForward(req, res, "GET", "/admin/nickname" + (req.query.q ? "?q=" + encodeURIComponent(String(req.query.q).slice(0, 300)) : "")));
+app.post("/api/nicknames/deploy", sectionsJson, sectionsGuard, (req, res) =>
+    nicknameForward(req, res, "POST", "/admin/nickname/deploy", req.body || {}));
+app.put("/api/nicknames/price", sectionsJson, sectionsGuard, (req, res) =>
+    nicknameForward(req, res, "PUT", "/admin/nickname/price", { price: (req.body || {}).price }));
+app.post("/api/nicknames/edges", sectionsJson, sectionsGuard, (req, res) =>
+    nicknameForward(req, res, "POST", "/admin/nickname/edges", req.body || {}));
+app.put("/api/nicknames/edges/:level", sectionsJson, sectionsGuard, (req, res) => {
+    if (!/^\d{1,2}$/.test(req.params.level)) {
+        return res.status(400).json({ error: "invalid edge level" });
+    }
+    return nicknameForward(req, res, "PUT", "/admin/nickname/edges/" + req.params.level, req.body || {});
+});
+app.post("/api/nicknames/reserve", sectionsJson, sectionsGuard, (req, res) =>
+    nicknameForward(req, res, "POST", "/admin/nickname/reserve", req.body || {}));
 
 // The section's user accounts with their balances
 app.get("/api/sections/:id/accounts", sectionsGuard, async (req, res) => {

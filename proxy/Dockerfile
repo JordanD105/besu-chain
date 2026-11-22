@@ -13,7 +13,7 @@ RUN --mount=type=bind,source=offline,target=/offline \
     else npm ci --omit=dev; fi \
     && chown -R node:node /app
 
-COPY --chown=node:node stress-latest.js nft-collection.json nft-collection-v3.json section-registry.json section-registry-v1.json ./
+COPY --chown=node:node stress-latest.js nft-collection.json nft-collection-v3.json section-registry.json section-registry-v1.json nickname-collection.json ./
 
 USER node
 

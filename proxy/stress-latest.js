@@ -3499,7 +3499,10 @@ app.post("/admin/contracts/check", adminGuard, adminRoute(async (req) => {
 app.post("/admin/contracts/deploy", adminGuard, adminRoute(async (req) => {
     requireSections();
     requireCenter();
-    const input = deployInputOf(req.body);
+    return deployAndRegister(deployInputOf(req.body));
+}));
+
+async function deployAndRegister(input) {
     await deployCheck(input);
     const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, input.data));
     const receipt = await receiptOf(sent.txHash);
@@ -3529,6 +3532,499 @@ app.post("/admin/contracts/deploy", adminGuard, adminRoute(async (req) => {
         codeCheck: check,
         registryTxHash: registered.txHash
     };
+}
+
+
+// ---- Nickname tokens (contracts/NicknameCollection.sol, docs/features/nicknames.md) ----------------
+// One nickname per section user account, bound to it (never transferable), with an edge level that only
+// goes up. Bought and upgraded by the user account (its MPC key signs), paid to its section's
+// consumption account. The edge levels are set by the contract account center (the minter).
+// The collection: the latest registered contract that has buyNickname (POST /admin/nickname/deploy).
+
+const nicknameArtifact = require("./nickname-collection.json");
+const nicknameIface = new ethers.Interface(nicknameArtifact.abi);
+const EDGE_PATTERNS = ["solid", "double", "dashed", "gradient", "glow"];
+const NICKNAME_FORBIDDEN = /[<>&"'\\\u0000-\u001f\u007f]/;
+const nicknameBook = { address: null, scannedTo: -1, tokens: new Map() };  // tokenId -> { nickname, owner, level }
+
+function ethText(wei) {
+    return ethers.formatEther(wei).replace(/\.0$/, "");
+}
+
+async function nicknameCollection(optional = false) {
+    requireSections();
+    const pick = (book) => [...book.values()]
+        .filter((e) => Array.isArray(e.abi) && e.abi.some((f) => f.type === "function" && f.name === "buyNickname"))
+        .sort((a, b) => b.registeredIn - a.registeredIn)[0];
+    const entry = pick(await loadContracts()) || pick(await loadContracts(true));
+
+    if (!entry && !optional) {
+        throw httpError(503, "no nickname collection yet: deploy one (POST /admin/nickname/deploy, or the chainlens Nicknames page)");
+    }
+
+    return entry || null;
+}
+
+async function nickCall(address, fn, args = []) {
+    let out;
+
+    try {
+        out = await rpc(CONFIG.BESU_RPC, "eth_call", [{ to: address, data: nicknameIface.encodeFunctionData(fn, args) }, "latest"]);
+    } catch (error) {
+        throw httpError(400, revertReason(error));
+    }
+
+    return nicknameIface.decodeFunctionResult(fn, out);
+}
+
+// What the user typed, trimmed and NFC-normalized: 1-256 characters, none forbidden
+function nicknameInput(value) {
+    if (typeof value !== "string") {
+        throw httpError(400, "nickname: text, 1 to 256 characters");
+    }
+
+    const text = value.normalize("NFC").trim();
+    const chars = Array.from(text).length;
+
+    if (chars < 1 || chars > 256) {
+        throw httpError(400, `nickname: 1 to 256 characters (this one has ${chars})`);
+    }
+
+    if (NICKNAME_FORBIDDEN.test(text)) {
+        throw httpError(400, "nickname: no control characters and none of < > & \" ' \\");
+    }
+
+    return text;
+}
+
+// The token id of a nickname: keccak256 of its UTF-8 bytes with A-Z lowercased (as the contract)
+function nicknameId(text) {
+    const bytes = ethers.toUtf8Bytes(text).map((c) => (c >= 65 && c <= 90 ? c + 32 : c));
+    return BigInt(ethers.keccak256(bytes));
+}
+
+function edgeOut(level, e) {
+    return {
+        level,
+        name: e.name,
+        price: ethText(e.stepPrice),
+        enabled: e.enabled,
+        style: {
+            color: "#" + e.color.slice(2),
+            color2: "#" + e.color2.slice(2),
+            width: Number(e.width),
+            radius: Number(e.radius),
+            pattern: EDGE_PATTERNS[Number(e.pattern)] || String(e.pattern)
+        }
+    };
+}
+
+async function readEdges(address) {
+    const [count] = await nickCall(address, "edgeCount");
+    const edges = [];
+
+    for (let level = 0; level < Number(count); level++) {
+        const [e] = await nickCall(address, "edgeInfo", [level]);
+        edges.push(edgeOut(level, e));
+    }
+
+    return edges;
+}
+
+function decodeDataUri(uri) {
+    const m = String(uri).match(/^data:application\/json;base64,(.*)$/);
+    return m ? JSON.parse(Buffer.from(m[1], "base64").toString("utf8")) : null;
+}
+
+async function nicknameInfo(address, tokenId) {
+    const [owner] = await nickCall(address, "ownerOf", [tokenId]);
+    const [nickname] = await nickCall(address, "nicknameById", [tokenId]);
+    const [level] = await nickCall(address, "edgeOf", [tokenId]);
+    const [edge] = await nickCall(address, "edgeInfo", [level]);
+    const [uri] = await nickCall(address, "tokenURI", [tokenId]);
+    const meta = decodeDataUri(uri) || {};
+    return {
+        nickname,
+        tokenId: tokenId.toString(),
+        account: ethers.getAddress(owner),
+        level: Number(level),
+        edge: edge.name,
+        image: meta.image || null
+    };
+}
+
+// Who buys or upgrades: "account", a user account of the X-Section-Key's section (or, for the
+// admin caller such as chainlens, of its own section)
+async function nicknameBuyer(req) {
+    const body = req.body || {};
+    const hasKey = String(req.headers["x-section-key"] || "").trim() !== "";
+    const admin = !hasKey && isAdminCaller(req);
+    const keyed = admin ? null : await sectionFromRequest(req);
+
+    if (!keyed && !admin) {
+        throw httpError(401, "X-Section-Key is required: \"account\" must be a user account of that section");
+    }
+
+    if (!isAddress(String(body.account || ""))) {
+        throw httpError(400, "account: the address of a user account of the section");
+    }
+
+    const account = ethers.getAddress(body.account);
+    const owner = await accountSection(account);
+
+    if (owner.kind !== ACCOUNT_USER) {
+        throw httpError(403, `${account} is not a user account of a section`);
+    }
+
+    const section = keyed || await getSection(owner.id, false);
+
+    if (!section.active) {
+        throw httpError(403, `section "${section.name}" is disabled`);
+    }
+
+    await assertSectionUser(section, account);
+    return { section, account };
+}
+
+// Sign as `from` (its MPC key), wait for the block; a revert or a refusal becomes a 400 with the reason
+async function nicknameSend(from, to, data, valueWei, priceText) {
+    let sent;
+
+    try {
+        sent = await withSenderLock(from, () => sendData(from, to, data, valueWei));
+    } catch (error) {
+        if (error.statusCode) {
+            throw error;
+        }
+
+        if (/insufficient/i.test(error.message)) {
+            throw httpError(400, `insufficient balance: ${priceText} ETH is needed`);
+        }
+
+        throw httpError(400, `refused: ${revertReason(error)}`);
+    }
+
+    const receipt = await receiptOf(sent.txHash);
+
+    if (BigInt(receipt.status) !== 1n) {
+        throw httpError(400, `reverted in block ${BigInt(receipt.blockNumber)} (transaction ${sent.txHash})`);
+    }
+
+    return { txHash: sent.txHash, blockNumber: Number(BigInt(receipt.blockNumber)) };
+}
+
+// Every nickname and its level, from the collection's events (for the admin list and the counts)
+async function scanNicknames(entry) {
+    if (nicknameBook.address !== entry.address) {
+        Object.assign(nicknameBook, { address: entry.address, scannedTo: entry.registeredIn - 1, tokens: new Map() });
+    }
+
+    const topics = [[nicknameIface.getEvent("NicknameBought").topicHash, nicknameIface.getEvent("EdgeUpgraded").topicHash]];
+    const logs = await registryLogs(entry.address, nicknameBook.scannedTo + 1, topics);
+
+    for (const log of logs) {
+        const parsed = nicknameIface.parseLog(log);
+        const id = parsed.args.tokenId.toString();
+
+        if (parsed.name === "NicknameBought") {
+            nicknameBook.tokens.set(id, { tokenId: id, nickname: parsed.args.nickname, account: ethers.getAddress(parsed.args.buyer), level: 0,
+                block: parseInt(log.blockNumber, 16) });
+        } else if (nicknameBook.tokens.has(id)) {
+            nicknameBook.tokens.get(id).level = Number(parsed.args.toLevel);
+        }
+    }
+
+    nicknameBook.scannedTo = parseInt(await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []), 16);
+    return nicknameBook.tokens;
+}
+
+function nicknameRoute(handler) {
+    return async (req, res) => {
+        try {
+            res.json(await handler(req));
+        } catch (error) {
+            if (!error.statusCode) {
+                console.error(error);
+            }
+
+            res.status(error.statusCode || 500).json({ error: error.message });
+        }
+    };
+}
+
+// ---- Applications
+
+// The edge levels and the price of a nickname
+app.get("/nickname/edges", nicknameRoute(async (req) => {
+    await sectionFromRequest(req);
+    const entry = await nicknameCollection();
+    const [price] = await nickCall(entry.address, "nicknamePrice");
+    return { collection: entry.address, nicknamePrice: ethText(price), edges: await readEdges(entry.address) };
+}));
+
+// Is a nickname valid and free?
+app.get("/nickname/check", nicknameRoute(async (req) => {
+    await sectionFromRequest(req);
+    const entry = await nicknameCollection();
+    const nickname = nicknameInput(req.query.name);
+    const tokenId = nicknameId(nickname);
+    const [taken, reserved] = await Promise.all([
+        rpc(CONFIG.BESU_RPC, "eth_call", [{ to: entry.address, data: nicknameIface.encodeFunctionData("ownerOf", [tokenId]) }, "latest"])
+            .then(() => true, () => false),
+        nickCall(entry.address, "reserved", [tokenId]).then((r) => r[0])
+    ]);
+    return {
+        nickname,
+        characters: Array.from(nickname).length,
+        tokenId: tokenId.toString(),
+        available: !taken && !reserved,
+        reason: taken ? "taken" : (reserved ? "reserved" : null)
+    };
+}));
+
+// An account's nickname: name, edge level and the picture (SVG, data URI)
+app.get("/nickname/of/:account", nicknameRoute(async (req) => {
+    await sectionFromRequest(req);
+    const entry = await nicknameCollection();
+
+    if (!isAddress(req.params.account)) {
+        throw httpError(400, "account: an address");
+    }
+
+    const [tokenId] = await nickCall(entry.address, "nicknameOf", [ethers.getAddress(req.params.account)]);
+
+    if (tokenId === 0n) {
+        throw httpError(404, `${ethers.getAddress(req.params.account)} has no nickname`);
+    }
+
+    return nicknameInfo(entry.address, tokenId);
+}));
+
+// Price for an account to reach an edge level
+app.get("/nickname/quote", nicknameRoute(async (req) => {
+    await sectionFromRequest(req);
+    const entry = await nicknameCollection();
+
+    if (!isAddress(String(req.query.account || ""))) {
+        throw httpError(400, "account: an address");
+    }
+
+    const level = Number(req.query.level);
+
+    if (!Number.isInteger(level) || level < 1 || level > 255) {
+        throw httpError(400, "level: the edge level to reach (1 or more)");
+    }
+
+    const [price] = await nickCall(entry.address, "quote", [ethers.getAddress(req.query.account), level]);
+    return { account: ethers.getAddress(req.query.account), level, price: ethText(price) };
+}));
+
+// Buy a nickname (edge 0) for a user account of the section
+app.post("/nickname/buy", nicknameRoute(async (req) => {
+    const entry = await nicknameCollection();
+    const { section, account } = await nicknameBuyer(req);
+    const nickname = nicknameInput((req.body || {}).nickname);
+    const [has] = await nickCall(entry.address, "nicknameOf", [account]);
+
+    if (has !== 0n) {
+        throw httpError(409, `${account} already has a nickname (one per account)`);
+    }
+
+    const [available] = await nickCall(entry.address, "isAvailable", [nickname]);
+
+    if (!available) {
+        throw httpError(409, `nickname "${nickname}" is taken or reserved`);
+    }
+
+    const [priceWei] = await nickCall(entry.address, "nicknamePrice");
+    const payee = section.accounts.consumption;
+    const sent = await nicknameSend(account, entry.address, nicknameIface.encodeFunctionData("buyNickname", [nickname, payee]),
+        priceWei, ethText(priceWei));
+    countSectionOp(section, "nickname_sale", ethText(priceWei));
+    return { success: true, section: { id: section.id, name: section.name }, ...await nicknameInfo(entry.address, nicknameId(nickname)),
+        price: ethText(priceWei), paidTo: payee, ...sent };
+}));
+
+// Raise the edge of an account's nickname (pays every step up to the level)
+app.post("/nickname/edge", nicknameRoute(async (req) => {
+    const entry = await nicknameCollection();
+    const { section, account } = await nicknameBuyer(req);
+    const level = Number((req.body || {}).level);
+
+    if (!Number.isInteger(level) || level < 1 || level > 255) {
+        throw httpError(400, "level: the edge level to reach (1 or more)");
+    }
+
+    const [tokenId] = await nickCall(entry.address, "nicknameOf", [account]);
+
+    if (tokenId === 0n) {
+        throw httpError(404, `${account} has no nickname: buy one first (POST /nickname/buy)`);
+    }
+
+    const [priceWei] = await nickCall(entry.address, "quote", [account, level]);
+    const payee = section.accounts.consumption;
+    const sent = await nicknameSend(account, entry.address, nicknameIface.encodeFunctionData("upgradeEdge", [level, payee]),
+        priceWei, ethText(priceWei));
+    countSectionOp(section, "edge_upgrade", ethText(priceWei));
+    return { success: true, section: { id: section.id, name: section.name }, ...await nicknameInfo(entry.address, tokenId),
+        price: ethText(priceWei), paidTo: payee, ...sent };
+}));
+
+// ---- Admin (chainlens Nicknames page): the collection, its edge levels, prices, reserved nicknames
+
+function edgeStyleInput(body, current) {
+    const b = body || {};
+    const color = (v, fallback, what) => {
+        const value = v === undefined ? fallback : v;
+
+        if (!/^#?[0-9a-fA-F]{6}$/.test(String(value || ""))) {
+            throw httpError(400, `${what}: a color #RRGGBB`);
+        }
+
+        return "0x" + String(value).replace(/^#/, "").toLowerCase();
+    };
+    const int = (v, fallback, min, max, what) => {
+        const value = v === undefined ? fallback : Number(v);
+
+        if (!Number.isInteger(value) || value < min || value > max) {
+            throw httpError(400, `${what}: ${min} to ${max}`);
+        }
+
+        return value;
+    };
+    const pattern = b.pattern === undefined ? (current ? EDGE_PATTERNS.indexOf(current.style.pattern) : 0)
+        : (EDGE_PATTERNS.includes(b.pattern) ? EDGE_PATTERNS.indexOf(b.pattern) : Number(b.pattern));
+    const name = b.name === undefined && current ? current.name : String(b.name || "").trim();
+
+    if (!name || Buffer.byteLength(name) > 32 || NICKNAME_FORBIDDEN.test(name)) {
+        throw httpError(400, "name: 1-32 bytes of plain text");
+    }
+
+    if (!Number.isInteger(pattern) || pattern < 0 || pattern > 4) {
+        throw httpError(400, `pattern: ${EDGE_PATTERNS.join(", ")}`);
+    }
+
+    return {
+        name,
+        stepPrice: b.price === undefined && current ? ethToWei(current.price) : adminPrice(b.price),
+        enabled: b.enabled === undefined ? (current ? current.enabled : true) : Boolean(b.enabled),
+        color: color(b.color, current && current.style.color, "color"),
+        color2: color(b.color2, current ? current.style.color2 : (b.color || "#94a3b8"), "color2"),
+        width: int(b.width, current ? current.style.width : 3, 1, 20, "width"),
+        radius: int(b.radius, current ? current.style.radius : 12, 0, 40, "radius"),
+        pattern
+    };
+}
+
+function adminPrice(value) {
+    if (value === undefined || value === null || !/^\d+(\.\d+)?$/.test(String(value))) {
+        throw httpError(400, "price: ETH, e.g. \"0.5\" (0 allowed)");
+    }
+
+    return ethToWei(String(value));
+}
+
+// Sign as the center (the minter), wait for the block
+async function centerSend(address, fn, args) {
+    requireCenter();
+    return nicknameSend(CONFIG.CONTRACT_CENTER, address, nicknameIface.encodeFunctionData(fn, args), 0n, "0");
+}
+
+app.get("/admin/nickname", adminGuard, adminRoute(async (req) => {
+    const entry = await nicknameCollection(true);
+
+    if (!entry) {
+        return { success: true, collection: null };
+    }
+
+    const [[price], [supply], [nameValue], [symbolValue], edges, tokens] = await Promise.all([
+        nickCall(entry.address, "nicknamePrice"), nickCall(entry.address, "totalSupply"),
+        nickCall(entry.address, "name"), nickCall(entry.address, "symbol"), readEdges(entry.address), scanNicknames(entry)
+    ]);
+    const list = [...tokens.values()];
+    edges.forEach((e) => { e.holders = list.filter((t) => t.level === e.level).length; });
+    const q = String(req.query.q || "").normalize("NFC").trim().toLowerCase();
+    const found = list.filter((t) => !q || t.nickname.toLowerCase().includes(q) || t.account.toLowerCase().includes(q))
+        .sort((a, b) => b.block - a.block);
+    return {
+        success: true,
+        collection: { address: entry.address, name: nameValue, symbol: symbolValue, registeredIn: entry.registeredIn },
+        nicknamePrice: ethText(price),
+        nicknames: Number(supply),
+        edges,
+        list: found.slice(0, 200).map(({ block, ...t }) => t),
+        listed: Math.min(found.length, 200),
+        matching: found.length
+    };
+}));
+
+// Deploy the collection (once), signed by the center, registered in the SectionRegistry
+app.post("/admin/nickname/deploy", adminGuard, adminRoute(async (req) => {
+    requireCenter();
+    const existing = await nicknameCollection(true);
+
+    if (existing && !(req.body || {}).another) {
+        throw httpError(409, `a nickname collection exists at ${existing.address} (send "another": true to deploy a new one: the new one is used from then on)`);
+    }
+
+    const b = req.body || {};
+    const name = String(b.name || "Nicknames").trim().slice(0, 64);
+    const symbol = String(b.symbol || "NICK").trim().slice(0, 16);
+    const edge0 = String(b.edge0 || "Simple").trim();
+    const input = deployInputOf({
+        kind: "common", name, abi: nicknameArtifact.abi, bytecode: nicknameArtifact.bytecode,
+        deployedBytecode: nicknameArtifact.deployedBytecode, immutableReferences: nicknameArtifact.immutableReferences,
+        args: [name, symbol, CONFIG.REGISTRY_CONTRACT, adminPrice(b.price === undefined ? "0" : b.price).toString(), edge0]
+    });
+    return deployAndRegister(input);
+}));
+
+app.put("/admin/nickname/price", adminGuard, adminRoute(async (req) => {
+    const entry = await nicknameCollection();
+    const price = adminPrice((req.body || {}).price);
+    const sent = await centerSend(entry.address, "setNicknamePrice", [price]);
+    return { success: true, nicknamePrice: ethText(price), ...sent };
+}));
+
+// A new edge level (the next number)
+app.post("/admin/nickname/edges", adminGuard, adminRoute(async (req) => {
+    const entry = await nicknameCollection();
+    const e = edgeStyleInput(req.body, null);
+    const [count] = await nickCall(entry.address, "edgeCount");
+    const sent = await centerSend(entry.address, "addEdge", [e.name, e.stepPrice, e.color, e.color2, e.width, e.radius, e.pattern]);
+    const [info] = await nickCall(entry.address, "edgeInfo", [count]);
+    return { success: true, edge: edgeOut(Number(count), info), ...sent };
+}));
+
+// Change a level: name, price, enabled, style (omitted fields keep their value). Never deleted.
+app.put("/admin/nickname/edges/:level", adminGuard, adminRoute(async (req) => {
+    const entry = await nicknameCollection();
+    const level = Number(req.params.level);
+    const edges = await readEdges(entry.address);
+
+    if (!Number.isInteger(level) || !edges[level]) {
+        throw httpError(404, `no edge level ${req.params.level} (levels 0-${edges.length - 1})`);
+    }
+
+    const e = edgeStyleInput(req.body, edges[level]);
+    const sent = await centerSend(entry.address, "setEdge", [level, e.name, e.stepPrice, e.enabled, e.color, e.color2, e.width, e.radius, e.pattern]);
+    const [info] = await nickCall(entry.address, "edgeInfo", [level]);
+    return { success: true, edge: edgeOut(level, info), ...sent };
+}));
+
+// Reserve (or release) nicknames nobody may buy
+app.post("/admin/nickname/reserve", adminGuard, adminRoute(async (req) => {
+    const entry = await nicknameCollection();
+    const names = (req.body || {}).nicknames;
+
+    if (!Array.isArray(names) || names.length < 1 || names.length > 100) {
+        throw httpError(400, "nicknames: a list of 1 to 100 nicknames");
+    }
+
+    const list = names.map(nicknameInput);
+    const reserved = (req.body || {}).reserved !== false;
+    const sent = await centerSend(entry.address, "reserve", [list, reserved]);
+    return { success: true, reserved, nicknames: list, ...sent };
 }));
 
 // ---- Applications: read and write registered contracts
@@ -3648,7 +4144,7 @@ app.post("/contract/send", async (req, res) => {
 // ---- Section metrics (step 6): balances refreshed every 15 s (the scrape stays fast), operation
 // counters in memory (they restart at 0 with the proxy; dashboards use increase()).
 const sectionOps = new Map(); // "id|op" -> { id, name, op, count, wei }
-const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "nft_first_sale", "nft_resale", "topup", "sweep", "payback", "account_replaced", "archive_return"];
+const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "nft_first_sale", "nft_resale", "nickname_sale", "edge_upgrade", "topup", "sweep", "payback", "account_replaced", "archive_return"];
 const sectionMetrics = { rows: [], sender01: null, error: 0, at: 0 };
 // Names of the platform and section accounts, whether they send now or not (proxy_account_info): the
 // MPC signer dashboard names each key's presignature pool with it. address (lowercase) -> info

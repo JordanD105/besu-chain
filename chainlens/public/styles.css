@@ -642,3 +642,13 @@ body.light .stat-date { color-scheme: light; }
 .platform h3 { margin: 0 0 4px; font-size: 14px; color: var(--muted); font-weight: 600; }
 @media (max-width: 1100px) { .id-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .id-cards { grid-template-columns: 1fr; } .viz-row { grid-template-columns: 90px 1fr; } }
+
+/* Nicknames page: edge level editors with a live preview */
+.edge-list { display: grid; gap: 14px; }
+.edge-editor { border: 1px solid var(--line, #334155); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+.edge-editor-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.edge-preview-box img.edge-preview { width: 100%; max-width: 420px; height: auto; border-radius: 8px; display: block; }
+.edge-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; }
+.edge-fields label { display: grid; gap: 4px; }
+.edge-fields input[type="color"] { width: 100%; height: 32px; padding: 0; border: 0; background: none; }
+.edge-fields input[type="checkbox"] { width: 20px; height: 20px; }
