@@ -328,26 +328,32 @@ contract NicknameCollection {
     // A line holds 520 px: about 16 half-units at 56 px, 26 at 36 px, 33 at 28 px.
 
     function _svg(string memory nick, Edge storage e) private view returns (bytes memory) {
-        bytes memory b = bytes(nick);
+        (bytes memory text, uint256 height) = _textBlock(bytes(nick));
+        return abi.encodePacked(_head(e, height), _frame(e, height, 16 + uint256(e.width)), text, "</svg>");
+    }
+
+    function _head(Edge storage e, uint256 height) private view returns (bytes memory) {
+        return abi.encodePacked(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='", _str(height), "' viewBox='0 0 600 ", _str(height), "'>",
+            "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='", _hex(e.color),
+            "'/><stop offset='1' stop-color='", _hex(e.color2), "'/></linearGradient></defs>",
+            "<rect width='600' height='", _str(height), "' fill='#0f172a'/>"
+        );
+    }
+
+    /// the <text> with its lines, and the picture's height
+    function _textBlock(bytes memory b) private pure returns (bytes memory text, uint256 height) {
         uint256 units = 0;
         for (uint256 i = 0; i < b.length; i++) {
             units += _unitsAt(b, i);
         }
         (uint256 size, uint256 perLine) = units <= 16 ? (uint256(56), uint256(16)) : (units <= 26 ? (uint256(36), uint256(26)) : (uint256(28), uint256(33)));
-        uint256 lines = _lineCount(b, perLine);
         uint256 lineHeight = size * 5 / 4;
-        uint256 height = 120 + lines * lineHeight;
-        uint256 pad = 16 + uint256(e.width);
-        bytes memory frame = _frame(e, height, pad);
-        bytes memory text = abi.encodePacked(
+        (bytes memory tspans, uint256 lines) = _lines(b, perLine, lineHeight);
+        height = 120 + lines * lineHeight;
+        text = abi.encodePacked(
             "<text x='300' y='", _str(60 + size + (lineHeight - size) / 2), "' font-family='sans-serif' font-size='", _str(size),
-            "' font-weight='600' fill='#f8fafc' text-anchor='middle'>", _lines(b, perLine, lineHeight), "</text>"
-        );
-        return abi.encodePacked(
-            "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='", _str(height), "' viewBox='0 0 600 ", _str(height), "'>",
-            "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='", _hex(e.color),
-            "'/><stop offset='1' stop-color='", _hex(e.color2), "'/></linearGradient></defs>",
-            "<rect width='600' height='", _str(height), "' fill='#0f172a'/>", frame, text, "</svg>"
+            "' font-weight='600' fill='#f8fafc' text-anchor='middle'>", tspans, "</text>"
         );
     }
 
@@ -386,37 +392,40 @@ contract NicknameCollection {
         return c >= 0xe0 ? 2 : 1;
     }
 
-    function _lineCount(bytes memory b, uint256 perLine) private pure returns (uint256 lines) {
+    /// one <tspan> per line of at most `perLine` half-units, broken after the last space of the line
+    /// when there is one (otherwise inside the word), always on a UTF-8 character boundary
+    function _lines(bytes memory b, uint256 perLine, uint256 lineHeight) private pure returns (bytes memory out, uint256 count) {
+        uint256 start = 0;
         uint256 width = 0;
-        lines = 1;
-        for (uint256 i = 0; i < b.length; i++) {
-            uint256 u = _unitsAt(b, i);
-            if (u > 0 && width + u > perLine) {
-                lines++;
-                width = 0;
+        uint256 space = 0;       // index of the last space in the current line (0: none)
+        uint256 afterSpace = 0;  // width of the line up to and including that space
+        for (uint256 i = 0; i <= b.length; i++) {
+            uint256 u = i < b.length ? _unitsAt(b, i) : 0;
+            if (i == b.length || (u > 0 && width + u > perLine)) {
+                uint256 end = (i < b.length && space > start) ? space : i;
+                out = abi.encodePacked(out, "<tspan x='300' dy='", count == 0 ? bytes("0") : _str(lineHeight), "'>", _slice(b, start, end), "</tspan>");
+                count++;
+                if (end != i) {
+                    start = end + 1;            // the rest of the word moves to the next line
+                    width = width - afterSpace;
+                } else {
+                    start = i;
+                    width = 0;
+                }
+                space = 0;
+            }
+            if (i < b.length && b[i] == 0x20 && i > start) {
+                space = i;
+                afterSpace = width + 1;
             }
             width += u;
         }
     }
 
-    /// one <tspan> per line of at most `perLine` half-units (cut on UTF-8 character boundaries)
-    function _lines(bytes memory b, uint256 perLine, uint256 lineHeight) private pure returns (bytes memory out) {
-        uint256 start = 0;
-        uint256 width = 0;
-        bool first = true;
-        for (uint256 i = 0; i <= b.length; i++) {
-            uint256 u = i < b.length ? _unitsAt(b, i) : 0;
-            if (i == b.length || (u > 0 && width + u > perLine)) {
-                bytes memory part = new bytes(i - start);
-                for (uint256 j = start; j < i; j++) {
-                    part[j - start] = b[j];
-                }
-                out = abi.encodePacked(out, "<tspan x='300' dy='", first ? bytes("0") : _str(lineHeight), "'>", part, "</tspan>");
-                first = false;
-                start = i;
-                width = 0;
-            }
-            width += u;
+    function _slice(bytes memory b, uint256 from, uint256 to) private pure returns (bytes memory part) {
+        part = new bytes(to - from);
+        for (uint256 j = from; j < to; j++) {
+            part[j - from] = b[j];
         }
     }
 
