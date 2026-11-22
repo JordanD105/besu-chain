@@ -324,7 +324,7 @@ The proxy's `/metrics` (scraped by Prometheus through the proxy VIP) has these s
 |---|---|
 | `proxy_section_balance_eth{section_id, section, role, active}` | each account's balance (role upfront / consumption / payment), refreshed every 15 s; archived sections are not listed |
 | `proxy_section_active{section_id, section}` | 1 = enabled |
-| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | operations and ETH moved since the proxy started (op: `create_account`, `transfer_in`, `transfer_out`, `nft_first_sale`, `nft_resale`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`); they restart at 0 with the proxy (dashboards use `increase()`) |
+| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | operations and ETH moved since the proxy started (op: `create_account`, `transfer_in`, `transfer_out`, `nft_first_sale`, `nft_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`); they restart at 0 with the proxy (dashboards use `increase()`) |
 | `proxy_sender01_balance_eth` | SENDER01's balance |
 | `proxy_section_low_balance_eth`, `proxy_sender01_low_balance_eth` | the alert thresholds |
 | `proxy_sections_metrics_error`, `proxy_sections_metrics_age_seconds` | 1 = the last refresh of the balances failed; seconds since the last refresh |

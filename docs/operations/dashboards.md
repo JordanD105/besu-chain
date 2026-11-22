@@ -354,7 +354,7 @@ estimates from `increase()`: amounts can be slightly off, counts are rounded.
 |---|---|
 | **New accounts / +x from users / NFT first sales / Top-ups, last period** | all selected sections |
 | **Most income / Most new accounts / Most spent, last period: 10 sections** | the top 10 sections of the last period |
-| **Operations per period** / **ETH moved per period** | bars per period and kind of operation (all selected sections): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `nft_first_sale`, `nft_resale`, `topup`, `sweep`, `payback`. Each bar counts the period that **starts** at its date (today's bar = today so far) |
+| **Operations per period** / **ETH moved per period** | bars per period and kind of operation (all selected sections): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `nft_first_sale`, `nft_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`. Each bar counts the period that **starts** at its date (today's bar = today so far) |
 | **Income per period: top 10 sections** | +x and first NFT sales, the 10 sections with the most income in each period |
 | **ETH moved in the selected time range** | per section (rows, with pages) and operation over the dashboard's whole time range |
 

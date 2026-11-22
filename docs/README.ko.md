@@ -86,6 +86,7 @@
 | [컨트랙트 배포](features/contract-deployment.md) | chainlens의 Deploy 페이지 |
 | [컨트랙트 기록](features/contract-records.md) | `contracts/deployments/`: 컨트랙트마다 하나의 기록 |
 | [NFT 워크플로](features/nft-workflow.md) | Remix → 배포 → 민팅 → 판매, 단계별 안내 |
+| [닉네임](features/nicknames.md) | 소울바운드 닉네임 토큰: 구매하고 테두리 올리기; 규칙, API, chainlens 페이지 |
 
 ### 운영 {#operations}
 | 문서 | 내용 |

@@ -81,6 +81,7 @@ plugins:
             Contract deployment: 컨트랙트 배포
             Contract records: 컨트랙트 기록
             NFT workflow: NFT 워크플로
+            Nicknames: 닉네임
             Operations: 운영
             Alerts: 알림
             Alert runbook: 알림 런북
@@ -149,6 +150,7 @@ nav:
       - Contract deployment: features/contract-deployment.md
       - Contract records: features/contract-records.md
       - NFT workflow: features/nft-workflow.md
+      - Nicknames: features/nicknames.md
   - Operations:
       - Alerts: operations/alerts.md
       - Alert runbook: operations/alert-runbook.md

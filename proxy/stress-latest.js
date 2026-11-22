@@ -3833,7 +3833,8 @@ app.post("/nickname/buy", nicknameRoute(async (req) => {
     const [available] = await nickCall(entry.address, "isAvailable", [nickname]);
 
     if (!available) {
-        throw httpError(409, `nickname "${nickname}" is taken or reserved`);
+        const [reserved] = await nickCall(entry.address, "reserved", [nicknameId(nickname)]);
+        throw httpError(409, reserved ? `nickname "${nickname}" is reserved` : `nickname "${nickname}" is taken`);
     }
 
     const [priceWei] = await nickCall(entry.address, "nicknamePrice");

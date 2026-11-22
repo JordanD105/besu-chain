@@ -86,6 +86,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | [Contract deployment](features/contract-deployment.md) | the chainlens Deploy page |
 | [Contract records](features/contract-records.md) | `contracts/deployments/`: one record per contract |
 | [NFT workflow](features/nft-workflow.md) | Remix → deploy → mint → sell, step by step |
+| [Nicknames](features/nicknames.md) | soulbound nickname tokens: buy one, raise its edge; rules, API, chainlens page |
 
 ### Operations
 | Document | Contents |

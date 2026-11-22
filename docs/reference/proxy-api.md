@@ -13,8 +13,10 @@
 - [Accounts and transfers](#accounts-and-transfers)
 - [Section calls (`X-Section-Key`)](#section-calls-x-section-key)
 - [NFT collections](#nft-collections)
+- [Nicknames](#nicknames)
 - [Registered contracts](#registered-contracts)
 - [Admin API: sections](#admin-api-sections)
+- [Admin API: nicknames](#admin-api-nicknames)
 - [Admin API: contracts and registry](#admin-api-contracts-and-registry)
 - [Status and metrics](#status-and-metrics)
 - [Errors](#errors)
@@ -199,6 +201,25 @@ Step by step from Remix to a sale: [NFT workflow](../features/nft-workflow.md).
 
 ---
 
+## Nicknames
+
+Soulbound nickname tokens with an edge level ([nicknames](../features/nicknames.md)). Every call needs
+`X-Section-Key` (or the admin token); `account` must be a user account of that section. Prices in ETH.
+
+| Endpoint | Body / query | Answer |
+|---|---|---|
+| `GET /nickname/edges` | | `{ collection, nicknamePrice, edges: [ { level, name, price, enabled, style: { color, color2, width, radius, pattern } } ] }` |
+| `GET /nickname/check` | `?name=Alice` | `{ nickname, characters, tokenId, available, reason }` (`reason`: `taken`, `reserved` or `null`) |
+| `GET /nickname/of/:account` | | `{ nickname, tokenId, account, level, edge, image }` (`image`: SVG data URI); 404 without one |
+| `GET /nickname/quote` | `?account=0x…&level=2` | `{ account, level, price }`: the sum of the step prices up to `level` |
+| `POST /nickname/buy` | `{ "account": "0x…", "nickname": "Alice" }` | `{ success, section, nickname, tokenId, account, level, edge, image, price, paidTo, txHash, blockNumber, … }` |
+| `POST /nickname/edge` | `{ "account": "0x…", "level": 2 }` | as `buy`, with the new level |
+
+Names: 1–256 characters after NFC and trimming, no control characters and none of `< > & " ' \`,
+unique without regard to A–Z case, one per account. The level only goes up.
+
+---
+
 ## Registered contracts
 
 Only contracts registered in the SectionRegistry (deployed by the contract account center), and only
@@ -250,6 +271,22 @@ can't be called this way (only the center mints): use `/nft/mint`.
 | `POST /admin/sections/:id/transfer` | `{ "account", "amount", "memo" }` | +x / −x for a user account (as `/transfer`) |
 
 Every money movement carries a memo naming the operation.
+
+---
+
+## Admin API: nicknames
+
+Admin token, as above. Usually used through the chainlens **Nicknames** page. Writes are signed by
+the contract account center (the collection's minter).
+
+| Endpoint | Body | Does |
+|---|---|---|
+| `GET /admin/nickname` | `?q=` (search) | the collection, price, edge levels with holder counts, nicknames (up to 200) |
+| `POST /admin/nickname/deploy` | `{ "name", "symbol", "price": "1", "edge0": "Simple", "another": false }` | deploy and register the collection; 409 if one exists unless `another: true` |
+| `PUT /admin/nickname/price` | `{ "price": "1" }` | the nickname price (new buyers) |
+| `POST /admin/nickname/edges` | `{ "name", "price", "color", "color2", "width", "radius", "pattern" }` | add the next edge level |
+| `PUT /admin/nickname/edges/:level` | any of the fields above, `enabled` | change a level; existing nicknames redraw. Level 0 keeps price 0 and stays enabled |
+| `POST /admin/nickname/reserve` | `{ "nicknames": ["admin"], "reserved": true }` | reserve (or free) up to 100 names |
 
 ---
 

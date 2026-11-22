@@ -63,6 +63,7 @@ They forward to the proxy's admin API, so the proxy signs, never chainlens.
 |---|---|---|---|
 | **Deploy** (`#/deploy`) | `chainlens_deploy_enabled: true` | deploy a compiled contract (Remix / Hardhat / Foundry artifact) as the contract account center, check first, register it | [contract deployment](../features/contract-deployment.md) |
 | **Sections** (`#/sections`) | `chainlens_sections_enabled: true` | create sections, top up, sweep, pay back, rename, info fields, keys, replace accounts, archive; a section's user accounts | [sections](../features/sections.md) |
+| **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | deploy the nickname collection, its price, edge levels (with a live preview), reserved names; the list of nicknames | [nicknames](../features/nicknames.md) |
 | **Mint and sell** (on an NFT collection's page) | either of the above | mint an NFT (price fixed at mint); sell it to a section's user account | [NFT workflow](../features/nft-workflow.md) |
 
 ![The admin Sections page: the list of sections and the New section form](../images/screenshots/chainlens-sections.png)

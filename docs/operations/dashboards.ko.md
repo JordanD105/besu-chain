@@ -351,7 +351,7 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 |---|---|
 | **New accounts / +x from users / NFT first sales / Top-ups, last period** (지난 기간 새 계정 / 사용자로부터의 +x / NFT 최초 판매 / 충전) | 선택한 모든 섹션 |
 | **Most income / Most new accounts / Most spent, last period: 10 sections** (지난 기간 수입 / 새 계정 / 지출 최다: 10개 섹션) | 지난 기간의 상위 10개 섹션 |
-| **Operations per period** / **ETH moved per period** (기간별 작업 / 기간별 이동한 ETH) | 기간과 작업 종류별 막대(선택한 모든 섹션): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `nft_first_sale`, `nft_resale`, `topup`, `sweep`, `payback`. 각 막대는 해당 날짜에 **시작하는** 기간을 셉니다(오늘의 막대 = 오늘 현재까지) |
+| **Operations per period** / **ETH moved per period** (기간별 작업 / 기간별 이동한 ETH) | 기간과 작업 종류별 막대(선택한 모든 섹션): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `nft_first_sale`, `nft_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`. 각 막대는 해당 날짜에 **시작하는** 기간을 셉니다(오늘의 막대 = 오늘 현재까지) |
 | **Income per period: top 10 sections** (기간별 수입: 상위 10개 섹션) | +x와 NFT 최초 판매, 각 기간에 수입이 가장 많은 섹션 10개 |
 | **ETH moved in the selected time range** (선택한 시간 범위에서 이동한 ETH) | 대시보드 전체 시간 범위 동안의 섹션(행, 페이지 단위)과 작업별 값 |
 

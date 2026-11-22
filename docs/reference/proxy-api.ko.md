@@ -13,8 +13,10 @@
 - [계정과 이체](#accounts-and-transfers)
 - [섹션 호출 (`X-Section-Key`)](#section-calls-x-section-key)
 - [NFT 컬렉션](#nft-collections)
+- [닉네임](#nicknames)
 - [등록된 컨트랙트](#registered-contracts)
 - [관리 API: 섹션](#admin-api-sections)
+- [관리 API: 닉네임](#admin-api-nicknames)
 - [관리 API: 컨트랙트와 레지스트리](#admin-api-contracts-and-registry)
 - [상태와 메트릭](#status-and-metrics)
 - [오류](#errors)
@@ -199,6 +201,25 @@ Remix에서 판매까지의 단계별 안내: [NFT 워크플로](../features/nft
 
 ---
 
+## 닉네임 {#nicknames}
+
+테두리 레벨이 있는 소울바운드 닉네임 토큰([닉네임](../features/nicknames.md)). 모든 호출에
+`X-Section-Key`(또는 관리 토큰)가 필요하고, `account`는 그 섹션의 사용자 계정이어야 합니다. 가격은 ETH.
+
+| 엔드포인트 | 본문 / 쿼리 | 응답 |
+|---|---|---|
+| `GET /nickname/edges` | | `{ collection, nicknamePrice, edges: [ { level, name, price, enabled, style: { color, color2, width, radius, pattern } } ] }` |
+| `GET /nickname/check` | `?name=Alice` | `{ nickname, characters, tokenId, available, reason }` (`reason`: `taken`, `reserved` 또는 `null`) |
+| `GET /nickname/of/:account` | | `{ nickname, tokenId, account, level, edge, image }` (`image`: SVG 데이터 URI); 없으면 404 |
+| `GET /nickname/quote` | `?account=0x…&level=2` | `{ account, level, price }`: `level`까지의 단계 가격 합계 |
+| `POST /nickname/buy` | `{ "account": "0x…", "nickname": "Alice" }` | `{ success, section, nickname, tokenId, account, level, edge, image, price, paidTo, txHash, blockNumber, … }` |
+| `POST /nickname/edge` | `{ "account": "0x…", "level": 2 }` | `buy`와 같으며 새 레벨 포함 |
+
+이름: NFC와 공백 제거 후 1~256자, 제어 문자와 `< > & " ' \` 불가, A–Z 대소문자 구분 없이 고유,
+계정당 하나. 레벨은 올라가기만 합니다.
+
+---
+
 ## 등록된 컨트랙트 {#registered-contracts}
 
 SectionRegistry에 등록된 컨트랙트(컨트랙트 계정 센터가 배포한 것)만, 그리고 해당 ABI에 있는
@@ -250,6 +271,22 @@ SectionRegistry에 등록된 컨트랙트(컨트랙트 계정 센터가 배포�
 | `POST /admin/sections/:id/transfer` | `{ "account", "amount", "memo" }` | 사용자 계정에 대한 +x / −x (`/transfer`와 동일) |
 
 모든 자금 이동에는 작업 이름을 담은 메모가 붙습니다.
+
+---
+
+## 관리 API: 닉네임 {#admin-api-nicknames}
+
+위와 같은 관리 토큰. 보통 chainlens **Nicknames** 페이지로 사용합니다. 쓰기는 컨트랙트 계정 센터
+(컬렉션의 민터)가 서명합니다.
+
+| 엔드포인트 | 본문 | 동작 |
+|---|---|---|
+| `GET /admin/nickname` | `?q=` (검색) | 컬렉션, 가격, 보유자 수가 있는 테두리 레벨, 닉네임(최대 200개) |
+| `POST /admin/nickname/deploy` | `{ "name", "symbol", "price": "1", "edge0": "Simple", "another": false }` | 컬렉션 배포와 등록; 이미 있으면 `another: true`가 아닌 한 409 |
+| `PUT /admin/nickname/price` | `{ "price": "1" }` | 닉네임 가격(새 구매자) |
+| `POST /admin/nickname/edges` | `{ "name", "price", "color", "color2", "width", "radius", "pattern" }` | 다음 테두리 레벨 추가 |
+| `PUT /admin/nickname/edges/:level` | 위 필드 중 아무것, `enabled` | 레벨 변경; 기존 닉네임도 다시 그려짐. 레벨 0은 가격 0과 활성 상태 유지 |
+| `POST /admin/nickname/reserve` | `{ "nicknames": ["admin"], "reserved": true }` | 이름 최대 100개 예약(또는 해제) |
 
 ---
 
