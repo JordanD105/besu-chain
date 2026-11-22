@@ -323,19 +323,18 @@ contract NicknameCollection {
         }
     }
 
-    // ---- the picture: the nickname (wrapped every 24 characters) inside its edge
+    // ---- the picture: the nickname inside its edge. Widths are counted in half-units: a 1- or 2-byte
+    // UTF-8 character (Latin, Cyrillic, …) is 1, a 3- or 4-byte one (Korean, Chinese, Japanese, emoji) 2.
+    // A line holds 520 px: about 16 half-units at 56 px, 26 at 36 px, 33 at 28 px.
 
     function _svg(string memory nick, Edge storage e) private view returns (bytes memory) {
         bytes memory b = bytes(nick);
-        uint256 chars = 0;
+        uint256 units = 0;
         for (uint256 i = 0; i < b.length; i++) {
-            if (uint8(b[i]) & 0xc0 != 0x80) {
-                chars++;
-            }
+            units += _unitsAt(b, i);
         }
-        uint256 size = chars <= 10 ? 56 : (chars <= 24 ? 36 : 28);
-        uint256 perLine = 24;
-        uint256 lines = (chars + perLine - 1) / perLine;
+        (uint256 size, uint256 perLine) = units <= 16 ? (uint256(56), uint256(16)) : (units <= 26 ? (uint256(36), uint256(26)) : (uint256(28), uint256(33)));
+        uint256 lines = _lineCount(b, perLine);
         uint256 lineHeight = size * 5 / 4;
         uint256 height = 120 + lines * lineHeight;
         uint256 pad = 16 + uint256(e.width);
@@ -378,14 +377,36 @@ contract NicknameCollection {
         return abi.encodePacked("<rect ", box, " stroke='", _hex(e.color), "'/>");  // solid
     }
 
-    /// one <tspan> per line of `perLine` characters (cut on UTF-8 character boundaries)
+    /// width in half-units of the character starting at b[i] (0 for a continuation byte)
+    function _unitsAt(bytes memory b, uint256 i) private pure returns (uint256) {
+        uint8 c = uint8(b[i]);
+        if (c & 0xc0 == 0x80) {
+            return 0;
+        }
+        return c >= 0xe0 ? 2 : 1;
+    }
+
+    function _lineCount(bytes memory b, uint256 perLine) private pure returns (uint256 lines) {
+        uint256 width = 0;
+        lines = 1;
+        for (uint256 i = 0; i < b.length; i++) {
+            uint256 u = _unitsAt(b, i);
+            if (u > 0 && width + u > perLine) {
+                lines++;
+                width = 0;
+            }
+            width += u;
+        }
+    }
+
+    /// one <tspan> per line of at most `perLine` half-units (cut on UTF-8 character boundaries)
     function _lines(bytes memory b, uint256 perLine, uint256 lineHeight) private pure returns (bytes memory out) {
         uint256 start = 0;
-        uint256 count = 0;
+        uint256 width = 0;
         bool first = true;
         for (uint256 i = 0; i <= b.length; i++) {
-            bool boundary = i == b.length || uint8(b[i]) & 0xc0 != 0x80;
-            if (boundary && (count == perLine || i == b.length)) {
+            uint256 u = i < b.length ? _unitsAt(b, i) : 0;
+            if (i == b.length || (u > 0 && width + u > perLine)) {
                 bytes memory part = new bytes(i - start);
                 for (uint256 j = start; j < i; j++) {
                     part[j - start] = b[j];
@@ -393,11 +414,9 @@ contract NicknameCollection {
                 out = abi.encodePacked(out, "<tspan x='300' dy='", first ? bytes("0") : _str(lineHeight), "'>", part, "</tspan>");
                 first = false;
                 start = i;
-                count = 0;
+                width = 0;
             }
-            if (boundary && i < b.length) {
-                count++;
-            }
+            width += u;
         }
     }
 
