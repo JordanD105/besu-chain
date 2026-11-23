@@ -5,11 +5,11 @@
   "translate": ["role", "kind"],
   "words": {
     "en": { "transaction": "Transaction", "upfront": "Upfront", "consumption": "Consumption", "payment": "Payment",
-            "avatar": "avatar", "nickname": "nickname", "registry": "registry", "other": "contract" },
+            "avatar": "avatar", "nickname": "nickname", "registry": "registry", "common": "contract", "other": "contract" },
     "ko": { "transaction": "트랜잭션", "upfront": "선지급", "consumption": "소비", "payment": "지급",
-            "avatar": "아바타", "nickname": "닉네임", "registry": "레지스트리", "other": "컨트랙트" },
+            "avatar": "아바타", "nickname": "닉네임", "registry": "레지스트리", "common": "컨트랙트", "other": "컨트랙트" },
     "zh": { "transaction": "交易", "upfront": "预付", "consumption": "消费", "payment": "支付",
-            "avatar": "头像", "nickname": "昵称", "registry": "注册表", "other": "合约" }
+            "avatar": "头像", "nickname": "昵称", "registry": "注册表", "common": "合约", "other": "合约" }
   },
   "types": {
     "transfer":        { "en": ["Transfer of {amount} ETH", "Transfer"],

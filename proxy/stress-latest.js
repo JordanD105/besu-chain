@@ -757,7 +757,14 @@ function contractMemo(entry, fragment, args, rawArgs, valueWei, section) {
             return;
         }
 
-        p[input.name] = /price|amount/i.test(input.name) && /^uint/.test(input.type) ? ethers.formatEther(v).replace(/\.0$/, "") : v;
+        // the catalogue's names: level, price (e.g. upgradeLevel(toLevel), addLevel(stepPrice))
+        const name = { toLevel: "level", stepPrice: "price" }[input.name] || input.name;
+
+        if (input.type === "address") {
+            return;  // payee, accounts: shown by the transaction itself
+        }
+
+        p[name] = /price|amount/i.test(input.name) && /^uint/.test(input.type) ? ethers.formatEther(v).replace(/\.0$/, "") : v;
     });
 
     if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
@@ -2367,7 +2374,8 @@ async function deployAndRegister(input) {
         blockNumber: Number(BigInt(receipt.blockNumber)),
         gasUsed: Number(BigInt(receipt.gasUsed)),
         codeCheck: check,
-        registryTxHash: registered.txHash
+        registryTxHash: registered.txHash,
+        ...memoAnswer(registered.memo)
     };
 }
 
