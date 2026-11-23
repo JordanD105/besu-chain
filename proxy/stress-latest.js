@@ -2741,6 +2741,21 @@ function ethInput(value, what) {
 // Friendly object arguments of the platform's contracts -> the ABI's raw values.
 // ctx: { center: true } for /admin/contract/send
 async function friendlyArgs(entry, fragment, raw, ctx) {
+    const args = await friendlyArgsOf(entry, fragment, raw, ctx);
+
+    // an object that left out a value (or misnamed it): say which one, except payee (filled in later)
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        const missing = fragment.inputs.findIndex((p, i) => args[i] === undefined && !(p.name === "payee" && p.type === "address"));
+
+        if (missing >= 0) {
+            throw httpError(400, `args: no value for "${fragment.inputs[missing].name.replace(/^_+|_+$/g, "")}" (${fragment.format("sighash")}); given: ${Object.keys(raw).join(", ") || "nothing"}`);
+        }
+    }
+
+    return args;
+}
+
+async function friendlyArgsOf(entry, fragment, raw, ctx) {
     const kind = platformKind(entry);
     const name = fragment.name;
 
