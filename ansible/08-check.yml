@@ -106,3 +106,30 @@
           - "proxy {{ vip_proxy }}:30000 answers"
           - "{{ ('smoke test: account ' ~ account.json.address ~ ', transfer ' ~ (transfer.json.txHash | default(transfer.json)))
                 if (account.json is defined) else 'smoke test: done before (state/smoke-test.json)' }}"
+
+# The TransferUndo contract (docs/features/transfer-undo.md): a section's +x / -x can be undone
+# (POST /transfer/undo). Deployed once by the contract account center; 409 = it exists already.
+- name: Transfer-undo contract (once)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Deploy the transfer-undo contract (through the proxy VIP)
+      ansible.builtin.uri:
+        url: "http://{{ vip_proxy }}:30000/admin/contract/deploy"
+        method: POST
+        headers: { Authorization: "Bearer {{ proxy_admin_token }}" }
+        body_format: json
+        body: { template: transfer-undo }
+        status_code: [200, 409]
+        timeout: 300
+      register: undo_deploy
+      until: undo_deploy.status in [200, 409]
+      retries: 10
+      delay: 6
+      when: contract_center != '' and registry.address is defined
+      no_log: true
+
+    - name: Transfer-undo contract
+      ansible.builtin.debug:
+        msg: "{{ 'deployed at ' ~ undo_deploy.json.address if undo_deploy.status == 200 else (undo_deploy.json.error | default('')) }}"
+      when: undo_deploy is not skipped
