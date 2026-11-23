@@ -2016,7 +2016,7 @@ let deployCenter = { address: null, at: 0 };
 
 async function centerAddress() {
     if (!deployCenter.address || Date.now() - deployCenter.at > 60000) {
-        const r = await proxyAdmin("GET", "/admin/contracts");
+        const r = await proxyAdmin("GET", "/contract/list?type=none");
         deployCenter = { address: r.status === 200 ? r.data.center : null, at: Date.now() };
     }
     return deployCenter.address;
@@ -2164,8 +2164,8 @@ app.post("/api/sections/:id/:action", sectionsJson, sectionsGuard, async (req, r
 });
 
 // ---- Nicknames page (docs/features/nicknames.md): the nickname collection's edge levels, prices and
-// reserved nicknames: read from the proxy's /admin/nickname, written with /admin/contracts/deploy and
-// /admin/contract/send. Same gate as the Sections page.
+// reserved nicknames: read with the proxy's /contract/list, /contract/call and /contract/events, written
+// with /admin/contract/deploy (template) and /admin/contract/send. Same gate as the Sections page.
 async function nicknameForward(req, res, method, pathname, body) {
     try {
         const r = await proxyAdmin(method, pathname, body);
@@ -2178,16 +2178,117 @@ async function nicknameForward(req, res, method, pathname, body) {
     }
 }
 
-app.get("/api/nicknames", sectionsGuard, (req, res) =>
-    nicknameForward(req, res, "GET", "/admin/nickname" + (req.query.q ? "?q=" + encodeURIComponent(String(req.query.q).slice(0, 300)) : "")));
+// The page's summary, from the proxy's generic contract API: the collection in use (/contract/list),
+// its price, edge levels and supply (/contract/call), every nickname and its level (/contract/events,
+// read incrementally and kept here)
+function proxyOk(r) {
+    if (r.status !== 200) {
+        throw Object.assign(new Error(r.data.error || "the proxy answered HTTP " + r.status), { status: r.status });
+    }
+    return r.data;
+}
+
+async function nicknameCollectionInfo() {
+    const d = proxyOk(await proxyAdmin("GET", "/contract/list?type=nickname"));
+    return (d.contracts || []).find((c) => c.current) || null;
+}
+
+// All events of one kind from fromBlock on, newest first, in pages of 1000 (a page never splits a block)
+async function contractEvents(contract, event, fromBlock) {
+    const events = [];
+    let toBlock;
+    let head = null;
+    for (;;) {
+        const body = { contract, event, fromBlock, limit: 1000 };
+        if (toBlock !== undefined) {
+            body.toBlock = toBlock;
+        }
+        const d = proxyOk(await proxyAdmin("POST", "/contract/events", body));
+        if (head === null) {
+            head = d.toBlock;
+        }
+        if (d.complete || !d.events.length) {
+            events.push(...d.events);
+            return { events, head };
+        }
+        const oldest = d.events[d.events.length - 1].blockNumber;
+        const newer = d.events.filter((e) => e.blockNumber > oldest);
+        events.push(...(newer.length ? newer : d.events));
+        toBlock = newer.length ? oldest : oldest - 1;
+        if (toBlock < fromBlock) {
+            return { events, head };
+        }
+    }
+}
+
+const nickBook = { address: null, scannedTo: -1, tokens: new Map() };
+
+async function nicknameSummary(query) {
+    const c = await nicknameCollectionInfo();
+    if (!c) {
+        return { success: true, collection: null };
+    }
+    if (nickBook.address !== c.address) {
+        Object.assign(nickBook, { address: c.address, scannedTo: c.registeredIn - 1, tokens: new Map() });
+    }
+    const from = nickBook.scannedTo + 1;
+    const [bought, upgraded, reads] = await Promise.all([
+        contractEvents(c.address, "NicknameBought", from),
+        contractEvents(c.address, "EdgeUpgraded", from),
+        proxyAdmin("POST", "/contract/call", { calls: ["nicknamePrice", "edgeCount", "totalSupply"].map((fn) => ({ contract: c.address, function: fn })) }).then(proxyOk)
+    ]);
+    // oldest first; applying an event twice (the next scan starts at the lower head) changes nothing
+    bought.events.slice().reverse().forEach((e) => {
+        const id = String(e.args.tokenId);
+        if (!nickBook.tokens.has(id)) {
+            nickBook.tokens.set(id, { tokenId: id, nickname: e.args.nickname, account: e.args.buyer, level: 0, block: e.blockNumber });
+        }
+    });
+    upgraded.events.slice().reverse().forEach((e) => {
+        const t = nickBook.tokens.get(String(e.args.tokenId));
+        if (t && Number(e.args.toLevel) > t.level) {
+            t.level = Number(e.args.toLevel);
+        }
+    });
+    nickBook.scannedTo = Math.min(bought.head, upgraded.head);
+    const [price, edgeCount, supply] = reads.results.map((r) => {
+        if (!r.success) {
+            throw new Error(r.error);
+        }
+        return r.result;
+    });
+    const list = [...nickBook.tokens.values()];
+    const edges = edgeCount.edges.map((e) => Object.assign({}, e, { holders: list.filter((t) => t.level === e.level).length }));
+    const q = String(query || "").normalize("NFC").trim().toLowerCase();
+    const found = list.filter((t) => !q || t.nickname.toLowerCase().includes(q) || t.account.toLowerCase().includes(q))
+        .sort((a, b) => b.block - a.block);
+    return {
+        success: true,
+        collection: { address: c.address, name: c.name, symbol: c.symbol, registeredIn: c.registeredIn },
+        nicknamePrice: price.price,
+        nicknames: Number(supply),
+        edges,
+        list: found.slice(0, 200).map(({ block, ...t }) => t),
+        listed: Math.min(found.length, 200),
+        matching: found.length
+    };
+}
+
+app.get("/api/nicknames", sectionsGuard, async (req, res) => {
+    try {
+        res.json(await nicknameSummary(String(req.query.q || "").slice(0, 300)));
+    } catch (error) {
+        res.status(error.status || 502).json({ error: "proxy: " + error.message });
+    }
+});
 // Writes: the deploy template, and the collection's admin functions signed by the center
 async function nicknameAdminSend(req, res, fn, args) {
     try {
-        const info = await proxyAdmin("GET", "/admin/nickname");
-        if (info.status !== 200 || !info.data.collection) {
-            return res.status(info.status === 200 ? 404 : info.status).json({ error: info.data.error || "no nickname collection yet" });
+        const c = await nicknameCollectionInfo();
+        if (!c) {
+            return res.status(404).json({ error: "no nickname collection yet" });
         }
-        const r = await proxyAdmin("POST", "/admin/contract/send", { contract: info.data.collection.address, function: fn, args });
+        const r = await proxyAdmin("POST", "/admin/contract/send", { contract: c.address, function: fn, args });
         console.log("nicknames:", fn, JSON.stringify(args).slice(0, 300), "from", req.socket.remoteAddress, "->", r.status);
         res.status(r.status).json(r.status === 200 ? Object.assign({}, r.data, r.data.result || {}) : r.data);
     } catch (error) {
@@ -2196,7 +2297,7 @@ async function nicknameAdminSend(req, res, fn, args) {
 }
 
 app.post("/api/nicknames/deploy", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameForward(req, res, "POST", "/admin/contracts/deploy", Object.assign({}, req.body || {}, { template: "nickname-collection" })));
+    nicknameForward(req, res, "POST", "/admin/contract/deploy", Object.assign({}, req.body || {}, { template: "nickname-collection" })));
 app.put("/api/nicknames/price", sectionsJson, sectionsGuard, (req, res) =>
     nicknameAdminSend(req, res, "setNicknamePrice", { price: (req.body || {}).price }));
 app.post("/api/nicknames/edges", sectionsJson, sectionsGuard, (req, res) =>
@@ -2293,7 +2394,7 @@ app.post("/api/deploy/inspect", deployJson, deployGuard, (req, res) => {
 // Dry run through the proxy: every check, nothing signed
 app.post("/api/deploy/check", deployJson, deployGuard, async (req, res) => {
     try {
-        const r = await proxyAdmin("POST", "/admin/contracts/check", deployBodyForProxy(req.body));
+        const r = await proxyAdmin("POST", "/admin/contract/check", deployBodyForProxy(req.body));
         res.status(r.status).json(r.data);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -2309,7 +2410,7 @@ app.post("/api/deploy/send", deployJson, deployGuard, async (req, res) => {
     DEPLOY.busy = true;
     try {
         const body = deployBodyForProxy(req.body);
-        const check = await proxyAdmin("POST", "/admin/contracts/check", body);
+        const check = await proxyAdmin("POST", "/admin/contract/check", body);
         if (check.status !== 200) {
             return res.status(check.status).json(check.data);
         }
@@ -2317,7 +2418,7 @@ app.post("/api/deploy/send", deployJson, deployGuard, async (req, res) => {
             return res.status(409).json({ error: "the deployer's state changed since the check (address " + check.data.address + "): check again" });
         }
         console.log("deploy:", body.kind, JSON.stringify(body.name), "->", check.data.address, "from", req.socket.remoteAddress);
-        const r = await proxyAdmin("POST", "/admin/contracts/deploy", body);
+        const r = await proxyAdmin("POST", "/admin/contract/deploy", body);
         if (r.status === 200) {
             chainRegistryScan().catch(() => {});
         }

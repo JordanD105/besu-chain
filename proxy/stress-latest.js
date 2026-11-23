@@ -2371,18 +2371,8 @@ function codeCheck(input, code) {
     return "same length as the artifact, not identical";
 }
 
-app.get("/admin/contracts", adminGuard, adminRoute(async () => {
-    requireSections();
-    const book = await loadContracts(true);
-    return {
-        success: true,
-        center: isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : null,
-        contracts: [...book.values()].map(({ iface, abi, ...rest }) => rest)
-    };
-}));
-
 // Dry run: every check, nothing signed
-app.post("/admin/contracts/check", adminGuard, adminRoute(async (req) => {
+app.post("/admin/contract/check", adminGuard, adminRoute(async (req) => {
     requireSections();
     requireCenter();
     const input = await templateInput(req.body);
@@ -2404,7 +2394,7 @@ app.post("/admin/contracts/check", adminGuard, adminRoute(async (req) => {
 }));
 
 // Deploy (signed by the center), check the code, register it (registry admin)
-app.post("/admin/contracts/deploy", adminGuard, adminRoute(async (req) => {
+app.post("/admin/contract/deploy", adminGuard, adminRoute(async (req) => {
     requireSections();
     requireCenter();
     return deployAndRegister(await templateInput(req.body));
@@ -2447,13 +2437,12 @@ async function deployAndRegister(input) {
 // One nickname per section user account, bound to it (never transferable), with an edge level that only
 // goes up. Bought and upgraded by the user account (its MPC key signs), paid to its section's
 // consumption account. The edge levels are set by the contract account center (the minter).
-// The collection: the latest registered contract that has buyNickname (POST /admin/nickname/deploy).
+// The collection: the latest registered contract that has buyNickname (POST /admin/contract/deploy, template nickname-collection).
 
 const nicknameArtifact = require("./nickname-collection.json");
 const nicknameIface = new ethers.Interface(nicknameArtifact.abi);
 const EDGE_PATTERNS = ["solid", "double", "dashed", "gradient", "glow"];
 const NICKNAME_FORBIDDEN = /[<>&"'\\\u0000-\u001f\u007f]/;
-const nicknameBook = { address: null, scannedTo: -1, tokens: new Map() };  // tokenId -> { nickname, owner, level }
 
 function ethText(wei) {
     return ethers.formatEther(wei).replace(/\.0$/, "");
@@ -2467,7 +2456,7 @@ async function nicknameCollection(optional = false) {
     const entry = pick(await loadContracts()) || pick(await loadContracts(true));
 
     if (!entry && !optional) {
-        throw httpError(503, "no nickname collection yet: deploy one (POST /admin/contracts/deploy with template nickname-collection, or the chainlens Nicknames page)");
+        throw httpError(503, "no nickname collection yet: deploy one (POST /admin/contract/deploy with template nickname-collection, or the chainlens Nicknames page)");
     }
 
     return entry || null;
@@ -2561,31 +2550,6 @@ async function nicknameInfo(address, tokenId) {
     };
 }
 
-// Every nickname and its level, from the collection's events (for the admin list and the counts)
-async function scanNicknames(entry) {
-    if (nicknameBook.address !== entry.address) {
-        Object.assign(nicknameBook, { address: entry.address, scannedTo: entry.registeredIn - 1, tokens: new Map() });
-    }
-
-    const topics = [[nicknameIface.getEvent("NicknameBought").topicHash, nicknameIface.getEvent("EdgeUpgraded").topicHash]];
-    const logs = await registryLogs(entry.address, nicknameBook.scannedTo + 1, topics);
-
-    for (const log of logs) {
-        const parsed = nicknameIface.parseLog(log);
-        const id = parsed.args.tokenId.toString();
-
-        if (parsed.name === "NicknameBought") {
-            nicknameBook.tokens.set(id, { tokenId: id, nickname: parsed.args.nickname, account: ethers.getAddress(parsed.args.buyer), level: 0,
-                block: parseInt(log.blockNumber, 16) });
-        } else if (nicknameBook.tokens.has(id)) {
-            nicknameBook.tokens.get(id).level = Number(parsed.args.toLevel);
-        }
-    }
-
-    nicknameBook.scannedTo = parseInt(await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []), 16);
-    return nicknameBook.tokens;
-}
-
 // ---- Applications
 
 // ---- Admin (chainlens Nicknames page): the collection, its edge levels, prices, reserved nicknames
@@ -2641,34 +2605,6 @@ function adminPrice(value) {
 
     return ethToWei(String(value));
 }
-
-app.get("/admin/nickname", adminGuard, adminRoute(async (req) => {
-    const entry = await nicknameCollection(true);
-
-    if (!entry) {
-        return { success: true, collection: null };
-    }
-
-    const [[price], [supply], [nameValue], [symbolValue], edges, tokens] = await Promise.all([
-        nickCall(entry.address, "nicknamePrice"), nickCall(entry.address, "totalSupply"),
-        nickCall(entry.address, "name"), nickCall(entry.address, "symbol"), readEdges(entry.address), scanNicknames(entry)
-    ]);
-    const list = [...tokens.values()];
-    edges.forEach((e) => { e.holders = list.filter((t) => t.level === e.level).length; });
-    const q = String(req.query.q || "").normalize("NFC").trim().toLowerCase();
-    const found = list.filter((t) => !q || t.nickname.toLowerCase().includes(q) || t.account.toLowerCase().includes(q))
-        .sort((a, b) => b.block - a.block);
-    return {
-        success: true,
-        collection: { address: entry.address, name: nameValue, symbol: symbolValue, registeredIn: entry.registeredIn },
-        nicknamePrice: ethText(price),
-        nicknames: Number(supply),
-        edges,
-        list: found.slice(0, 200).map(({ block, ...t }) => t),
-        listed: Math.min(found.length, 200),
-        matching: found.length
-    };
-}));
 
 // ---- Applications: read and write registered contracts (docs/reference/proxy-api.md)
 // One API shape for every registered contract:
@@ -3013,10 +2949,19 @@ function contractRoute(handler) {
     };
 }
 
+// The read routes: a section key (required with sections_required), or the admin caller (chainlens)
+async function contractReader(req) {
+    if (String(req.headers["x-section-key"] || "").trim() === "" && isAdminCaller(req)) {
+        return null;
+    }
+
+    return sectionFromRequest(req);
+}
+
 // Read: a view/pure function (eth_call on the latest block). With sections_required, a section key.
 // { "calls": [ {contract, function, args}, ... ] }: up to 50 reads, each answered (or failed) on its own.
 app.post("/contract/call", contractRoute(async (req) => {
-    await sectionFromRequest(req);
+    await contractReader(req);
     const calls = (req.body || {}).calls;
 
     if (calls === undefined) {
@@ -3042,7 +2987,7 @@ app.post("/contract/call", contractRoute(async (req) => {
 const symbolCache = new Map();
 
 app.get("/contract/list", contractRoute(async (req) => {
-    await sectionFromRequest(req);
+    await contractReader(req);
     const q = req.query || {};
     const latestNickname = await nicknameCollection(true);
     const rows = [];
@@ -3079,7 +3024,7 @@ app.get("/contract/list", contractRoute(async (req) => {
         rows.push(row);
     }
 
-    return { success: true, contracts: rows };
+    return { success: true, center: isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : null, contracts: rows };
 }));
 
 // The events of a registered contract, newest first.
@@ -3108,7 +3053,7 @@ function sameValue(a, b) {
 }
 
 app.post("/contract/events", contractRoute(async (req) => {
-    await sectionFromRequest(req);
+    await contractReader(req);
     const b = req.body || {};
     const entry = await registeredContract(b.contract);
     let fragment;
@@ -3501,7 +3446,7 @@ app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
 }));
 
 // ---- Deploy templates: the platform's own contracts, compiled into the proxy image
-// POST /admin/contracts/check and /admin/contracts/deploy with
+// POST /admin/contract/check and /admin/contract/deploy with
 //   { "template": "nft-collection", "name": "Dragons", "symbol": "DRG" }
 //   { "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "edge0": "Simple", "another": false }
 async function templateInput(body) {
@@ -3554,7 +3499,7 @@ async function templateInput(body) {
 
 // ---- Removed routes: 410 with the call that replaces each
 const MOVED = [
-    ["post", "/nft/deploy", "POST /admin/contracts/deploy { \"template\": \"nft-collection\", \"name\", \"symbol\" }"],
+    ["post", "/nft/deploy", "POST /admin/contract/deploy { \"template\": \"nft-collection\", \"name\", \"symbol\" }"],
     ["post", "/nft/mint", "POST /admin/contract/send { \"contract\", \"function\": \"mint\", \"args\": { \"name\", \"image\", \"price\" } }"],
     ["post", "/nft/transfer", "POST /contract/send { \"contract\", \"function\": \"buy\", \"args\": { \"tokenId\" }, \"from\": buyer } (a resale: the seller first sends \"approve\" { \"tokenId\" }); version-2 collections are retired"],
     ["get", "/nft/contract", "GET /contract/list?type=nft"],
@@ -3568,10 +3513,14 @@ const MOVED = [
     ["get", "/nickname/quote", "POST /contract/call { \"contract\", \"function\": \"quote\", \"args\": { \"account\", \"level\" } }"],
     ["post", "/nickname/buy", "POST /contract/send { \"contract\", \"function\": \"buyNickname\", \"args\": { \"nickname\" }, \"from\" }"],
     ["post", "/nickname/edge", "POST /contract/send { \"contract\", \"function\": \"upgradeEdge\", \"args\": { \"level\" }, \"from\" }"],
-    ["post", "/admin/nickname/deploy", "POST /admin/contracts/deploy { \"template\": \"nickname-collection\", \"name\", \"symbol\", \"price\", \"edge0\" }"],
+    ["post", "/admin/nickname/deploy", "POST /admin/contract/deploy { \"template\": \"nickname-collection\", \"name\", \"symbol\", \"price\", \"edge0\" }"],
     ["put", "/admin/nickname/price", "POST /admin/contract/send { \"contract\", \"function\": \"setNicknamePrice\", \"args\": { \"price\" } }"],
     ["post", "/admin/nickname/edges", "POST /admin/contract/send { \"contract\", \"function\": \"addEdge\", \"args\": { \"name\", \"price\", \"color\", ... } }"],
     ["put", "/admin/nickname/edges/:level", "POST /admin/contract/send { \"contract\", \"function\": \"setEdge\", \"args\": { \"level\", ...changes } }"],
+    ["get", "/admin/contracts", "GET /contract/list (\"center\": the contract account center)"],
+    ["post", "/admin/contracts/check", "POST /admin/contract/check (same body)"],
+    ["post", "/admin/contracts/deploy", "POST /admin/contract/deploy (same body)"],
+    ["get", "/admin/nickname", "GET /contract/list?type=nickname (the collection), POST /contract/call (nicknamePrice, edgeCount, totalSupply) and POST /contract/events (NicknameBought, EdgeUpgraded)"],
     ["post", "/admin/nickname/reserve", "POST /admin/contract/send { \"contract\", \"function\": \"reserve\", \"args\": { \"nicknames\", \"reserved\" } }"]
 ];
 
