@@ -1024,6 +1024,11 @@ app.post("/account/pool", async (req, res) => {
 // Transfer
 // =======================
 
+// The commit this proxy was deployed from (chainlens shows it next to its own)
+app.get("/version", (req, res) => {
+    res.json({ commit: String(process.env.APP_COMMIT || "").slice(0, 40) });
+});
+
 // Undo of a section's +x / -x: { txHash, memo } with X-Section-Key
 app.post("/transfer/undo", async (req, res) => {
     try {

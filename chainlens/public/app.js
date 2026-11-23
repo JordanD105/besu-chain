@@ -41,9 +41,6 @@ themeButton.addEventListener("click", () => {
     applyTheme(!document.body.classList.contains("light"));
 });
 
-document.querySelector("#chain-toggle").addEventListener("click", () => {
-    document.querySelector("#chain-links").hidden = !document.querySelector("#chain-links").hidden;
-});
 
 document.querySelector("#search").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -514,7 +511,7 @@ function txTo(tx) {
         return tx.toLabel ? contractLink(tx.toLabel, tx.to, "#/contracts/" + tx.to) : addr(tx.to);
     }
 
-    return tx.contractAddress ? ident(tx.contractAddress, "#/transactions?address=" + tx.contractAddress) : el("span", {}, "—");
+    return tx.contractAddress ? ident(tx.contractAddress, "#/activity/transactions?address=" + tx.contractAddress) : el("span", {}, "—");
 }
 
 function isImageUrl(url) {
@@ -585,7 +582,7 @@ function memoNodes(memo) {
 
 function txColumns() {
     return [
-        { label: "col.hash", sort: (tx) => tx.hash, cell: (tx) => ident(tx.hash, "#/transactions/" + tx.hash) },
+        { label: "col.hash", sort: (tx) => tx.hash, cell: (tx) => ident(tx.hash, "#/activity/transactions/" + tx.hash) },
         { label: "col.type", sort: (tx) => tx.type, search: (tx) => tx.type + " " + t(tx.type === "call" ? "tx.call" : (tx.type === "create" ? "tx.create" : "tx.transfer")), cell: (tx) => badge(tx.type) },
         { label: "col.function", sort: (tx) => tx.functionName || "", search: (tx) => (tx.functionName || "") + " " + fnLabel(tx.functionName), cell: (tx) => fnLabel(tx.functionName) },
         { label: "col.from", sort: (tx) => tx.from, cell: (tx) => addr(tx.from) },
@@ -680,11 +677,12 @@ function paintStatus(status) {
 
 function noteStatus(status) {
     paintStatus(status);
+    paintChrome(status);
     statusSig = [status.ready, status.error || "", status.head, status.indexed, status.transactions, status.accounts, status.contracts, status.nfts, status.peers].join("|");
 }
 
 function skipRefresh() {
-    if (document.hidden || /^#\/(contracts\/0x|deploy|sections)/.test(location.hash)) {
+    if (document.hidden || /^#\/(contracts\/0x|admin\/)/.test(location.hash)) {
         return true;
     }
 
@@ -760,6 +758,15 @@ async function render(options) {
         enodeOpen = false;
     }
 
+    // older links (and bookmarks) -> the new scheme
+    for (const [from, to] of ROUTE_ALIASES) {
+        if (from.test(location.hash)) {
+            rendering = false;
+            location.replace(location.hash.replace(from, to));
+            return;
+        }
+    }
+
     const { path, params } = parseHash();
     const page = Number(params.get("page") || 1);
     markNav(path);
@@ -786,8 +793,8 @@ async function render(options) {
             return showAccount(account[1]);
         }
 
-        if (path === "#/nfts") {
-            return showNfts(page, status);
+        if (path === "#/items/avatars" || path === "#/items/nicknames") {
+            return showNfts(page, status, path.endsWith("avatars") ? "avatar" : "nickname");
         }
 
         const nft = path.match(/^#\/nfts\/(0x[0-9a-fA-F]{40})\/(\d+)$/);
@@ -799,46 +806,25 @@ async function render(options) {
             return showContracts(page, params.get("type") || "all", status);
         }
 
-        if (path === "#/deploy") {
-            return showDeploy();
-        }
-
-        if (path === "#/sections") {
-            return showSections();
-        }
-
-        if (path === "#/nicknames") {
-            return showNicknames(params.get("q") || "");
-        }
-
-        const sectionPage = path.match(/^#\/sections\/(\d+)$/);
-        if (sectionPage) {
-            return showSection(sectionPage[1]);
-        }
-
         const contract = path.match(/^#\/contracts\/(0x[0-9a-fA-F]{40})$/);
         if (contract) {
             return showContract(contract[1]);
         }
 
-        if (path === "#/transactions") {
-            return showTxs(page, status);
+        if (path === "#/activity/transactions") {
+            return showActivity(params, status);
         }
 
-        if (path === "#/memos") {
-            return showMemos(params);
-        }
-
-        const tx = path.match(/^#\/transactions\/(0x[0-9a-fA-F]{64})$/);
+        const tx = path.match(/^#\/activity\/transactions\/(0x[0-9a-fA-F]{64})$/);
         if (tx) {
             return showTx(tx[1]);
         }
 
-        if (path === "#/blocks") {
+        if (path === "#/activity/blocks") {
             return showBlocks(page, status);
         }
 
-        const block = path.match(/^#\/blocks\/(\d+)$/);
+        const block = path.match(/^#\/activity\/blocks\/(\d+)$/);
         if (block) {
             return showBlock(block[1]);
         }
@@ -849,6 +835,32 @@ async function render(options) {
 
         if (path === "#/api") {
             return showApi();
+        }
+
+        // admin (hidden unless this address may use it; the server checks the token)
+        if (path === "#/admin/sections") {
+            return showSections();
+        }
+
+        const sectionPage = path.match(/^#\/admin\/sections\/(\d+)$/);
+        if (sectionPage) {
+            return showSection(sectionPage[1], params.get("tab") || "overview");
+        }
+
+        if (path === "#/admin/avatars") {
+            return showAvatarAdmin(params.get("c") || "");
+        }
+
+        if (path === "#/admin/nicknames") {
+            return showNicknames(params.get("q") || "");
+        }
+
+        if (path === "#/admin/deploy") {
+            return showDeploy();
+        }
+
+        if (path === "#/admin/gateways") {
+            return showGateways();
         }
 
         show(el("div", { class: "card" }, t("page.missing")));
@@ -871,8 +883,19 @@ async function render(options) {
     }
 }
 
+// old hash -> new hash (prefix); bookmarks and links from before the new navigation keep working
+const ROUTE_ALIASES = [
+    [/^#\/transactions(?=$|[/?])/, "#/activity/transactions"],
+    [/^#\/memos(?=$|[/?])/, "#/activity/transactions"],
+    [/^#\/blocks(?=$|[/?])/, "#/activity/blocks"],
+    [/^#\/nfts(?=$|\?)/, "#/items/avatars"],
+    [/^#\/sections(?=$|[/?])/, "#/admin/sections"],
+    [/^#\/nicknames(?=$|[/?])/, "#/admin/nicknames"],
+    [/^#\/deploy(?=$|[/?])/, "#/admin/deploy"]
+];
+
 function markNav(path) {
-    for (const link of nav.querySelectorAll("a")) {
+    for (const link of nav.querySelectorAll('a:not([target="_blank"])')) {
         const href = link.getAttribute("href");
         link.classList.toggle("active", href === path || (href !== "#/" && path.startsWith(href)));
     }
@@ -1601,9 +1624,10 @@ function nftSearchText(nft) {
     return [nft.name, nft.tokenId, nft.collection, nft.owner, nft.contract, nft.amount, nft.type, nft.description, ...traits, ...properties].join(" ");
 }
 
-async function showNfts(page, status) {
+async function showNfts(page, status, kind) {
     const token = showToken;
-    const data = await api("/api/nfts?limit=20000");
+    const base = kind === "nickname" ? "#/items/nicknames" : "#/items/avatars";
+    const data = await api("/api/nfts?limit=20000&kind=" + (kind || "avatar"));
 
     if (token !== showToken) {
         return;
@@ -1625,10 +1649,10 @@ async function showNfts(page, status) {
         oninput: (event) => {
             query = event.target.value;
             tableStates.set("nfts", { query });
-            const hash = location.hash || "#/nfts";
+            const hash = location.hash || base;
 
-            if (hash !== "#/nfts" && hash !== "#/nfts?page=1") {
-                location.hash = "#/nfts";
+            if (hash !== base && hash !== base + "?page=1") {
+                location.hash = base;
                 return;
             }
 
@@ -1665,7 +1689,7 @@ async function showNfts(page, status) {
             total: list.length,
             limit,
             page: current
-        }, (next) => next === 1 ? "#/nfts" : "#/nfts?page=" + next);
+        }, (next) => next === 1 ? base : base + "?page=" + next);
         pagerHost.replaceChildren(nftPager());
         pagerTail.replaceChildren(nftPager());
     }
@@ -1673,7 +1697,7 @@ async function showNfts(page, status) {
     paint();
     show(el("section", { class: "card" }, [
         notice(status),
-        el("h2", {}, t("nft.title")),
+        el("h2", {}, t(kind === "nickname" ? "items.nicknames" : "items.avatars")),
         el("div", { class: "nft-tools" }, [input, pagerHost]),
         empty,
         grid,
@@ -1726,14 +1750,13 @@ async function showContracts(page, type, status) {
     if (token !== showToken) {
         return;
     }
-    const select = el("select", { onchange: (event) => { location.hash = "#/contracts?type=" + event.target.value; } }, [
-        el("option", { value: "all" }, t("contracts.all")),
-        el("option", { value: "ERC721" }, t("contracts.erc721"))
-    ]);
+    const select = el("select", { onchange: (event) => { location.hash = "#/contracts?type=" + event.target.value; } },
+        ["all", "avatar", "nickname", "registry", "transferUndo", "registered", "erc721", "contract"]
+            .map((v) => el("option", { value: v }, v === "all" ? t("contracts.all") : t("ctype." + v))));
     select.value = type;
     const table = dataTable([
         { label: "col.address", sort: (row) => row.label || row.address, search: (row) => row.label + " " + row.address, cell: (row) => contractLink(row.label, row.address, "#/contracts/" + row.address) },
-        { label: "col.type", sort: (row) => row.type, cell: (row) => el("span", { class: "badge type" }, row.type) },
+        { label: "col.type", sort: (row) => row.platform || row.type, search: (row) => t("ctype." + (row.platform || "contract")), cell: (row) => el("span", { class: "badge type" }, t("ctype." + (row.platform || "contract"))) },
         { label: "col.txCount", sort: (row) => row.txCount || 0, cell: (row) => String(row.txCount) },
         { label: "col.created", sort: (row) => row.createdAt || 0, search: (row) => stamp(row.createdAt), cell: (row) => stamp(row.createdAt) },
         { label: "col.last", sort: (row) => row.lastAt || 0, search: (row) => ago(row.lastAt), cell: (row) => ago(row.lastAt) }
@@ -1816,8 +1839,6 @@ async function avatarAdminCard(collection) {
     if (!status.enabled) {
         return null;
     }
-    const tokenInput = el("input", { class: "table-search", type: "password", placeholder: t("sections.token"), "aria-label": t("sections.token"), autocomplete: "off", value: deployToken() });
-    tokenInput.addEventListener("input", () => setDeployToken(tokenInput.value.trim()));
     const post = (action, body) => deployPost("/api/avataradmin/" + action, Object.assign({ collection }, body));
 
     const m = { image: itemInput("nft.image", { placeholder: "https://…/fox.png" }), price: itemInput("nft.price", { value: "0" }),
@@ -1863,7 +1884,6 @@ async function avatarAdminCard(collection) {
     return el("section", { class: "card stack" }, [
         el("h2", {}, t("nft.adminTitle")),
         el("div", { class: "muted", style: "margin-bottom:12px" }, t("nft.adminNote")),
-        el("label", {}, [el("span", { class: "muted" }, t("sections.token")), tokenInput]),
         memoBox(),
         mint, price, sell, buyers,
         el("h3", {}, t("item.list")), list
@@ -1886,8 +1906,8 @@ async function showContract(address) {
         ...kv(t("contract.codeSize"), data.codeSize + " bytes"),
         ...(rec ? [
             ...kv(t("contract.deployer"), addr(rec.deployer)),
-            ...kv(t("contract.deployTx"), rec.txHash ? ident(rec.txHash, "#/transactions/" + rec.txHash) : null),
-            ...kv(t("tx.block"), rec.blockNumber != null ? el("a", { href: "#/blocks/" + rec.blockNumber }, "#" + rec.blockNumber) : null),
+            ...kv(t("contract.deployTx"), rec.txHash ? ident(rec.txHash, "#/activity/transactions/" + rec.txHash) : null),
+            ...kv(t("tx.block"), rec.blockNumber != null ? el("a", { href: "#/activity/blocks/" + rec.blockNumber }, "#" + rec.blockNumber) : null),
             ...kv(t("contract.deployedAt"), rec.deployedAt),
             ...kv(t("contract.artifact"), rec.artifact),
             ...kv(t("contract.args"), rec.constructorArgs && rec.constructorArgs.length ? JSON.stringify(rec.constructorArgs) : "—"),
@@ -1902,7 +1922,7 @@ async function showContract(address) {
         el("section", { class: "card" }, [
             el("div", { class: "card-head" }, [
                 el("h2", {}, [data.label && data.label !== data.address ? data.label : t("contract.details"), " ", data.registered ? el("span", { class: "badge abi" }, "ABI") : null]),
-                el("a", { href: "#/transactions?address=" + data.address }, t("contract.txs") + " (" + data.txCount + ")")
+                el("a", { href: "#/activity/transactions?address=" + data.address }, t("contract.txs") + " (" + data.txCount + ")")
             ]),
             facts
         ])
@@ -2013,10 +2033,29 @@ async function deployPost(path, body) {
         body: JSON.stringify(withPageMemo(body))
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        throw new Error(data.error || ("HTTP " + response.status));
+    if (response.status === 401) {
+        signInDialog(() => {});
     }
+    if (!response.ok) {
+        throw Object.assign(new Error(data.error || ("HTTP " + response.status)), { status: response.status });
+    }
+    noteResult(data);
     return data;
+}
+
+// every transaction an admin action made: a toast now, a refresh when indexed
+function noteResult(data) {
+    if (!data || typeof data !== "object") {
+        return;
+    }
+    if (data.txHash) {
+        notePending(data);
+    }
+    for (const r of (data.results || [])) {
+        if (r && r.txHash) {
+            notePending(r);
+        }
+    }
 }
 
 function deployBody(extra) {
@@ -2106,8 +2145,8 @@ async function showDeploy() {
                 el("h3", {}, t("deploy.done")),
                 el("div", { class: "kv" }, [
                     el("span", { class: "muted" }, t("deploy.address")), el("a", { href: "#/contracts/" + r.address }, r.address),
-                    el("span", { class: "muted" }, t("contract.deployTx")), ident(r.txHash, "#/transactions/" + r.txHash),
-                    el("span", { class: "muted" }, t("tx.block")), el("a", { href: "#/blocks/" + r.blockNumber }, "#" + r.blockNumber),
+                    el("span", { class: "muted" }, t("contract.deployTx")), ident(r.txHash, "#/activity/transactions/" + r.txHash),
+                    el("span", { class: "muted" }, t("tx.block")), el("a", { href: "#/activity/blocks/" + r.blockNumber }, "#" + r.blockNumber),
                     el("span", { class: "muted" }, t("contract.code")), el("span", {}, r.codeCheck)
                 ]),
                 el("div", { class: "muted", style: "margin-top:8px" }, r.saved ? t("deploy.saved") : t("deploy.notSaved"))
@@ -2115,8 +2154,6 @@ async function showDeploy() {
         }
     }
 
-    const tokenInput = el("input", { class: "table-search", type: "password", placeholder: t("deploy.token"), "aria-label": t("deploy.token"), autocomplete: "off", value: deployToken() });
-    tokenInput.addEventListener("input", () => setDeployToken(tokenInput.value.trim()));
 
     const fileInput = el("input", { type: "file", accept: ".json,application/json", class: "deploy-file" });
     fileInput.addEventListener("change", async () => {
@@ -2196,7 +2233,6 @@ async function showDeploy() {
             el("h2", {}, t("deploy.title")),
             el("div", { class: "muted", style: "margin-bottom:12px" }, t("deploy.intro").replace("{deployer}", status.deployer)),
             el("div", { class: "deploy-form" }, [
-                el("label", {}, [el("span", { class: "muted" }, t("deploy.token")), tokenInput]),
                 el("label", {}, [el("span", { class: "muted" }, t("deploy.artifact")), fileInput]),
                 contractRow,
                 el("div", {}, [el("span", { class: "muted" }, t("contract.args")), argsBox]),
@@ -2223,17 +2259,6 @@ async function sectionGet(path) {
         throw error;
     }
     return data;
-}
-
-function tokenBox(onSaved) {
-    const input = el("input", { class: "table-search", type: "password", placeholder: t("sections.token"), "aria-label": t("sections.token"), autocomplete: "off", value: deployToken() });
-    const save = el("button", { type: "button", class: "fn-run" }, t("sections.useToken"));
-    save.addEventListener("click", () => { setDeployToken(input.value.trim()); onSaved(); });
-    input.addEventListener("keydown", (event) => { if (event.key === "Enter") save.click(); });
-    return el("div", { class: "deploy-form" }, [
-        el("label", {}, [el("span", { class: "muted" }, t("sections.token")), input]),
-        el("div", { class: "deploy-buttons" }, [save])
-    ]);
 }
 
 function keyBox(name, key) {
@@ -2263,16 +2288,16 @@ async function showSections() {
     try {
         data = deployToken() ? await sectionGet("/api/sections") : null;
     } catch (error) {
-        if (error.status === 401) {
-            setDeployToken("");
-        }
+        lastAdminStatus = error.status || 0;
         message.textContent = error.message;
     }
     if (token !== showToken) {
         return;
     }
     if (!data) {
-        return show(el("section", { class: "card" }, [el("h2", {}, t("sections.title")), el("div", { class: "muted", style: "margin-bottom:12px" }, t("sections.needToken")), tokenBox(() => render()), message]));
+        // no token or a wrong one: sign in; any other error: the error itself (not the sign-in)
+        return show(!deployToken() || lastAdminStatus === 401 ? adminError({ status: 401 }, t("sections.title"))
+            : el("section", { class: "card" }, [el("h2", {}, t("sections.title")), uiError(message.textContent)]));
     }
 
     // create
@@ -2290,7 +2315,7 @@ async function showSections() {
         try {
             const info = descInput.value.trim() ? { description: descInput.value.trim() } : {};
             const r = await deployPost("/api/sections", { name, info });
-            createResult.replaceChildren(keyBox(r.section.name, r.apiKey), el("div", { style: "margin-top:8px" }, el("a", { href: "#/sections/" + r.section.id }, t("sections.open").replace("{name}", r.section.name))));
+            createResult.replaceChildren(keyBox(r.section.name, r.apiKey), el("div", { style: "margin-top:8px" }, el("a", { href: "#/admin/sections/" + r.section.id }, t("sections.open").replace("{name}", r.section.name))));
             nameInput.value = "";
             descInput.value = "";
         } catch (error) {
@@ -2301,7 +2326,7 @@ async function showSections() {
 
     const table = dataTable([
         { label: "col.id", sort: (row) => row.id, cell: (row) => String(row.id) },
-        { label: "sections.name", sort: (row) => row.name, search: (row) => row.name, cell: (row) => el("a", { href: "#/sections/" + row.id }, row.name) },
+        { label: "sections.name", sort: (row) => row.name, search: (row) => row.name, cell: (row) => el("a", { href: "#/admin/sections/" + row.id }, row.name) },
         { label: "sections.status", sort: (row) => (row.active ? 1 : 0), cell: (row) => el("span", { class: "badge " + (row.active ? "type" : "create") }, row.active ? t("sections.active") : t("sections.disabled")) },
         { label: "sections.upfront", sort: (row) => Number(row.balances.upfront), cell: (row) => row.balances.upfront },
         { label: "sections.consumption", sort: (row) => Number(row.balances.consumption), cell: (row) => row.balances.consumption },
@@ -2317,7 +2342,7 @@ async function showSections() {
             (x.mode === "unreachable" ? t("gateway.unreachable") : t("gateway.offline")).replace("{section}", name(x.section)).replace("{mode}", x.mode)
                 .replace("{queue}", x.queue || 0).replace("{since}", String(x.since || "").replace("T", " ").slice(0, 16)))),
         ...g.gateways.filter((x) => x.corrections && x.corrections.open > 0).map((x) => el("div", { class: "card", style: "margin-bottom:12px" },
-            el("a", { href: "#/sections/" + x.section }, t("gateway.openNotice").replace("{section}", name(x.section)).replace("{n}", x.corrections.open)))));
+            el("a", { href: "#/admin/sections/" + x.section }, t("gateway.openNotice").replace("{section}", name(x.section)).replace("{n}", x.corrections.open)))));
     }).catch(() => {});
 
     show(el("div", {}, [
@@ -2340,7 +2365,7 @@ async function showSections() {
     ]));
 }
 
-async function showSection(id) {
+async function showSection(id, tab) {
     const token = showToken;
     const status = await api("/api/sections/status");
     if (token !== showToken) {
@@ -2355,7 +2380,7 @@ async function showSection(id) {
     } catch (error) {
         if (error.status === 401) {
             setDeployToken("");
-            return show(el("section", { class: "card" }, [el("h2", {}, t("sections.title")), el("div", { class: "muted", style: "margin-bottom:12px" }, t("sections.needToken")), tokenBox(() => render()), el("div", { class: "bad-text" }, error.message)]));
+            return show(adminError(error, t("sections.title")));
         }
         throw error;
     }
@@ -2366,14 +2391,14 @@ async function showSection(id) {
     const result = el("div", { class: "deploy-error" });
     if (s.archived) {
         return show(el("div", {}, [
-            el("div", { class: "muted", style: "margin-bottom:10px" }, [el("a", { href: "#/sections" }, t("sections.title")), " / ", s.name]),
+            el("div", { class: "muted", style: "margin-bottom:10px" }, [el("a", { href: "#/admin/sections" }, t("sections.title")), " / ", s.name]),
             el("section", { class: "card" }, [el("h2", {}, s.name + " (" + t("sections.archivedBadge") + ")"), el("div", { class: "muted" }, t("sections.archivedNote"))])
         ]));
     }
     const done = (r, text) => {
-        result.replaceChildren(el("span", {}, text), r.txHash ? el("span", {}, [" ", ident(r.txHash, "#/transactions/" + r.txHash)]) : null,
+        result.replaceChildren(el("span", {}, text), r.txHash ? el("span", {}, [" ", ident(r.txHash, "#/activity/transactions/" + r.txHash)]) : null,
             el("span", { class: "muted" }, " " + t("sections.refreshSoon")));
-        setTimeout(() => { if (location.hash === "#/sections/" + id) render(); }, 4000);
+        // the page refreshes when chainlens indexes the transaction (live feed), no timer
     };
     const act = async (button, action, body, confirmText, onDone) => {
         if (confirmText && !window.confirm(confirmText)) {
@@ -2445,7 +2470,7 @@ async function showSection(id) {
         }
         act(archiveButton, "archive", { confirm: typed }, null, () => {
             result.replaceChildren(el("span", {}, t("sections.archived").replace("{name}", s.name)));
-            setTimeout(() => { location.hash = "#/sections"; }, 2500);
+            setTimeout(() => { location.hash = "#/admin/sections"; }, 2500);
         });
     });
     const keyButton = el("button", { type: "button", class: "fn-run" }, t("sections.rotate"));
@@ -2464,7 +2489,7 @@ async function showSection(id) {
             accountsBox.replaceChildren(r.accounts.length ? dataTable([
                 { label: "col.address", sort: (row) => row.address, search: (row) => row.address, cell: (row) => addr(row.address) },
                 { label: "account.balance", sort: (row) => Number(row.balance), cell: (row) => row.balance + " ETH" },
-                { label: "sections.addedIn", sort: (row) => row.addedIn, cell: (row) => el("a", { href: "#/blocks/" + row.addedIn }, "#" + row.addedIn) }
+                { label: "sections.addedIn", sort: (row) => row.addedIn, cell: (row) => el("a", { href: "#/activity/blocks/" + row.addedIn }, "#" + row.addedIn) }
             ], r.accounts, { sort: 2, dir: "desc", key: "section-accounts" }) : el("div", { class: "empty" }, t("sections.noAccounts")));
         } catch (error) {
             accountsBox.replaceChildren(el("span", { class: "bad-text" }, error.message));
@@ -2494,10 +2519,10 @@ async function showSection(id) {
     // undo of a +x / -x (docs/features/transfer-undo.md): the full amount, once, within undoDays
     const transferUndoCell = (row) => {
         if (row.undoneBy) {
-            return el("a", { href: "#/transactions/" + row.undoneBy, class: "muted" }, t("sections.undone"));
+            return el("a", { href: "#/activity/transactions/" + row.undoneBy, class: "muted" }, t("sections.undone"));
         }
         if (row.undoOf) {
-            return el("a", { href: "#/transactions/" + row.undoOf, class: "muted" }, t("sections.undoOfLink"));
+            return el("a", { href: "#/activity/transactions/" + row.undoOf, class: "muted" }, t("sections.undoOfLink"));
         }
         const fresh = row.timestamp && Date.now() / 1000 - row.timestamp < (data.undoDays || 7) * 86400;
         if (!(row.memoType === "transfer.in" || row.memoType === "transfer.out") || row.status !== "success" || !fresh) {
@@ -2516,12 +2541,53 @@ async function showSection(id) {
         { label: "col.from", sort: (row) => row.from, cell: (row) => addr(row.from) },
         { label: "col.to", sort: (row) => row.to || "", cell: (row) => (row.to ? addr(row.to) : el("span", {}, "—")) },
         { label: "sections.memo", sort: (row) => memoOf(row), search: (row) => memoOf(row), cell: (row) => memoOf(row) },
-        { label: "col.hash", sort: (row) => row.hash, cell: (row) => ident(row.hash, "#/transactions/" + row.hash) },
+        { label: "col.hash", sort: (row) => row.hash, cell: (row) => ident(row.hash, "#/activity/transactions/" + row.hash) },
         { label: "sections.undoCol", sort: (row) => (row.undoneBy ? 2 : 0), cell: (row) => transferUndoCell(row) }
     ], data.history, { sort: 0, dir: "desc", key: "section-history" });
 
+    // tabs (docs/components/chainlens.md): overview (money), accounts, history (with undo), gateway, settings
+    const tabs = ["overview", "accounts", "history"].concat(adminState.allowed && document.querySelector('[data-admin="gateways"]') && !document.querySelector('[data-admin="gateways"]').hidden ? ["gateway"] : []).concat(["settings"]);
+    const current = tabs.includes(tab) ? tab : "overview";
+    const panes = {
+        overview: () => [el("section", { class: "card" }, [memoBox()]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.money")),
+            el("div", { class: "section-actions" }, [
+                moveRow(t("sections.topup"), "topup", false, "SENDER01", t("sections.upfront")),
+                moveRow(t("sections.sweep"), "sweep", true, t("sections.consumption"), t("sections.payment")),
+                moveRow(t("sections.payback"), "payback", true, t("sections.payment"), "SENDER01")
+            ])
+        ])],
+        accounts: () => [el("section", { class: "card" }, [memoBox()]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.accounts")),
+            el("div", { class: "muted", style: "margin-bottom:10px" }, t("sections.accountsNote")),
+            accountsBox,
+            el("div", { class: "section-actions", style: "margin-top:12px" }, [
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.newAccount")), el("div", { class: "section-inputs" }, [newAmount, newPool, newButton])]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.transferLabel")), el("div", { class: "section-inputs" }, [transferAccount, moveAmount, moveButton])])
+            ])
+        ])],
+        history: () => [el("section", { class: "card" }, [memoBox()]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.history")),
+            data.history.length ? history : el("div", { class: "empty" }, t("sections.noHistory"))
+        ])],
+        gateway: () => [gatewayBox],
+        settings: () => [el("section", { class: "card" }, [memoBox()]),
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("sections.settings")),
+            el("div", { class: "section-actions" }, [
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.name")), el("div", { class: "section-inputs" }, [nameInput, nameButton])]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.infoFields")), infoRows]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.keyLabel")), el("div", { class: "section-inputs" }, [keyButton, activeButton])]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.accountsLabel")), el("div", { class: "section-inputs" }, replaceButtons)]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.archiveLabel")), el("div", { class: "section-inputs" }, [archiveButton])])
+            ])
+        ])]
+    };
     show(el("div", {}, [
-        el("div", { class: "muted", style: "margin-bottom:10px" }, [el("a", { href: "#/sections" }, t("sections.title")), " / ", s.name]),
+        el("div", { class: "muted", style: "margin-bottom:10px" }, [el("a", { href: "#/admin/sections" }, t("sections.title")), " / ", s.name]),
         el("section", { class: "card" }, [
             el("div", { class: "card-head" }, [
                 el("h2", {}, [s.name + " ", el("span", { class: "badge " + (s.active ? "type" : "create") }, s.active ? t("sections.active") : t("sections.disabled"))]),
@@ -2535,41 +2601,13 @@ async function showSection(id) {
                 el("span", { class: "muted" }, t("sections.created")), el("span", {}, stamp(s.createdAt))
             ])
         ]),
-        el("section", { class: "card" }, [memoBox()]),
-        el("section", { class: "card stack" }, [
-            el("h2", {}, t("sections.money")),
-            el("div", { class: "section-actions" }, [
-                moveRow(t("sections.topup"), "topup", false, "SENDER01", t("sections.upfront")),
-                moveRow(t("sections.sweep"), "sweep", true, t("sections.consumption"), t("sections.payment")),
-                moveRow(t("sections.payback"), "payback", true, t("sections.payment"), "SENDER01")
-            ]),
-            result
-        ]),
-        el("section", { class: "card stack" }, [
-            el("h2", {}, t("sections.accounts")),
-            el("div", { class: "muted", style: "margin-bottom:10px" }, t("sections.accountsNote")),
-            accountsBox,
-            el("div", { class: "section-actions", style: "margin-top:12px" }, [
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.newAccount")), el("div", { class: "section-inputs" }, [newAmount, newPool, newButton])]),
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.transferLabel")), el("div", { class: "section-inputs" }, [transferAccount, moveAmount, moveButton])])
-            ])
-        ]),
-        el("section", { class: "card stack" }, [
-            el("h2", {}, t("sections.settings")),
-            el("div", { class: "section-actions" }, [
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.name")), el("div", { class: "section-inputs" }, [nameInput, nameButton])]),
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.infoFields")), infoRows]),
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.keyLabel")), el("div", { class: "section-inputs" }, [keyButton, activeButton])]),
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.accountsLabel")), el("div", { class: "section-inputs" }, replaceButtons)]),
-                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.archiveLabel")), el("div", { class: "section-inputs" }, [archiveButton])])
-            ])
-        ]),
-        gatewayBox,
-        el("section", { class: "card stack" }, [
-            el("h2", {}, t("sections.history")),
-            data.history.length ? history : el("div", { class: "empty" }, t("sections.noHistory"))
-        ])
+        el("div", { class: "tabs page-tabs" }, tabs.map((k) => el("a", { href: "#/admin/sections/" + id + (k === "overview" ? "" : "?tab=" + k), class: k === current ? "active" : "" }, t("sectab." + k)))),
+        result,
+        ...panes[current]()
     ]));
+    if (current !== "gateway") {
+        return;
+    }
     gatewayCard(id).then((card) => gatewayBox.replaceChildren(card || "")).catch((error) => gatewayBox.replaceChildren(
         el("section", { class: "card" }, [el("h2", {}, t("gateway.title")), el("div", { class: "bad-text" }, error.message)])));
 }
@@ -2670,9 +2708,13 @@ async function nicknamePut(path, body) {
         body: JSON.stringify(withPageMemo(body))
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        throw new Error(data.error || ("HTTP " + response.status));
+    if (response.status === 401) {
+        signInDialog(() => {});
     }
+    if (!response.ok) {
+        throw Object.assign(new Error(data.error || ("HTTP " + response.status)), { status: response.status });
+    }
+    noteResult(data);
     return data;
 }
 
@@ -2724,16 +2766,16 @@ async function showNicknames(q) {
     try {
         data = deployToken() ? await sectionGet("/api/nicknames" + (q ? "?q=" + encodeURIComponent(q) : "")) : null;
     } catch (error) {
-        if (error.status === 401) {
-            setDeployToken("");
-        }
+        lastAdminStatus = error.status || 0;
         message.textContent = error.message;
     }
     if (token !== showToken) {
         return;
     }
     if (!data) {
-        return show(el("section", { class: "card" }, [el("h2", {}, t("nick.title")), el("div", { class: "muted", style: "margin-bottom:12px" }, t("sections.needToken")), tokenBox(() => render()), message]));
+        // no token or a wrong one: sign in; any other error: the error itself (not the sign-in)
+        return show(!deployToken() || lastAdminStatus === 401 ? adminError({ status: 401 }, t("nick.title"))
+            : el("section", { class: "card" }, [el("h2", {}, t("nick.title")), uiError(message.textContent)]));
     }
 
     if (!data.collection) {
@@ -2777,7 +2819,7 @@ async function showNicknames(q) {
     const search = el("input", { class: "table-search", value: q, placeholder: t("nick.search"), "aria-label": t("nick.search") });
     search.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
-            location.hash = "#/nicknames" + (search.value.trim() ? "?q=" + encodeURIComponent(search.value.trim()) : "");
+            location.hash = "#/admin/nicknames" + (search.value.trim() ? "?q=" + encodeURIComponent(search.value.trim()) : "");
         }
     });
     const list = dataTable([
@@ -2817,172 +2859,175 @@ async function showNicknames(q) {
     ]));
 }
 
-async function showSectionsNav() {
-    try {
-        const status = await api("/api/sections/status");
-        document.querySelector("#nav-sections").hidden = !status.enabled;
-        document.querySelector("#nav-nicknames").hidden = !status.enabled;
-    } catch (error) {
-        // stays hidden
-    }
+// ---- Navigation chrome: the Admin group and sign-in, versions, links (from /api/status)
+let adminState = { allowed: false, signedIn: false };
+let lastAdminStatus = 0;
+
+function paintChrome(status) {
+    const admin = status.admin || {};
+    adminState.allowed = Boolean(admin.allowed);
+    adminState.signedIn = adminState.allowed && Boolean(deployToken()) && sessionStorage.getItem("chainlens.adminOk") === deployToken();
+    document.querySelectorAll(".admin-only").forEach((node) => { node.hidden = !adminState.allowed; });
+    document.querySelectorAll('[data-admin="sections"]').forEach((node) => { node.hidden = !adminState.allowed || !admin.sections; });
+    document.querySelectorAll('[data-admin="deploy"]').forEach((node) => { node.hidden = !adminState.allowed || !admin.deploy; });
+    document.querySelectorAll('[data-admin="gateways"]').forEach((node) => { node.hidden = !adminState.allowed || !admin.gateways; });
+    const chip = document.querySelector("#admin-chip");
+    chip.hidden = !adminState.allowed;
+    chip.textContent = adminState.signedIn ? t("admin.signedIn") : t("admin.signIn");
+    chip.classList.toggle("on", adminState.signedIn);
+    const links = status.links || {};
+    const docs = document.querySelector("#nav-docs");
+    docs.hidden = !links.docs;
+    docs.href = links.docs || "#";
+    const grafana = document.querySelector("#nav-grafana");
+    grafana.hidden = !links.grafana;
+    grafana.href = links.grafana || "#";
+    const v = status.version || {};
+    const short7 = (c) => (c ? c.slice(0, 7) : "?");
+    const differ = v.chainlens && v.proxy && v.chainlens !== v.proxy;
+    const box = document.querySelector("#versions");
+    box.className = "versions" + (differ ? " bad-text" : "");
+    box.textContent = v.chainlens || v.proxy ? "chainlens " + short7(v.chainlens) + " · proxy " + short7(v.proxy) + (differ ? " · " + t("admin.versionsDiffer") : "") : "";
 }
 
-async function showDeployNav() {
-    try {
-        const status = await api("/api/deploy/status");
-        document.querySelector("#nav-deploy").hidden = !status.enabled;
-    } catch (error) {
-        // stays hidden
+// Sign in once (the admin token); 401 anywhere opens this again
+function signInDialog(onDone) {
+    const old = document.querySelector(".modal");
+    if (old) {
+        old.remove();
     }
-}
-
-const TX_TYPES = ["call", "transfer", "create"];
-
-function readTxFilter(params) {
-    const types = [...new Set((params.get("type") || "").split(",").map((value) => value.trim()).filter((value) => TX_TYPES.includes(value)))];
-    const from = Number(params.get("from")) || 0;
-    const to = Number(params.get("to")) || 0;
-    return { types, from: from > 0 ? from : 0, to: to > 0 ? to : 0 };
-}
-
-function txListHash(types, from, to) {
-    const { params } = parseHash();
-    const query = new URLSearchParams();
-    const address = params.get("address") || "";
-
-    if (types.length) {
-        query.set("type", types.join(","));
-    }
-
-    if (from) {
-        query.set("from", String(from));
-    }
-
-    if (to) {
-        query.set("to", String(to));
-    }
-
-    if (address) {
-        query.set("address", address);
-    }
-
-    const text = query.toString();
-    return "#/transactions" + (text ? "?" + text : "");
-}
-
-function matchesTxFilter(tx, filter) {
-    const timestamp = Number(tx.timestamp);
-
-    if (filter.types.length && !filter.types.includes(tx.type)) {
-        return false;
-    }
-
-    if (filter.from && timestamp < filter.from) {
-        return false;
-    }
-
-    if (filter.to && timestamp > filter.to) {
-        return false;
-    }
-
-    return true;
-}
-
-function localInputValue(unix) {
-    const date = new Date(Number(unix) * 1000);
-    const pad = (value) => String(value).padStart(2, "0");
-    return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + "T" + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds());
-}
-
-function unixFromInput(value) {
-    if (!value) {
-        return 0;
-    }
-
-    const ms = new Date(value).getTime();
-    return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
-}
-
-function dateField(label, unix) {
-    const input = el("input", { type: "datetime-local", step: "1", "aria-label": label });
-    const icon = el("span", { class: "cal", "aria-hidden": "true" });
-    icon.innerHTML = "<svg viewBox='0 0 16 16'><path fill='currentColor' d='M5 1.2h1.2V3h3.6V1.2H11V3h1.4A1.6 1.6 0 0 1 14 4.6v8.2A1.6 1.6 0 0 1 12.4 14.4H3.6A1.6 1.6 0 0 1 2 12.8V4.6A1.6 1.6 0 0 1 3.6 3H5V1.2zM3.2 6.2v6.6c0 .2.2.4.4.4h8.8c.2 0 .4-.2.4-.4V6.2H3.2z'/></svg>";
-    const field = el("label", { class: "filter-date" }, [icon, input, el("span", { class: "ph" }, label)]);
-
-    if (unix) {
-        input.value = localInputValue(unix);
-        field.classList.add("has-value");
-    }
-
-    const sync = () => field.classList.toggle("has-value", Boolean(input.value));
-    input.addEventListener("input", sync);
-    input.addEventListener("change", sync);
-    return { field, input };
-}
-
-function txFilter(filter) {
-    const boxes = TX_TYPES.map((type) => {
-        const input = el("input", { type: "checkbox", value: type });
-        input.checked = filter.types.includes(type);
-        return { input, label: el("label", { class: "filter-check" }, [input, t(type === "call" ? "tx.call" : (type === "create" ? "tx.create" : "tx.transfer"))]) };
-    });
-    const from = dateField(t("tx.filterFrom"), filter.from);
-    const to = dateField(t("tx.filterTo"), filter.to);
-    const panel = el("div", { class: "filter-pop", hidden: "" }, [
-        el("div", { class: "filter-label" }, t("tx.filterType")),
-        el("div", { class: "filter-types" }, boxes.map((box) => box.label)),
-        el("hr"),
-        el("div", { class: "filter-label" }, t("tx.filterTime")),
-        el("div", { class: "filter-times" }, [from.field, to.field]),
-        el("div", { class: "filter-actions" }, [
-            el("button", { type: "button", class: "filter-reset" }, t("tx.filterReset")),
-            el("button", { type: "button", class: "filter-apply" }, t("tx.filterApply"))
-        ])
-    ]);
-    const button = el("button", { type: "button", class: "filter-btn" + (filter.types.length || filter.from || filter.to ? " on" : ""), "aria-expanded": "false", "aria-label": t("tx.filter") }, [t("tx.filter"), el("span", { class: "caret", "aria-hidden": "true" })]);
-    const wrap = el("div", { class: "filter" }, [button, panel]);
-
-    const setOpen = (open) => {
-        panel.hidden = !open;
-        button.classList.toggle("open", open);
-        button.setAttribute("aria-expanded", open ? "true" : "false");
+    const input = el("input", { class: "table-search", type: "password", autocomplete: "off", placeholder: t("sections.token"), "aria-label": t("sections.token") });
+    const message = el("div", { class: "bad-text" });
+    const ok = el("button", { type: "button", class: "fn-run" }, t("admin.signIn"));
+    const cancel = el("button", { type: "button", class: "fn-run" }, t("admin.cancel"));
+    const modal = el("div", { class: "modal" }, el("div", { class: "card modal-box stack" }, [
+        el("h2", {}, t("admin.signInTitle")),
+        el("div", { class: "muted" }, t("sections.needToken")),
+        input, message, el("div", { class: "deploy-buttons" }, [ok, cancel])
+    ]));
+    const submit = async () => {
+        ok.disabled = true;
+        message.textContent = "";
+        try {
+            const r = await fetch("/api/admin/check", { method: "POST", headers: { authorization: "Bearer " + input.value.trim() } });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                throw new Error(d.error || "HTTP " + r.status);
+            }
+            setDeployToken(input.value.trim());
+            sessionStorage.setItem("chainlens.adminOk", input.value.trim());
+            modal.remove();
+            const status = await api("/api/status");
+            paintChrome(status);
+            if (onDone) {
+                onDone();
+            } else {
+                render();
+            }
+        } catch (error) {
+            message.textContent = error.message;
+            ok.disabled = false;
+        }
     };
+    ok.addEventListener("click", submit);
+    cancel.addEventListener("click", () => modal.remove());
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter") submit(); });
+    document.body.append(modal);
+    input.focus();
+}
 
-    button.addEventListener("click", (event) => {
-        event.stopPropagation();
-        setOpen(panel.hidden);
-    });
-    panel.querySelector(".filter-reset").addEventListener("click", () => {
-        for (const box of boxes) {
-            box.input.checked = false;
+function signOut() {
+    setDeployToken("");
+    sessionStorage.removeItem("chainlens.adminOk");
+    location.hash = "#/";
+    api("/api/status").then(paintChrome).catch(() => {});
+}
+
+document.querySelector("#admin-chip").addEventListener("click", () => {
+    if (adminState.signedIn) {
+        if (window.confirm(t("admin.signOutConfirm"))) {
+            signOut();
         }
+    } else {
+        signInDialog();
+    }
+});
 
-        from.input.value = "";
-        to.input.value = "";
-        from.field.classList.remove("has-value");
-        to.field.classList.remove("has-value");
-    });
-    panel.querySelector(".filter-apply").addEventListener("click", () => {
-        let start = unixFromInput(from.input.value);
-        let end = unixFromInput(to.input.value);
+// An admin page's error: 401 -> sign in; anything else -> the real message
+function adminError(error, title) {
+    if (error.status === 401) {
+        sessionStorage.removeItem("chainlens.adminOk");
+        return el("section", { class: "card stack" }, [el("h2", {}, title || t("admin.title")), el("div", { class: "muted" }, t("admin.needSignIn")),
+            el("div", { class: "deploy-buttons" }, [el("button", { type: "button", class: "fn-run", onclick: () => signInDialog() }, t("admin.signIn"))])]);
+    }
+    return el("section", { class: "card" }, [el("h2", {}, title || t("admin.title")), uiError(error.message)]);
+}
 
-        if (start && end && start > end) {
-            const swap = start;
-            start = end;
-            end = swap;
-        }
+// ---- Results at once: the proxy's answer is shown as a toast, and the page refreshes when chainlens
+// indexes the transaction (live feed /api/live)
+const pendingTx = new Map();   // hash -> toast
 
-        const next = txListHash(boxes.filter((box) => box.input.checked).map((box) => box.input.value), start, end);
+function toastHost() {
+    let host = document.querySelector(".toasts");
+    if (!host) {
+        host = el("div", { class: "toasts", role: "status", "aria-live": "polite" });
+        document.body.append(host);
+    }
+    return host;
+}
 
-        if (next === location.hash) {
-            setOpen(false);
+function notePending(answer) {
+    const hash = answer && typeof answer.txHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(answer.txHash) ? answer.txHash.toLowerCase() : null;
+    const text = (answer && (answer.memo || answer.memoText)) || t("toast.sent");
+    const toast = el("div", { class: "toast" }, [
+        el("span", { class: "toast-state" }, "⏳"),
+        el("span", {}, [text, answer && answer.amount ? " · " + answer.amount + " ETH" : ""]),
+        hash ? el("a", { href: "#/activity/transactions/" + hash }, short(hash)) : null
+    ]);
+    toastHost().append(toast);
+    if (hash) {
+        pendingTx.set(hash, toast);
+        setTimeout(() => { if (pendingTx.get(hash) === toast) { toast.classList.add("late"); } }, 15000);
+    } else {
+        setTimeout(() => toast.remove(), 6000);
+    }
+}
+
+function liveFeed() {
+    if (!window.EventSource) {
+        return;
+    }
+    const source = new EventSource("/api/live");
+    source.onmessage = (event) => {
+        let data;
+        try {
+            data = JSON.parse(event.data);
+        } catch (error) {
             return;
         }
-
-        location.hash = next;
-    });
-    return wrap;
+        if (!data.txs) {
+            return;
+        }
+        let mine = false;
+        for (const hash of data.txs) {
+            const toast = pendingTx.get(hash);
+            if (toast) {
+                mine = true;
+                pendingTx.delete(hash);
+                toast.querySelector(".toast-state").textContent = "✓";
+                toast.classList.add("done");
+                setTimeout(() => toast.remove(), 6000);
+            }
+        }
+        // the page shows new data at once: for my own transactions always, otherwise when the user is not typing
+        if (viewReady && (mine || !skipRefresh())) {
+            viewDirty = false;
+            lastViewRefresh = Date.now();
+            render({ refresh: true });
+        }
+    };
 }
+
 
 document.addEventListener("click", (event) => {
     const pop = document.querySelector(".filter-pop:not([hidden])");
@@ -2996,24 +3041,6 @@ document.addEventListener("click", (event) => {
     button.classList.remove("open");
     button.setAttribute("aria-expanded", "false");
 });
-
-async function showTxs(page, status) {
-    const token = showToken;
-    const { params } = parseHash();
-    const address = params.get("address") || "";
-    const filter = readTxFilter(params);
-    const data = await api("/api/transactions?limit=20000" + (address ? "&address=" + encodeURIComponent(address) : ""));
-
-    if (token !== showToken) {
-        return;
-    }
-    const items = data.items.filter((tx) => matchesTxFilter(tx, filter));
-    show(el("section", { class: "card" }, [
-        notice(status),
-        el("div", { class: "card-head" }, [el("h2", {}, t("tx.title")), txFilter(filter)]),
-        data.items.length ? txTable(items, "txs") : el("div", { class: "empty" }, t("tx.none"))
-    ]));
-}
 
 async function showTx(hash) {
     const token = showToken;
@@ -3063,7 +3090,7 @@ async function showTx(hash) {
 
     show(el("div", {}, [
         el("div", { class: "muted", style: "margin-bottom:10px" }, [
-            el("a", { href: "#/transactions" }, t("tx.title")),
+            el("a", { href: "#/activity/transactions" }, t("tx.title")),
             " / ",
             copyValue(tx.hash)
         ]),
@@ -3073,18 +3100,18 @@ async function showTx(hash) {
                 el("div", { style: "word-break:break-all;margin:8px 0" }, copyValue(tx.hash)),
                 el("div", {}, [
                     t("tx.block") + " ",
-                    el("a", { href: "#/blocks/" + tx.blockNumber }, "#" + tx.blockNumber),
+                    el("a", { href: "#/activity/blocks/" + tx.blockNumber }, "#" + tx.blockNumber),
                     "  " + t("tx.time") + " " + ago(tx.timestamp)
                 ]),
                 el("div", { style: "margin-top:8px" }, [t("tx.from") + " ", addr(tx.from), "  " + t("tx.to") + " ", to]),
                 el("div", { style: "margin-top:8px" }, t("tx.status") + " " + (tx.status === "success" ? t("tx.ok") : t("tx.fail"))),
                 el("div", { class: "memo", style: "margin-top:8px" }, [t("tx.memo") + " ", ...(memoOf(tx) ? memoNodes(memoOf(tx)) : ["—"])]),
-                tx.undoneBy ? el("div", { style: "margin-top:4px" }, [t("tx.undoneBy") + " ", ident(tx.undoneBy, "#/transactions/" + tx.undoneBy)]) : null,
-                tx.undoOf ? el("div", { style: "margin-top:4px" }, [t("tx.undoOf") + " ", ident(tx.undoOf, "#/transactions/" + tx.undoOf)]) : null,
+                tx.undoneBy ? el("div", { style: "margin-top:4px" }, [t("tx.undoneBy") + " ", ident(tx.undoneBy, "#/activity/transactions/" + tx.undoneBy)]) : null,
+                tx.undoOf ? el("div", { style: "margin-top:4px" }, [t("tx.undoOf") + " ", ident(tx.undoOf, "#/activity/transactions/" + tx.undoOf)]) : null,
                 tx.memoType ? el("div", { class: "muted", style: "margin-top:4px" }, [
-                    t("memo.type") + " ", el("a", { href: "#/memos?type=" + encodeURIComponent(tx.memoType) }, tx.memoType),
+                    t("memo.type") + " ", el("a", { href: "#/activity/transactions?type=" + encodeURIComponent(tx.memoType) }, tx.memoType),
                     tx.memoUser && tx.memoDefaults ? "  · " + t("memo.default") + " " + (tx.memoDefaults[getLocale()] || tx.memoDefaults.en) : "",
-                    tx.memoRequest ? el("span", {}, ["  · ", el("a", { href: "#/memos?request=" + tx.memoRequest }, t("memo.request") + " " + tx.memoRequest)]) : ""
+                    tx.memoRequest ? el("span", {}, ["  · ", el("a", { href: "#/activity/transactions?request=" + tx.memoRequest }, t("memo.request") + " " + tx.memoRequest)]) : ""
                 ]) : null
             ]),
             el("aside", { class: "side-stat" }, [el("div", {}, t("tx.value")), el("b", {}, tx.value + " ETH")])
@@ -3108,8 +3135,8 @@ async function showBlocks(page, status) {
         return;
     }
     const table = dataTable([
-        { label: "col.blockNumber", sort: (row) => row.number || 0, cell: (row) => el("a", { href: "#/blocks/" + row.number }, String(row.number)) },
-        { label: "col.hash", sort: (row) => row.hash, cell: (row) => ident(row.hash, "#/blocks/" + row.number) },
+        { label: "col.blockNumber", sort: (row) => row.number || 0, cell: (row) => el("a", { href: "#/activity/blocks/" + row.number }, String(row.number)) },
+        { label: "col.hash", sort: (row) => row.hash, cell: (row) => ident(row.hash, "#/activity/blocks/" + row.number) },
         { label: "col.txCount", sort: (row) => row.txCount || 0, cell: (row) => String(row.txCount) },
         { label: "col.time", sort: (row) => row.timestamp || 0, search: (row) => stamp(row.timestamp), cell: (row) => stamp(row.timestamp) }
     ], data.items, { sort: 0, dir: "desc", page, key: "blocks" });
@@ -3139,43 +3166,51 @@ async function showBlock(number) {
     ]));
 }
 
+// Network (docs/components/chainlens.md): every Besu node from its own metrics (RPC nodes keep the
+// ADMIN API off in production); the node details and peers only where the ADMIN API is on (development)
 async function showNetwork() {
     const token = showToken;
-    const data = await api("/api/network");
+    const [data, nodes] = await Promise.all([api("/api/network"), api("/api/network/nodes")]);
 
     if (token !== showToken) {
         return;
     }
-    const enodeRow = el("div");
-    const viewLink = el("button", { type: "button", class: "linkish" }, t("net.view"));
-    viewLink.addEventListener("click", () => {
-        enodeOpen = !enodeOpen;
-        enodeRow.textContent = enodeOpen ? data.enode : "";
-    });
-    if (enodeOpen) {
-        enodeRow.textContent = data.enode;
-    }
-    const table = dataTable([
+    const head = Math.max(0, ...nodes.nodes.map((n) => n.height || 0));
+    const nodeTable = dataTable([
+        { label: "net.nodeName", sort: (n) => n.name, cell: (n) => el("b", {}, n.name) },
+        { label: "net.role", sort: (n) => n.role, cell: (n) => el("span", { class: "badge type" }, t("net.role." + n.role) || n.role) },
+        { label: "col.address", sort: (n) => n.host, cell: (n) => n.host },
+        { label: "net.state", sort: (n) => (n.up ? 1 : 0), cell: (n) => el("span", { class: "badge " + (n.up ? "type" : "create") }, n.up ? t("net.up") : t("net.down")) },
+        { label: "net.height", sort: (n) => n.height || 0, cell: (n) => (n.height === null || n.height === undefined ? "—" : [formatCount(n.height), head - n.height > 2 ? el("span", { class: "bad-text" }, " (−" + (head - n.height) + ")") : ""]) },
+        { label: "net.peers", sort: (n) => n.peers || 0, cell: (n) => (n.peers === null || n.peers === undefined ? "—" : String(n.peers)) },
+        { label: "net.since", sort: (n) => n.started || 0, cell: (n) => (n.started ? ago(n.started) : "—") }
+    ], nodes.nodes, { key: "nodes" });
+    const up = nodes.nodes.filter((n) => n.up).length;
+    const peersCard = data.adminApi === false ? null : el("section", { class: "card stack" }, [el("h2", {}, t("net.peers")), dataTable([
         { label: "col.id", sort: (row) => row.id || "", cell: (row) => short(row.id) },
         { label: "col.name", sort: (row) => row.name || "", cell: (row) => row.name || "" },
         { label: "col.address", sort: (row) => row.address || "", cell: (row) => row.address || "" }
-    ], data.peers, { key: "peers" });
-    const noAdmin = data.adminApi === false;
-    const noAdminNote = () => el("div", { class: "empty" }, t("net.noAdmin"));
+    ], data.peers || [], { key: "peers" })]);
     show(el("div", {}, [
         el("div", { class: "detail" }, [
-            noAdmin ? el("section", { class: "card" }, [el("h2", {}, t("net.node")), noAdminNote()]) : el("section", { class: "card" }, [
-                el("h2", {}, t("net.node")),
+            el("section", { class: "card" }, [
+                el("h2", {}, t("net.chain")),
                 el("div", { class: "kv" }, [
-                    el("span", {}, t("net.name")), data.name || "—",
-                    el("span", {}, t("net.enode")), viewLink,
-                    el("span", {}, t("net.address")), data.address || "—"
-                ]),
-                enodeRow
+                    el("span", { class: "muted" }, t("net.client")), el("span", {}, nodes.client || "—"),
+                    el("span", { class: "muted" }, t("net.chainId")), el("span", {}, String(nodes.chainId || "—")),
+                    el("span", { class: "muted" }, t("net.head")), el("span", {}, formatCount(nodes.head)),
+                    el("span", { class: "muted" }, t("net.blockTime")), el("span", {}, nodes.blockTime ? nodes.blockTime.toFixed(1) + " s" : "—"),
+                    el("span", { class: "muted" }, t("net.rpcPeers")), el("span", {}, String(data.peerCount))
+                ])
             ]),
-            el("aside", { class: "side-stat" }, [el("div", {}, t("net.count")), el("b", {}, String(data.peerCount))])
+            el("aside", { class: "side-stat" }, [el("div", {}, t("net.nodesUp")), el("b", {}, up + " / " + nodes.nodes.length)])
         ]),
-        el("section", { class: "card stack" }, [el("h2", {}, t("net.peers")), noAdmin ? noAdminNote() : table])
+        el("section", { class: "card stack" }, [
+            el("h2", {}, t("net.nodes")),
+            el("div", { class: "muted", style: "margin-bottom:8px" }, t("net.nodesNote")),
+            nodes.configured ? nodeTable : el("div", { class: "empty" }, t("net.noNodes"))
+        ]),
+        peersCard
     ]));
 }
 
@@ -3202,70 +3237,178 @@ function showApi() {
 }
 
 window.addEventListener("hashchange", render);
-showDeployNav();
-showSectionsNav();
+api("/api/status").then(paintChrome).catch(() => {});
+liveFeed();
 document.addEventListener("localechange", () => {
     themeButton.setAttribute("aria-label", t(document.body.classList.contains("light") ? "theme.dark" : "theme.light"));
     render({ refresh: true });
 });
 render();
 
-// ---- Memos (docs/features/memos.md): every transaction's memo, filtered; export as CSV or JSON
-async function showMemos(params) {
+// ---- Transactions (docs/components/chainlens.md): every transaction with its memo, in the page's
+// language; filters (text, kind, section, dates, request, account) in the URL; export CSV / JSON
+const KIND_FAMILIES = [["transfer.", "kind.transfers"], ["account.", "kind.accounts"], ["section.", "kind.sections"], ["avatar.", "kind.avatars"],
+    ["nickname.", "kind.nicknames"], ["contract.", "kind.contracts"], ["none", "kind.none"]];
+
+async function showActivity(params, status) {
     const token = showToken;
     const f = {};
-    ["type", "section", "q", "from", "to", "request"].forEach((k) => { f[k] = params.get(k) || ""; });
+    ["q", "type", "section", "from", "to", "request", "address"].forEach((k) => { f[k] = params.get(k) || ""; });
     const query = () => {
         const p = new URLSearchParams();
         Object.entries(f).forEach(([k, v]) => { if (v) { p.set(k, v); } });
-        p.set("lang", getLocale());
         return p;
     };
-    const data = await api("/api/memos?" + query().toString());
+    const apiQuery = query();
+    apiQuery.set("lang", getLocale());
+    apiQuery.set("limit", params.get("limit") || "2000");
+    const data = await api("/api/activity?" + apiQuery.toString());
     if (token !== showToken) {
         return;
     }
-    const typeSelect = el("select", { class: "table-search", "aria-label": t("memo.type") },
-        [el("option", { value: "" }, t("memo.allTypes"))].concat(
-            [...new Set(data.types.map((x) => x.split(".")[0] + ".").concat(data.types))].sort()
-                .map((x) => el("option", { value: x }, x.endsWith(".") ? x + "*" : x))));
-    typeSelect.value = f.type;
-    const input = (k, attrs) => {
-        const i = el("input", Object.assign({ class: "table-search", value: f[k], "aria-label": t("memo." + k) }, attrs || {}));
-        return i;
+    const go = () => {
+        const p = query();
+        location.hash = "#/activity/transactions" + (p.toString() ? "?" + p.toString() : "");
     };
-    const fields = { section: input("section", { placeholder: "1", inputmode: "numeric" }), q: input("q", { placeholder: t("memo.qHint") }),
-        from: input("from", { type: "date" }), to: input("to", { type: "date" }), request: input("request", { placeholder: "a1b2c3d4" }) };
+    const kind = el("select", { class: "table-search", "aria-label": t("memo.type") }, [
+        el("option", { value: "" }, t("memo.allTypes")),
+        el("optgroup", { label: t("kind.families") }, KIND_FAMILIES.map(([v, k]) => el("option", { value: v }, t(k)))),
+        el("optgroup", { label: t("kind.types") }, data.types.slice().sort().map((v) => el("option", { value: v }, v)))
+    ]);
+    kind.value = f.type;
+    const input = (k, attrs) => el("input", Object.assign({ class: "table-search", value: f[k], "aria-label": t("memo." + k) }, attrs || {}));
+    const fields = { q: input("q", { type: "search", placeholder: t("memo.qHint") }), section: input("section", { placeholder: "1", inputmode: "numeric" }),
+        from: input("from", { type: "date" }), to: input("to", { type: "date" }), request: input("request", { placeholder: "a1b2c3d4" }),
+        address: input("address", { placeholder: "0x…" }) };
+    fields.q.addEventListener("keydown", (e) => { if (e.key === "Enter") { apply.click(); } });
     const apply = el("button", { type: "button", class: "fn-run" }, t("memo.apply"));
     apply.addEventListener("click", () => {
-        f.type = typeSelect.value;
+        f.type = kind.value;
         Object.entries(fields).forEach(([k, i]) => { f[k] = i.value.trim(); });
-        const p = query();
-        p.delete("lang");
-        location.hash = "#/memos" + (p.toString() ? "?" + p.toString() : "");
+        go();
     });
+    const clear = el("button", { type: "button", class: "fn-run" }, t("memo.clear"));
+    clear.addEventListener("click", () => { location.hash = "#/activity/transactions"; });
+    const more = el("details", { class: "more-filters" }, [el("summary", {}, t("memo.more")),
+        el("div", { class: "memo-filters" }, [el("label", {}, [el("span", { class: "muted" }, t("memo.request")), fields.request]),
+            el("label", {}, [el("span", { class: "muted" }, t("memo.address")), fields.address])])]);
+    more.open = Boolean(f.request || f.address);
     const exportQuery = query();
+    exportQuery.set("lang", getLocale());
     exportQuery.set("limit", "10000");
-    const csv = el("a", { class: "fn-run", href: "/api/memos?" + exportQuery.toString() + "&format=csv" }, t("memo.exportCsv"));
-    const json = el("a", { class: "fn-run", href: "/api/memos?" + exportQuery.toString(), target: "_blank" }, t("memo.exportJson"));
+    const csv = el("a", { class: "fn-run", href: "/api/activity?" + exportQuery.toString() + "&format=csv" }, t("memo.exportCsv"));
+    const json = el("a", { class: "fn-run", href: "/api/activity?" + exportQuery.toString(), target: "_blank" }, t("memo.exportJson"));
     const label = (k, node) => el("label", {}, [el("span", { class: "muted" }, t("memo." + k)), node]);
+    const counts = data.requestCounts || {};
+    const what = (r) => {
+        const shown = r.shown || memoOf(r);
+        const chips = [];
+        if (r.undoneBy) {
+            chips.push(el("a", { class: "chip", href: "#/activity/transactions/" + r.undoneBy }, "↩ " + t("sections.undone")));
+        }
+        if (r.undoOf) {
+            chips.push(el("a", { class: "chip", href: "#/activity/transactions/" + r.undoOf }, "↩ " + t("sections.undoOfLink")));
+        }
+        if (r.memoRequest && counts[r.memoRequest] > 1) {
+            chips.push(el("a", { class: "chip", title: t("memo.requestHint"), href: "#/activity/transactions?request=" + r.memoRequest }, "⛓ " + counts[r.memoRequest]));
+        }
+        return el("div", { class: "what" }, [
+            shown ? el("span", { class: "memo-cell" }, memoNodes(shown)) : el("span", { class: "muted" }, fnLabel(r.functionName)),
+            r.memoUser && r.defaultText ? el("div", { class: "muted small" }, r.defaultText) : null,
+            chips.length ? el("div", { class: "chips" }, chips) : null
+        ]);
+    };
     const table = dataTable([
-        { label: "col.time", sort: (r) => r.time, cell: (r) => stamp(Date.parse(r.time) / 1000) },
-        { label: "memo.type", sort: (r) => r.type, search: (r) => r.type, cell: (r) => (r.type ? el("span", { class: "badge type" }, r.type) : "—") },
-        { label: "col.memo", sort: (r) => r.memo, search: (r) => r.memo + " " + r.userMemo, cell: (r) => el("span", { class: "memo-cell" }, memoNodes(r.memo)) },
-        { label: "memo.section", sort: (r) => r.section || 0, cell: (r) => (r.section ? el("a", { href: "#/sections/" + r.section }, "#" + r.section) : "—") },
-        { label: "col.value", sort: (r) => Number(r.value), cell: (r) => r.value + " ETH" },
-        { label: "memo.request", sort: (r) => r.request, cell: (r) => (r.request ? el("a", { href: "#/memos?request=" + r.request }, r.request) : "—") },
-        { label: "col.hash", sort: (r) => r.hash, cell: (r) => ident(r.hash, "#/transactions/" + r.hash) }
-    ], data.rows, { sort: 0, dir: "desc", key: "memos" });
+        { label: "col.time", sort: (r) => r.timestamp || 0, search: (r) => stamp(r.timestamp), cell: (r) => stamp(r.timestamp) },
+        { label: "memo.what", sort: (r) => r.shown || "", search: (r) => [r.shown, r.memo, r.memoType, r.memoUser, r.functionName].filter(Boolean).join(" "), cell: what },
+        { label: "memo.section", sort: (r) => r.memoSection || 0, cell: (r) => (r.memoSection ? el("a", { href: "#/activity/transactions?section=" + r.memoSection }, "#" + r.memoSection) : "—") },
+        { label: "col.value", sort: (r) => BigInt(r.valueWei || 0), search: (r) => r.value + " ETH", cell: (r) => r.value + " ETH" },
+        { label: "col.from", sort: (r) => r.from, cell: (r) => addr(r.from) },
+        { label: "col.to", sort: (r) => r.toLabel || r.to || r.contractAddress || "", search: (r) => [r.to, r.toLabel, r.contractAddress].filter(Boolean).join(" "), cell: (r) => txTo(r) },
+        { label: "tx.status", sort: (r) => r.status, cell: (r) => el("span", { class: r.status === "success" ? "" : "bad-text", title: r.status }, r.status === "success" ? "✓" : "✗") },
+        { label: "col.hash", sort: (r) => r.hash, cell: (r) => ident(r.hash, "#/activity/transactions/" + r.hash) }
+    ], data.rows, { sort: 0, dir: "desc", key: "activity" });
     show(el("div", {}, [
         el("section", { class: "card stack" }, [
-            el("div", { class: "card-head" }, [el("h2", {}, t("memo.title")), el("span", { class: "muted" }, t("memo.count").replace("{n}", data.count))]),
-            el("div", { class: "muted", style: "margin-bottom:10px" }, t("memo.note")),
-            el("div", { class: "memo-filters" }, [label("type", typeSelect), label("section", fields.section), label("q", fields.q),
-                label("from", fields.from), label("to", fields.to), label("request", fields.request)]),
-            el("div", { class: "deploy-buttons", style: "margin-top:12px" }, [apply, csv, json])
+            notice(status),
+            el("div", { class: "card-head" }, [el("h2", {}, t("tx.title")), el("span", { class: "muted" }, t("memo.count").replace("{n}", formatCount(data.count)))]),
+            el("div", { class: "memo-filters" }, [label("q", fields.q), label("type", kind), label("section", fields.section), label("from", fields.from), label("to", fields.to)]),
+            more,
+            el("div", { class: "deploy-buttons", style: "margin-top:12px" }, [apply, clear, csv, json])
         ]),
-        el("section", { class: "card" }, data.rows.length ? table : el("div", { class: "empty" }, t("memo.none")))
+        el("section", { class: "card" }, data.rows.length ? table : el("div", { class: "empty" }, t("tx.none")))
+    ]));
+}
+
+// ---- Admin → Avatars: pick a collection, then mint, price, sell, undo (the avatar card)
+async function showAvatarAdmin(selected) {
+    const token = showToken;
+    const data = await api("/api/contracts?limit=1000&type=avatar");
+    if (token !== showToken) {
+        return;
+    }
+    const list = data.items.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const chosen = list.find((c) => c.address.toLowerCase() === String(selected).toLowerCase()) || list[0];
+    const select = el("select", { class: "table-search", "aria-label": t("ctype.avatar"),
+        onchange: (event) => { location.hash = "#/admin/avatars?c=" + event.target.value; } },
+    list.map((c) => el("option", { value: c.address }, (c.label || c.address) + " · " + short(c.address))));
+    if (chosen) {
+        select.value = chosen.address;
+    }
+    let card = null;
+    if (chosen) {
+        try {
+            card = await avatarAdminCard(chosen.address);
+        } catch (error) {
+            card = adminError(error, t("nav.avatarAdmin"));
+        }
+    }
+    if (token !== showToken) {
+        return;
+    }
+    show(el("div", {}, [
+        el("section", { class: "card stack" }, [
+            el("div", { class: "card-head" }, [el("h2", {}, t("nav.avatarAdmin")), chosen ? el("a", { href: "#/contracts/" + chosen.address }, t("admin.openContract")) : null]),
+            list.length ? el("label", {}, [el("span", { class: "muted" }, t("admin.collection")), select])
+                : el("div", { class: "empty" }, [t("admin.noAvatars") + " ", el("a", { href: "#/admin/deploy" }, t("nav.deploy"))])
+        ]),
+        card
+    ]));
+}
+
+// ---- Admin → Gateways: every section gateway, its mode and open corrections
+async function showGateways() {
+    const token = showToken;
+    let data;
+    let sections;
+    try {
+        [data, sections] = await Promise.all([sectionGet("/api/sections/gateways"), sectionGet("/api/sections")]);
+    } catch (error) {
+        if (token === showToken) {
+            show(adminError(error, t("nav.gateways")));
+        }
+        return;
+    }
+    if (token !== showToken) {
+        return;
+    }
+    const name = (id) => ((sections.sections || []).find((x) => x.id === id) || {}).name || "#" + id;
+    const table = dataTable([
+        { label: "memo.section", sort: (g) => name(g.section), cell: (g) => el("a", { href: "#/admin/sections/" + g.section + "?tab=gateway" }, name(g.section)) },
+        { label: "gateway.mode", sort: (g) => g.mode, cell: (g) => el("span", { class: "badge " + (g.mode === "online" ? "type" : "create") }, g.mode) },
+        { label: "gateway.since", sort: (g) => g.since || "", cell: (g) => (g.since ? String(g.since).replace("T", " ").slice(0, 19) : "—") },
+        { label: "gateway.queue", sort: (g) => g.queue || 0, cell: (g) => String(g.queue || 0) },
+        { label: "gateway.spares", sort: (g) => g.spares || 0, cell: (g) => String(g.spares === undefined ? "—" : g.spares) },
+        { label: "gateway.corrections", sort: (g) => (g.corrections || {}).open || 0, cell: (g) => {
+            const c = g.corrections || {};
+            return el("span", { class: c.open ? "bad-text" : "" }, (c.open || 0) + " / " + (c.total || 0));
+        } },
+        { label: "gateway.cuts", sort: (g) => g.cuts || 0, cell: (g) => String(g.cuts || 0) },
+        { label: "col.address", sort: (g) => g.url, cell: (g) => el("span", { class: "muted" }, g.url) }
+    ], data.gateways, { sort: 0, dir: "asc", key: "gateways" });
+    show(el("section", { class: "card stack" }, [
+        el("h2", {}, t("nav.gateways")),
+        el("div", { class: "muted" }, t("gateway.listNote")),
+        data.gateways.length ? table : el("div", { class: "empty" }, t("gateway.none"))
     ]));
 }

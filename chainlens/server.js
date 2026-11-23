@@ -1124,6 +1124,10 @@ async function syncOnce() {
 
         pending.forEach((item, index) => ingest(item.tx, receipts[index], item.block));
         db.indexed = end;
+        if (db.ready && pending.length) {
+            liveSend({ indexed: end, txs: pending.map((item) => item.tx.hash.toLowerCase()),
+                sections: [...new Set(pending.map((item) => (db.txByHash.get(item.tx.hash.toLowerCase()) || {}).memoSection).filter(Boolean))] });
+        }
     }
 
     await refreshContracts();
@@ -1158,7 +1162,7 @@ async function loop() {
         db.syncing = false;
     }
 
-    setTimeout(loop, 4000);
+    setTimeout(loop, 1500);
 }
 
 function contractLabel(address) {
@@ -1240,8 +1244,34 @@ function publicAccount(row) {
     };
 }
 
+// What a contract is, from the registry: registry, avatar / nickname collection, transfer undo,
+// registered (other), ERC721 / ERC20 seen on chain, or a plain contract
+function contractPlatform(address) {
+    const key = String(address || "").toLowerCase();
+    if (key && key === String(process.env.REGISTRY_CONTRACT || "").toLowerCase()) {
+        return "registry";
+    }
+    const entry = contractEntry(key);
+    if (entry && Array.isArray(entry.record.abi)) {
+        const fns = new Set(entry.record.abi.filter((f) => f.type === "function").map((f) => f.name));
+        if (fns.has("upgradeLevel") && fns.has("tokensOf")) {
+            return "nickname";
+        }
+        if (fns.has("imageOf") && fns.has("tokensOf")) {
+            return "avatar";
+        }
+        if (fns.has("undoneAt")) {
+            return "transferUndo";
+        }
+        return "registered";
+    }
+    const row = db.contracts.get(key);
+    return row && row.isErc721 ? "erc721" : (row && row.isErc20 ? "erc20" : "contract");
+}
+
 function publicContract(row) {
     return {
+        platform: contractPlatform(row.address),
         address: row.address,
         label: contractLabel(row.address) || row.address,
         name: row.name,
@@ -1291,8 +1321,88 @@ function pageOf(list, req) {
     };
 }
 
+// Versions (the commit each was deployed from) and links for the navigation
+const APP = {
+    commit: String(process.env.APP_COMMIT || "").slice(0, 40),
+    proxyCommit: "",
+    links: { docs: process.env.DOCS_URL || "", grafana: process.env.GRAFANA_URL || "" }
+};
+async function refreshProxyVersion() {
+    const base = String(process.env.PROXY_ADMIN_URL || "").replace(/\/$/, "");
+    if (!base) {
+        return;
+    }
+    try {
+        const r = await fetch(base + "/version", { signal: AbortSignal.timeout(3000) });
+        APP.proxyCommit = r.ok ? String((await r.json()).commit || "") : "";
+    } catch (error) {
+        APP.proxyCommit = "";
+    }
+}
+setTimeout(refreshProxyVersion, 2000).unref();
+setInterval(refreshProxyVersion, 60000).unref();
+
+// Live feed (Server-Sent Events): every newly indexed block with transactions -> { indexed, txs, sections }
+const liveClients = new Set();
+function liveSend(data) {
+    const line = "data: " + JSON.stringify(data) + "\n\n";
+    for (const res of liveClients) {
+        res.write(line);
+    }
+}
+app.get("/api/live", (req, res) => {
+    res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+    res.write("data: " + JSON.stringify({ hello: true, indexed: db.indexed }) + "\n\n");
+    liveClients.add(res);
+    const keep = setInterval(() => res.write(": keep-alive\n\n"), 25000);
+    req.on("close", () => {
+        clearInterval(keep);
+        liveClients.delete(res);
+    });
+});
+
+// Network: each Besu node's own metrics (NETWORK_NODES="val1=10.0.0.1:9545:validator rpc1=…"), read
+// directly (the monitoring host may read them), since RPC nodes keep the ADMIN API off
+const NETWORK_NODES = String(process.env.NETWORK_NODES || "").split(/\s+/).filter(Boolean).map((x) => {
+    const [name, rest] = x.split("=");
+    const [host, port, role] = String(rest || "").split(":");
+    return { name, host, port: Number(port), role: role || "" };
+}).filter((n) => n.name && n.host && n.port);
+
+function metricValue(text, name) {
+    const m = text.match(new RegExp("^" + name + "(?:\\{[^}]*\\})?\\s+([0-9.eE+-]+)", "m"));
+    return m ? Number(m[1]) : null;
+}
+
+app.get("/api/network/nodes", async (req, res) => {
+    const nodes = await Promise.all(NETWORK_NODES.map(async (n) => {
+        try {
+            const r = await fetch(`http://${n.host}:${n.port}/metrics`, { signal: AbortSignal.timeout(2500) });
+            const text = await r.text();
+            return { name: n.name, role: n.role, host: n.host, up: r.ok,
+                height: metricValue(text, "ethereum_blockchain_height"), peers: metricValue(text, "ethereum_peer_count"),
+                started: metricValue(text, "process_start_time_seconds"), cpu: metricValue(text, "process_cpu_seconds_total") };
+        } catch (error) {
+            return { name: n.name, role: n.role, host: n.host, up: false, error: error.message };
+        }
+    }));
+    let client = "";
+    try {
+        client = await rpc("web3_clientVersion", []);
+    } catch (error) {
+        client = "";
+    }
+    const recent = db.blocks.slice(-50).filter(Boolean);
+    const blockTime = recent.length > 1 ? (recent[recent.length - 1].timestamp - recent[0].timestamp) / (recent.length - 1) : null;
+    res.json({ nodes, client, chainId: db.chainId, head: db.head, blockTime, configured: NETWORK_NODES.length > 0 });
+});
+
 app.get("/api/status", (req, res) => {
     res.json({
+        version: { chainlens: APP.commit, proxy: APP.proxyCommit },
+        links: APP.links,
+        admin: { allowed: ipAllowed(req.socket.remoteAddress) && (DEPLOY.enabled || SECTIONS.enabled), sections: SECTIONS.enabled, deploy: DEPLOY.enabled,
+            gateways: SECTIONS.gateways.length },
         ready: db.ready,
         syncing: db.syncing,
         error: db.error,
@@ -1834,6 +1944,8 @@ app.get("/api/contracts", (req, res) => {
 
     if (req.query.type === "ERC721") {
         rows = rows.filter((row) => row.type === "ERC721");
+    } else if (req.query.type && req.query.type !== "all") {
+        rows = rows.filter((row) => row.platform === req.query.type);  // registry, avatar, nickname, transferUndo, registered, erc721, contract
     }
 
     rows.sort((a, b) => b.txCount - a.txCount);
@@ -2147,7 +2259,12 @@ app.post("/api/sections/:id/gateway/ack/:report", sectionsGuard, async (req, res
 
 // Memo log: every indexed transaction with a memo, filtered; JSON or CSV (format=csv), texts in `lang`.
 //   GET /api/memos?type=avatar.&section=1&q=gift&from=2026-11-01&to=2026-11-30&request=ab12&lang=ko&format=csv
-app.get("/api/memos", (req, res) => {
+// Transactions with their memos (the Transactions page): the same filters, every transaction
+// (with or without a memo); &address= one account's (from or to)
+app.get("/api/activity", (req, res) => activityQuery(req, res, true));
+app.get("/api/memos", (req, res) => activityQuery(req, res, false));
+
+function activityQuery(req, res, all) {
     const q = req.query;
     const lang = MEMO.lang(q.lang, req.headers["accept-language"]);
     const from = q.from ? Date.parse(q.from) / 1000 : 0;
@@ -2159,10 +2276,16 @@ app.get("/api/memos", (req, res) => {
     const rows = [];
     for (let i = db.txs.length - 1; i >= 0 && rows.length < limit; i -= 1) {
         const tx = db.txs[i];
-        if (!tx.memoType && !tx.memo) {
+        if (!all && !tx.memoType && !tx.memo) {
             continue;
         }
-        if (type && !(tx.memoType || "").startsWith(type)) {
+        if (q.address && ![tx.from, tx.to || "", tx.contractAddress || ""].some((v) => String(v).toLowerCase() === String(q.address).toLowerCase())) {
+            continue;
+        }
+        if (type === "none" && tx.memoType) {
+            continue;
+        }
+        if (type && type !== "none" && !(tx.memoType || "").startsWith(type)) {
             continue;
         }
         if (section !== null && tx.memoSection !== section) {
@@ -2178,18 +2301,38 @@ app.get("/api/memos", (req, res) => {
         if (text && ![shown, tx.memo, tx.memoUser || "", tx.hash, tx.from, tx.to || ""].some((v) => String(v).toLowerCase().includes(text))) {
             continue;
         }
-        rows.push({ time: new Date(tx.timestamp * 1000).toISOString(), hash: tx.hash, block: tx.blockNumber, from: tx.from, to: tx.to,
-            value: formatEth(tx.value), type: tx.memoType || "", section: tx.memoSection, memo: shown, userMemo: tx.memoUser || "",
-            request: tx.memoRequest || "", status: tx.status });
+        rows.push(all ? Object.assign(publicTx(tx), { shown, defaultText: (tx.memoDefaults && tx.memoDefaults[lang]) || "" })
+            : { time: new Date(tx.timestamp * 1000).toISOString(), hash: tx.hash, block: tx.blockNumber, from: tx.from, to: tx.to,
+                value: formatEth(tx.value), type: tx.memoType || "", section: tx.memoSection, memo: shown, userMemo: tx.memoUser || "",
+                request: tx.memoRequest || "", status: tx.status });
+    }
+    if (all && q.format !== "csv") {
+        // how many transactions each request made (the "1 of 2" chip)
+        const counts = {};
+        rows.forEach((r) => { if (r.memoRequest) { counts[r.memoRequest] = (counts[r.memoRequest] || 0) + 1; } });
+        return res.json({ lang, types: Object.keys(MEMO.CATALOGUE.types), count: rows.length, indexed: db.indexed, requestCounts: counts, rows });
     }
     if (q.format === "csv") {
+        const csvRows = all ? rows.map((r) => ({ time: new Date(r.timestamp * 1000).toISOString(), hash: r.hash, block: r.blockNumber, from: r.from, to: r.to,
+            value: r.value, type: r.memoType || "", section: r.memoSection, memo: r.shown, userMemo: r.memoUser || "", request: r.memoRequest || "", status: r.status })) : rows;
         const cols = ["time", "hash", "block", "from", "to", "value", "type", "section", "memo", "userMemo", "request", "status"];
         const cell = (v) => (v === null || v === undefined ? "" : /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v));
         res.type("text/csv; charset=utf-8").attachment("memos.csv")
-            .send("\ufeff" + [cols.join(",")].concat(rows.map((r) => cols.map((c) => cell(r[c])).join(","))).join("\n") + "\n");
+            .send("\ufeff" + [cols.join(",")].concat(csvRows.map((r) => cols.map((c) => cell(r[c])).join(","))).join("\n") + "\n");
         return;
     }
     res.json({ lang, types: Object.keys(MEMO.CATALOGUE.types), count: rows.length, indexed: db.indexed, rows });
+}
+
+// The admin sign-in: is this token right? (the same token as the Deploy and Sections pages)
+app.post("/api/admin/check", (req, res) => {
+    if (!ipAllowed(req.socket.remoteAddress)) {
+        return res.status(403).json({ error: "the admin pages are only allowed from operator_ip and chainlens_deploy_ips" });
+    }
+    if (!tokenOk(req)) {
+        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
+    }
+    res.json({ success: true });
 });
 
 app.get("/api/sections/status", (req, res) => {
@@ -2668,6 +2811,11 @@ app.get("/api/network", (req, res) => {
 
 app.get("/api/nfts", (req, res) => {
     let rows = [...db.nfts.values()].map(publicNft);
+
+    // Items: kind=avatar | nickname (the collection's type from the registry)
+    if (req.query.kind === "avatar" || req.query.kind === "nickname") {
+        rows = rows.filter((nft) => contractPlatform(nft.contract) === req.query.kind);
+    }
 
     if (req.query.owner && /^0x[0-9a-fA-F]{40}$/.test(req.query.owner)) {
         const key = req.query.owner.toLowerCase();

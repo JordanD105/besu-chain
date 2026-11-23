@@ -43,6 +43,8 @@ registry_from_block: >-
   {{ (lookup('ansible.builtin.file', state_dir ~ '/registry-record/' ~ (registry.address | default('') | lower) ~ '.json')
       | from_json).blockNumber
      if registry.address is defined and (state_dir ~ '/registry-record/' ~ (registry.address | lower) ~ '.json') is file else 0 }}
+# the commit the hosts have (01-hosts.yml records it); shown by chainlens for chainlens and the proxy
+repo_commit: "{{ (lookup('ansible.builtin.file', state_dir ~ '/repo.commit') | trim) if (state_dir ~ '/repo.commit') is file else '' }}"
 contract_center: "{{ (lookup('ansible.builtin.file', state_dir ~ '/contract-center') | trim) if (state_dir ~ '/contract-center') is file else '' }}"
 vrrp_pass_proxy: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_proxy', chars=['ascii_letters', 'digits'], length=8) }}"
 

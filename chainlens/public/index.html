@@ -23,27 +23,33 @@
             <option value="ko">한국어</option>
             <option value="zh">中文</option>
         </select>
+        <button id="admin-chip" class="admin-chip" type="button" hidden>Sign in</button>
         <button id="theme" class="theme" type="button" aria-label="Switch to light theme"></button>
     </header>
     <div class="shell">
         <aside class="side">
             <nav id="nav">
-                <a href="#/" data-nav="dashboard"><span class="ico">⌂</span> <span data-i18n="nav.dashboard">Dashboard</span></a>
+                <div class="nav-group" data-i18n="nav.explorer">Explorer</div>
+                <a href="#/" data-nav="overview"><span class="ico">⌂</span> <span data-i18n="nav.overview">Overview</span></a>
+                <a href="#/activity/transactions" data-nav="transactions"><span class="ico">⇄</span> <span data-i18n="nav.transactions">Transactions</span></a>
+                <a href="#/activity/blocks" data-nav="blocks"><span class="ico">▦</span> <span data-i18n="nav.blocks">Blocks</span></a>
                 <a href="#/accounts" data-nav="accounts"><span class="ico">▤</span> <span data-i18n="nav.accounts">Accounts</span></a>
-                <a href="#/nfts" data-nav="nfts"><span class="ico">◆</span> <span data-i18n="nav.nfts">NFTs</span></a>
-                <button type="button" id="chain-toggle" class="group"><span class="ico">⛓</span> <span data-i18n="nav.blockchain">Blockchain</span></button>
-                <div id="chain-links">
-                    <a href="#/contracts" data-nav="contracts"><span data-i18n="nav.contracts">Contracts</span></a>
-                    <a href="#/deploy" data-nav="deploy" id="nav-deploy" hidden><span data-i18n="nav.deploy">Deploy</span></a>
-                    <a href="#/sections" data-nav="sections" id="nav-sections" hidden><span data-i18n="nav.sections">Sections</span></a>
-                    <a href="#/nicknames" data-nav="nicknames" id="nav-nicknames" hidden><span data-i18n="nav.nicknames">Nicknames</span></a>
-                    <a href="#/transactions" data-nav="transactions"><span data-i18n="nav.transactions">Transactions</span></a>
-                    <a href="#/memos" data-nav="memos"><span data-i18n="nav.memos">Memos</span></a>
-                    <a href="#/blocks" data-nav="blocks"><span data-i18n="nav.blocks">Blocks</span></a>
-                    <a href="#/network" data-nav="network"><span data-i18n="nav.network">Network</span></a>
-                    <a href="#/api" data-nav="api"><span data-i18n="nav.api">API</span></a>
-                </div>
+                <a href="#/items/avatars" data-nav="avatars"><span class="ico">◆</span> <span data-i18n="nav.avatars">Avatars</span></a>
+                <a href="#/items/nicknames" data-nav="nicknames"><span class="ico">✎</span> <span data-i18n="nav.nicknamesPublic">Nicknames</span></a>
+                <a href="#/contracts" data-nav="contracts"><span class="ico">⧉</span> <span data-i18n="nav.contracts">Contracts</span></a>
+                <a href="#/network" data-nav="network"><span class="ico">◎</span> <span data-i18n="nav.network">Network</span></a>
+                <div class="nav-group admin-only" hidden data-i18n="nav.admin">Admin</div>
+                <a href="#/admin/sections" class="admin-only" data-admin="sections" hidden><span class="ico">▣</span> <span data-i18n="nav.sections">Sections</span></a>
+                <a href="#/admin/avatars" class="admin-only" data-admin="sections" hidden><span class="ico">◆</span> <span data-i18n="nav.avatarAdmin">Avatars</span></a>
+                <a href="#/admin/nicknames" class="admin-only" data-admin="sections" hidden><span class="ico">✎</span> <span data-i18n="nav.nicknames">Nicknames</span></a>
+                <a href="#/admin/deploy" class="admin-only" data-admin="deploy" hidden><span class="ico">⇪</span> <span data-i18n="nav.deploy">Deploy</span></a>
+                <a href="#/admin/gateways" class="admin-only" data-admin="gateways" hidden><span class="ico">⇋</span> <span data-i18n="nav.gateways">Gateways</span></a>
+                <div class="nav-group" data-i18n="nav.help">Help</div>
+                <a href="#/api" data-nav="api"><span class="ico">{}</span> <span data-i18n="nav.api">API</span></a>
+                <a id="nav-docs" href="#" target="_blank" rel="noopener" hidden><span class="ico">?</span> <span data-i18n="nav.docs">Docs</span> ↗</a>
+                <a id="nav-grafana" href="#" target="_blank" rel="noopener" hidden><span class="ico">▲</span> Grafana ↗</a>
             </nav>
+            <div id="versions" class="versions"></div>
             <div class="status-row" id="status-badge" tabindex="0" aria-describedby="status-pop">
                 <span id="status-dot"></span>
                 <span id="status-text" data-i18n="status.title">Status</span>
