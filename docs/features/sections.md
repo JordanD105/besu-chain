@@ -30,8 +30,9 @@ API key. Money for a section's users comes from the section's own accounts inste
 What exists: the SectionRegistry (version 2), the proxy admin API, section-scoped `/createaccount`
 and `/transfer`, the chainlens **Sections** page (with the sections' user accounts), contracts
 deployed by the contract account center and used through one generic API (`/contract/call`,
-`/contract/send`, `/contract/events`, `/contract/list`), avatar collections (minted by the
-center, first sales paid to the section), nicknames, and monitoring
+`/contract/send`, `/contract/events`, `/contract/list`), avatar and nickname collections
+(items minted by the center, bought once, paid at once to the buyer's section, undone within the
+hold period), and monitoring
 (alerts and the Grafana **Sections** dashboard).
 
 ## Accounts
@@ -40,11 +41,11 @@ center, first sales paid to the section), nicknames, and monitoring
 |---|---|---|---|---|
 | SENDER01 | 1 | Funds the upfront accounts (manual top-up); receives money back from payment accounts | – | big |
 | `upfront_account_i` | 1 per section | **Pays out:** funds new accounts, `/transfer -x` | 2 upfront | big |
-| `consumption_account_i` | 1 per section | **Receives:** `/transfer +x`, first avatar sales; swept to `payment_account_i` | 3 consumption | none |
+| `consumption_account_i` | 1 per section | **Receives:** `/transfer +x`, avatar and nickname sales, nickname level upgrades; **pays** the undo refunds; swept to `payment_account_i` | 3 consumption | none |
 | `payment_account_i` | 1 per section | **Collects** the swept money; can pay it back to SENDER01 | 4 payment | none |
 | user accounts | many | Created by `/createaccount` with the section's key; belong to one section | 1 user | as requested (default `small`) |
 | retired accounts | after a replacement | A replaced upfront / consumption / payment account: still the section's, no role | 5 retired | unchanged |
-| `contract_account_center` | 1 | Deploys all contracts (common and avatar), mints the avatars of the avatar collections | – | big |
+| `contract_account_center` | 1 | Deploys all contracts (common and avatar), mints the avatars and nicknames, sets their prices and the user levels | – | big |
 | registry admin | 1 | The only writer of the SectionRegistry | – | small |
 
 Every account is an MPC key. **Only the proxy sends transactions** from them (one queue per account,
@@ -76,7 +77,7 @@ ordered nonces); chainlens is the UI and calls the proxy's admin API.
 [`proxy/section-registry.json`](../../proxy/section-registry.json) (solc 0.8.28, EVM cancun;
 `proxy/scripts/compile-contract.js`). Both proxies and chainlens read it; nothing else stores
 sections, so there is no database to replicate or back up (the chain is), every change is a signed
-transaction, and contracts can check it (AvatarCollection).
+transaction, and contracts can check it (the avatar and nickname collections).
 
 | Holds | Changed by |
 |---|---|
@@ -87,7 +88,7 @@ transaction, and contracts can check it (AvatarCollection).
 | info fields: a key (1–32 characters: letters, digits, `_ . -`) → a value (up to 512 bytes), up to 32 per section | `setInfo` (an empty value removes the field) |
 | user accounts of each section, every account's kind (1 user … 5 retired) | `addAccount`, `addAccounts` (`AccountAdded` events) |
 | registered contracts (kind 1 common, 2 avatar collection) and their ABI (in the `ContractRegistered` event) | `registerContract` |
-| `isConsumptionAccount(address)`: true only for the consumption account of an active, not archived section; the payee check of AvatarCollection | (view) |
+| `isConsumptionAccount(address)`: true only for the consumption account of an active, not archived section; with `sectionOfAccount` and `accountKind`, the buyer and payee checks of the avatar and nickname collections | (view) |
 
 Only the **registry admin** (an MPC key) writes, through the proxy, one write at a time. New kinds of
 section information go into **info fields** (description, contact, limits, …) without a new
@@ -166,7 +167,7 @@ archived). Who may reach the proxy at all is the firewall's `proxy_client_ips`
 | `POST /createaccount {amount, pool}` | new MPC account, **registered under section_i** on chain, funded **from `upfront_account_i`** |
 | `POST /transfer {account, amount: "x", memo}` | `account` → `consumption_account_i` |
 | `POST /transfer {account, amount: "-x", memo}` | `upfront_account_i` → `account` |
-| `POST /contract/send {contract, function, args, from, value}` | a transaction signed by `from`, a user account of section_i ([Contracts](#contracts)); also the avatar sale (`buy`, [avatar collections](#avatar-collections)) and the nickname writes (`buyNickname`, `upgradeEdge`, [nicknames](nicknames.md)), with the payee and price filled in |
+| `POST /contract/send {contract, function, args, from, value}` | a transaction signed by `from`, a user account of section_i ([Contracts](#contracts)); also the item sales (`buy`, [avatar collections](#avatar-collections), [nicknames](nicknames.md)) and level upgrades (`upgradeLevel`), with the payee and price filled in, and the undos (`undo`, `undoLevel`, no `from`: signed by consumption_account_i) |
 
 `account` must be a user account of section_i (created with that section's key). `from` / `to`
 are not accepted on a section `/transfer`. The answer names the section, the direction, `from`, `to`
@@ -205,7 +206,7 @@ admin API:
 | `POST /admin/contract/check {kind, name, abi, bytecode, deployedBytecode, immutableReferences, args}` | dry run: arguments, gas, no revert; the address it will get. Nothing is signed |
 | `POST /admin/contract/deploy {…same}` | deploys (signed by the center), checks the code on chain against `deployedBytecode`, registers it (signed by the registry admin) |
 | `check` / `deploy` with `{template: "avatar-collection", name, symbol}` or `{template: "nickname-collection", …}` | the platform's own contracts, compiled into the proxy image (the registry's address filled in) |
-| `POST /admin/contract/send {contract, function, args}` | a write signed by the center: the minter and owner of the platform's contracts (`mint`, nickname price and edge levels, reserved names) |
+| `POST /admin/contract/send {contract, function, args}` | a write signed by the center: the minter and owner of the platform's contracts (`mint`, `setPrice`, the nickname user levels `addLevel` / `setLevel`) |
 
 The contract's `msg.sender` at construction is the center: a contract with an owner or roles should
 take them as constructor arguments when the center must not hold them.
@@ -228,39 +229,46 @@ the reason (`the transaction would revert: …`). `AvatarCollection.mint` can't 
 the center mints, so it reverts with `not minter`; use `POST /admin/contract/send`.
 
 For the platform's own contracts `/contract/send` fills in what the section fixes: a `payee` left out
-is the sender's section's consumption account, and a `value` left out is the price (nickname
-`buyNickname`, `upgradeEdge`; avatar `buy`). The admin API caller (chainlens) may call it
-without a key: the section is then that of `from`. Details: [proxy API](../reference/proxy-api.md#post-contractsend--write).
+is the sender's section's consumption account, and a `value` left out is the price (`buy`,
+nickname `upgradeLevel`) or the refund (`undo`, nickname `undoLevel`: signed by the consumption
+account that was paid, no `from`). The admin API caller (chainlens) may call it without a key: the
+section is then that of `from` (an undo: of the account that was paid). Details: [proxy API](../reference/proxy-api.md#post-contractsend--write).
 
 ## Avatar collections
 
-An **avatar** is the platform's image token. Avatar collections ([`proxy/contracts/AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol),
-`proxy/avatar-collection.json`; version-3 collections are the same code) are deployed and minted by
-the **contract account center**, registered in the SectionRegistry (kind avatar), shared by all
-sections. The constructor takes `name_`, `symbol_`
-and `registry_` (the SectionRegistry's address).
+An **avatar** is the platform's image token. Avatar collections ([`proxy/contracts/AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol)
+version 4, `proxy/avatar-collection.json`) and nickname collections ([nicknames](nicknames.md)) are
+**items**, with the same rules ([`proxy/contracts/BoundItems.sol`](../../proxy/contracts/BoundItems.sol)).
+They are deployed by the **contract account center** (the minter), registered in the SectionRegistry
+and shared by all sections. The avatar constructor takes `name_`, `symbol_`, `registry_` (the
+SectionRegistry's address) and `holdSeconds_` (the undo period; the template's `holdDays`).
 
 | Request | What happens |
 |---|---|
-| `POST /admin/contract/deploy {template: "avatar-collection", name, symbol}` | the center deploys an avatar collection (its minter, with the registry's address) and registers it |
-| `POST /admin/contract/send {contract, function: "mint", args: {name, image, …, price}}` | the center mints the avatar to itself, for sale; `price` (ETH) is fixed for good. Not tied to a section. |
-| `POST /contract/send {contract, function: "buy", args: {tokenId}, from}` + `X-Section-Key` | a sale to `from`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price (payee and value filled in). **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user holds it): the seller's section first sends `approve` `{tokenId}` from the seller (it approves the collection), also with `/contract/send`; the price goes to the **seller**. Seller and buyer may be in different sections. |
+| `POST /admin/contract/deploy {template: "avatar-collection", name, symbol, holdDays}` | the center deploys an avatar collection (its minter, with the registry's address and the undo period, default 7 days) and registers it |
+| `POST /admin/contract/send {contract, function: "mint", args: {image, price, description, attributes}}` | the center mints the avatar and holds it, for sale; each image once. Not tied to a section |
+| `POST /admin/contract/send {contract, function: "setPrice", args: {tokenId, price}}` | a new price, until the avatar is sold |
+| `POST /contract/send {contract, function: "buy", args: {tokenId} or {imageUrl}, from}` + `X-Section-Key` | `from`, a **user account of the caller's section**, signs `buy(tokenId, payee)` paying the price (payee and value filled in). The price goes **at once** to the section's **consumption account**; the avatar is bound to the buyer: no resale, no transfer |
+| `POST /contract/send {contract, function: "undo", args: {tokenId}}` + `X-Section-Key` (no `from`) | within the hold period: the proxy signs as the consumption account that was paid, which refunds the buyer in the same transaction; the avatar goes back to the center, for sale again |
 
-The contract itself enforces where a first sale's money goes: `buy` checks
-`SectionRegistry.isConsumptionAccount(payee)` (the consumption account of an active section), so
-even a transaction sent around the proxy can't redirect it.
+The contract itself enforces where the money goes: `buy` checks that the buyer is a user account
+(`accountKind`) and that `payee` is the consumption account of the buyer's own section
+(`isConsumptionAccount`, `sectionOfAccount`), so even a transaction sent around the proxy can't
+redirect it. Only that consumption account can undo, and only with exactly the refund.
 
-An avatar sale needs the section key. The one exception is the admin API caller (the admin token
+Item writes need the section key. The one exception is the admin API caller (the admin token
 from an address in `ADMIN_ALLOWED_IPS`): the chainlens **Mint and sell avatars** card on a collection's
-contract page (admin token and IP, as the Deploy page) calls the proxy that way, and the section is
-then the buyer's. Step by step from Remix to a sale: [avatars](avatars.md).
+contract page and the **Nicknames** page (admin token and IP, as the Deploy page) call the proxy that
+way, and the section is then the buyer's (an undo: the one that was paid). Step by step:
+[avatars](avatars.md), [nicknames](nicknames.md).
 
-Owners, prices, metadata and sales are read with `/contract/call` and `/contract/events`
-([proxy API, avatar collections](../reference/proxy-api.md#avatar-collections)). The old `/nft/*` routes
-answer 410.
+Owners, prices, metadata and payments are read with `/contract/call` (`tokensOf`, `tokenOf`,
+`ownerOf`, `paymentsOf`…) and `/contract/events` ([proxy API, avatar
+collections](../reference/proxy-api.md#avatar-collections)). The old `/nft/*` routes answer 410.
 
-**Version-2 collections** (minted by SENDER01, made before sections) are **retired**: the proxy no
-longer reads, mints or sells them.
+**Older collections:** version 3 (with resale) is an ordinary contract to the proxy; **version-2
+collections** (minted by SENDER01, made before sections) are **retired**: the proxy no longer reads,
+mints or sells them.
 
 ## Sections in the chainlens Accounts page
 
@@ -296,8 +304,11 @@ sender and receiver:
 | Balances (end of period), the default | each period's closing balances (upfront / consumption / payment / users), stacked like the Sections bars: today's balances minus every later change (gas is free on this chain) |
 | New users | the registry's `AccountAdded` (or the account's first funding, if earlier) |
 | +x from users | user account → the section's consumption account |
-| Avatar sales / Avatar sales (ETH) | `buy` calls by the section's user accounts (first sales: the center was the seller) |
-| Income | +x from users + first avatar sales (what reaches the consumption account) |
+| Avatar sales / Avatar sales (ETH) | `buy` calls of avatar collections by the section's user accounts |
+| Nickname sales / Level upgrades | `buy` and `upgradeLevel` calls of nickname collections by the section's user accounts |
+| Nicknames and levels (ETH) | the ETH of those nickname sales and level upgrades |
+| Undone, refunded (ETH) | `undo` and `undoLevel` calls by the section's consumption account (the refunds) |
+| Income | +x from users + avatar and nickname sales + level upgrades − refunds (what stays on the consumption account) |
 | To users | upfront → user (new accounts' funding and −x) |
 | Top-ups, Swept, Paid back | SENDER01 → upfront, consumption → payment, payment → SENDER01 |
 | Transactions | every transaction from or to one of the section's accounts |
@@ -307,7 +318,7 @@ start is not included.
 
 ## Flows
 
-![The money cycle of one section: SENDER01 top-up to the upfront account, −x and new-account funding to user accounts, +x and first avatar sales to the consumption account, sweep to the payment account, pay back to SENDER01](../images/diagrams/section-money-flow.svg)
+![The money cycle of one section: SENDER01 top-up to the upfront account, −x and new-account funding to user accounts, +x and item sales to the consumption account (undos refund from it), sweep to the payment account, pay back to SENDER01](../images/diagrams/section-money-flow.svg)
 
 | Action | Who | Signed by / what happens |
 |---|---|---|
@@ -325,9 +336,10 @@ start is not included.
 | **Deploy avatar collection** (UI or the `avatar-collection` template) | proxy → registry | `contract_account_center` (the minter), then registry admin; shared by all sections |
 | `/contract/call` | proxy | none (read); any registered contract |
 | `/contract/send` (section_i) | proxy | a user account of section_i; only registered contracts and their ABI functions |
-| `/admin/contract/send` `mint` | proxy (center's queue) | `contract_account_center`: `mint(center, tokenId, uri, price)`; price fixed for good |
-| `/contract/send` `buy`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; avatar → buyer, price → `consumption_account_i` |
-| `/contract/send` `approve`, then `buy`, resale | proxy | the seller `approve(collection, tokenId)` (seller's section); the buyer `buy(tokenId, …)` at the same mint price (buyer's section); avatar → buyer, price → seller |
+| `/admin/contract/send` `mint`, `setPrice` (`addLevel`, `setLevel`) | proxy (center's queue) | `contract_account_center`: avatar `mint(image, uri, price)`, nickname `mint(nickname, price)`; the price can change until the item is sold |
+| `/contract/send` `buy` (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; item → buyer (for good), price → `consumption_account_i` at once |
+| `/contract/send` `upgradeLevel` (section_i) | proxy (owner's queue) | the owner: `upgradeLevel(tokenId, level, payee = consumption_account_i)`; the step prices → `consumption_account_i` at once |
+| `/contract/send` `undo` / `undoLevel` (section_i, no `from`) | proxy (consumption account's queue) | `consumption_account_i`, within the hold period: the refund → the buyer; `undo`: the item back to the center, for sale again |
 
 ## Monitoring
 
@@ -338,7 +350,7 @@ The proxy's `/metrics` (scraped by Prometheus through the proxy VIP) has these s
 |---|---|
 | `proxy_section_balance_eth{section_id, section, role, active}` | each account's balance (role upfront / consumption / payment), refreshed every 15 s; archived sections are not listed |
 | `proxy_section_active{section_id, section}` | 1 = enabled |
-| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | operations and ETH moved since the proxy started (op: `create_account`, `transfer_in`, `transfer_out`, `avatar_sale`, `avatar_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`); they restart at 0 with the proxy (dashboards use `increase()`) |
+| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | operations and ETH moved since the proxy started (op: `create_account`, `transfer_in`, `transfer_out`, `avatar_sale`, `avatar_undo`, `nickname_sale`, `nickname_undo`, `level_upgrade`, `level_undo`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`); they restart at 0 with the proxy (dashboards use `increase()`) |
 | `proxy_sender01_balance_eth` | SENDER01's balance |
 | `proxy_section_low_balance_eth`, `proxy_sender01_low_balance_eth` | the alert thresholds |
 | `proxy_sections_metrics_error`, `proxy_sections_metrics_age_seconds` | 1 = the last refresh of the balances failed; seconds since the last refresh |

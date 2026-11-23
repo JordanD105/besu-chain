@@ -333,7 +333,7 @@ Each column can be sorted, or filtered with the funnel.
 | **Upfront** / **Consumption** / **Payment** | balances now (ETH) |
 | **Days left** | how long the upfront account lasts at the last 7 days' spending; *no spending* when it paid nothing out. Red under 3, orange under 7 |
 | **Spend / day** | ETH paid out of the upfront account per day over the last 7 days (−x transfers and the funding of new accounts) |
-| **New accounts**, **+x in**, **−x out**, **Avatar sales**, **Top-ups**, **Swept**, **Paid back** (All sections only) | the last Period |
+| **New accounts**, **+x in**, **−x out**, **Avatar sales**, **Top-ups**, **Swept**, **Paid back**, **Nicknames**, **Level upgrades**, **Undone** (All sections only) | the last Period (ETH, except New accounts). **Undone**: the ETH refunded by undos of avatar sales, nickname sales and level upgrades |
 
 ### Balances (ETH)
 
@@ -353,9 +353,9 @@ estimates from `increase()`: amounts can be slightly off, counts are rounded.
 | Panel | Shows |
 |---|---|
 | **New accounts / +x from users / Avatar sales / Top-ups, last period** | all selected sections |
-| **Most income / Most new accounts / Most spent, last period: 10 sections** | the top 10 sections of the last period |
-| **Operations per period** / **ETH moved per period** | bars per period and kind of operation (all selected sections): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `avatar_sale`, `avatar_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback` (before the avatar rename: `nft_first_sale`, `nft_resale`; that history still shows, and the avatar sales and income panels count both names). Each bar counts the period that **starts** at its date (today's bar = today so far) |
-| **Income per period: top 10 sections** | +x and first avatar sales, the 10 sections with the most income in each period |
+| **Most income / Most new accounts / Most spent, last period: 10 sections** | the top 10 sections of the last period. Income = +x, avatar and nickname sales and level upgrades, minus the undone (refunded) payments |
+| **Operations per period** / **ETH moved per period** | bars per period and kind of operation (all selected sections): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `avatar_sale`, `avatar_undo`, `nickname_sale`, `nickname_undo`, `level_upgrade`, `level_undo`, `topup`, `sweep`, `payback` (older names kept for history: `nft_first_sale`, `nft_resale`, `avatar_resale`, `edge_upgrade`; the avatar sales, level upgrades and income panels also count `nft_first_sale` and `edge_upgrade`). Each bar counts the period that **starts** at its date (today's bar = today so far) |
+| **Income per period: top 10 sections** | +x, avatar and nickname sales and level upgrades, minus undos; the 10 sections with the most income in each period |
 | **ETH moved in the selected time range** | per section (rows, with pages) and operation over the dashboard's whole time range |
 
 Choose a time range that holds several periods (Day: the last 14–30 days; Year: several years).

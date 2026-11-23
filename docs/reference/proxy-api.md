@@ -41,7 +41,7 @@ Three kinds of callers:
 | Caller | Header | Can use |
 |---|---|---|
 | Application **without** a section | none | `/createaccount` and `/transfer` with SENDER01, and the contract reads (`/contract/call`, `/contract/events`, `/contract/list`); all refused (401) when `sections_required: true` |
-| Application **of a section** | `X-Section-Key: sk_…` | section calls: its own accounts, +x / −x transfers, contract reads and writes (avatar purchases, nicknames) |
+| Application **of a section** | `X-Section-Key: sk_…` | section calls: its own accounts, +x / −x transfers, contract reads and writes (avatar and nickname purchases, level upgrades, undos) |
 | **Operator / chainlens** | `Authorization: Bearer <ADMIN_TOKEN>`, from `ADMIN_ALLOWED_IPS` | the `/admin/*` API, and `/contract/send` without a key |
 
 ```bash
@@ -147,7 +147,7 @@ as JSON. With an object on the **platform's contracts**, the values are **friend
 ETH, metadata for a mint ([table below](#friendly-values-of-the-platform-contracts)).
 On other contracts an object only puts the values in the ABI's order.
 
-- A missing or misnamed value: 400 `args: no value for "account" (quote(address,uint8)); given: acct`.
+- A missing or misnamed value: 400 `args: no value for "level" (quote(uint256,uint8)); given: tokenId`.
 - An unknown name on another contract: 400 `args: unknown name(s) x; f(uint256) takes a, b`.
 - An unknown name on the platform's contracts: 400 `args: unknown name(s) name; mint takes image, price, description, attributes`.
 - Nicknames are always trimmed and NFC-normalized, also in a list.

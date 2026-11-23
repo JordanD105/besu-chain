@@ -30,7 +30,8 @@
 현재 제공되는 기능: SectionRegistry(버전 2), 프록시 관리 API, 섹션 범위의 `/createaccount`와
 `/transfer`, chainlens **Sections** 페이지(섹션의 사용자 계정 포함), 컨트랙트 계정 센터가 배포하고 하나의
 범용 API(`/contract/call`, `/contract/send`, `/contract/events`, `/contract/list`)로 사용하는 컨트랙트,
-아바타 컬렉션(센터가 민팅하며 최초 판매 대금은 섹션에 지급), 닉네임, 모니터링(알림과 Grafana
+아바타와 닉네임 컬렉션(센터가 민팅하는 아이템: 한 번 구매, 대금은 즉시 구매자의 섹션에 지급, 보류 기간 안에 취소 가능),
+모니터링(알림과 Grafana
 **Sections** 대시보드).
 
 ## 계정 {#accounts}
@@ -39,11 +40,11 @@
 |---|---|---|---|---|
 | SENDER01 | 1 | 선지급 계정에 자금 공급(수동 충전). 결제 계정에서 반환되는 자금을 받습니다 | – | big |
 | `upfront_account_i` | 섹션당 1 | **지급:** 새 계정에 자금 공급, `/transfer -x` | 2 upfront | big |
-| `consumption_account_i` | 섹션당 1 | **수령:** `/transfer +x`, 아바타 최초 판매. `payment_account_i`로 스윕됩니다 | 3 consumption | none |
+| `consumption_account_i` | 섹션당 1 | **수령:** `/transfer +x`, 아바타와 닉네임 판매, 닉네임 레벨 업그레이드. 취소 환불을 **지급**합니다. `payment_account_i`로 스윕됩니다 | 3 consumption | none |
 | `payment_account_i` | 섹션당 1 | 스윕된 자금을 **모읍니다**. SENDER01로 반환할 수 있습니다 | 4 payment | none |
 | 사용자 계정 | 다수 | 섹션의 키로 `/createaccount`를 호출하여 생성. 하나의 섹션에 속합니다 | 1 user | 요청에 따름 (기본값 `small`) |
 | 퇴역 계정 | 교체 후 | 교체된 선지급 / 소비 / 결제 계정: 여전히 섹션 소속이지만 역할은 없습니다 | 5 retired | 변경 없음 |
-| `contract_account_center` | 1 | 모든 컨트랙트(일반 및 아바타)를 배포하고, 아바타 컬렉션의 아바타를 민팅합니다 | – | big |
+| `contract_account_center` | 1 | 모든 컨트랙트(일반 및 아바타)를 배포하고, 아바타와 닉네임을 민팅하며, 그 가격과 사용자 레벨을 정합니다 | – | big |
 | 레지스트리 관리자 | 1 | SectionRegistry에 쓰기를 하는 유일한 주체 | – | small |
 
 모든 계정은 MPC 키입니다. 이 계정들에서 **트랜잭션을 보내는 것은 프록시뿐입니다**(계정별 대기열 하나,
@@ -75,7 +76,7 @@
 [`proxy/section-registry.json`](../../proxy/section-registry.json)으로 컴파일합니다(solc 0.8.28, EVM cancun,
 `proxy/scripts/compile-contract.js`). 두 프록시와 chainlens가 이를 읽습니다. 섹션을 저장하는 곳은 이것뿐이므로
 복제하거나 백업할 데이터베이스가 없고(체인이 그 역할을 합니다), 모든 변경은 서명된
-트랜잭션이며, 컨트랙트가 이를 확인할 수 있습니다(AvatarCollection).
+트랜잭션이며, 컨트랙트가 이를 확인할 수 있습니다(아바타와 닉네임 컬렉션).
 
 | 보유 정보 | 변경 함수 |
 |---|---|
@@ -86,7 +87,7 @@
 | 정보 필드: 키(1–32자: 문자, 숫자, `_ . -`) → 값(최대 512바이트), 섹션당 최대 32개 | `setInfo` (빈 값이면 필드 제거) |
 | 각 섹션의 사용자 계정, 모든 계정의 종류 (1 user … 5 retired) | `addAccount`, `addAccounts` (`AccountAdded` 이벤트) |
 | 등록된 컨트랙트(종류 1 일반, 2 아바타 컬렉션)와 그 ABI(`ContractRegistered` 이벤트에 포함) | `registerContract` |
-| `isConsumptionAccount(address)`: 활성 상태이고 보관되지 않은 섹션의 소비 계정일 때만 true. AvatarCollection의 수취인 확인 | (view) |
+| `isConsumptionAccount(address)`: 활성 상태이고 보관되지 않은 섹션의 소비 계정일 때만 true. `sectionOfAccount`, `accountKind`와 함께 아바타와 닉네임 컬렉션의 구매자와 수취인 확인 | (view) |
 
 **레지스트리 관리자**(MPC 키)만 프록시를 통해 한 번에 하나씩 쓰기를 합니다. 새로운 종류의
 섹션 정보는 새 컨트랙트 없이 **정보 필드**(설명, 연락처, 한도 등)에 넣습니다.
@@ -165,7 +166,7 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 | `POST /createaccount {amount, pool}` | 새 MPC 계정, 온체인에서 **section_i 아래에 등록**, **`upfront_account_i`에서** 자금 공급 |
 | `POST /transfer {account, amount: "x", memo}` | `account` → `consumption_account_i` |
 | `POST /transfer {account, amount: "-x", memo}` | `upfront_account_i` → `account` |
-| `POST /contract/send {contract, function, args, from, value}` | section_i의 사용자 계정인 `from`이 서명한 트랜잭션 ([컨트랙트](#contracts)). 아바타 판매(`buy`, [아바타 컬렉션](#avatar-collections))와 닉네임 쓰기(`buyNickname`, `upgradeEdge`, [닉네임](nicknames.md))도 포함하며, payee와 가격이 채워짐 |
+| `POST /contract/send {contract, function, args, from, value}` | section_i의 사용자 계정인 `from`이 서명한 트랜잭션 ([컨트랙트](#contracts)). 아이템 판매(`buy`, [아바타 컬렉션](#avatar-collections), [닉네임](nicknames.md))와 레벨 업그레이드(`upgradeLevel`)도 포함하며 payee와 가격이 채워짐. 취소(`undo`, `undoLevel`, `from` 없음: consumption_account_i가 서명)도 포함 |
 
 `account`는 section_i의 사용자 계정이어야 합니다(해당 섹션의 키로 생성). 섹션 `/transfer`에서는
 `from` / `to`를 받지 않습니다. 응답에는 섹션, 방향, `from`, `to`,
@@ -203,7 +204,7 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 | `POST /admin/contract/check {kind, name, abi, bytecode, deployedBytecode, immutableReferences, args}` | 시험 실행: 인수, 가스, revert 없음 확인, 배포될 주소. 아무것도 서명하지 않습니다 |
 | `POST /admin/contract/deploy {…same}` | 배포하고(센터가 서명), 온체인 코드를 `deployedBytecode`와 비교하고, 등록합니다(레지스트리 관리자가 서명) |
 | `{template: "avatar-collection", name, symbol}` 또는 `{template: "nickname-collection", …}`로 `check` / `deploy` | 프록시 이미지에 컴파일된 플랫폼 자체 컨트랙트(레지스트리 주소는 채워짐) |
-| `POST /admin/contract/send {contract, function, args}` | 센터가 서명하는 쓰기: 플랫폼 컨트랙트의 민터이자 소유자(`mint`, 닉네임 가격과 테두리 레벨, 예약 이름) |
+| `POST /admin/contract/send {contract, function, args}` | 센터가 서명하는 쓰기: 플랫폼 컨트랙트의 민터이자 소유자(`mint`, `setPrice`, 닉네임 사용자 레벨 `addLevel` / `setLevel`) |
 
 생성 시 컨트랙트의 `msg.sender`는 센터입니다. 소유자나 역할이 있는 컨트랙트에서 센터가 이를 보유하면
 안 되는 경우, 생성자 인수로 받도록 하십시오.
@@ -226,38 +227,42 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 사용하십시오.
 
 플랫폼 자체 컨트랙트에 대해서는 `/contract/send`가 섹션이 정하는 값을 채웁니다. 생략한 `payee`는 보내는
-계정 섹션의 소비 계정이 되고, 생략한 `value`는 가격이 됩니다(닉네임 `buyNickname`, `upgradeEdge`, 아바타
-`buy`). 관리 API 호출자(chainlens)는 키 없이 호출할 수 있으며, 이때 섹션은 `from`의 섹션입니다.
+계정 섹션의 소비 계정이 되고, 생략한 `value`는 가격(`buy`, 닉네임 `upgradeLevel`) 또는 환불액(`undo`, 닉네임
+`undoLevel`: 돈을 받은 소비 계정이 서명, `from` 없음)이 됩니다. 관리 API 호출자(chainlens)는 키 없이 호출할 수
+있으며, 이때 섹션은 `from`의 섹션(취소의 경우: 돈을 받은 계정의 섹션)입니다.
 자세한 내용: [프록시 API](../reference/proxy-api.md#post-contractsend--write).
 
 ## 아바타 컬렉션 {#avatar-collections}
 
-**아바타**는 플랫폼의 이미지 토큰입니다. 아바타 컬렉션([`proxy/contracts/AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol),
-`proxy/avatar-collection.json`. 버전 3 컬렉션도 같은 코드)은 **컨트랙트 계정 센터**가 배포하고 민팅하며,
-SectionRegistry에 등록되고(종류 avatar), 모든 섹션이 공유합니다. 생성자는 `name_`, `symbol_`,
-`registry_`(SectionRegistry의 주소)를 받습니다.
+**아바타**는 플랫폼의 이미지 토큰입니다. 아바타 컬렉션([`proxy/contracts/AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol)
+버전 4, `proxy/avatar-collection.json`)과 닉네임 컬렉션([닉네임](nicknames.md))은 **아이템**이며 같은 규칙을 따릅니다
+([`proxy/contracts/BoundItems.sol`](../../proxy/contracts/BoundItems.sol)). **컨트랙트 계정 센터**(민터)가 배포하고,
+SectionRegistry에 등록되며, 모든 섹션이 공유합니다. 아바타 생성자는 `name_`, `symbol_`, `registry_`(SectionRegistry의
+주소), `holdSeconds_`(취소 기간; 템플릿의 `holdDays`)를 받습니다.
 
 | 요청 | 동작 |
 |---|---|
-| `POST /admin/contract/deploy {template: "avatar-collection", name, symbol}` | 센터가 아바타 컬렉션을 배포하고(센터가 민터, 레지스트리 주소 포함) 등록합니다 |
-| `POST /admin/contract/send {contract, function: "mint", args: {name, image, …, price}}` | 센터가 판매용으로 아바타를 자신에게 민팅합니다. `price`(ETH)는 영구 고정됩니다. 섹션과 연결되지 않습니다. |
-| `POST /contract/send {contract, function: "buy", args: {tokenId}, from}` + `X-Section-Key` | **호출자 섹션의 사용자 계정**인 `from`에게 판매합니다. `from`은 민팅 가격을 지불하며 `buy(tokenId, payee)`에 서명합니다(payee와 value는 채워짐). **최초 판매**(센터가 보유): 대금은 섹션의 **소비 계정**으로 갑니다. **재판매**(사용자가 보유): 먼저 판매자의 섹션이 판매자로 `approve` `{tokenId}`(컬렉션을 승인)를 역시 `/contract/send`로 보내고, 대금은 **판매자**에게 갑니다. 판매자와 구매자가 다른 섹션에 있어도 됩니다. |
+| `POST /admin/contract/deploy {template: "avatar-collection", name, symbol, holdDays}` | 센터가 아바타 컬렉션을 배포하고(센터가 민터, 레지스트리 주소와 취소 기간 포함, 기본 7일) 등록합니다 |
+| `POST /admin/contract/send {contract, function: "mint", args: {image, price, description, attributes}}` | 센터가 아바타를 민팅해 판매용으로 보유합니다. 이미지마다 한 번. 섹션과 연결되지 않습니다 |
+| `POST /admin/contract/send {contract, function: "setPrice", args: {tokenId, price}}` | 아바타가 판매되기 전까지 새 가격 |
+| `POST /contract/send {contract, function: "buy", args: {tokenId} 또는 {imageUrl}, from}` + `X-Section-Key` | **호출자 섹션의 사용자 계정**인 `from`이 가격을 지불하며 `buy(tokenId, payee)`에 서명합니다(payee와 value는 채워짐). 대금은 **즉시** 섹션의 **소비 계정**으로 갑니다. 아바타는 구매자에게 귀속됩니다: 재판매 없음, 이전 없음 |
+| `POST /contract/send {contract, function: "undo", args: {tokenId}}` + `X-Section-Key`(`from` 없음) | 보류 기간 안: 프록시가 돈을 받은 소비 계정으로 서명하고, 그 계정이 같은 트랜잭션에서 구매자에게 환불합니다. 아바타는 센터로 돌아가 다시 판매됩니다 |
 
-최초 판매 대금이 어디로 갈지는 컨트랙트 자체가 강제합니다. `buy`는
-`SectionRegistry.isConsumptionAccount(payee)`(활성 섹션의 소비 계정)를 확인하므로,
-프록시를 우회하여 보낸 트랜잭션도 대금을 다른 곳으로 돌릴 수 없습니다.
+돈이 어디로 갈지는 컨트랙트 자체가 강제합니다. `buy`는 구매자가 사용자 계정인지(`accountKind`), `payee`가 구매자 자신의
+섹션의 소비 계정인지(`isConsumptionAccount`, `sectionOfAccount`) 확인하므로, 프록시를 우회하여 보낸 트랜잭션도 대금을
+다른 곳으로 돌릴 수 없습니다. 그 소비 계정만, 정확히 환불액으로만 취소할 수 있습니다.
 
-아바타 판매에는 섹션 키가 필요합니다. 유일한 예외는 관리 API 호출자(`ADMIN_ALLOWED_IPS`에 있는
-주소에서 온 관리 토큰)입니다. 컬렉션의 컨트랙트 페이지에 있는 chainlens **Mint and sell avatars** 카드(Deploy 페이지와 같은
-관리 토큰과 IP)가 이 방식으로 프록시를 호출하며, 이때 섹션은 구매자의 섹션입니다.
-Remix에서 판매까지의 단계별 안내: [아바타](avatars.md).
+아이템 쓰기에는 섹션 키가 필요합니다. 유일한 예외는 관리 API 호출자(`ADMIN_ALLOWED_IPS`에 있는 주소에서 온 관리
+토큰)입니다. 컬렉션의 컨트랙트 페이지에 있는 chainlens **Mint and sell avatars** 카드와 **Nicknames** 페이지(Deploy
+페이지와 같은 관리 토큰과 IP)가 이 방식으로 프록시를 호출하며, 이때 섹션은 구매자의 섹션(취소의 경우: 돈을 받은 섹션)입니다.
+단계별 안내: [아바타](avatars.md), [닉네임](nicknames.md).
 
-소유자, 가격, 메타데이터, 판매 내역은 `/contract/call`과 `/contract/events`로 읽습니다
-([프록시 API, 아바타 컬렉션](../reference/proxy-api.md#avatar-collections)). 이전의 `/nft/*` 라우트는 410으로
-응답합니다.
+소유자, 가격, 메타데이터, 결제는 `/contract/call`(`tokensOf`, `tokenOf`, `ownerOf`, `paymentsOf`…)과
+`/contract/events`로 읽습니다([프록시 API, 아바타 컬렉션](../reference/proxy-api.md#avatar-collections)).
+이전의 `/nft/*` 라우트는 410으로 응답합니다.
 
-**버전 2 컬렉션**(SENDER01이 민팅, 섹션 도입 이전에 만든 것)은 **폐기되었습니다**: 프록시는 더 이상
-이를 읽거나, 민팅하거나, 판매하지 않습니다.
+**이전 컬렉션:** 버전 3(재판매 있음)은 프록시에게 일반 컨트랙트입니다. **버전 2 컬렉션**(SENDER01이 민팅, 섹션 이전에
+만들어짐)은 **폐기되어** 프록시가 더 이상 읽거나 민팅하거나 판매하지 않습니다.
 
 ## chainlens Accounts 페이지의 섹션 {#sections-in-the-chainlens-accounts-page}
 
@@ -293,8 +298,11 @@ periods**는 기본값으로 돌아갑니다. chainlens가 인덱싱한 트랜�
 | Balances (end of period), 기본값 | 각 기간의 마감 잔액(선지급 / 소비 / 결제 / 사용자), Sections 막대처럼 누적 표시: 오늘 잔액에서 이후의 모든 변경을 뺀 값 (이 체인에서는 가스가 무료) |
 | New users | 레지스트리의 `AccountAdded` (또는 그보다 이른 경우 계정의 최초 자금 공급) |
 | +x from users | 사용자 계정 → 섹션의 소비 계정 |
-| Avatar sales / Avatar sales (ETH) | 섹션 사용자 계정의 `buy` 호출 (최초 판매: 센터가 판매자) |
-| Income | 사용자의 +x + 아바타 최초 판매 (소비 계정에 도달하는 금액) |
+| Avatar sales / Avatar sales (ETH) | 섹션 사용자 계정의 아바타 컬렉션 `buy` 호출 |
+| Nickname sales / Level upgrades | 섹션 사용자 계정의 닉네임 컬렉션 `buy`와 `upgradeLevel` 호출 |
+| Nicknames and levels (ETH) | 그 닉네임 판매와 레벨 업그레이드의 ETH |
+| Undone, refunded (ETH) | 섹션 소비 계정의 `undo`와 `undoLevel` 호출(환불) |
+| Income | 사용자의 +x + 아바타와 닉네임 판매 + 레벨 업그레이드 − 환불 (소비 계정에 남는 금액) |
 | To users | 선지급 → 사용자 (새 계정 자금 공급과 −x) |
 | Top-ups, Swept, Paid back | SENDER01 → 선지급, 소비 → 결제, 결제 → SENDER01 |
 | Transactions | 섹션 계정 중 하나에서 보내거나 받은 모든 트랜잭션 |
@@ -304,7 +312,7 @@ periods**는 기본값으로 돌아갑니다. chainlens가 인덱싱한 트랜�
 
 ## 흐름 {#flows}
 
-![섹션의 자금 순환: 충전, -x, +x와 첫 아바타 판매, 스윕, 반환](../images/diagrams/section-money-flow.svg)
+![섹션의 자금 순환: 충전, -x, +x와 아이템 판매(취소 시 소비 계정에서 환불), 스윕, 반환](../images/diagrams/section-money-flow.svg)
 
 | 작업 | 처리 주체 | 서명 주체 / 동작 |
 |---|---|---|
@@ -322,9 +330,10 @@ periods**는 기본값으로 돌아갑니다. chainlens가 인덱싱한 트랜�
 | **아바타 컬렉션 배포** (UI 또는 `avatar-collection` 템플릿) | 프록시 → 레지스트리 | `contract_account_center`(민터), 이후 레지스트리 관리자. 모든 섹션이 공유 |
 | `/contract/call` | 프록시 | 없음(읽기). 등록된 모든 컨트랙트 |
 | `/contract/send` (section_i) | 프록시 | section_i의 사용자 계정. 등록된 컨트랙트와 그 ABI 함수만 |
-| `/admin/contract/send` `mint` | 프록시 (센터의 대기열) | `contract_account_center`: `mint(center, tokenId, uri, price)`. 가격은 영구 고정 |
-| `/contract/send` `buy`, 최초 판매 (section_i) | 프록시 (구매자의 대기열) | 구매자: `buy(tokenId, payee = consumption_account_i)`. 아바타 → 구매자, 대금 → `consumption_account_i` |
-| `/contract/send` `approve` 후 `buy`, 재판매 | 프록시 | 판매자가 `approve(collection, tokenId)`(판매자의 섹션), 구매자가 같은 민팅 가격으로 `buy(tokenId, …)`(구매자의 섹션). 아바타 → 구매자, 대금 → 판매자 |
+| `/admin/contract/send` `mint`, `setPrice` (`addLevel`, `setLevel`) | 프록시 (센터의 대기열) | `contract_account_center`: 아바타 `mint(image, uri, price)`, 닉네임 `mint(nickname, price)`. 가격은 아이템이 판매되기 전까지 변경 가능 |
+| `/contract/send` `buy` (section_i) | 프록시 (구매자의 대기열) | 구매자: `buy(tokenId, payee = consumption_account_i)`. 아이템 → 구매자(영구), 대금 → 즉시 `consumption_account_i` |
+| `/contract/send` `upgradeLevel` (section_i) | 프록시 (소유자의 대기열) | 소유자: `upgradeLevel(tokenId, level, payee = consumption_account_i)`. 단계 가격 → 즉시 `consumption_account_i` |
+| `/contract/send` `undo` / `undoLevel` (section_i, `from` 없음) | 프록시 (소비 계정의 대기열) | `consumption_account_i`, 보류 기간 안: 환불 → 구매자. `undo`: 아이템은 센터로 돌아가 다시 판매 |
 
 ## 모니터링 {#monitoring}
 
@@ -335,7 +344,7 @@ periods**는 기본값으로 돌아갑니다. chainlens가 인덱싱한 트랜�
 |---|---|
 | `proxy_section_balance_eth{section_id, section, role, active}` | 각 계정의 잔액(역할 upfront / consumption / payment), 15초마다 갱신. 보관된 섹션은 나열되지 않음 |
 | `proxy_section_active{section_id, section}` | 1 = 활성화됨 |
-| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | 프록시 시작 이후의 작업 수와 이동한 ETH (op: `create_account`, `transfer_in`, `transfer_out`, `avatar_sale`, `avatar_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`). 프록시와 함께 0부터 다시 시작합니다(대시보드는 `increase()` 사용) |
+| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | 프록시 시작 이후의 작업 수와 이동한 ETH (op: `create_account`, `transfer_in`, `transfer_out`, `avatar_sale`, `avatar_undo`, `nickname_sale`, `nickname_undo`, `level_upgrade`, `level_undo`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`). 프록시와 함께 0부터 다시 시작합니다(대시보드는 `increase()` 사용) |
 | `proxy_sender01_balance_eth` | SENDER01의 잔액 |
 | `proxy_section_low_balance_eth`, `proxy_sender01_low_balance_eth` | 알림 임계값 |
 | `proxy_sections_metrics_error`, `proxy_sections_metrics_age_seconds` | 1 = 마지막 잔액 갱신 실패, 마지막 갱신 이후 경과 초 |

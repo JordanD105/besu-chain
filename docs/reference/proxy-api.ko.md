@@ -41,7 +41,7 @@
 | 호출자 | 헤더 | 사용 가능 범위 |
 |---|---|---|
 | 섹션이 **없는** 애플리케이션 | 없음 | SENDER01을 쓰는 `/createaccount`와 `/transfer`, 컨트랙트 읽기(`/contract/call`, `/contract/events`, `/contract/list`). `sections_required: true`이면 모두 거부(401) |
-| **섹션에 속한** 애플리케이션 | `X-Section-Key: sk_…` | 섹션 호출: 자체 계정, +x / −x 이체, 컨트랙트 읽기와 쓰기(아바타 구매, 닉네임) |
+| **섹션에 속한** 애플리케이션 | `X-Section-Key: sk_…` | 섹션 호출: 자체 계정, +x / −x 이체, 컨트랙트 읽기와 쓰기(아바타와 닉네임 구매, 레벨 업그레이드, 취소) |
 | **운영자 / chainlens** | `Authorization: Bearer <ADMIN_TOKEN>`, `ADMIN_ALLOWED_IPS`에서 호출 | `/admin/*` API, 키 없는 `/contract/send` |
 
 ```bash
@@ -112,7 +112,7 @@ MPC 노드 3개가 분산 키 생성을 실행합니다. 개인 키는 어디에
 |---|---|
 | `POST /createaccount` | 섹션의 계정, 섹션의 선지급 계정에서 자금 공급 |
 | `POST /transfer` | +x / −x (위 참조) |
-| `POST /contract/send` | 섹션의 사용자 계정이 서명하는 컨트랙트 트랜잭션. 모든 아바타 구매와 닉네임 쓰기도 포함 ([아래](#contracts)) |
+| `POST /contract/send` | 섹션의 사용자 계정이 서명하는 컨트랙트 트랜잭션. 모든 아이템 구매와 레벨 업그레이드, 그리고 취소(섹션의 소비 계정이 서명)도 포함 ([아래](#contracts)) |
 | `POST /contract/call`, `/contract/events`, `GET /contract/list` | 읽기. 키는 `sections_required: true`일 때만 필요 |
 
 ---
@@ -146,16 +146,16 @@ SectionRegistry에 등록된 모든 컨트랙트(컨트랙트 계정 센터가 �
 **플랫폼 컨트랙트**에 객체를 쓰면 값이 **친화적**입니다: ETH 가격, 민팅용 메타데이터([아래 표](#friendly-values-of-the-platform-contracts)). 다른 컨트랙트에서는
 객체가 값을 ABI 순서로 놓기만 합니다.
 
-- 빠졌거나 이름이 틀린 값: 400 `args: no value for "account" (quote(address,uint8)); given: acct`.
+- 빠졌거나 이름이 틀린 값: 400 `args: no value for "level" (quote(uint256,uint8)); given: tokenId`.
 - 다른 컨트랙트에서 알 수 없는 이름: 400 `args: unknown name(s) x; f(uint256) takes a, b`.
-- 플랫폼 컨트랙트에서 알 수 없는 이름: 400 `args: unknown name(s) color; setEdge takes level, price, forSale, enabled`.
+- 플랫폼 컨트랙트에서 알 수 없는 이름: 400 `args: unknown name(s) name; mint takes image, price, description, attributes`.
 - 닉네임은 목록에서도 항상 앞뒤 공백 제거와 NFC 정규화를 거칩니다.
 
 ### `POST /contract/call` — 읽기 {#post-contractcall--read}
 
 ```json
-{ "contract": "0xCollection", "function": "priceOf", "args": { "tokenId": "1" } }
-→ { "success": true, "contract": "0xCollection", "function": "priceOf(uint256)",
+{ "contract": "0xFaces", "function": "priceOf", "args": { "tokenId": "1" } }
+→ { "success": true, "contract": "0xFaces", "function": "priceOf(uint256)",
     "result": { "tokenId": "1", "price": "0.3" },
     "outputs": [ { "name": "0", "type": "uint256", "value": "300000000000000000" } ] }
 ```
@@ -167,19 +167,19 @@ SectionRegistry에 등록된 모든 컨트랙트(컨트랙트 계정 센터가 �
 
 ```json
 { "calls": [
-    { "contract": "0xCollection", "function": "ownerOf", "args": { "tokenId": "1" } },
-    { "contract": "0xCollection", "function": "ownerOf", "args": ["77"] },
-    { "contract": "0xCollection", "function": "name" } ] }
+    { "contract": "0xFaces", "function": "ownerOf", "args": { "tokenId": "1" } },
+    { "contract": "0xFaces", "function": "ownerOf", "args": ["77"] },
+    { "contract": "0xFaces", "function": "name" } ] }
 → { "success": false, "results": [
-    { "success": true, "function": "ownerOf(uint256)", "result": { "tokenId": "1", "owner": "0xUser" }, "outputs": […], … },
-    { "success": false, "status": 400, "error": "call reverted: not minted" },
-    { "success": true, "function": "name()", "result": "Dragons", "outputs": […], … } ] }
+    { "success": true, "function": "ownerOf(uint256)", "result": { "tokenId": "1", "owner": "0xUser", "sold": true }, "outputs": […], … },
+    { "success": false, "status": 400, "error": "call reverted: no such token" },
+    { "success": true, "function": "name()", "result": "Faces", "outputs": […], … } ] }
 ```
 
 ### `POST /contract/send` — 쓰기 {#post-contractsend--write}
 
-호출자 섹션의 사용자 계정인 `from`이 서명합니다. 블록을 기다립니다. `value`는 ETH 단위이며
-payable 함수에만 사용합니다.
+호출자 섹션의 사용자 계정인 `from`이 서명합니다(취소는 돈을 받은 소비 계정이 서명,
+[아래](#undo-signed-by-the-consumption-account)). 블록을 기다립니다. `value`는 ETH이며 payable 함수에만 씁니다.
 
 ```json
 { "contract": "0x…", "function": "transfer(address,uint256)", "args": ["0xTo", "5"], "from": "0xUser", "value": "0" }
@@ -188,49 +188,70 @@ payable 함수에만 사용합니다.
     "result": null, "events": [ { "name": "Transfer", "args": {…} } ] }
 ```
 
-`result`는 플랫폼 컨트랙트의 친화적인 결과(판매, 닉네임…)이며, 다른 컨트랙트에서는 `null`입니다.
-`events`는 디코딩된 컨트랙트 이벤트입니다. 채굴되었지만 revert된 트랜잭션은 `success: false`와
+`result`는 플랫폼 컨트랙트의 친화적인 결과(판매, 레벨 업그레이드, 취소…)이며, 다른 컨트랙트에서는 `null`입니다.
+`events`는 컨트랙트의 디코딩된 이벤트입니다(원시 값: wei). 채굴되었지만 되돌려진 트랜잭션은 `success: false`와
 함께 400으로 응답합니다.
 
-- **호출자:** `X-Section-Key`, 또는 키 없이 `ADMIN_ALLOWED_IPS`에서 온 관리 토큰(chainlens 방식).
-  이때 섹션은 `from`의 섹션이며, `from`은 활성 섹션의 사용자 계정이어야 합니다.
-- **payee:** 이름이 `payee`인 `address` 입력은 생략하면 보내는 계정 섹션의 **소비** 계정으로
-  채워집니다. 다른 주소이면 400.
-- **가격:** 아래 플랫폼 함수는 `value`를 생략하면 가격으로 채워집니다. 다른 값이면 400.
-- **메트릭:** 섹션 작업은 이벤트로 집계됩니다: `NicknameBought` → `nickname_sale`,
-  `EdgeUpgraded` → `edge_upgrade`, `Sold` → `avatar_sale`(판매자 = 컨트랙트 계정 센터)
-  또는 `avatar_resale`.
+- **호출자:** `X-Section-Key`, 또는 키 없이 `ADMIN_ALLOWED_IPS`에서 관리 토큰(chainlens 방식). 이때 섹션은
+  `from`의 섹션(취소의 경우: 돈을 받은 계정의 섹션)이며, 활성 섹션이어야 합니다.
+- **Payee:** 이름이 `payee`인 `address` 입력은 생략하면 보내는 계정의 섹션의 **소비** 계정으로 설정됩니다. 다른 주소 → 400.
+- **가격:** `buy`와 `upgradeLevel`은 생략한 `value`를 가격으로, `undo`와 `undoLevel`은 환불액으로 채웁니다. 다른 값 → 400.
+- **메트릭:** 섹션 작업은 이벤트로 셉니다: `Sold` → `avatar_sale` / `nickname_sale`, `Undone` → `avatar_undo` /
+  `nickname_undo`, `LevelUpgraded` → `level_upgrade`, `LevelUndone` → `level_undo`.
 
-| 컨트랙트 | 함수, `args` | 채워지는 `value` | 전송 전 확인 | 이벤트 |
-|---|---|---|---|---|
-| 닉네임 컬렉션 | `buyNickname`, `{ nickname }` | `nicknamePrice` | 공백 제거 + NFC, 1~256자, 제어 문자와 `< > & " ' \` 불가 (400). 계정당 하나, 사용 중, 예약됨 (409) | `NicknameBought {tokenId, buyer, nickname, price, paidTo}` |
-| 닉네임 컬렉션 | `upgradeEdge`, `{ level }` | `quote(from, level)` (단계 가격 합계) | 레벨 1 이상 (400). 닉네임 보유 (404). 레벨이 있고, 판매 중이며, 현재보다 높음 (400 `level N: …`) | `EdgeUpgraded {tokenId, owner, fromLevel, toLevel, price, paidTo}` |
-| 아바타 컬렉션 | `buy`, `{ tokenId }` | `priceOf(tokenId)` | 토큰 존재 (404). `from`이 이미 보유하지 않음 (400) | `Sold {tokenId, seller, buyer, price, paidTo}` |
-| 아바타 컬렉션 | 판매자가 `approve`, `{ tokenId }` | — | — | `Approval` |
+| 컨트랙트 | 함수, `args` | 서명 주체 | 채워지는 `value` | 보내기 전 확인 | 이벤트 |
+|---|---|---|---|---|---|
+| 아바타, 닉네임 | `buy`, `{ tokenId }`; 아바타 `{ imageUrl }`, 닉네임 `{ nickname }` | `from`(구매자) | `priceOf(tokenId)` | 민팅됨(404 `token N is not minted`, `image … is not minted`, `nickname "…" is not minted`); 판매되지 않음(409 `token N is already sold`) | `Sold {tokenId, buyer, price, paidTo}`, `Transfer`, `Locked` |
+| 닉네임 | `upgradeLevel`, `{ tokenId, level }` | `from`(소유자) | `quote(tokenId, level)`(단계 가격 합계) | `from`이 소유(403 `token N is not owned by …`); 레벨이 있고 판매 중이며 현재보다 높음(400 `level N: …`) | `LevelUpgraded {tokenId, owner, fromLevel, toLevel, price, paidTo}`, `MetadataUpdate` |
+| 아바타, 닉네임 | `undo`, `{ tokenId }`, **`from` 없음** | 돈을 받은 소비 계정 | 환불액: 판매 + 취소되지 않은 레벨 업그레이드 | 판매됨(409 `token N is not sold`); 기간 안(409 `the undo period of token N ended at …`); 키의 섹션이 돈을 받음(403); 소비 계정에 환불액이 있음(409) | `Undone {tokenId, buyer, refunded, by}`, `Transfer` |
+| 닉네임 | `undoLevel`, `{ tokenId }`, **`from` 없음** | 돈을 받은 소비 계정 | 가장 최근 업그레이드의 가격 | 취소할 레벨 업그레이드가 있음(409 `token N has no level upgrade to undo`); 그 기간 안(409 `the undo period of the level a -> b upgrade ended at …`); 나머지는 `undo`와 같음 | `LevelUndone {tokenId, owner, fromLevel, toLevel, refunded, by}`, `MetadataUpdate` |
 
-`mint`는 이 방식으로 보낼 수 없습니다(센터만 민팅, `not minter`).
+`mint`, `setPrice`, `addLevel`, `setLevel`은 이 방법으로 보낼 수 없습니다(센터만 가능, `not minter`):
 [`POST /admin/contract/send`](#post-admincontractsend--write-as-the-contract-account-center)를 사용하십시오.
+이전과 승인(`transferFrom`, `approve`, …)은 항상 되돌려집니다: 아이템은 구매자에게 귀속됩니다.
+
+#### 취소: 소비 계정이 서명 {#undo-signed-by-the-consumption-account}
+
+`undo`와 `undoLevel`은 **`from`을 받지 않습니다**. 프록시는 `paymentsOf`를 읽어 돈을 받은 계정(구매자 섹션의 소비
+계정)을 찾고 그 계정으로 서명합니다. 그 계정이 같은 트랜잭션에서 환불을 보내고, 컨트랙트가 구매자에게 지불합니다.
+
+```json
+{ "contract": "0xFaces", "function": "undo", "args": { "tokenId": "1" } }
+→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "function": "undo(uint256)",
+    "from": "0xConsumption", "value": "0.4", "txHash": "0x…",
+    "result": { "tokenId": "1", "undone": "sale", "buyer": "0xUser", "refunded": "0.4", "by": "0xConsumption" }, "events": [ … ] }
+```
+
+| 거부되는 경우 | 상태, 메시지 |
+|---|---|
+| 판매되지 않았거나 이미 취소됨 | 409 `token N is not sold` |
+| 판매의 / 가장 최근 레벨 업그레이드의 보류 기간 이후 | 409 `the undo period of token N ended at <time>` / `the undo period of the level a -> b upgrade ended at <time>` |
+| 남은 레벨 업그레이드 없음(`undoLevel`) | 409 `token N has no level upgrade to undo` |
+| 다른 섹션의 키 | 403 `token N was paid to section "…": only its key can undo` |
+| 소비 계정의 ETH 부족 | 409 `the refund needs X ETH but 0x… (section "…" consumption) has Y ETH` |
+| 그 계정이 아닌 `from` | 400 `from: leave it out (an undo is signed by 0x…, the account that was paid)` |
+| 돈을 받은 계정이 더 이상 섹션의 계정이 아님 | 409 `token N was paid to 0x…, not a section's account` |
 
 ### `POST /contract/events` — 이벤트 {#post-contractevents--events}
 
 ```json
-{ "contract": "0xCollection", "event": "Transfer", "where": { "to": "0xUser" }, "current": true }
-→ { "success": true, "contract": "0xCollection", "event": "Transfer(address,address,uint256)",
+{ "contract": "0xFaces", "event": "Transfer", "where": { "to": "0xUser" }, "current": true }
+→ { "success": true, "contract": "0xFaces", "event": "Transfer(address,address,uint256)",
     "fromBlock": 37567, "toBlock": 37592, "count": 1, "complete": true,
-    "events": [ { "name": "Transfer", "args": { "from": "0xSeller", "to": "0xUser", "tokenId": "1" },
+    "events": [ { "name": "Transfer", "args": { "from": "<center>", "to": "0xUser", "tokenId": "1" },
                   "blockNumber": 37590, "txHash": "0x…", "logIndex": 0, "time": "2026-11-23T12:20:15.000Z" } ] }
 ```
 
 | 필드 | |
 |---|---|
 | `event` | 이벤트 이름(또는 시그니처). 틀리면 목록과 함께 400 |
-| `where` | `{ 인수: 값 }`. **indexed** 인수는 체인이 필터링하고, 그 밖의 인수는 디코딩 후 프록시가 필터링 |
-| `fromBlock`, `toBlock` | 기본값: 컨트랙트 등록 블록부터 최신 블록까지 |
-| `limit` | 기본값 100, 최대 1000. 최신 이벤트부터 |
-| `current` | 이벤트 `Transfer`와 `where.to`가 있을 때만 `true`: 그 주소가 **아직 보유한** 토큰만 남김(토큰당 이벤트 하나) |
+| `where` | `{ arg: value }`. **indexed** 인수는 체인이 필터링하고, 나머지는 프록시가 디코딩 후 필터링 |
+| `fromBlock`, `toBlock` | 기본값: 컨트랙트 등록 시점부터 최신 블록까지 |
+| `limit` | 기본 100, 최대 1000. 최신 이벤트부터 |
+| `current` | 이벤트 `Transfer`와 `where.to`에서만 `true`: 그 주소가 **아직 보유한** 토큰만 남김(토큰당 이벤트 하나) |
 
-`complete: false`는 한도에 도달했다는 뜻입니다: 더 오래된 이벤트가 있습니다. 플랫폼 컨트랙트에서는
-`price`와 `stepPrice`가 ETH 단위입니다.
+`complete: false`는 한도에 도달했다는 뜻으로, 더 오래된 이벤트가 있습니다. 플랫폼 컨트랙트에서 `price`와
+`stepPrice`는 ETH입니다(`refunded` 같은 다른 금액은 wei). 계정이 보유한 아이템은 `tokensOf`가 더 간단합니다.
 
 ### `GET /contract/list` — 등록된 컨트랙트 {#get-contractlist--registered-contracts}
 
@@ -238,76 +259,82 @@ payable 함수에만 사용합니다.
 |---|---|
 | `?type=avatar` / `nickname` / `contract` | 아바타 컬렉션, 닉네임 컬렉션, 그 밖의 컨트랙트 |
 | `?kind=common` / `avatar` | 레지스트리 종류 |
-| `?has=buyNickname` | 이 함수가 있는 컨트랙트 |
-| `?q=drag` | 이름에 포함 (대소문자 무관) |
+| `?has=upgradeLevel` | 이 함수가 있는 컨트랙트 |
+| `?q=face` | 이름에 포함(대소문자 무관) |
 | `?functions=1` | 각 컨트랙트의 `functions`(시그니처, mutability)와 `events` 추가 |
 
 ```json
 → { "success": true, "contracts": [
-    { "address": "0xCollection", "name": "Dragons", "type": "avatar", "kind": "avatar", "registeredIn": 14172,
-      "symbol": "DRG", "minter": "<contract account center>" },
+    { "address": "0xFaces", "name": "Faces", "type": "avatar", "kind": "avatar", "registeredIn": 14172,
+      "symbol": "FACE", "minter": "<contract account center>" },
     { "address": "0xNicknames", "name": "Nicknames", "type": "nickname", "kind": "common", "registeredIn": 35444,
       "symbol": "NICK", "minter": "<contract account center>", "current": true } ],
   "center": "<contract account center>" }
 ```
 
-오래된 것부터 나열합니다. `current: true`는 사용 중인 닉네임 컬렉션(가장 최근에 등록된 것)입니다.
-버전 5 컬렉션만 `type: "nickname"`입니다. 이전 컬렉션(버전 4, 테두리 스타일 포함)은 일반
-컨트랙트(`type: "contract"`, 친화적 값 없음)입니다.
+오래된 것부터 나열합니다. `current: true`는 사용 중인 닉네임 컬렉션(가장 최근에 등록된 것)을 표시합니다.
+현재 버전만 아이템입니다: 아바타 버전 4는 `type: "avatar"`, 닉네임 버전 6은 `type: "nickname"`. 이전 컬렉션(아바타
+버전 3, 닉네임 버전 4와 5)은 일반 컨트랙트입니다(`type: "contract"`, 친화적인 값 없음): 새로 배포하십시오.
+`center`는 컨트랙트 계정 센터(배포자이자 민터)의 주소입니다.
 
 ### 플랫폼 컨트랙트의 친화적인 값 {#friendly-values-of-the-platform-contracts}
 
-**인수**(객체 형태의 `args`). *센터* = `/admin/contract/send`에서만.
+아바타와 닉네임 컬렉션은 **아이템**입니다([아바타](../features/avatars.md), [닉네임](../features/nicknames.md)).
+객체 `args`는 이 이름만 받습니다(다른 이름: 400 `args: unknown name(s) …; <function> takes …`).
+*센터* = `/admin/contract/send`에서만.
 
-| 컨트랙트 | 함수 | `args` |
+**인수**, 두 종류 공통:
+
+| 함수 | `args` |
+|---|---|
+| `buy` | `{ tokenId }`, 아바타 `{ imageUrl }`, 닉네임 `{ nickname }`(payee와 가격은 채워짐) |
+| `undo` | `{ tokenId }`(`from` 없음) |
+| `setPrice`(센터) | `{ tokenId, price }`(ETH; 토큰이 판매되기 전까지) |
+| `ownerOf`, `priceOf`, `tokenURI`, `paymentsOf` | `{ tokenId }` |
+| `tokensOf`, `balanceOf` | `{ account }`(또는 `{ owner }`) |
+| `holdSeconds`, `totalSupply`, `minter`, `name`, `symbol` | 없음 |
+
+| 종류 | 함수 | `args` |
 |---|---|---|
-| 아바타 | `buy` | `{ tokenId }` (payee와 가격은 채워짐) |
-| 아바타 | `approve` | `{ tokenId }`: 토큰을 판매에 내놓음(컬렉션 자신을 승인. 다른 주소를 승인하려면 `to`) |
-| 아바타 | `priceOf`, `ownerOf`, `tokenURI`, `getApproved` | `{ tokenId }` |
-| 아바타 | `balanceOf` | `{ owner }` |
-| 아바타 | `mint` (센터) | `{ name, image, description, attributes, properties, price }`: `name`과 `image` 필수, `price`는 ETH(기본값 0). 소유자(센터), 다음 토큰 ID, 온체인 메타데이터 URI는 채워짐 |
-| 닉네임 | `buyNickname` | `{ nickname }` |
-| 닉네임 | `upgradeEdge` | `{ level }` |
-| 닉네임 | `quote` | `{ account, level }` |
-| 닉네임 | `isAvailable`, `idOf` | `{ nickname }` |
-| 닉네임 | `nicknameOf`, `balanceOf` | `{ account }` |
-| 닉네임 | `edgeInfo` | `{ level }` |
-| 닉네임 | `tokenURI`, `ownerOf`, `edgeOf`, `nicknameById`, `locked`, `reserved` | `{ tokenId }` |
-| 닉네임 | `setNicknamePrice` (센터) | `{ price }` (ETH) |
-| 닉네임 | `addEdge` (센터) | `{ price }`: 새 레벨의 단계 가격(ETH). 판매 중으로 추가됨 |
-| 닉네임 | `setEdge` (센터) | `{ level, price, forSale }`: 생략한 필드는 그대로 (`enabled`는 `forSale`의 별칭) |
-| 닉네임 | `reserve` (센터) | `{ nicknames: [ … ], reserved }`: 이름 1~100개. `reserved: false`이면 해제 |
+| 아바타 | `mint`(센터) | `{ image, price, description, attributes }`: `image` 필수, `price`는 ETH(기본 0). `name` 없음. 프록시가 체인상 메타데이터 URI를 만듦 |
+| 아바타 | `tokenOf` | `{ imageUrl }` |
+| 아바타 | `imageOf` | `{ tokenId }` |
+| 닉네임 | `mint`(센터) | `{ nickname, price }`(공백 제거, NFC, 1~256자) |
+| 닉네임 | `tokenOf` | `{ nickname }`(A–Z 대소문자 무관) |
+| 닉네임 | `nicknameOf`, `levelOf`, `undoLevel` | `{ tokenId }` |
+| 닉네임 | `upgradeLevel` | `{ tokenId, level }` |
+| 닉네임 | `quote` | `{ tokenId, level }` |
+| 닉네임 | `levelInfo` | `{ level }` |
+| 닉네임 | `addLevel`(센터) | `{ price }`: 다음 레벨의 단계 가격(ETH). 판매 중으로 추가 |
+| 닉네임 | `setLevel`(센터) | `{ level, price, forSale }`: 생략한 필드는 값 유지 |
 
-레벨에는 단계 가격과 판매 여부만 저장됩니다. 레벨 0은 항상 가격 0이고 항상 판매 중입니다.
+레벨은 단계 가격과 판매 여부만 저장합니다. 레벨 0은 항상 가격 0이며 항상 판매 중입니다.
 
-**결과**(`result`):
+**결과**(`result`), 가격은 ETH:
 
-| 컨트랙트 | 함수 | `result` |
+| 종류 | 함수 | `result` |
 |---|---|---|
-| 아바타 | `priceOf` | `{ tokenId, price }` |
-| 아바타 | `ownerOf` | `{ tokenId, owner }` |
-| 아바타 | `tokenURI` | `{ tokenId, metadata, image }` |
-| 아바타 | `balanceOf` | `{ owner, tokens }` |
-| 아바타 | `buy` | `{ sale: "first sale" \| "resale", tokenId, seller, buyer, price, paidTo }` |
-| 아바타 | `mint` | `{ minted, tokenId, owner, price, metadata }` |
-| 아바타 | `approve` | `{ tokenId, approved, forSale }` (`forSale`: 컬렉션에 승인됨) |
-| 닉네임 | `nicknamePrice` | `{ price }` |
-| 닉네임 | `edgeCount` | `{ count, edges: [ { level, price, forSale } ] }` |
-| 닉네임 | `edgeInfo` | 테두리 하나 `{ level, price, forSale }` |
-| 닉네임 | `quote` | `{ account, level, price }`: `level`까지의 단계 가격 합계 |
-| 닉네임 | `isAvailable` | `{ nickname, characters, tokenId, available, reason }` (`reason`: `taken`, `reserved` 또는 `null`) |
-| 닉네임 | `idOf` | `{ nickname, tokenId }` |
-| 닉네임 | `nicknameOf` | `{ nickname, tokenId, account, level }` 또는 `{ account, nickname: null }` |
-| 닉네임 | `edgeOf` | `{ tokenId, level }` |
-| 닉네임 | `tokenURI` | `{ tokenId, metadata }` (`metadata`: `{ name, description, attributes: [ { trait_type: "edge level", display_type: "number", value } ] }`, 이미지 없음) |
-| 닉네임 | `ownerOf` | `{ tokenId, owner }` |
-| 닉네임 | `buyNickname`, `upgradeEdge` | 닉네임 정보(`nicknameOf`와 같음) + `price`, `paidTo` |
-| 닉네임 | `setEdge`, `addEdge` | `{ edge: { level, price, forSale } }` |
-| 닉네임 | `setNicknamePrice` | `{ nicknamePrice }` |
-| 닉네임 | `reserve` | `{ reserved, nicknames }` |
-| 그 밖의 컨트랙트 | 읽기 | 값 하나, 또는 이름 붙은 값의 객체. JSON 데이터 URI는 디코딩 |
-
-가격은 ETH 단위입니다.
+| 공통 | `priceOf` | `{ tokenId, price }` |
+| 공통 | `ownerOf` | `{ tokenId, owner, sold }` |
+| 공통 | `balanceOf` | `{ owner, tokens }` |
+| 공통 | `tokenOf` | `{ tokenId, minted, sold, owner, price }`, 또는 `{ tokenId: null, minted: false }` |
+| 공통 | `tokensOf` | 아바타 `[ { tokenId, image, price } ]`, 닉네임 `[ { tokenId, nickname, level, price } ]` |
+| 공통 | `paymentsOf` | `[ { kind: "sale" \| "level", fromLevel, toLevel, amount, payer, paidTo, paidAt, undoUntil, undone, undoable, current } ]`, 오래된 것부터(`fromLevel`, `toLevel`은 `level`에만; `undoable`: 지금 취소 가능; `current`: 유효한 판매에 속함) |
+| 공통 | `mint` | `{ minted: true, tokenId, image, price }` / `{ minted: true, tokenId, nickname, level, price }` |
+| 공통 | `setPrice` | `{ tokenId, price }` |
+| 공통 | `buy` | 아이템(`tokensOf`와 같음) + `buyer`, `paid`, `paidTo`, `undoUntil` |
+| 공통 | `undo` | `{ tokenId, undone: "sale", buyer, refunded, by }` |
+| 아바타 | `tokenURI` | `{ tokenId, metadata: { image, description, attributes }, image }` |
+| 아바타 | `imageOf` | `{ tokenId, image }` |
+| 닉네임 | `tokenURI` | `{ tokenId, metadata: { name, description, attributes: [ { trait_type: "user level", display_type: "number", value } ] } }`(이미지 없음) |
+| 닉네임 | `nicknameOf` / `levelOf` | `{ tokenId, nickname }` / `{ tokenId, level }` |
+| 닉네임 | `levelCount` | `{ count, levels: [ { level, price, forSale } ] }` |
+| 닉네임 | `levelInfo` | `{ level, price, forSale }` |
+| 닉네임 | `quote` | `{ tokenId, level, price }`: `level`까지의 단계 가격 합계 |
+| 닉네임 | `upgradeLevel` | 닉네임(`tokensOf`와 같음) + `fromLevel`, `paid`, `paidTo`, `undoUntil` |
+| 닉네임 | `undoLevel` | `{ tokenId, undone: "level", level, undoneLevel, refunded }`(`level`: 현재 레벨) |
+| 닉네임 | `addLevel`, `setLevel` | `{ level: { level, price, forSale } }` |
+| 그 밖 | 읽기 | 값 하나, 또는 이름 붙은 값들의 객체. JSON data URI는 디코딩 |
 
 ### 컨트랙트 호출의 오류 {#errors-of-the-contract-calls}
 
@@ -316,133 +343,158 @@ payable 함수에만 사용합니다.
 | 400 | `contract: a contract address` |
 | 404 | `0x… is not a registered contract` |
 | 400 | `function "x" is not in the contract's ABI` / `several functions have this name, give the signature …` |
-| 400 | `… changes state: use POST /contract/send` / `… only reads: use POST /contract/call` |
-| 400 | `args: no value for "…" (…); given: …` / `args: unknown name(s) …; setEdge takes level, price, forSale, enabled` / `args: a list (raw ABI values) or an object (by name)` |
-| 400 | 친화적인 값: `price: ETH, e.g. "0.5"`, `nicknames: a list of 1 to 100 nicknames` |
-| 404 | `level: no edge level 40 (levels 0-3)` (`setEdge`) |
-| 400 | `call reverted: …` (읽기) / `calls: a list of 1 to 50 reads …` |
+| 400 | `… changes state: use POST /contract/send` / `… only reads: use POST /contract/call`(아이템의 `transferFrom`, `approve`도: 항상 되돌려짐) |
+| 400 | `args: no value for "…" (…); given: …` / `args: unknown name(s) …; mint takes image, price, description, attributes` / `args: a list (raw ABI values) or an object (by name)` |
+| 400 | 친화적인 값: `price: ETH, e.g. "0.5"`, `tokenId: a token id (1, 2, …)`, `nickname: 1 to 256 characters …` |
+| 404 | `token N is not minted` / `image … is not minted` / `nickname "…" is not minted` / `level: no level 40 (levels 0-3)`(`setLevel`) |
+| 409 | `token N is already sold` / `token N is not sold` / `token N has no level upgrade to undo` / `the undo period of … ended at …` / `the refund needs X ETH …` |
+| 403 | `token N is not owned by 0x…` / `token N was paid to section "…": only its key can undo` |
+| 400 | `call reverted: …`(읽기) / `calls: a list of 1 to 50 reads …` |
 | 400 | `event: one of …` / `where: Sold has no argument …` / `current: only with event Transfer and where.to …` |
 | 400 | `payee: the consumption account of section "…" (0x…); leave it out to fill it in` |
 | 400 | `value: the price is X ETH (leave "value" out to pay it)` / `… is not payable: send no value` |
 | 400 | `insufficient balance: X ETH is needed` |
-| 400 | `the transaction would revert: …` (서명 전에 컨트랙트의 이유와 함께 거부) |
-| 401 | `X-Section-Key is required: …` (키 없음, 관리 호출자도 아님) |
+| 400 | `the transaction would revert: …`(서명 전에 컨트랙트의 사유와 함께 거부) |
+| 401 | `X-Section-Key is required: …`(키가 없고 관리자 호출자도 아님) |
 | 403 | `… is not a user account of a section` / `section "…" is disabled` |
 
 ---
 
 ## 아바타 컬렉션 {#avatar-collections}
 
-**아바타**는 플랫폼의 이미지 토큰입니다. 아바타 컬렉션
-([`AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol). 버전 3 컬렉션도 같은 코드)은
-**컨트랙트 계정 센터**가 배포하고 민팅하며, SectionRegistry에 등록되고(종류 avatar), 모든 섹션이
-공유합니다. 가격은 민팅 시 정해지며 모든 판매에서 고정됩니다. 판매는 구매자가 서명하는 `buy`
-하나이며, 토큰과 ETH는 함께 이동하거나 전혀 이동하지 않습니다.
+**아바타**는 플랫폼의 이미지 토큰이며 **아이템**입니다
+([`AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol) 버전 4, [`BoundItems.sol`](../../proxy/contracts/BoundItems.sol) 기반).
+컬렉션은 **컨트랙트 계정 센터**(민터)가 배포하고, SectionRegistry에 등록되며(종류 avatar), 모든 섹션이 공유합니다.
+센터는 이미지마다 한 번, 아바타가 판매되기 전까지 바꿀 수 있는 가격으로 민팅합니다. 섹션의 사용자 계정이 **한 번**
+구매합니다: 가격은 즉시 구매자 섹션의 소비 계정으로 가고, 아바타는 구매자에게 귀속됩니다(재판매 없음, 이전 없음).
+보류 기간(`holdDays`, 기본 7일) 안에는 판매를 취소할 수 있습니다.
 
 | 작업 | 호출 |
 |---|---|
 | 컬렉션 목록 | `GET /contract/list?type=avatar` |
-| 배포 | `POST /admin/contract/deploy` `{ "template": "avatar-collection", "name", "symbol" }` |
-| 판매용 민팅 | `POST /admin/contract/send` `mint` `{ name, image, description, attributes, price }` |
-| 최초 판매 | `POST /contract/send` `buy` `{ tokenId }`, `from` = 구매자: 대금은 구매자 섹션의 **소비** 계정으로 |
-| 재판매 | 판매자가 `approve` `{ tokenId }`를 보낸 뒤 구매자가 `buy` `{ tokenId }`를 보냄: 대금은 **판매자**에게 |
-| 계정이 보유한 토큰 | `POST /contract/events` `Transfer`, `where: { to }`, `current: true` |
-| 토큰 정보 | `POST /contract/call` 일괄: `ownerOf`, `priceOf`, `tokenURI` |
-| 토큰의 민팅 트랜잭션 | `POST /contract/events` `Transfer`, `where: { from: 0x0…0, tokenId }` |
-| 판매 내역 | `POST /contract/events` `Sold` |
-
-**버전 2 컬렉션**(SENDER01이 민팅)은 **폐기되었습니다**: 프록시는 더 이상 이를 읽거나, 민팅하거나,
-판매하지 않습니다. 체인에는 남아 있습니다.
+| 배포 | `POST /admin/contract/deploy` `{ "template": "avatar-collection", "name", "symbol", "holdDays" }` |
+| 판매용 민팅 | `POST /admin/contract/send` `mint` `{ image, price, description, attributes }` |
+| 가격 변경(미판매) | `POST /admin/contract/send` `setPrice` `{ tokenId, price }` |
+| 구매 | `POST /contract/send` `buy` `{ tokenId }` 또는 `{ imageUrl }`, `from` = 구매자 |
+| 판매 취소 | `POST /contract/send` `undo` `{ tokenId }`, `from` 없음([취소](#undo-signed-by-the-consumption-account)) |
+| 계정의 아바타 | `POST /contract/call` `tokensOf` `{ account }` |
+| 이미지의 토큰 | `POST /contract/call` `tokenOf` `{ imageUrl }` |
+| 토큰 상세 | `POST /contract/call` 일괄: `ownerOf`, `priceOf`, `tokenURI`, `paymentsOf` |
+| 판매와 취소 | `POST /contract/events` `Sold`, `Undone` |
 
 ```bash
 P=http://192.168.68.151:30000; T=<admin token>; K=<section key>
 # 배포 (이름과 심볼은 아바타 컬렉션 사이에서 대소문자 무관하게 고유, 아니면 409)
 curl -s -X POST $P/admin/contract/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
-  -d '{"template":"avatar-collection","name":"Dragons","symbol":"DRG"}'
-# → { "success": true, "name": "Dragons", "kind": "avatar", "address": "0xCollection", "txHash": "0x…", "codeCheck": "matches the artifact", … }
+  -d '{"template":"avatar-collection","name":"Faces","symbol":"FACE","holdDays":7}'
+# → { "success": true, "name": "Faces", "kind": "avatar", "address": "0xFaces", "codeCheck": "matches the artifact", … }
 
-# 민팅 (센터가 판매용으로 자신에게 민팅)
+# 민팅(센터가 판매용으로 보유)과 가격 변경
 curl -s -X POST $P/admin/contract/send -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
-  -d '{"contract":"0xCollection","function":"mint","args":{"name":"Red dragon","image":"https://example.com/red.png","description":"Level 1","attributes":[{"trait_type":"level","value":"1"}],"price":"0.3"}}'
-# → { "success": true, "function": "mint(address,uint256,string,uint256)", "txHash": "0x…",
-#     "result": { "minted": true, "tokenId": "1", "owner": "<center>", "price": "0.3", "metadata": { "name": "Red dragon", … } }, … }
+  -d '{"contract":"0xFaces","function":"mint","args":{"image":"https://img.example/fox.png","price":"0.3","description":"fox"}}'
+# → "function": "mint(string,string,uint256)", "result": { "minted": true, "tokenId": "1", "image": "https://img.example/fox.png", "price": "0.3" }
+curl -s -X POST $P/admin/contract/send -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+  -d '{"contract":"0xFaces","function":"setPrice","args":{"tokenId":"1","price":"0.4"}}'
+# → "result": { "tokenId": "1", "price": "0.4" }
 
-# 최초 판매 (구매자: 키 섹션의 사용자 계정)
+# 이미지 URL로 구매(구매자: 키 섹션의 사용자 계정)
 curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
-  -d '{"contract":"0xCollection","function":"buy","args":{"tokenId":"1"},"from":"0xUser"}'
-# → { "success": true, "value": "0.3", "txHash": "0x…",
-#     "result": { "sale": "first sale", "tokenId": "1", "seller": "<center>", "buyer": "0xUser", "price": "0.3", "paidTo": "<consumption account>" }, "events": [ … ] }
+  -d '{"contract":"0xFaces","function":"buy","args":{"imageUrl":"https://img.example/fox.png"},"from":"0xUser"}'
+# → "value": "0.4", "result": { "tokenId": "1", "image": "https://img.example/fox.png", "price": "0.4", "buyer": "0xUser",
+#     "paid": "0.4", "paidTo": "0xConsumption", "undoUntil": "2026-11-30T17:36:09.250Z" }
 
-# 재판매: 판매자의 섹션이 판매에 내놓고, 구매자의 섹션이 구매
-curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
-  -d '{"contract":"0xCollection","function":"approve","args":{"tokenId":"1"},"from":"0xUser"}'
-# → { …, "result": { "tokenId": "1", "approved": "0xCollection", "forSale": true } }
-curl -s -X POST $P/contract/send -H "X-Section-Key: $K2" -H 'Content-Type: application/json' \
-  -d '{"contract":"0xCollection","function":"buy","args":{"tokenId":"1"},"from":"0xBuyer"}'
-# → { …, "result": { "sale": "resale", "tokenId": "1", "seller": "0xUser", "buyer": "0xBuyer", "price": "0.3", … } }
-
-# 0xBuyer가 보유한 토큰, 토큰 1을 한 번에
-curl -s -X POST $P/contract/events -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
-  -d '{"contract":"0xCollection","event":"Transfer","where":{"to":"0xBuyer"},"current":true}'
+# 0xUser가 보유한 것과 토큰 1의 결제
 curl -s -X POST $P/contract/call -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
-  -d '{"calls":[{"contract":"0xCollection","function":"ownerOf","args":{"tokenId":"1"}},{"contract":"0xCollection","function":"priceOf","args":{"tokenId":"1"}},{"contract":"0xCollection","function":"tokenURI","args":{"tokenId":"1"}}]}'
-# → results: { "tokenId": "1", "owner": "0xBuyer" }, { "tokenId": "1", "price": "0.3" }, { "tokenId": "1", "metadata": {…}, "image": "https://example.com/red.png" }
-# 토큰 1의 민팅 트랜잭션
-curl -s -X POST $P/contract/events -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
-  -d '{"contract":"0xCollection","event":"Transfer","where":{"from":"0x0000000000000000000000000000000000000000","tokenId":"1"}}'
+  -d '{"calls":[{"contract":"0xFaces","function":"tokensOf","args":{"account":"0xUser"}},{"contract":"0xFaces","function":"paymentsOf","args":{"tokenId":"1"}}]}'
+# → results: [ { "tokenId": "1", "image": "https://img.example/fox.png", "price": "0.4" } ],
+#            [ { "kind": "sale", "amount": "0.4", "payer": "0xUser", "paidTo": "0xConsumption", "paidAt": "…",
+#                "undoUntil": "2026-11-30T17:36:09.000Z", "undone": false, "undoable": true, "current": true } ]
+
+# 보류 기간 안의 취소: 0xConsumption에서 0xUser로 0.4 환불, 토큰 1은 다시 판매
+curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
+  -d '{"contract":"0xFaces","function":"undo","args":{"tokenId":"1"}}'
+# → "from": "0xConsumption", "value": "0.4", "result": { "tokenId": "1", "undone": "sale", "buyer": "0xUser", "refunded": "0.4", "by": "0xConsumption" }
 ```
 
-토큰 ID는 각 컬렉션에서 1부터 시작합니다. 메타데이터는 토큰 URI에 온체인으로 저장됩니다(JSON.
-블록에 들어가지 않으면 400 `metadata is too large for the chain`). 판매자와 구매자는 다른 섹션에
-있어도 됩니다: 각 섹션은 자기 계정으로만 서명합니다. Remix에서 판매까지의 단계별 안내:
-[아바타](../features/avatars.md).
+토큰 ID는 컬렉션마다 1, 2, 3…입니다. 메타데이터(`image`, `description`, `attributes`; 이름 없음)는 토큰 URI에
+체인상으로 저장됩니다(JSON; 블록에 들어가지 않으면 400 `metadata is too large for the chain`). 이미지마다 한 번만
+민팅할 수 있습니다(`this image is already minted`). 단계별 안내: [아바타](../features/avatars.md).
+
+**이전 컬렉션:** 버전 3(재판매 있음)은 프록시에게 일반 컨트랙트이고, 버전 2(SENDER01이 민팅)는 **폐기되어** 프록시가
+더 이상 읽거나 민팅하거나 판매하지 않습니다. 둘 다 체인에 남습니다.
 
 ### 이전 이름 {#old-names}
 
-프록시는 *avatar*로 이름을 바꾸기 전의 이름도 계속 받습니다.
+프록시는 *avatar*로 이름을 바꾸기 전의 이름도 받습니다:
 
 | 이전 이름 | 현재 |
 |---|---|
 | `?type=nft`, `?kind=nft` | `?type=avatar`, `?kind=avatar` |
-| `"kind": "nft"` (deploy, check) | `"kind": "avatar"` (온체인 종류 번호는 여전히 2) |
+| `"kind": "nft"` (deploy, check) | `"kind": "avatar"` (체인에서 종류는 여전히 숫자 2) |
 | 템플릿 `nft-collection` | 템플릿 `avatar-collection` |
 
-응답은 항상 새 이름을 씁니다. 메트릭의 `op` 값은 별칭 없이 바뀌었습니다: `nft_first_sale` →
-`avatar_sale`, `nft_resale` → `avatar_resale`.
+응답은 항상 새 이름을 씁니다. 이전 컬렉션의 다음 함수는 별칭 없이 사라졌습니다:
+
+| 사라짐 | 현재 |
+|---|---|
+| 아바타 `approve`(재판매 등록), `buy`를 통한 재판매 | 없음: 아바타는 한 번 구매되고 구매자에게 귀속 |
+| 아바타 `mint` `{ name, image, properties, … }` | `mint` `{ image, price, description, attributes }`(이름 없음) |
+| 닉네임 `buyNickname` `{ nickname }` | `buy` `{ nickname }` 또는 `{ tokenId }`(민팅된 이름만) |
+| 닉네임 `upgradeEdge` `{ level }`, `quote` `{ account, level }` | `upgradeLevel` `{ tokenId, level }`, `quote` `{ tokenId, level }` |
+| 닉네임 `addEdge`, `setEdge`, `edgeCount`, `edgeInfo`, `edgeOf` | `addLevel`, `setLevel`, `levelCount`, `levelInfo`, `levelOf` |
+| 닉네임 `setNicknamePrice`, `nicknamePrice` | `setPrice` `{ tokenId, price }`, `priceOf`(닉네임마다 자체 가격) |
+| 닉네임 `reserve`, `reserved`, `isAvailable`, `idOf` | 없음(센터가 민팅한 이름만 구매 가능); `tokenOf` `{ nickname }` |
+| 닉네임 `nicknameOf` `{ account }` | `tokensOf` `{ account }`(계정당 여러 개 가능); `nicknameOf` `{ tokenId }` |
+| 템플릿 `nickname-collection`의 `price` | `mint` `{ nickname, price }` |
+
+메트릭 `op` 값도 바뀌었습니다: `nft_first_sale` → `avatar_sale`; `nft_resale`와 `avatar_resale`는 사라짐;
+`edge_upgrade` → `level_upgrade`; 새로 추가: `avatar_undo`, `nickname_undo`, `level_undo`. 대시보드는 이전 이름의
+이력도 계속 보여 줍니다.
 
 ---
 
 ## 닉네임 {#nicknames}
 
-테두리 레벨이 있는 소울바운드 닉네임 토큰([닉네임](../features/nicknames.md))이며, **닉네임
-컬렉션**에 있습니다: 센터가 배포한 등록 컨트랙트입니다. `GET /contract/list?type=nickname`으로
-찾습니다(`current: true`인 것). 가격은 ETH. 쓰기는 호출자 섹션의 사용자 계정이 서명합니다.
+**사용자 레벨**이 있는 닉네임 토큰([닉네임](../features/nicknames.md))으로, **닉네임 컬렉션**(버전 6, 아바타처럼
+**아이템**)에 있습니다: 센터가 배포한 등록 컨트랙트입니다. `GET /contract/list?type=nickname`(`current: true`인 것)으로
+찾습니다. 센터가 이름을 민팅하고, 섹션의 사용자 계정이 하나 또는 여러 개를 각각 한 번 구매하며, 소유자가 레벨을
+올립니다. 가격은 ETH입니다.
 
 | 작업 | 호출 | `result` |
 |---|---|---|
-| 테두리 레벨 | `POST /contract/call` `edgeCount` | `{ count, edges: [ { level, price, forSale } ] }` |
-| 닉네임 가격 | `POST /contract/call` `nicknamePrice` | `{ price }` |
-| 이름 사용 가능 여부 | `POST /contract/call` `isAvailable` `{ nickname }` | `{ nickname, characters, tokenId, available, reason }` |
-| 계정의 닉네임 | `POST /contract/call` `nicknameOf` `{ account }` | `{ nickname, tokenId, account, level }` 또는 `{ account, nickname: null }` |
-| 레벨 가격 | `POST /contract/call` `quote` `{ account, level }` | `{ account, level, price }` |
-| 구매 | `POST /contract/send` `buyNickname` `{ nickname }`, `from` | 닉네임 + `price`, `paidTo` |
-| 테두리 올리기 | `POST /contract/send` `upgradeEdge` `{ level }`, `from` | 닉네임 + `price`, `paidTo` |
-| 모든 구매 내역 | `POST /contract/events` `NicknameBought` (또는 `EdgeUpgraded`) | |
+| 민팅(센터) | `POST /admin/contract/send` `mint` `{ nickname, price }` | `{ minted, tokenId, nickname, level, price }` |
+| 가격 변경(센터, 미판매) | `POST /admin/contract/send` `setPrice` `{ tokenId, price }` | `{ tokenId, price }` |
+| 레벨 추가 / 변경(센터) | `POST /admin/contract/send` `addLevel` `{ price }` / `setLevel` `{ level, price, forSale }` | `{ level: { level, price, forSale } }` |
+| 사용자 레벨 | `POST /contract/call` `levelCount` | `{ count, levels: [ { level, price, forSale } ] }` |
+| 이름 찾기 | `POST /contract/call` `tokenOf` `{ nickname }` | `{ tokenId, minted, sold, owner, price }` |
+| 계정의 닉네임 | `POST /contract/call` `tokensOf` `{ account }` | `[ { tokenId, nickname, level, price } ]` |
+| 레벨 가격 | `POST /contract/call` `quote` `{ tokenId, level }` | `{ tokenId, level, price }` |
+| 구매 | `POST /contract/send` `buy` `{ nickname }` 또는 `{ tokenId }`, `from` | 닉네임 + `buyer`, `paid`, `paidTo`, `undoUntil` |
+| 사용자 레벨 올리기 | `POST /contract/send` `upgradeLevel` `{ tokenId, level }`, `from` = 소유자 | 닉네임 + `fromLevel`, `paid`, `paidTo`, `undoUntil` |
+| 판매 취소 | `POST /contract/send` `undo` `{ tokenId }`, `from` 없음 | `{ tokenId, undone: "sale", buyer, refunded, by }` |
+| 가장 최근 레벨 업그레이드 취소 | `POST /contract/send` `undoLevel` `{ tokenId }`, `from` 없음 | `{ tokenId, undone: "level", level, undoneLevel, refunded }` |
+| 결제 | `POST /contract/call` `paymentsOf` `{ tokenId }` | 판매와 레벨 업그레이드, `undoUntil`, `undoable` 포함 |
 
 ```bash
 curl -s -X POST $P/contract/call -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
-  -d '{"calls":[{"contract":"0xNicknames","function":"edgeCount"},{"contract":"0xNicknames","function":"nicknamePrice"},{"contract":"0xNicknames","function":"isAvailable","args":{"nickname":"  Alice "}}]}'
-# → results: { "count": 4, "edges": [ { "level": 0, "price": "0", "forSale": true }, { "level": 1, "price": "0.5", "forSale": true }, … ] },
-#            { "price": "1" }, { "nickname": "Alice", "characters": 5, "tokenId": "…", "available": true, "reason": null }
+  -d '{"calls":[{"contract":"0xNicknames","function":"tokenOf","args":{"nickname":"  alice "}},{"contract":"0xNicknames","function":"levelCount"}]}'
+# → results: { "tokenId": "1", "minted": true, "sold": false, "owner": "<center>", "price": "1" },
+#            { "count": 3, "levels": [ { "level": 0, "price": "0", "forSale": true }, { "level": 1, "price": "0.5", "forSale": true }, … ] }
 curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
-  -d '{"contract":"0xNicknames","function":"buyNickname","args":{"nickname":"Alice"},"from":"0xUser"}'
-# → { "success": true, "value": "1.0", …, "result": { "nickname": "Alice", "tokenId": "…", "account": "0xUser", "level": 0,
-#     "price": "1", "paidTo": "<consumption account>" } }
+  -d '{"contract":"0xNicknames","function":"buy","args":{"nickname":"alice"},"from":"0xUser"}'
+# → "value": "1.0", "result": { "tokenId": "1", "nickname": "Alice", "level": 0, "price": "1", "buyer": "0xUser", "paid": "1",
+#     "paidTo": "0xConsumption", "undoUntil": "…" }
+curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
+  -d '{"contract":"0xNicknames","function":"upgradeLevel","args":{"tokenId":"1","level":2},"from":"0xUser"}'
+# → "value": "1.5", "result": { "tokenId": "1", "nickname": "Alice", "level": 2, "price": "1", "fromLevel": 0, "paid": "1.5", … }
+curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
+  -d '{"contract":"0xNicknames","function":"undoLevel","args":{"tokenId":"1"}}'
+# → "from": "0xConsumption", "value": "1.5", "result": { "tokenId": "1", "undone": "level", "level": 0, "undoneLevel": 2, "refunded": "1.5" }
 ```
 
-이름: NFC와 공백 제거 후 1~256자, 제어 문자와 `< > & " ' \` 불가, A–Z 대소문자 구분 없이 고유,
-계정당 하나. 레벨은 올라가기만 합니다. 관리 쓰기(가격, 레벨, 예약 이름)는
-[`POST /admin/contract/send`](#post-admincontractsend--write-as-the-contract-account-center)를 사용합니다.
+이름: NFC와 공백 제거 후 1~256자, 제어 문자와 `< > & " ' \` 없음, A–Z 대소문자 무관하게 고유, 민팅된 이름만 구매 가능,
+계정당 여러 개. 레벨은 취소할 때를 빼면 올라가기만 합니다: `undo`는 판매와 취소되지 않은 레벨 업그레이드를 환불하고
+레벨을 0으로 만듭니다. `undoLevel`은 가장 최근 업그레이드 하나만 그 자신의 보류 기간 안에 취소하고 그 가격만 환불합니다.
 
 ---
 
@@ -486,7 +538,7 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 | `POST /admin/registry/migrate` | `{ "from": "0xOldRegistry" }` | 버전 1 레지스트리에서 섹션 복사 (Ansible `08-check.yml`이 실행) |
 
 ```json
-→ { "success": true, "name": "Dragons", "kind": "avatar", "address": "0x…", "deployer": "<center>", "txHash": "0x…",
+→ { "success": true, "name": "Faces", "kind": "avatar", "address": "0x…", "deployer": "<center>", "txHash": "0x…",
     "blockNumber": 37570, "gasUsed": 1408380, "codeCheck": "matches the artifact", "registryTxHash": "0x…" }
 ```
 
@@ -497,10 +549,13 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 
 | 템플릿 | 본문 | 등록 종류 |
 |---|---|---|
-| `avatar-collection` | `{ "template": "avatar-collection", "name": "Dragons", "symbol": "DRG" }` (둘 다 필수). 이름과 심볼은 아바타 컬렉션 사이에서 대소문자 무관하게 고유: 아니면 409 | 종류 avatar |
-| `nickname-collection` | `{ "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "another": false }` (`price`를 제외하면 이 값들이 기본값입니다. `price`의 기본값은 0) | common |
+| `avatar-collection` | `{ "template": "avatar-collection", "name": "Faces", "symbol": "FACE", "holdDays": 7 }` (`name`과 `symbol` 필수). 이름과 심볼은 아바타 컬렉션 사이에서 대소문자 무관하게 고유: 아니면 409 | 종류 avatar |
+| `nickname-collection` | `{ "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "holdDays": 7, "another": false }` (이 값들이 기본값). 가격 없음: 닉네임마다 민팅할 때 가격을 정함 | common |
 
-두 번째 닉네임 컬렉션은 `"another": true`가 아니면 거부됩니다(409 `a nickname collection exists at 0x… (send "another": true …)`).
+`holdDays`는 판매(와 닉네임 레벨 업그레이드)의 취소 기간입니다: 기본 7, 0~365, 소수 허용(테스트용 `0.0025` = 216초).
+아니면 400 `holdDays: 0 to 365 (default 7)`. 배포할 때 고정됩니다(컨트랙트의 `holdSeconds`).
+
+두 번째 버전 6 닉네임 컬렉션은 `"another": true`가 아니면 거부됩니다(409 `a nickname collection exists at 0x… (send "another": true …)`).
 `another: true`이면 그때부터 새 컬렉션이 사용됩니다. 알 수 없는 템플릿: 400
 `template: avatar-collection or nickname-collection (or no template: abi and bytecode)`.
 
@@ -512,18 +567,20 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 
 | 함수 | `args` |
 |---|---|
-| `mint` (아바타) | `{ "name", "image", "description", "attributes", "properties", "price": "0.5" }` |
-| `setNicknamePrice` | `{ "price": "1" }` (새 구매자) |
-| `addEdge` | `{ "price": "1" }`: 다음 레벨의 단계 가격 |
-| `setEdge` | `{ "level": 3, "price": "2", "forSale": false }`: 생략한 필드는 그대로. 레벨 0은 가격 0과 판매 중 상태 유지 |
-| `reserve` | `{ "nicknames": ["admin"], "reserved": true }` (최대 100개. `false`이면 해제) |
+| `mint` (아바타) | `{ "image", "price": "0.5", "description", "attributes" }` (메타데이터 URI는 프록시가 만듦) |
+| `mint` (닉네임) | `{ "nickname", "price": "1" }` |
+| `setPrice` | `{ "tokenId", "price" }`: 토큰이 판매되기 전까지 |
+| `addLevel` | `{ "price": "1" }`: 다음 사용자 레벨의 단계 가격. 판매 중으로 추가 |
+| `setLevel` | `{ "level": 3, "price": "2", "forSale": false }`: 생략한 필드는 그대로. 레벨 0은 가격 0과 판매 중 상태 유지 |
 
 ```json
-{ "contract": "0xNicknames", "function": "setEdge", "args": { "level": 3, "forSale": false } }
-→ { "success": true, "function": "setEdge(uint8,uint256,bool)", "from": "<center>",
-    "txHash": "0x…", "result": { "edge": { "level": 3, "price": "2", "forSale": false } },
-    "events": [ { "name": "EdgeSet", "args": { "level": "3", "stepPrice": "2", "forSale": false } } ] }
+{ "contract": "0xNicknames", "function": "setLevel", "args": { "level": 3, "forSale": false } }
+→ { "success": true, "function": "setLevel(uint8,uint256,bool)", "from": "<center>",
+    "txHash": "0x…", "result": { "level": { "level": 3, "price": "2", "forSale": false } },
+    "events": [ { "name": "LevelSet", "args": { "level": "3", "stepPrice": "2000000000000000000", "forSale": false } } ] }
 ```
+
+센터는 구매, 업그레이드, 취소를 하지 않습니다: 이것들은 [`/contract/send`](#post-contractsend--write)를 사용합니다.
 
 revert는 400으로 응답합니다(서명 전 `the transaction would revert: …`, 서명 후 `reverted in block N`).
 
@@ -531,33 +588,33 @@ revert는 400으로 응답합니다(서명 전 `the transaction would revert: �
 
 ## 제거된 라우트 {#removed-routes}
 
-이 라우트는 **410**으로 응답하며, 메시지가 대체 호출을 알려 줍니다. `0xCollection`과
+이 라우트는 **410**으로 응답하며, 메시지가 대체 호출을 알려 줍니다. `0xFaces`와
 `0xNicknames`는 `GET /contract/list`의 컨트랙트 주소입니다.
 
 | 제거됨 | 대신 사용 |
 |---|---|
 | `POST /nft/deploy` | `POST /admin/contract/deploy` `{ "template": "avatar-collection", "name", "symbol" }` |
-| `POST /nft/mint` | `POST /admin/contract/send` `mint` `{ name, image, price, … }` |
-| `POST /nft/transfer` | `POST /contract/send` `buy` `{ tokenId }`, `from` = 구매자 (재판매: 판매자가 먼저 `approve` `{ tokenId }`). 버전 2 컬렉션은 폐기됨 |
+| `POST /nft/mint` | `POST /admin/contract/send` `mint` `{ image, price }` |
+| `POST /nft/transfer` | `POST /contract/send` `buy` `{ tokenId }`, `from` = 구매자 (아바타는 한 번 구매되며 재판매되지 않음). 버전 2 컬렉션은 폐기됨 |
 | `GET /nft/contract`, `GET /nft/collections` | `GET /contract/list?type=avatar` |
-| `GET /nft/owner/:address` | `POST /contract/events` `Transfer`, `where: { to: address }`, `current: true` |
+| `GET /nft/owner/:address` | `POST /contract/call` `tokensOf` `{ account }` |
 | `GET /nft/:tokenId/metadata` | `POST /contract/call` `tokenURI` `{ tokenId }` (`result.metadata`) |
-| `GET /nft/:tokenId` | `POST /contract/call` 일괄 `ownerOf`, `priceOf`, `tokenURI`. 민팅: `POST /contract/events` `0x0`에서의 `Transfer` |
-| `GET /nickname/edges` | `POST /contract/call` `edgeCount` (`result.edges`)와 `nicknamePrice`. 컬렉션: `GET /contract/list?type=nickname` |
-| `GET /nickname/check` | `POST /contract/call` `isAvailable` `{ nickname }` |
-| `GET /nickname/of/:account` | `POST /contract/call` `nicknameOf` `{ account }` |
-| `GET /nickname/quote` | `POST /contract/call` `quote` `{ account, level }` |
-| `POST /nickname/buy` | `POST /contract/send` `buyNickname` `{ nickname }`, `from` |
-| `POST /nickname/edge` | `POST /contract/send` `upgradeEdge` `{ level }`, `from` |
-| `POST /admin/nickname/deploy` | `POST /admin/contract/deploy` `{ "template": "nickname-collection", … }` |
-| `PUT /admin/nickname/price` | `POST /admin/contract/send` `setNicknamePrice` `{ price }` |
-| `POST /admin/nickname/edges` | `POST /admin/contract/send` `addEdge` `{ price }` |
-| `PUT /admin/nickname/edges/:level` | `POST /admin/contract/send` `setEdge` `{ level, price, forSale }` |
-| `POST /admin/nickname/reserve` | `POST /admin/contract/send` `reserve` `{ nicknames, reserved }` |
+| `GET /nft/:tokenId` | `POST /contract/call` 일괄 `ownerOf`, `priceOf`, `tokenURI`, `paymentsOf` |
+| `GET /nickname/edges` | `POST /contract/call` `levelCount` (`result.levels`). 컬렉션: `GET /contract/list?type=nickname` |
+| `GET /nickname/check` | `POST /contract/call` `tokenOf` `{ nickname }` |
+| `GET /nickname/of/:account` | `POST /contract/call` `tokensOf` `{ account }` |
+| `GET /nickname/quote` | `POST /contract/call` `quote` `{ tokenId, level }` |
+| `POST /nickname/buy` | `POST /contract/send` `buy` `{ nickname }`, `from` |
+| `POST /nickname/edge` | `POST /contract/send` `upgradeLevel` `{ tokenId, level }`, `from` |
+| `POST /admin/nickname/deploy` | `POST /admin/contract/deploy` `{ "template": "nickname-collection", "name", "symbol" }` |
+| `PUT /admin/nickname/price` | `POST /admin/contract/send` `setPrice` `{ tokenId, price }` (닉네임마다 자체 가격) |
+| `POST /admin/nickname/edges` | `POST /admin/contract/send` `addLevel` `{ price }` |
+| `PUT /admin/nickname/edges/:level` | `POST /admin/contract/send` `setLevel` `{ level, price, forSale }` |
+| `POST /admin/nickname/reserve` | 없음: 예약 이름은 사라짐(센터가 민팅한 이름만 구매 가능) |
 | `GET /admin/contracts` | `GET /contract/list` (`center`: 컨트랙트 계정 센터) |
 | `POST /admin/contracts/check` | `POST /admin/contract/check` (같은 본문) |
 | `POST /admin/contracts/deploy` | `POST /admin/contract/deploy` (같은 본문) |
-| `GET /admin/nickname` | `GET /contract/list?type=nickname` (컬렉션), `POST /contract/call` (`nicknamePrice`, `edgeCount`, `totalSupply`), `POST /contract/events` (`NicknameBought`, `EdgeUpgraded`) |
+| `GET /admin/nickname` | `GET /contract/list?type=nickname` (컬렉션), `POST /contract/call` (`levelCount`, `totalSupply`, `tokensOf`), `POST /contract/events` (`Sold`, `Undone`, `LevelUpgraded`, `LevelUndone`) |
 
 ```json
 GET /nft/collections
@@ -582,8 +639,8 @@ GET /nft/collections
 |---|---|
 | 400 | 잘못된 입력: 필드 누락, 잘못된 금액 또는 주소, ABI에 없는 함수, 빠진 `args` 값, "the transaction would revert: …" |
 | 401 | `X-Section-Key is required`, 알 수 없는 섹션 키, 잘못된 관리 토큰 |
-| 403 | 계정이 해당 섹션의 사용자가 아님, 비활성화된 섹션, 관리자 주소가 아닌 곳에서의 관리 API 호출 |
-| 404 | 알 수 없는 컨트랙트, 토큰, 테두리 레벨 또는 섹션 |
-| 409 | 이미 사용 중인 컬렉션 이름 또는 심볼. 사용 중이거나 예약된 닉네임, 이미 닉네임이 있는 계정. 이미 있는 닉네임 컬렉션 |
+| 403 | 계정이 해당 섹션의 사용자가 아님, 비활성화된 섹션, 토큰의 소유자가 아님, 다른 섹션의 키로 취소, 관리자 주소가 아닌 곳에서의 관리 API 호출 |
+| 404 | 알 수 없는 컨트랙트, 토큰, 이미지, 닉네임, 사용자 레벨 또는 섹션 |
+| 409 | 이미 사용 중인 컬렉션 이름 또는 심볼. 이미 판매되었거나(구매) 판매되지 않은(취소) 토큰. 끝난 취소 기간. 환불을 지불할 수 없는 소비 계정. 이미 있는 닉네임 컬렉션 |
 | 410 | 제거된 라우트 ([위](#removed-routes)) |
 | 500 / 502 / 503 / 504 | 서명기, Besu 또는 레지스트리가 응답하지 않거나 트랜잭션이 제때 채굴되지 않음. 프록시 로그와 [문제 해결](../operations/troubleshooting.md)을 참조하십시오 |
