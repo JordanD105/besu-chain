@@ -2050,7 +2050,7 @@ async function proxyAdmin(method, pathname, body) {
 }
 
 // ---- NFT mint and sale from the contract page (admin pages' gate), forwarded to the proxy's
-// /nft/mint and /nft/transfer
+// /nft/mint and /contract/send
 function nftAdminEnabled() {
     return (DEPLOY.enabled || SECTIONS.enabled) && Boolean(SECTIONS.proxy);
 }
@@ -2073,13 +2073,36 @@ app.get("/api/nftadmin/status", (req, res) => {
     res.json({ enabled: nftAdminEnabled() && ipAllowed(req.socket.remoteAddress) });
 });
 
+// A sale (version 3): the buyer calls buy(tokenId) through the proxy's /contract/send, which fills in
+// the payee (the buyer's section's consumption account) and the price. The answer keeps the old shape.
+// Version-2 collections are not registered: they still sell through /nft/transfer.
+async function nftSell(body) {
+    const r = await proxyAdmin("POST", "/contract/send", { contract: body.collection, function: "buy", args: [String(body.tokenId)], from: body.to });
+    if (r.status === 404 && /not a registered contract/.test(String(r.data.error))) {
+        return proxyAdmin("POST", "/nft/transfer", body); // version 2 (legacy): sold by SENDER01
+    }
+    const sold = r.status === 200 && (r.data.events || []).find((e) => e.name === "Sold");
+    if (!sold) {
+        return r;
+    }
+    const minter = await proxyAdmin("POST", "/contract/call", { contract: r.data.contract, function: "minter", args: [] }).catch(() => null);
+    const center = minter && minter.data.outputs ? String(minter.data.outputs[0].value).toLowerCase() : "";
+    return { status: 200, data: Object.assign({}, r.data, {
+        sale: String(sold.args.seller).toLowerCase() === center ? "first sale" : "resale",
+        tokenId: String(sold.args.tokenId),
+        to: sold.args.buyer,
+        price: String(r.data.value).replace(/\.0$/, ""),
+        paidTo: sold.args.paidTo
+    }) };
+}
+
 app.post("/api/nftadmin/:action", express.json({ limit: "256kb" }), nftGuard, async (req, res) => {
     const action = req.params.action;
     if (action !== "mint" && action !== "transfer") {
         return res.status(404).json({ error: "unknown NFT action" });
     }
     try {
-        const r = await proxyAdmin("POST", "/nft/" + action, req.body || {});
+        const r = action === "transfer" ? await nftSell(req.body || {}) : await proxyAdmin("POST", "/nft/" + action, req.body || {});
         console.log("nft:", action, JSON.stringify({ collection: req.body.collection, tokenId: req.body.tokenId, to: req.body.to }), "from", req.socket.remoteAddress, "->", r.status);
         res.status(r.status).json(r.data);
     } catch (error) {

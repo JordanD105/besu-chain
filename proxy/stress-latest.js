@@ -2121,105 +2121,6 @@ async function mintNft(req) {
 // buy(tokenId, payee) with value = the mint price. First sale (the center holds the NFT): the price
 // goes to section_i's consumption account. Resale: the seller (a user account of section_i) approves
 // the sale if needed, and the price goes to the seller.
-async function transferNftV3(req, contract, tokenId) {
-    const body = req.body || {};
-    // X-Section-Key is required; the admin API's caller (ADMIN_TOKEN from ADMIN_ALLOWED_IPS, e.g. the
-    // chainlens Sell form) may sell without it: the section is then the buyer's. The admin caller is
-    // checked first, so SECTION_KEY_REQUIRED does not refuse it.
-    const hasKey = String(req.headers["x-section-key"] || "").trim() !== "";
-    const admin = !hasKey && isAdminCaller(req);
-    const keyed = admin ? null : await sectionFromRequest(req);
-
-    if (!keyed && !admin) {
-        throw httpError(401, "X-Section-Key is required: the buyer \"to\" must be a user account of that section");
-    }
-
-    const to = ethers.getAddress(body.to);
-    const owner0 = await accountSection(to);
-
-    if (owner0.kind !== ACCOUNT_USER) {
-        throw httpError(403, `${to} is not a user account of a section: this collection's NFTs are sold to section accounts (create one with /createaccount and the section's key)`);
-    }
-
-    const section = keyed || await getSection(owner0.id, false);
-
-    if (!section.active) {
-        throw httpError(403, `section "${section.name}" is disabled`);
-    }
-
-    await assertSectionUser(section, to);
-    const owner = await readOwner(contract, tokenId);
-
-    if (!owner) {
-        throw httpError(404, "token not found");
-    }
-
-    const seller = ethers.getAddress(owner);
-
-    if (body.from && ethers.getAddress(body.from) !== seller) {
-        throw httpError(400, "sender is not the token owner");
-    }
-
-    if (seller === to) {
-        throw httpError(400, "token is already owned by to");
-    }
-
-    const priceWei = (await callNft(contract, "priceOf", [tokenId]))[0];
-    const price = ethers.formatEther(priceWei).replace(/\.0$/, "");
-    const center = isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : null;
-    const firstSale = seller === center;
-    let approveTxHash = null;
-
-    if (!firstSale) {
-        // resale: only between accounts of the calling section; the seller lets the collection sell
-        await assertSectionUser(section, seller);
-        const approved = (await callNft(contract, "getApproved", [tokenId]))[0];
-        const operator = (await callNft(contract, "isApprovedForAll", [seller, contract]))[0];
-
-        if (approved.toLowerCase() !== contract.toLowerCase() && !operator) {
-            const approveData = nftV3Interface.encodeFunctionData("approve", [contract, tokenId]);
-            const approval = await withSenderLock(seller, () => sendData(seller, contract, approveData));
-            await waitForReceipt(approval.txHash);
-            approveTxHash = approval.txHash;
-        }
-    }
-
-    const payee = section.accounts.consumption;
-    const buyData = nftV3Interface.encodeFunctionData("buy", [tokenId, payee]);
-    let sent;
-
-    try {
-        sent = await withSenderLock(to, () => sendData(to, contract, buyData, priceWei));
-    } catch (error) {
-        if (/insufficient/i.test(error.message)) {
-            throw httpError(400, `insufficient balance: the price of this token is ${price} ETH`);
-        }
-
-        if (error.statusCode) {
-            throw error;
-        }
-
-        throw httpError(400, `the sale would revert: ${revertReason(error)}`);
-    }
-
-    countSectionOp(section, firstSale ? "nft_first_sale" : "nft_resale", price);
-
-    return {
-        success: true,
-        section: { id: section.id, name: section.name },
-        sale: firstSale ? "first sale" : "resale",
-        txHash: sent.txHash,
-        from: seller,
-        to,
-        tokenId,
-        contract,
-        price,
-        paidTo: firstSale ? payee : seller,
-        approveTxHash,
-        nonce: sent.nonce
-    };
-}
-
 async function transferNft(req) {
     const body = req.body || {};
     const tokenId = parseTokenId(body.tokenId);
@@ -2235,7 +2136,8 @@ async function transferNft(req) {
     const contract = await resolveCollection(collectionParam(body));
 
     if (await collectionVersion(contract) === 3) {
-        return transferNftV3(req, contract, tokenId);
+        throw httpError(410, "version-3 collections are sold with POST /contract/send: \"function\": \"buy\", \"args\": [tokenId] "
+            + "from the buyer (payee and value are filled in); a resale needs the seller's approve(collection, tokenId) first, also with /contract/send");
     }
 
     const to = ethers.getAddress(body.to);
@@ -3653,39 +3555,6 @@ async function nicknameInfo(address, tokenId) {
     };
 }
 
-// Who buys or upgrades: "account", a user account of the X-Section-Key's section (or, for the
-// admin caller such as chainlens, of its own section)
-async function nicknameBuyer(req) {
-    const body = req.body || {};
-    const hasKey = String(req.headers["x-section-key"] || "").trim() !== "";
-    const admin = !hasKey && isAdminCaller(req);
-    const keyed = admin ? null : await sectionFromRequest(req);
-
-    if (!keyed && !admin) {
-        throw httpError(401, "X-Section-Key is required: \"account\" must be a user account of that section");
-    }
-
-    if (!isAddress(String(body.account || ""))) {
-        throw httpError(400, "account: the address of a user account of the section");
-    }
-
-    const account = ethers.getAddress(body.account);
-    const owner = await accountSection(account);
-
-    if (owner.kind !== ACCOUNT_USER) {
-        throw httpError(403, `${account} is not a user account of a section`);
-    }
-
-    const section = keyed || await getSection(owner.id, false);
-
-    if (!section.active) {
-        throw httpError(403, `section "${section.name}" is disabled`);
-    }
-
-    await assertSectionUser(section, account);
-    return { section, account };
-}
-
 // Sign as `from` (its MPC key), wait for the block; a revert or a refusal becomes a 400 with the reason
 async function nicknameSend(from, to, data, valueWei, priceText) {
     let sent;
@@ -3819,57 +3688,12 @@ app.get("/nickname/quote", nicknameRoute(async (req) => {
     return { account: ethers.getAddress(req.query.account), level, price: ethText(price) };
 }));
 
-// Buy a nickname (edge 0) for a user account of the section
-app.post("/nickname/buy", nicknameRoute(async (req) => {
-    const entry = await nicknameCollection();
-    const { section, account } = await nicknameBuyer(req);
-    const nickname = nicknameInput((req.body || {}).nickname);
-    const [has] = await nickCall(entry.address, "nicknameOf", [account]);
-
-    if (has !== 0n) {
-        throw httpError(409, `${account} already has a nickname (one per account)`);
-    }
-
-    const [available] = await nickCall(entry.address, "isAvailable", [nickname]);
-
-    if (!available) {
-        const [reserved] = await nickCall(entry.address, "reserved", [nicknameId(nickname)]);
-        throw httpError(409, reserved ? `nickname "${nickname}" is reserved` : `nickname "${nickname}" is taken`);
-    }
-
-    const [priceWei] = await nickCall(entry.address, "nicknamePrice");
-    const payee = section.accounts.consumption;
-    const sent = await nicknameSend(account, entry.address, nicknameIface.encodeFunctionData("buyNickname", [nickname, payee]),
-        priceWei, ethText(priceWei));
-    countSectionOp(section, "nickname_sale", ethText(priceWei));
-    return { success: true, section: { id: section.id, name: section.name }, ...await nicknameInfo(entry.address, nicknameId(nickname)),
-        price: ethText(priceWei), paidTo: payee, ...sent };
-}));
-
-// Raise the edge of an account's nickname (pays every step up to the level)
-app.post("/nickname/edge", nicknameRoute(async (req) => {
-    const entry = await nicknameCollection();
-    const { section, account } = await nicknameBuyer(req);
-    const level = Number((req.body || {}).level);
-
-    if (!Number.isInteger(level) || level < 1 || level > 255) {
-        throw httpError(400, "level: the edge level to reach (1 or more)");
-    }
-
-    const [tokenId] = await nickCall(entry.address, "nicknameOf", [account]);
-
-    if (tokenId === 0n) {
-        throw httpError(404, `${account} has no nickname: buy one first (POST /nickname/buy)`);
-    }
-
-    const [priceWei] = await nickCall(entry.address, "quote", [account, level]);
-    const payee = section.accounts.consumption;
-    const sent = await nicknameSend(account, entry.address, nicknameIface.encodeFunctionData("upgradeEdge", [level, payee]),
-        priceWei, ethText(priceWei));
-    countSectionOp(section, "edge_upgrade", ethText(priceWei));
-    return { success: true, section: { id: section.id, name: section.name }, ...await nicknameInfo(entry.address, tokenId),
-        price: ethText(priceWei), paidTo: payee, ...sent };
-}));
+// Writes go through POST /contract/send (buyNickname, upgradeEdge): one write path for every contract
+for (const [path, fn] of [["/nickname/buy", "buyNickname(string,address)"], ["/nickname/edge", "upgradeEdge(uint8,address)"]]) {
+    app.post(path, (req, res) => res.status(410).json({
+        error: `${path} was removed: use POST /contract/send with "function": "${fn.split("(")[0]}" on the nickname collection (payee and value are filled in)`
+    }));
+}
 
 // ---- Admin (chainlens Nicknames page): the collection, its edge levels, prices, reserved nicknames
 
@@ -4068,11 +3892,134 @@ app.post("/contract/call", async (req, res) => {
 
 // Write: a state-changing function, signed by a user account of the caller's section. Waits for the
 // block; answers with the status and the contract's decoded events.
+// Functions of the platform's own contracts, sent through /contract/send:
+//   nickname collection: buyNickname(nickname, payee), upgradeEdge(level, payee)
+//   NFT collection v3:   buy(tokenId, payee)
+// An address input named "payee" is the sender's section's consumption account: filled in when left
+// out, refused when it is another account. The price (value) is filled in when left out. A nickname is
+// trimmed and NFC-normalized (1-256 characters), and the usual refusals get clear messages.
+function hasFunction(entry, name) {
+    try {
+        entry.iface.getFunction(name);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+async function entryCall(entry, fn, args) {
+    const out = await rpc(CONFIG.BESU_RPC, "eth_call", [{ to: entry.address, data: entry.iface.encodeFunctionData(fn, args || []) }, "latest"]);
+    return entry.iface.decodeFunctionResult(fn, out);
+}
+
+async function knownSend(entry, fragment, args, from, section) {
+    const payeeAt = fragment.inputs.findIndex((input) => input.name === "payee" && input.type === "address");
+
+    if (payeeAt >= 0) {
+        const consumption = ethers.getAddress(section.accounts.consumption);
+        const given = args[payeeAt];
+
+        if (given === undefined || given === null || String(given) === "") {
+            args[payeeAt] = consumption;
+        } else if (!isAddress(String(given)) || ethers.getAddress(String(given)) !== consumption) {
+            throw httpError(400, `payee: the consumption account of section "${section.name}" (${consumption}); leave it out to fill it in`);
+        }
+    }
+
+    const name = fragment.name;
+    const nicknames = hasFunction(entry, "buyNickname") && hasFunction(entry, "upgradeEdge");
+    const nftV3 = name === "buy" && hasFunction(entry, "priceOf") && hasFunction(entry, "minter") && payeeAt === 1;
+
+    if (nicknames && name === "buyNickname") {
+        const nickname = nicknameInput(args[0]);
+        args[0] = nickname;
+        const [has] = await entryCall(entry, "nicknameOf", [from]);
+
+        if (has !== 0n) {
+            throw httpError(409, `${from} already has a nickname (one per account)`);
+        }
+
+        const [available] = await entryCall(entry, "isAvailable", [nickname]);
+
+        if (!available) {
+            const [reserved] = await entryCall(entry, "reserved", [nicknameId(nickname)]);
+            throw httpError(409, reserved ? `nickname "${nickname}" is reserved` : `nickname "${nickname}" is taken`);
+        }
+
+        return { priceWei: (await entryCall(entry, "nicknamePrice"))[0] };
+    }
+
+    if (nicknames && name === "upgradeEdge") {
+        const level = Number(args[0]);
+
+        if (!Number.isInteger(level) || level < 1 || level > 255) {
+            throw httpError(400, "args[0]: the edge level to reach (1 or more)");
+        }
+
+        const [tokenId] = await entryCall(entry, "nicknameOf", [from]);
+
+        if (tokenId === 0n) {
+            throw httpError(404, `${from} has no nickname: buy one first (buyNickname)`);
+        }
+
+        try {
+            return { priceWei: (await entryCall(entry, "quote", [from, level]))[0] };
+        } catch (error) {
+            throw httpError(400, `level ${level}: ${revertReason(error)}`);
+        }
+    }
+
+    if (nftV3) {
+        const tokenId = parseTokenId(args[0]);
+
+        if (!tokenId) {
+            throw httpError(400, "args[0]: the token id");
+        }
+
+        let owner;
+
+        try {
+            [owner] = await entryCall(entry, "ownerOf", [tokenId]);
+        } catch (error) {
+            throw httpError(404, "token not found");
+        }
+
+        if (ethers.getAddress(owner) === from) {
+            throw httpError(400, `${from} already owns token ${tokenId}`);
+        }
+
+        return { priceWei: (await entryCall(entry, "priceOf", [tokenId]))[0] };
+    }
+
+    return { priceWei: null };
+}
+
+// Section operation counters from the events of a sent transaction
+function countKnownSend(section, events) {
+    const center = isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : null;
+
+    for (const event of events) {
+        const price = event.args && event.args.price !== undefined ? ethers.formatEther(BigInt(event.args.price)) : "0";
+
+        if (event.name === "NicknameBought") {
+            countSectionOp(section, "nickname_sale", price);
+        } else if (event.name === "EdgeUpgraded") {
+            countSectionOp(section, "edge_upgrade", price);
+        } else if (event.name === "Sold") {
+            const first = center && isAddress(String(event.args.seller)) && ethers.getAddress(String(event.args.seller)) === center;
+            countSectionOp(section, first ? "nft_first_sale" : "nft_resale", price);
+        }
+    }
+}
+
 app.post("/contract/send", async (req, res) => {
     try {
-        const section = await sectionFromRequest(req);
+        // X-Section-Key, or the admin caller (chainlens): then the section is the one of "from"
+        const hasKey = String(req.headers["x-section-key"] || "").trim() !== "";
+        const admin = !hasKey && isAdminCaller(req);
+        let section = admin ? null : await sectionFromRequest(req);
 
-        if (!section) {
+        if (!section && !admin) {
             throw httpError(401, "X-Section-Key is required: transactions are sent by a user account of a section");
         }
 
@@ -4088,7 +4035,24 @@ app.post("/contract/send", async (req, res) => {
         }
 
         const from = ethers.getAddress(req.body.from);
+
+        if (!section) {
+            const owner = await accountSection(from);
+
+            if (owner.kind !== ACCOUNT_USER) {
+                throw httpError(403, `${from} is not a user account of a section`);
+            }
+
+            section = await getSection(owner.id, false);
+        }
+
+        if (!section.active) {
+            throw httpError(403, `section "${section.name}" is disabled`);
+        }
+
         await assertSectionUser(section, from);
+        const args = Array.isArray(req.body.args) ? [...req.body.args] : [];
+        const known = await knownSend(entry, fragment, args, from, section);
         let valueWei = 0n;
 
         if (req.body.value !== undefined && req.body.value !== null && String(req.body.value) !== "" && String(req.body.value) !== "0") {
@@ -4103,7 +4067,17 @@ app.post("/contract/send", async (req, res) => {
             valueWei = ethToWei(String(req.body.value));
         }
 
-        const data = entry.iface.encodeFunctionData(fragment, coerceParams(fragment.inputs, req.body.args));
+        if (known.priceWei !== null) {
+            const given = req.body.value === undefined || req.body.value === null || String(req.body.value) === "";
+
+            if (!given && valueWei !== known.priceWei) {
+                throw httpError(400, `value: the price is ${ethText(known.priceWei)} ETH (leave "value" out to pay it)`);
+            }
+
+            valueWei = known.priceWei;
+        }
+
+        const data = entry.iface.encodeFunctionData(fragment, coerceParams(fragment.inputs, args));
         let sent;
 
         try {
@@ -4113,11 +4087,21 @@ app.post("/contract/send", async (req, res) => {
                 throw error;
             }
 
+            if (/insufficient/i.test(error.message)) {
+                throw httpError(400, `insufficient balance: ${ethText(valueWei)} ETH is needed`);
+            }
+
             throw httpError(400, `the transaction would revert: ${revertReason(error)}`);
         }
 
         const receipt = await receiptOf(sent.txHash);
         const ok = BigInt(receipt.status) === 1n;
+        const events = ok ? decodeEvents(entry, receipt) : [];
+
+        if (ok) {
+            countKnownSend(section, events);
+        }
+
         console.log(`section ${section.id}: ${from} -> ${entry.address} ${fragment.format("sighash")} ${ok ? "ok" : "REVERTED"} (${sent.txHash})`);
 
         res.status(ok ? 200 : 400).json({
@@ -4131,7 +4115,7 @@ app.post("/contract/send", async (req, res) => {
             txHash: sent.txHash,
             blockNumber: Number(BigInt(receipt.blockNumber)),
             gasUsed: Number(BigInt(receipt.gasUsed)),
-            events: ok ? decodeEvents(entry, receipt) : []
+            events
         });
     } catch (error) {
         if (!error.statusCode) {

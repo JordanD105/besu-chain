@@ -1728,7 +1728,7 @@ async function showContracts(page, type, status) {
 // (contracts/deployments). View/pure functions can be run (eth_call); state-changing functions are
 // only listed: transactions are signed by the MPC signer through the proxy or the deploy tools.
 // Mint and sell NFTs of a collection (admin pages' gate), through the proxy's /nft/mint and
-// /nft/transfer. The buyer must be a user account of a section; its section receives a first sale.
+// /contract/send (buy). The buyer must be a user account of a section; its section receives a first sale.
 async function nftAdminCard(collection) {
     let status;
     try {
