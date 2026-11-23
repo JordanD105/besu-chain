@@ -164,8 +164,7 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 | `POST /createaccount {amount, pool}` | 새 MPC 계정, 온체인에서 **section_i 아래에 등록**, **`upfront_account_i`에서** 자금 공급 |
 | `POST /transfer {account, amount: "x", memo}` | `account` → `consumption_account_i` |
 | `POST /transfer {account, amount: "-x", memo}` | `upfront_account_i` → `account` |
-| `POST /nft/transfer {collection, to, tokenId}` | section_i의 사용자 계정인 `to`에게 버전 3 NFT 판매 ([NFT 컬렉션](#nft-collections)) |
-| `POST /contract/send {contract, function, args, from, value}` | section_i의 사용자 계정인 `from`이 서명한 트랜잭션 ([컨트랙트](#contracts)) |
+| `POST /contract/send {contract, function, args, from, value}` | section_i의 사용자 계정인 `from`이 서명한 트랜잭션 ([컨트랙트](#contracts)). 버전 3 NFT 판매(`buy`, [NFT 컬렉션](#nft-collections))와 닉네임 쓰기(`buyNickname`, `upgradeEdge`, [닉네임](nicknames.md))도 포함하며, payee와 가격이 채워짐 |
 
 `account`는 section_i의 사용자 계정이어야 합니다(해당 섹션의 키로 생성). 섹션 `/transfer`에서는
 `from` / `to`를 받지 않습니다. 응답에는 섹션, 방향, `from`, `to`,
@@ -180,7 +179,7 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 | 오류 | 원인 |
 |---|---|
 | 401 `unknown section key` | 이 키를 가진 활성 섹션이 없음 (교체되었거나 보관되었는지 확인) |
-| 401 `X-Section-Key is required` | `sections_required: true`이고 키가 없음. 또는 항상 키가 필요한 호출(`/contract/send`, 버전 3 `/nft/transfer`) |
+| 401 `X-Section-Key is required` | `sections_required: true`이고 키가 없음. 또는 항상 키가 필요한 호출(`/contract/send`) |
 | 403 `section "…" is disabled` | 섹션이 꺼져 있음 |
 | 403 `0x… is not an account of section "…"` | 계정이 다른 섹션에 속하거나 사용자 계정이 아님 |
 | 403 `0x… belongs to section N: call with that section's X-Section-Key` | 키 없는 호출이 섹션의 자금을 이동하려 함 |
@@ -221,6 +220,11 @@ revert될 트랜잭션은 서명 전에 이유와 함께 거부됩니다(`the tr
 would revert: …`). `NftCollection.mint`는 이 방식으로 사용할 수 없습니다. 센터만 민팅하므로
 `not minter`로 revert됩니다. `/nft/mint`를 사용하십시오.
 
+플랫폼 자체 컨트랙트에 대해서는 `/contract/send`가 섹션이 정하는 값을 채웁니다. 생략한 `payee`는 보내는
+계정 섹션의 소비 계정이 되고, 생략한 `value`는 가격이 됩니다(닉네임 `buyNickname`, `upgradeEdge`, NFT
+버전 3 `buy`). 관리 API 호출자(chainlens)는 키 없이 호출할 수 있으며, 이때 섹션은 `from`의 섹션입니다.
+자세한 내용: [프록시 API](../reference/proxy-api.md#post-contractsend--write).
+
 ## NFT 컬렉션 {#nft-collections}
 
 새 컬렉션은 **NftCollection 버전 3**([`proxy/contracts/NftCollection.sol`](../../proxy/contracts/NftCollection.sol),
@@ -232,7 +236,7 @@ SectionRegistry에 등록되고(종류 NFT), 모든 섹션이 공유합니다. �
 |---|---|
 | `POST /nft/deploy {name, symbol}` | 센터가 버전 3 컬렉션을 배포하고(센터가 민터, 레지스트리 주소 포함) 등록합니다 |
 | `POST /nft/mint {collection, name, image, …, amount}` | 센터가 판매용으로 NFT를 자신에게 민팅합니다. `amount`는 **가격**이며 영구 고정됩니다. 섹션과 연결되지 않습니다. |
-| `POST /nft/transfer {collection, to, tokenId}` + `X-Section-Key` | **호출자 섹션의 사용자 계정**인 `to`에게 판매합니다. `to`는 민팅 가격을 지불하며 `buy(tokenId, payee)`에 서명합니다. **최초 판매**(센터가 보유): 대금은 섹션의 **소비 계정**으로 갑니다. **재판매**(같은 섹션의 사용자가 보유): 필요하면 판매자의 승인이 전송되고 대금은 **판매자**에게 갑니다. |
+| `POST /contract/send {contract, function: "buy", args: [tokenId], from}` + `X-Section-Key` | **호출자 섹션의 사용자 계정**인 `from`에게 판매합니다. `from`은 민팅 가격을 지불하며 `buy(tokenId, payee)`에 서명합니다(payee와 value는 채워짐). **최초 판매**(센터가 보유): 대금은 섹션의 **소비 계정**으로 갑니다. **재판매**(사용자가 보유): 먼저 판매자의 섹션이 판매자로 `approve(collection, tokenId)`를 역시 `/contract/send`로 보내고, 대금은 **판매자**에게 갑니다. 판매자와 구매자가 다른 섹션에 있어도 됩니다. |
 
 최초 판매 대금이 어디로 갈지는 컨트랙트 자체가 강제합니다. `buy`는
 `SectionRegistry.isConsumptionAccount(payee)`(활성 섹션의 소비 계정)를 확인하므로,
@@ -243,7 +247,9 @@ SectionRegistry에 등록되고(종류 NFT), 모든 섹션이 공유합니다. �
 관리 토큰과 IP)가 이 방식으로 프록시를 호출하며, 이때 섹션은 구매자의 섹션입니다.
 Remix에서 판매까지의 단계별 안내: [NFT 워크플로](nft-workflow.md).
 
-**버전 2 컬렉션**(SENDER01이 민팅, 예: 섹션 도입 이전에 만든 것)은 이전처럼 키 없이
+버전 3 컬렉션의 `POST /nft/transfer`는 제거되었습니다(410).
+
+**버전 2 컬렉션**(SENDER01이 민팅, 예: 섹션 도입 이전에 만든 것)은 이전처럼 `POST /nft/transfer`로 키 없이
 계속 동작합니다. 판매 대금은 SENDER01(최초 판매) 또는 판매자에게 지급됩니다.
 
 ## chainlens Accounts 페이지의 섹션 {#sections-in-the-chainlens-accounts-page}
@@ -310,8 +316,8 @@ periods**는 기본값으로 돌아갑니다. chainlens가 인덱싱한 트랜�
 | `/contract/call` | 프록시 | 없음(읽기). 등록된 모든 컨트랙트 |
 | `/contract/send` (section_i) | 프록시 | section_i의 사용자 계정. 등록된 컨트랙트와 그 ABI 함수만 |
 | `/nft/mint` | 프록시 (센터의 대기열) | `contract_account_center`: `mint(center, tokenId, uri, price)`. 가격은 영구 고정 |
-| `/nft/transfer`, 최초 판매 (section_i) | 프록시 (구매자의 대기열) | 구매자: `buy(tokenId, payee = consumption_account_i)`. NFT → 구매자, 대금 → `consumption_account_i` |
-| `/nft/transfer`, 재판매 (section_i) | 프록시 | 판매자가 승인(필요 시), 구매자가 같은 민팅 가격으로 `buy(tokenId, …)`. NFT → 구매자, 대금 → 판매자 |
+| `/contract/send` `buy`, 최초 판매 (section_i) | 프록시 (구매자의 대기열) | 구매자: `buy(tokenId, payee = consumption_account_i)`. NFT → 구매자, 대금 → `consumption_account_i` |
+| `/contract/send` `approve` 후 `buy`, 재판매 | 프록시 | 판매자가 `approve(collection, tokenId)`(판매자의 섹션), 구매자가 같은 민팅 가격으로 `buy(tokenId, …)`(구매자의 섹션). NFT → 구매자, 대금 → 판매자 |
 
 ## 모니터링 {#monitoring}
 

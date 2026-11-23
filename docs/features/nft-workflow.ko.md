@@ -30,7 +30,7 @@
 | 2. 배포 | chainlens **Deploy** 페이지 (또는 `POST /nft/deploy`) | 컨트랙트 계정 센터 |
 | 3. 민팅 | 컬렉션의 chainlens 페이지에서 **Mint**, 또는 `POST /nft/mint` | 컨트랙트 계정 센터 |
 | 4. 구매자 | 섹션의 키로 `POST /createaccount`, 또는 chainlens Sections 페이지에서 **Create account** | — (섹션의 선지급 계정에서 자금 공급) |
-| 5. 판매 | 컬렉션의 chainlens 페이지에서 **Sell**, 또는 섹션의 키로 `POST /nft/transfer` | 구매자 (재판매의 경우 판매자의 승인 포함) |
+| 5. 판매 | 컬렉션의 chainlens 페이지에서 **Sell**, 또는 섹션의 키로 `POST /contract/send` (`buy`) | 구매자 (재판매의 경우 먼저 판매자의 `approve`) |
 
 ![NFT 워크플로: Remix에서 컴파일, chainlens에서 배포, 고정 가격으로 민팅, 섹션 사용자 계정이 구매](../images/diagrams/nft-lifecycle.svg)
 
@@ -143,16 +143,20 @@ curl -s -X POST http://192.168.68.151:30000/createaccount -H 'Content-Type: appl
 **chainlens에서:** **Mint and sell** 카드의 **Sell** 아래에 토큰 ID와 구매자를 입력합니다.
 구매자 필드는 섹션 사용자 계정을 섹션 및 잔액과 함께 제안합니다. **Sell**을 클릭합니다.
 
-**또는 curl 사용**, 구매자 섹션의 키와 함께:
+**또는 curl 사용**, 구매자 섹션의 키와 함께 범용
+[`POST /contract/send`](../reference/proxy-api.md#post-contractsend--write)로 호출합니다. `contract`는
+컬렉션 주소(`GET /nft/collections`), `from`은 구매자입니다. payee와 `value`는 생략하십시오. 프록시가
+구매자 섹션의 소비 계정과 토큰 가격을 채웁니다.
 
 ```bash
-curl -s -X POST http://192.168.68.151:30000/nft/transfer -H 'Content-Type: application/json' \
-  -H 'X-Section-Key: sk_…' -d '{"collection":"DRG","to":"0xBuyer…","tokenId":"1"}'
+curl -s -X POST http://192.168.68.151:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xCollection","function":"buy","args":["7"],"from":"0xBuyer"}'
 ```
 
 ```
-{ "success": true, "section": {"id": 1, "name": "Shop A"}, "sale": "first sale",
-  "price": "3", "paidTo": "<Shop A's consumption account>", "txHash": "0x…", "approveTxHash": null, ... }
+{ "success": true, "section": {"id": 1, "name": "Shop A"}, "function": "buy(uint256,address)", "value": "3.0", "txHash": "0x…",
+  "events": [ { "name": "Sold", "args": { "tokenId": "7", "seller": "<center>", "buyer": "0xBuyer", "price": "…",
+  "paidTo": "<Shop A's consumption account>" } }, ... ] }
 ```
 
 구매자는 원자적인 `buy(tokenId, payee)` 트랜잭션 하나에 서명합니다. 정확히 가격만큼 지불하고
@@ -161,13 +165,17 @@ curl -s -X POST http://192.168.68.151:30000/nft/transfer -H 'Content-Type: appli
 - **최초 판매**(센터가 토큰 보유): 대금은 구매자 섹션의
   **소비 계정**으로 갑니다. 컨트랙트 자체가 `payee`가
   활성 섹션의 소비 계정인지 확인합니다(`SectionRegistry.isConsumptionAccount`).
-- **재판매**(사용자가 토큰 보유): 새 구매자로 `/nft/transfer`를 다시 호출합니다. 새 구매자는 판매자와
-  **같은 섹션**의 사용자여야 합니다. 필요하면 프록시가 판매자의 승인을 보내며
-  (`approveTxHash`), 대금은 **판매자**에게 갑니다.
+- **재판매**(사용자가 토큰 보유): 호출이 두 번입니다. 먼저 판매자의 섹션이 판매자로 `approve`를 보냅니다
+  (`"function":"approve","args":["0xCollection","7"],"from":"0xSeller"`). 그다음 구매자의 섹션이 위와 같이
+  `buy`를 보냅니다. 대금은 **판매자**에게 갑니다(컨트랙트는 payee를 무시). 각 섹션은 자기 계정으로만
+  서명하므로 구매자가 판매자와 **다른 섹션**에 있어도 됩니다.
 
 키가 없으면 프록시는 401 `X-Section-Key is required`로 응답합니다. 유일한 예외는 관리
 API 호출자입니다. chainlens Sell 양식에는 섹션 키가 필요 없습니다. chainlens가 프록시의
 `ADMIN_ALLOWED_IPS`에 있는 주소에서 관리 토큰으로 프록시를 호출하기 때문이며, 이때 섹션은 구매자의 섹션입니다.
+재판매라면 판매자가 먼저 승인해야 합니다.
+
+버전 3 컬렉션의 `POST /nft/transfer`는 제거되었습니다. `/contract/send`를 안내하는 410으로 응답합니다.
 
 ## 6. 확인 {#6-check}
 
@@ -185,7 +193,7 @@ API 호출자입니다. chainlens Sell 양식에는 섹션 키가 필요 없습�
 ## 버전 2 컬렉션 {#version-2-collections}
 
 섹션 도입 이전에 배포된 컬렉션([`NftCollectionV2.sol`](../../proxy/contracts/NftCollectionV2.sol),
-SENDER01이 민팅)은 키 없이 계속 동작합니다. `/nft/mint`는 SENDER01에게 민팅하고, `/nft/transfer`는
+SENDER01이 민팅)은 키 없이 계속 동작합니다. `/nft/mint`는 SENDER01에게 민팅하고, `/nft/transfer`(버전 2 전용)는
 `buy(tokenId)`로 판매하며, 최초 판매에서는 SENDER01에게, 재판매에서는 판매자에게 대금을 지급합니다. 섹션이 없는
 프록시(개발)는 `/nft/deploy`로 버전 2 컬렉션을 배포합니다
 ([프록시](../components/proxy.md#nft-collections)).
@@ -194,14 +202,16 @@ SENDER01이 민팅)은 키 없이 계속 동작합니다. `/nft/mint`는 SENDER0
 
 | 메시지 | 원인 |
 |---|---|
-| `X-Section-Key is required: the buyer "to" must be a user account of that section` | 버전 3 컬렉션의 `/nft/transfer`에 `X-Section-Key` 헤더가 없음 (관리 API 호출자도 아님) |
+| `X-Section-Key is required: …` | `/contract/send`에 `X-Section-Key` 헤더가 없음 (관리 API 호출자도 아님) |
+| 410 `version-3 collections are sold with POST /contract/send …` | 버전 3 컬렉션에 `/nft/transfer` 호출 |
 | `unknown section key` | 키가 교체되었거나 섹션이 보관됨 |
-| `… is not a user account of a section` | `to`가 `/createaccount`와 섹션 키로 생성되지 않음 |
+| `… is not a user account of a section` | 구매자(`from`)가 `/createaccount`와 섹션 키로 생성되지 않음 |
 | `section "…" is disabled` | 구매자의 섹션이 비활성화됨 (Sections 페이지) |
-| `… is not an account of section "…"` | 구매자가 키에 해당하는 섹션의 사용자가 아니거나, 다른 섹션으로의 재판매임 |
-| `insufficient balance: the price of this token is N ETH` | 구매자의 잔액이 가격보다 적음: 충전하십시오 (`−x` 이체) |
-| `the sale would revert: …` | 컨트랙트가 판매를 거부함, 예: `payee is not a section's consumption account` |
-| `token not found` / `token is already owned by to` | 잘못된 토큰 ID이거나 구매자가 이미 보유함 |
+| `… is not an account of section "…"` | `from`이 키에 해당하는 섹션의 사용자가 아님 (서명하는 계정의 섹션 키를 사용하십시오) |
+| `insufficient balance: N ETH is needed` | 구매자의 잔액이 가격보다 적음: 충전하십시오 (`−x` 이체) |
+| `value: the price is N ETH …` / `payee: …` | 잘못된 `value` 또는 payee를 지정함: 생략하십시오 |
+| `the transaction would revert: …` | 컨트랙트가 판매를 거부함, 예: 판매자의 `approve` 없는 재판매 |
+| `token not found` / `… already owns token N` | 잘못된 토큰 ID이거나 구매자가 이미 보유함 |
 | `no NFT collection named "…"` | 잘못된 이름 또는 심볼: 주소를 사용하거나 `GET /nft/collections`를 확인하십시오 |
 | `"…" matches several collections` | 주소를 사용하십시오 |
 | `the collection's minter 0x… is not the contract account center` | 컬렉션이 컨트랙트 계정 센터가 아닌 다른 곳에서 배포됨 |

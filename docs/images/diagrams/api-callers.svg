@@ -40,8 +40,8 @@
 <text x="1036" y="283" font-size="15" fill="#14532d" font-weight="700" text-anchor="start">Can use</text>
 <text x="1036" y="303" font-size="13" fill="#334155" font-weight="400" text-anchor="start">its own user accounts: /createaccount</text>
 <text x="1036" y="322" font-size="13" fill="#334155" font-weight="400" text-anchor="start">+x / −x: POST /transfer</text>
-<text x="1036" y="341" font-size="13" fill="#334155" font-weight="400" text-anchor="start">NFT purchase: POST /nft/transfer (version 3)</text>
-<text x="1036" y="360" font-size="13" fill="#334155" font-weight="400" text-anchor="start">POST /contract/send (from = its user account)</text>
+<text x="1036" y="341" font-size="13" fill="#334155" font-weight="400" text-anchor="start">POST /contract/send (from = its user account):</text>
+<text x="1036" y="360" font-size="13" fill="#334155" font-weight="400" text-anchor="start">NFT v3 buy / approve, nickname buy / edge</text>
 <path d="M420,319.0 L518,319.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
 <path d="M920,319.0 L1018,319.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
 <rect x="40" y="405" width="380" height="128" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#sh)"/>
@@ -57,7 +57,7 @@
 <text x="1036" y="453" font-size="13" fill="#334155" font-weight="400" text-anchor="start">/admin/sections/* (create, top up, sweep,</text>
 <text x="1036" y="472" font-size="13" fill="#334155" font-weight="400" text-anchor="start">pay back, keys, accounts, archive …)</text>
 <text x="1036" y="491" font-size="13" fill="#334155" font-weight="400" text-anchor="start">/admin/contracts/check, /deploy</text>
-<text x="1036" y="510" font-size="13" fill="#334155" font-weight="400" text-anchor="start">/nft/transfer version 3 without a section key</text>
+<text x="1036" y="510" font-size="13" fill="#334155" font-weight="400" text-anchor="start">/contract/send without a section key (e.g. NFT buy)</text>
 <path d="M420,469.0 L518,469.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
 <path d="M920,469.0 L1018,469.0" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
 <text x="40" y="576" font-size="13" fill="#475569" font-weight="400" text-anchor="start">Chainlens calls the admin API for its Sections, Deploy and Mint and sell pages with its own token, which never reaches the browser.</text>

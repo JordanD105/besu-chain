@@ -30,7 +30,7 @@ are in [sections](sections.md#nft-collections)).
 | 2. Deploy | chainlens **Deploy** page (or `POST /nft/deploy`) | the contract account center |
 | 3. Mint | **Mint** on the collection's chainlens page, or `POST /nft/mint` | the contract account center |
 | 4. Buyer | `POST /createaccount` with a section's key, or **Create account** on the chainlens Sections page | — (funded by the section's upfront account) |
-| 5. Sell | **Sell** on the collection's chainlens page, or `POST /nft/transfer` with the section's key | the buyer (and, for a resale, the seller's approval) |
+| 5. Sell | **Sell** on the collection's chainlens page, or `POST /contract/send` (`buy`) with the section's key | the buyer (and, for a resale, first the seller's `approve`) |
 
 ![NFT workflow: 1 compile in Remix, 2 deploy in chainlens (contract account center), 3 mint at a fixed price, 4 a section user account as buyer, 5 sell with X-Section-Key: first sale pays the section's consumption account, resale pays the seller](../images/diagrams/nft-lifecycle.svg)
 
@@ -143,16 +143,20 @@ chainlens **Sections** page (the section's user accounts: **Create account**, **
 **In chainlens:** in the **Mint and sell** card, under **Sell**, enter the token id and the buyer. The
 buyer field suggests the section user accounts, with their section and balance. Click **Sell**.
 
-**Or with curl**, with the key of the buyer's section:
+**Or with curl**, with the key of the buyer's section, through the generic
+[`POST /contract/send`](../reference/proxy-api.md#post-contractsend--write). `contract` is the
+collection's address (`GET /nft/collections`), `from` the buyer. Leave out the payee and `value`:
+the proxy fills in the buyer's section's consumption account and the token's price.
 
 ```bash
-curl -s -X POST http://192.168.68.151:30000/nft/transfer -H 'Content-Type: application/json' \
-  -H 'X-Section-Key: sk_…' -d '{"collection":"DRG","to":"0xBuyer…","tokenId":"1"}'
+curl -s -X POST http://192.168.68.151:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xCollection","function":"buy","args":["7"],"from":"0xBuyer"}'
 ```
 
 ```
-{ "success": true, "section": {"id": 1, "name": "Shop A"}, "sale": "first sale",
-  "price": "3", "paidTo": "<Shop A's consumption account>", "txHash": "0x…", "approveTxHash": null, ... }
+{ "success": true, "section": {"id": 1, "name": "Shop A"}, "function": "buy(uint256,address)", "value": "3.0", "txHash": "0x…",
+  "events": [ { "name": "Sold", "args": { "tokenId": "7", "seller": "<center>", "buyer": "0xBuyer", "price": "…",
+  "paidTo": "<Shop A's consumption account>" } }, ... ] }
 ```
 
 The buyer signs one atomic `buy(tokenId, payee)` transaction. It pays exactly the price and receives
@@ -161,13 +165,18 @@ the token; if any check fails, nothing moves.
 - **First sale** (the center holds the token): the price goes to the buyer's section's
   **consumption account**. The contract itself checks that `payee` is the consumption account of an
   active section (`SectionRegistry.isConsumptionAccount`).
-- **Resale** (a user holds it): call `/nft/transfer` again with a new buyer, who must be a user
-  of the **same section** as the seller. The proxy sends the seller's approval if needed
-  (`approveTxHash`), and the price goes to the **seller**.
+- **Resale** (a user holds it): two calls. The seller's section first sends `approve` from the seller
+  (`"function":"approve","args":["0xCollection","7"],"from":"0xSeller"`); then the buyer's section
+  sends `buy` as above. The price goes to the **seller** (the contract ignores the payee). Each
+  section signs only for its own accounts, so the buyer may be in **another section** than the seller.
 
 Without the key, the proxy answers 401 `X-Section-Key is required`. The one exception is the admin
 API caller: the chainlens Sell form needs no section key, because chainlens calls the proxy with the
-admin token from an address in the proxy's `ADMIN_ALLOWED_IPS`; the section is then the buyer's.
+admin token from an address in the proxy's `ADMIN_ALLOWED_IPS`; the section is then the buyer's. For
+a resale the seller must have approved first.
+
+`POST /nft/transfer` on a version-3 collection was removed: it answers 410 with a pointer to
+`/contract/send`.
 
 ## 6. Check
 
@@ -186,7 +195,7 @@ admin token from an address in the proxy's `ADMIN_ALLOWED_IPS`; the section is t
 
 Collections deployed before sections ([`NftCollectionV2.sol`](../../proxy/contracts/NftCollectionV2.sol),
 minted by SENDER01) keep working without a key: `/nft/mint` mints to SENDER01, and `/nft/transfer`
-sells with `buy(tokenId)`, paying SENDER01 on a first sale and the seller on a resale. A proxy
+(version 2 only) sells with `buy(tokenId)`, paying SENDER01 on a first sale and the seller on a resale. A proxy
 without sections (development) deploys version-2 collections with `/nft/deploy`
 ([proxy](../components/proxy.md#nft-collections)).
 
@@ -194,14 +203,16 @@ without sections (development) deploys version-2 collections with `/nft/deploy`
 
 | Message | Cause |
 |---|---|
-| `X-Section-Key is required: the buyer "to" must be a user account of that section` | no `X-Section-Key` header on `/nft/transfer` of a version-3 collection (and not the admin API caller) |
+| `X-Section-Key is required: …` | no `X-Section-Key` header on `/contract/send` (and not the admin API caller) |
+| 410 `version-3 collections are sold with POST /contract/send …` | `/nft/transfer` on a version-3 collection |
 | `unknown section key` | the key was rotated, or the section archived |
-| `… is not a user account of a section` | `to` was not created with `/createaccount` and a section key |
+| `… is not a user account of a section` | the buyer (`from`) was not created with `/createaccount` and a section key |
 | `section "…" is disabled` | the buyer's section is disabled (Sections page) |
-| `… is not an account of section "…"` | the buyer is not a user of the key's section, or a resale to another section |
-| `insufficient balance: the price of this token is N ETH` | the buyer has less than the price: top it up (`−x` transfer) |
-| `the sale would revert: …` | the contract refused the sale, e.g. `payee is not a section's consumption account` |
-| `token not found` / `token is already owned by to` | wrong token id, or the buyer already owns it |
+| `… is not an account of section "…"` | `from` is not a user of the key's section (use the key of the account that signs) |
+| `insufficient balance: N ETH is needed` | the buyer has less than the price: top it up (`−x` transfer) |
+| `value: the price is N ETH …` / `payee: …` | a wrong `value` or payee was given: leave them out |
+| `the transaction would revert: …` | the contract refused the sale, e.g. a resale without the seller's `approve` |
+| `token not found` / `… already owns token N` | wrong token id, or the buyer already owns it |
 | `no NFT collection named "…"` | wrong name or symbol: use the address, or `GET /nft/collections` |
 | `"…" matches several collections` | use the address |
 | `the collection's minter 0x… is not the contract account center` | the collection was not deployed by the contract account center (deployed elsewhere) |

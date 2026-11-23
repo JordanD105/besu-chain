@@ -237,16 +237,18 @@ curl -s localhost:30000/nft/mint -H 'content-type: application/json' \
   --data '{"name":"Badge 1","image":"https://example/badge.png","amount":"0.5"}'
 ```
 
-Sell it to the user. This is **one** `buy` transaction signed by the buyer, carrying exactly the
-price. The NFT moves and the ETH goes to `SENDER01` atomically; if anything fails, nothing moves:
+Sell it to the user (a version-2 collection, as in development). This is **one** `buy` transaction
+signed by the buyer, carrying exactly the price. The NFT moves and the ETH goes to `SENDER01`
+atomically; if anything fails, nothing moves:
 
 ```bash
 curl -s localhost:30000/nft/transfer -H 'content-type: application/json' \
   --data '{"to":"0x1293…717d","tokenId":"1"}'
 ```
 
-With sections configured (production), collections are version 3 and a sale needs a section key:
-see [NFT collections](#nft-collections) and the [NFT workflow](../features/nft-workflow.md).
+With sections configured (production), collections are version 3: a sale is `buy` through
+`POST /contract/send` with a section key, and `/nft/transfer` answers 410. See
+[NFT collections](#nft-collections) and the [NFT workflow](../features/nft-workflow.md).
 
 Signer side:
 
@@ -303,8 +305,8 @@ Which account a request may send from is decided before that:
 | keyless `/transfer {from, to, amount}` | `from` (a negative `amount` sends from `to` to `from`); a section's account, the registry admin or the contract center is refused (403) |
 | `/createaccount`, `/transfer` with `X-Section-Key` | the section's upfront account, or the user account for `+x` ([sections](../features/sections.md#application-api-section-calls)) |
 | `/nft/mint` | the collection's minter: `SENDER01` (v2) or the contract account center (v3) |
-| `/nft/transfer` | the buyer (`buy`), plus the seller's `approve` for a resale |
-| `/contract/send` | `from`, a user account of the caller's section |
+| `/nft/transfer` (version 2) | the buyer (`buy`), plus the seller's `approve` for a resale |
+| `/contract/send` | `from`, a user account of the caller's section (also the version-3 NFT `buy` / `approve` and the nickname `buyNickname` / `upgradeEdge`) |
 | `/admin/*` writes | the registry admin (registry), `SENDER01` / section accounts (money), the contract account center (deployments) |
 
 ## Nonces and balance checks: fast path + periodic chain check
@@ -403,9 +405,9 @@ in listings and refused when selected.
 | Deployed by `/nft/deploy` when | sections are configured and `CONTRACT_CENTER` is set | otherwise (development) |
 | Deployed and minted by | the contract account center | `SENDER01` |
 | Registered in the SectionRegistry | yes (kind NFT) | no |
-| `/nft/transfer` | needs `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. the chainlens Sell form) may sell without it: the section is then the buyer's | no key |
+| Sale | `POST /contract/send` `buy` from the buyer, with `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. the chainlens Sell form) may send it without a key: the section is then the buyer's. `/nft/transfer` answers 410 | `/nft/transfer`, no key |
 | First sale pays | the section's consumption account (checked on chain by `isConsumptionAccount`) | `SENDER01` |
-| Resale pays | the seller (same section); the proxy sends the seller's approval when needed | the seller |
+| Resale pays | the seller; the seller's section first sends `approve(collection, tokenId)` with `/contract/send`, then the buyer's section sends `buy` (the sections may differ) | the seller |
 
 In both, the price is set at mint (`amount`) and fixed for every later sale, and a sale is one
 `buy` transaction signed by the buyer: the token and the ETH move together or not at all.
@@ -415,7 +417,7 @@ In both, the price is set at mint (`amount`) and fixed for every later sale, and
 symbols must be unique across collections; a duplicate is rejected with 409. Version-3 collections
 can also be deployed from the chainlens Deploy page ([NFT workflow](../features/nft-workflow.md)).
 
-Choose a collection with `"collection"` in the `/nft/mint` and `/nft/transfer` body, or with
+Choose a collection with `"collection"` in the `/nft/mint` and (version 2) `/nft/transfer` body, or with
 `?collection=` on `GET /nft/:id`, `/nft/:id/metadata` and `/nft/owner/:address`. The value can be
 the collection's **name**, its **symbol** (both case-insensitive) or its **address**. Without it,
 the default collection is used, so single-collection requests still work. `contract` is accepted
@@ -433,7 +435,7 @@ registry 0x… v2, N section(s), admin API on`).
 
 | Feature | Endpoints | Guide |
 |---|---|---|
-| section calls | `/createaccount`, `/transfer` (+x / −x), `/nft/transfer`, `/contract/send` with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
+| section calls | `/createaccount`, `/transfer` (+x / −x), `/contract/send` (also NFT v3 sales and nicknames) with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
 | admin API | `/admin/sections/*`: create, rename, info, key rotation, enable / disable, top-up, sweep, pay back, replace an account, archive, user accounts | [sections](../features/sections.md#admin-api) |
 | contracts | `/admin/contracts/check` and `/deploy` (signed by the contract account center, registered with their ABI); `/contract/call` (read) and `/contract/send` (write, signed by a user account of the caller's section) | [contract deployment](../features/contract-deployment.md) |
 
@@ -489,7 +491,7 @@ More cases: [troubleshooting](../operations/troubleshooting.md#proxy-and-transac
 | `NFT_CONTRACT 0x… has no contract on this chain (was the chain reset?)` | `NFT_CONTRACT` in `proxy/.env` points to a contract from **before the chain was reset** | delete the `NFT_CONTRACT` line and run `docker compose up -d --build`; the proxy finds the collections on chain, or deploy one with `/nft/deploy` |
 | `collection 0x… is an old version without buy()` | the collection predates version 2 | deploy a new collection |
 | `sender not managed by the MPC signer` | the `from` address is not an MPC key of this cluster | create accounts with `/createaccount` |
-| `X-Section-Key is required` | `SECTION_KEY_REQUIRED=true`, or a call that always needs a key (`/contract/send`, a version-3 `/nft/transfer`) | send the section's key ([sections](../features/sections.md#application-api-section-calls)) |
+| `X-Section-Key is required` | `SECTION_KEY_REQUIRED=true`, or a call that always needs a key (`/contract/send`) | send the section's key ([sections](../features/sections.md#application-api-section-calls)) |
 | `sections are not configured (REGISTRY_CONTRACT, REGISTRY_ADMIN)` (503) | a section call or admin call on a proxy without the registry | run `ansible-playbook 06-proxy.yml`, or set both in `.env` |
 | `the admin API is off` (404) / `not allowed from this address` (403) / `wrong admin token` (401) | `ADMIN_TOKEN` or `ADMIN_ALLOWED_IPS` not set, the caller's address is not listed, or the token is wrong | [access control](../deployment/access-control.md) |
 | log `sections: the registry is version 1; this proxy needs version 2` | registry not upgraded | `ansible-playbook 06-proxy.yml 08-check.yml` (deploys version 2, migrates) |

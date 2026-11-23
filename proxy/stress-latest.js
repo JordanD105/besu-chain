@@ -4255,7 +4255,7 @@ function sectionMetricLines() {
         sectionMetrics.rows.map((r) => [`${sec(r.id, r.name)},role="${r.role}",active="${r.active ? 1 : 0}"`, r.eth]));
     metric("proxy_section_active", "gauge", "1 = the section is enabled (archived sections are not listed).",
         [...new Map(sectionMetrics.rows.map((r) => [r.id, r])).values()].map((r) => [sec(r.id, r.name), r.active ? 1 : 0]));
-    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, nft_first_sale, nft_resale, topup, sweep, payback, account_replaced, archive_return).",
+    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, nft_first_sale, nft_resale, nickname_sale, edge_upgrade, topup, sweep, payback, account_replaced, archive_return).",
         [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, e.count]));
     metric("proxy_section_amount_eth_total", "counter", "ETH moved by section operations since the proxy started.",
         [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, Number(ethers.formatEther(e.wei))]));

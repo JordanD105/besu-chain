@@ -112,8 +112,7 @@ MPC 노드 3개가 분산 키 생성을 실행합니다. 개인 키는 어디에
 |---|---|
 | `POST /createaccount` | 섹션의 계정, 섹션의 선지급 계정에서 자금 공급 |
 | `POST /transfer` | +x / −x (위 참조) |
-| `POST /nft/transfer` | 버전 3 NFT를 섹션의 사용자 계정에 판매 (아래 참조) |
-| `POST /contract/send` | 섹션의 사용자 계정이 서명하는 컨트랙트 트랜잭션 (아래 참조) |
+| `POST /contract/send` | 섹션의 사용자 계정이 서명하는 컨트랙트 트랜잭션. 닉네임과 버전 3 NFT의 모든 쓰기도 포함 (아래 참조) |
 
 ---
 
@@ -126,7 +125,8 @@ MPC 노드 3개가 분산 키 생성을 실행합니다. 개인 키는 어디에
 | 배포 및 민팅 주체 | **컨트랙트 계정 센터** | SENDER01 |
 | 최초 판매 대금 수령 | 구매자 섹션의 **소비** 계정 (컨트랙트가 확인) | SENDER01 |
 | 재판매 대금 수령 | 판매자 | 판매자 |
-| `/nft/transfer` | `X-Section-Key` 필요 (또는 chainlens처럼 관리 토큰) | 키 불필요 |
+| 판매 | 구매자가 `POST /contract/send` `buy`, `X-Section-Key` 필요 (또는 chainlens처럼 관리 토큰) | `POST /nft/transfer`, 키 불필요 |
+| 재판매 | 판매자의 `approve` 후 구매자의 `buy` (둘 다 `/contract/send`). 섹션을 넘나들 수 있음 | `POST /nft/transfer`, 키 불필요 |
 
 **컬렉션 선택:** 본문의 `collection` 또는 쿼리의 `?collection=`에 컬렉션의 **이름**,
 **심볼**(대소문자 구분 없음) 또는 **주소**를 지정합니다. 지정하지 않으면 기본(첫 번째) 컬렉션이 사용됩니다.
@@ -170,23 +170,36 @@ ETH 단위의 **가격**으로, 온체인에 저장되며 이후 모든 판매�
 
 `name`과 `image`는 필수입니다. 토큰 ID는 각 컬렉션에서 1부터 시작합니다.
 
-### `POST /nft/transfer` — 판매 {#post-nfttransfer--sale}
+### 버전 3: `/contract/send`로 판매와 재판매 {#version-3-sale-and-resale-with-contractsend}
 
-구매자 `to`가 정확히 가격만큼의 금액으로 **하나의** `buy` 트랜잭션에 서명합니다. NFT와 ETH는
-함께 이동하거나 전혀 이동하지 않습니다.
+구매자가 정확히 가격만큼의 금액으로 **하나의** `buy` 트랜잭션에 서명합니다. NFT와 ETH는
+함께 이동하거나 전혀 이동하지 않습니다. payee와 `value`는 생략하십시오. 프록시가 구매자 섹션의
+소비 계정과 `priceOf(tokenId)`를 채웁니다.
+
+```bash
+curl -s -X POST http://192.168.68.151:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xCollection","function":"buy","args":["7"],"from":"0xBuyer"}'
+```
+```json
+→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "function": "buy(uint256,address)", "value": "3.0",
+    "txHash": "0x…", "events": [ { "name": "Sold", "args": { "tokenId": "7", "seller": "<center>", "buyer": "0xBuyer", "price": "…", "paidTo": "<consumption account>" } }, … ] }
+```
+
+- **최초 판매**(센터가 보유): 대금은 구매자 섹션의 소비 계정으로 갑니다.
+- **재판매**(사용자가 보유): 호출이 두 번입니다. 먼저 판매자의 섹션이 판매자로 `approve`를
+  args `[collectionAddress, tokenId]`로 보내고, 그다음 구매자의 섹션이 `buy`를 보냅니다. 대금은
+  판매자에게 갑니다(컨트랙트는 payee를 무시). 각 섹션은 자기 계정으로만 서명하므로 판매자와 구매자가
+  다른 섹션에 있어도 됩니다.
+- 버전 3 컬렉션에 `POST /nft/transfer`를 호출하면 이 안내와 함께 **410**이 반환됩니다.
+
+### `POST /nft/transfer` — 판매 (버전 2) {#post-nfttransfer--sale-version-2}
+
+버전 2(레거시) 컬렉션 전용이며 키가 필요 없습니다. `from`은 선택 사항입니다(기본값: 현재 소유자).
 
 ```bash
 curl -s -X POST http://192.168.68.151:30000/nft/transfer -H 'Content-Type: application/json' \
-  -H 'X-Section-Key: sk_…' -d '{"collection":"DRG","to":"0xBuyer…","tokenId":"1"}'
+  -d '{"collection":"OLD","to":"0xBuyer…","tokenId":"1"}'
 ```
-```json
-→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "sale": "first sale",
-    "price": "3", "paidTo": "<consumption account>", "txHash": "0x…", "approveTxHash": null }
-```
-
-- **버전 3:** `to`는 키에 해당하는 섹션의 사용자 계정이어야 합니다. 재판매는 같은 섹션 안에서만
-  가능합니다. 필요하면 판매자의 승인이 자동으로 전송됩니다.
-- **버전 2:** 키가 필요 없습니다. `from`은 선택 사항입니다(기본값: 현재 소유자).
 
 ### 조회 {#reading}
 
@@ -205,6 +218,7 @@ Remix에서 판매까지의 단계별 안내: [NFT 워크플로](../features/nft
 
 테두리 레벨이 있는 소울바운드 닉네임 토큰([닉네임](../features/nicknames.md)). 모든 호출에
 `X-Section-Key`(또는 관리 토큰)가 필요하고, `account`는 그 섹션의 사용자 계정이어야 합니다. 가격은 ETH.
+이 라우트는 읽기만 합니다. 구매와 테두리 올리기는 [`POST /contract/send`](#post-contractsend--write)를 사용합니다.
 
 | 엔드포인트 | 본문 / 쿼리 | 응답 |
 |---|---|---|
@@ -212,8 +226,10 @@ Remix에서 판매까지의 단계별 안내: [NFT 워크플로](../features/nft
 | `GET /nickname/check` | `?name=Alice` | `{ nickname, characters, tokenId, available, reason }` (`reason`: `taken`, `reserved` 또는 `null`) |
 | `GET /nickname/of/:account` | | `{ nickname, tokenId, account, level, edge, image }` (`image`: SVG 데이터 URI); 없으면 404 |
 | `GET /nickname/quote` | `?account=0x…&level=2` | `{ account, level, price }`: `level`까지의 단계 가격 합계 |
-| `POST /nickname/buy` | `{ "account": "0x…", "nickname": "Alice" }` | `{ success, section, nickname, tokenId, account, level, edge, image, price, paidTo, txHash, blockNumber, … }` |
-| `POST /nickname/edge` | `{ "account": "0x…", "level": 2 }` | `buy`와 같으며 새 레벨 포함 |
+| `POST /contract/send` `buyNickname` | `{ "contract": "<collection>", "function": "buyNickname", "args": ["Alice"], "from": "0x…" }` | 이벤트 `NicknameBought` (아래 참조) |
+| `POST /contract/send` `upgradeEdge` | `{ "contract": "<collection>", "function": "upgradeEdge", "args": [2], "from": "0x…" }` | 이벤트 `EdgeUpgraded` (아래 참조) |
+
+`POST /nickname/buy`와 `POST /nickname/edge`는 제거되었습니다(410).
 
 이름: NFC와 공백 제거 후 1~256자, 제어 문자와 `< > & " ' \` 불가, A–Z 대소문자 구분 없이 고유,
 계정당 하나. 레벨은 올라가기만 합니다.
@@ -232,17 +248,44 @@ SectionRegistry에 등록된 컨트랙트(컨트랙트 계정 센터가 배포�
 → { "success": true, "function": "balanceOf(address)", "outputs": [ { "name": "0", "type": "uint256", "value": "3" } ] }
 ```
 
-### `POST /contract/send` — 쓰기 (`X-Section-Key` 필요) {#post-contractsend--write-x-section-key-required}
+### `POST /contract/send` — 쓰기 {#post-contractsend--write}
 
 호출자 섹션의 사용자 계정인 `from`이 서명합니다. `value`는 ETH 단위이며 payable 함수에만 사용합니다.
 
 ```json
 { "contract": "0x…", "function": "transfer(address,uint256)", "args": ["0xTo", "5"], "from": "0xSectionUser", "value": "0" }
-→ { "success": true, "txHash": "0x…", "blockNumber": 123, "gasUsed": 51234, "events": [ { "name": "Transfer", "args": {…} } ] }
+→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "contract": "0x…", "function": "transfer(address,uint256)",
+    "from": "0xSectionUser", "value": "0.0", "txHash": "0x…", "blockNumber": 123, "gasUsed": 51234,
+    "events": [ { "name": "Transfer", "args": {…} } ] }
 ```
 
 `function`은 이름 또는 전체 시그니처입니다(이름이 오버로드된 경우 시그니처가 필요합니다). `NftCollection.mint`는
 이 방식으로 호출할 수 없습니다(센터만 민팅 가능). `/nft/mint`를 사용하십시오.
+
+- **호출자:** `X-Section-Key`, 또는 키 없이 `ADMIN_ALLOWED_IPS`에서 온 관리 토큰(chainlens 방식).
+  이때 섹션은 `from`의 섹션이며, `from`은 활성 섹션의 사용자 계정이어야 합니다.
+- **payee:** 이름이 `payee`인 `address` 입력은 생략하면(`args`가 짧거나 `null` 또는 `""`) 보내는
+  계정 섹션의 **소비** 계정으로 채워집니다. 다른 주소이면 400.
+- **가격:** 아래 함수는 `value`를 생략하면 가격으로 채워집니다. 다른 값이면 400.
+- **메트릭:** 섹션 작업은 이벤트로 집계됩니다: `NicknameBought` → `nickname_sale`,
+  `EdgeUpgraded` → `edge_upgrade`, `Sold` → `nft_first_sale`(판매자 = 컨트랙트 계정 센터)
+  또는 `nft_resale`.
+
+| 컨트랙트 | 함수, `args` | 채워지는 `value` | 전송 전 확인 | 이벤트 |
+|---|---|---|---|---|
+| 닉네임 컬렉션 (`GET /nickname/edges`의 `collection`) | `buyNickname`, `[nickname]` | `nicknamePrice` | 공백 제거 + NFC, 1~256자, 제어 문자와 `< > & " ' \` 불가 (400). 계정당 하나, 사용 중, 예약됨 (409) | `NicknameBought {tokenId, buyer, nickname, price, paidTo}` |
+| 닉네임 컬렉션 | `upgradeEdge`, `[level]` | `quote(from, level)` (단계 가격 합계) | 레벨 1 이상 (400). 닉네임 보유 (404). 레벨이 있고, 판매 중이며, 현재보다 높음 (400 `level N: …`) | `EdgeUpgraded {tokenId, owner, fromLevel, toLevel, price, paidTo}` |
+| NFT 컬렉션, 버전 3 | `buy`, `[tokenId]` | `priceOf(tokenId)` | 토큰 존재 (404). `from`이 이미 보유하지 않음 (400) | `Sold {tokenId, seller, buyer, price, paidTo}` |
+| NFT 컬렉션, 버전 3 | 판매자가 `approve`, `[collection, tokenId]` | — | — | `Approval` |
+
+| 상태 | 메시지(시작 부분) |
+|---|---|
+| 400 | `payee: the consumption account of section "…" (0x…); leave it out to fill it in` |
+| 400 | `value: the price is X ETH (leave "value" out to pay it)` |
+| 400 | `insufficient balance: X ETH is needed` |
+| 400 | `the transaction would revert: …` |
+| 401 | `X-Section-Key is required: …` (키 없음, 관리 호출자도 아님) |
+| 403 | `… is not a user account of a section` / `section "…" is disabled` |
 
 ---
 

@@ -165,8 +165,7 @@ archived). Who may reach the proxy at all is the firewall's `proxy_client_ips`
 | `POST /createaccount {amount, pool}` | new MPC account, **registered under section_i** on chain, funded **from `upfront_account_i`** |
 | `POST /transfer {account, amount: "x", memo}` | `account` → `consumption_account_i` |
 | `POST /transfer {account, amount: "-x", memo}` | `upfront_account_i` → `account` |
-| `POST /nft/transfer {collection, to, tokenId}` | sale of a version-3 NFT to `to`, a user account of section_i ([NFT collections](#nft-collections)) |
-| `POST /contract/send {contract, function, args, from, value}` | a transaction signed by `from`, a user account of section_i ([Contracts](#contracts)) |
+| `POST /contract/send {contract, function, args, from, value}` | a transaction signed by `from`, a user account of section_i ([Contracts](#contracts)); also the version-3 NFT sale (`buy`, [NFT collections](#nft-collections)) and the nickname writes (`buyNickname`, `upgradeEdge`, [nicknames](nicknames.md)), with the payee and price filled in |
 
 `account` must be a user account of section_i (created with that section's key). `from` / `to`
 are not accepted on a section `/transfer`. The answer names the section, the direction, `from`, `to`
@@ -181,7 +180,7 @@ account center as sender is refused. With `sections_required: true` they are ref
 | Error | Cause |
 |---|---|
 | 401 `unknown section key` | no live section has this key (rotated? archived?) |
-| 401 `X-Section-Key is required` | `sections_required: true` and no key; or a call that always needs one (`/contract/send`, a version-3 `/nft/transfer`) |
+| 401 `X-Section-Key is required` | `sections_required: true` and no key; or a call that always needs one (`/contract/send`) |
 | 403 `section "…" is disabled` | the section is switched off |
 | 403 `0x… is not an account of section "…"` | the account belongs to another section, or isn't a user account |
 | 403 `0x… belongs to section N: call with that section's X-Section-Key` | a keyless call tried to move a section's money |
@@ -223,6 +222,11 @@ transaction that would revert is refused before it is signed, with the reason (`
 would revert: …`). `NftCollection.mint` can't be used this way: only the center mints, so it
 reverts with `not minter`; use `/nft/mint`.
 
+For the platform's own contracts `/contract/send` fills in what the section fixes: a `payee` left out
+is the sender's section's consumption account, and a `value` left out is the price (nickname
+`buyNickname`, `upgradeEdge`; NFT version-3 `buy`). The admin API caller (chainlens) may call it
+without a key: the section is then that of `from`. Details: [proxy API](../reference/proxy-api.md#post-contractsend--write).
+
 ## NFT collections
 
 New collections are **NftCollection version 3** ([`proxy/contracts/NftCollection.sol`](../../proxy/contracts/NftCollection.sol),
@@ -234,7 +238,7 @@ and `registry_` (the SectionRegistry's address).
 |---|---|
 | `POST /nft/deploy {name, symbol}` | the center deploys a version-3 collection (its minter, with the registry's address) and registers it |
 | `POST /nft/mint {collection, name, image, …, amount}` | the center mints the NFT to itself, for sale; `amount` is its **price**, fixed for good. Not tied to a section. |
-| `POST /nft/transfer {collection, to, tokenId}` + `X-Section-Key` | a sale to `to`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price. **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user of the same section holds it): the seller's approval is sent if needed and the price goes to the **seller**. |
+| `POST /contract/send {contract, function: "buy", args: [tokenId], from}` + `X-Section-Key` | a sale to `from`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price (payee and value filled in). **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user holds it): the seller's section first sends `approve(collection, tokenId)` from the seller, also with `/contract/send`; the price goes to the **seller**. Seller and buyer may be in different sections. |
 
 The contract itself enforces where a first sale's money goes: `buy` checks
 `SectionRegistry.isConsumptionAccount(payee)` (the consumption account of an active section), so
@@ -245,8 +249,10 @@ from an address in `ADMIN_ALLOWED_IPS`): the chainlens **Mint and sell** card on
 contract page (admin token and IP, as the Deploy page) calls the proxy that way, and the section is
 then the buyer's. Step by step from Remix to a sale: [NFT workflow](nft-workflow.md).
 
+`POST /nft/transfer` on a version-3 collection was removed (410).
+
 **Version-2 collections** (minted by SENDER01, e.g. those made before sections) keep working as
-before, without a key: a sale pays SENDER01 (first sale) or the seller.
+before with `POST /nft/transfer`, without a key: a sale pays SENDER01 (first sale) or the seller.
 
 ## Sections in the chainlens Accounts page
 
@@ -312,8 +318,8 @@ start is not included.
 | `/contract/call` | proxy | none (read); any registered contract |
 | `/contract/send` (section_i) | proxy | a user account of section_i; only registered contracts and their ABI functions |
 | `/nft/mint` | proxy (center's queue) | `contract_account_center`: `mint(center, tokenId, uri, price)`; price fixed for good |
-| `/nft/transfer`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` |
-| `/nft/transfer`, resale (section_i) | proxy | the seller approves (if needed); the buyer `buy(tokenId, …)` at the same mint price; NFT → buyer, price → seller |
+| `/contract/send` `buy`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` |
+| `/contract/send` `approve`, then `buy`, resale | proxy | the seller `approve(collection, tokenId)` (seller's section); the buyer `buy(tokenId, …)` at the same mint price (buyer's section); NFT → buyer, price → seller |
 
 ## Monitoring
 

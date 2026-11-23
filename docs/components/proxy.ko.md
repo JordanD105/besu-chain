@@ -237,7 +237,7 @@ curl -s localhost:30000/nft/mint -H 'content-type: application/json' \
   --data '{"name":"Badge 1","image":"https://example/badge.png","amount":"0.5"}'
 ```
 
-사용자에게 판매하십시오. 이는 구매자가 서명하고 정확히 가격만큼의 금액을 담은 **하나의** `buy` 트랜잭션입니다.
+사용자에게 판매하십시오(개발 환경처럼 버전 2 컬렉션). 이는 구매자가 서명하고 정확히 가격만큼의 금액을 담은 **하나의** `buy` 트랜잭션입니다.
 NFT 이동과 `SENDER01`로의 ETH 이동이 원자적으로 이루어집니다. 무엇이든 실패하면 아무것도 이동하지 않습니다.
 
 ```bash
@@ -245,8 +245,8 @@ curl -s localhost:30000/nft/transfer -H 'content-type: application/json' \
   --data '{"to":"0x1293…717d","tokenId":"1"}'
 ```
 
-섹션이 구성된 경우(프로덕션) 컬렉션은 버전 3이며 판매에는 섹션 키가 필요합니다.
-[NFT 컬렉션](#nft-collections)과 [NFT 워크플로](../features/nft-workflow.md)를 참조하십시오.
+섹션이 구성된 경우(프로덕션) 컬렉션은 버전 3입니다. 판매는 섹션 키로 `POST /contract/send`의 `buy`를
+호출하며, `/nft/transfer`는 410으로 응답합니다. [NFT 컬렉션](#nft-collections)과 [NFT 워크플로](../features/nft-workflow.md)를 참조하십시오.
 
 서명기 측:
 
@@ -303,8 +303,8 @@ curl -s http://192.168.68.130:9100/admin/pool                              # hot
 | 키 없는 `/transfer {from, to, amount}` | `from` (음수 `amount`는 `to`에서 `from`으로 송금). 섹션의 계정, 레지스트리 관리자, 컨트랙트 센터는 거부됩니다(403) |
 | `X-Section-Key`가 있는 `/createaccount`, `/transfer` | 섹션의 선지급 계정, 또는 `+x`의 경우 사용자 계정 ([섹션](../features/sections.md#application-api-section-calls)) |
 | `/nft/mint` | 컬렉션의 민터: `SENDER01`(v2) 또는 컨트랙트 계정 센터(v3) |
-| `/nft/transfer` | 구매자(`buy`), 재판매 시 판매자의 `approve` 추가 |
-| `/contract/send` | `from`, 호출자 섹션의 사용자 계정 |
+| `/nft/transfer` (버전 2) | 구매자(`buy`), 재판매 시 판매자의 `approve` 추가 |
+| `/contract/send` | `from`, 호출자 섹션의 사용자 계정 (버전 3 NFT의 `buy` / `approve`와 닉네임 `buyNickname` / `upgradeEdge`도 포함) |
 | `/admin/*` 쓰기 | 레지스트리 관리자(레지스트리), `SENDER01` / 섹션 계정(자금), 컨트랙트 계정 센터(배포) |
 
 ## 논스와 잔액 검사: 빠른 경로 + 주기적인 체인 검사 {#nonces-and-balance-checks-fast-path--periodic-chain-check}
@@ -402,9 +402,9 @@ SectionRegistry에서 읽습니다(섹션은 10초 동안 캐시, 컨트랙트�
 | `/nft/deploy`로 배포되는 조건 | 섹션이 구성되어 있고 `CONTRACT_CENTER`가 설정됨 | 그 외 (개발) |
 | 배포 및 민팅 주체 | 컨트랙트 계정 센터 | `SENDER01` |
 | SectionRegistry 등록 | 예 (종류 NFT) | 아니요 |
-| `/nft/transfer` | `X-Section-Key`가 필요하며 구매자는 해당 섹션의 사용자 계정이어야 합니다. 관리 API 호출자(`ADMIN_ALLOWED_IPS`에서 온 관리 토큰, 예: chainlens Sell 양식)는 키 없이 판매할 수 있으며, 이때 섹션은 구매자의 섹션입니다 | 키 불필요 |
+| 판매 | 구매자가 `X-Section-Key`로 `POST /contract/send` `buy`를 보내며, 구매자는 해당 섹션의 사용자 계정이어야 합니다. 관리 API 호출자(`ADMIN_ALLOWED_IPS`에서 온 관리 토큰, 예: chainlens Sell 양식)는 키 없이 보낼 수 있으며, 이때 섹션은 구매자의 섹션입니다. `/nft/transfer`는 410으로 응답 | `/nft/transfer`, 키 불필요 |
 | 최초 판매 대금 수령 | 섹션의 소비 계정 (`isConsumptionAccount`로 온체인 확인) | `SENDER01` |
-| 재판매 대금 수령 | 판매자 (같은 섹션). 필요 시 프록시가 판매자의 승인을 보냅니다 | 판매자 |
+| 재판매 대금 수령 | 판매자. 먼저 판매자의 섹션이 `/contract/send`로 `approve(collection, tokenId)`를 보내고, 그다음 구매자의 섹션이 `buy`를 보냅니다(섹션이 달라도 됨) | 판매자 |
 
 두 버전 모두 가격은 민팅 시(`amount`) 정해지며 이후 모든 판매에서 고정됩니다. 판매는 구매자가 서명한
 하나의 `buy` 트랜잭션이며, 토큰과 ETH는 함께 이동하거나 전혀 이동하지 않습니다.
@@ -414,7 +414,7 @@ SectionRegistry에서 읽습니다(섹션은 10초 동안 캐시, 컨트랙트�
 심볼은 컬렉션 간에 고유해야 하며, 중복이면 409로 거부됩니다. 버전 3 컬렉션은
 chainlens Deploy 페이지에서도 배포할 수 있습니다([NFT 워크플로](../features/nft-workflow.md)).
 
-컬렉션은 `/nft/mint`와 `/nft/transfer` 본문의 `"collection"`으로, 또는
+컬렉션은 `/nft/mint`와 (버전 2) `/nft/transfer` 본문의 `"collection"`으로, 또는
 `GET /nft/:id`, `/nft/:id/metadata`, `/nft/owner/:address`의 `?collection=`으로 선택합니다. 값은
 컬렉션의 **이름**, **심볼**(둘 다 대소문자 구분 없음) 또는 **주소**일 수 있습니다. 지정하지 않으면
 기본 컬렉션이 사용되므로 단일 컬렉션 요청도 계속 동작합니다. `contract`도 별칭으로
@@ -432,7 +432,7 @@ registry 0x… v2, N section(s), admin API on`).
 
 | 기능 | 엔드포인트 | 가이드 |
 |---|---|---|
-| 섹션 호출 | `X-Section-Key`를 사용하는 `/createaccount`, `/transfer`(+x / −x), `/nft/transfer`, `/contract/send` | [섹션](../features/sections.md#application-api-section-calls) |
+| 섹션 호출 | `X-Section-Key`를 사용하는 `/createaccount`, `/transfer`(+x / −x), `/contract/send`(NFT v3 판매와 닉네임 포함) | [섹션](../features/sections.md#application-api-section-calls) |
 | 관리 API | `/admin/sections/*`: 생성, 이름 변경, 정보, 키 교체, 활성화 / 비활성화, 충전, 스윕, 반환, 계정 교체, 보관, 사용자 계정 | [섹션](../features/sections.md#admin-api) |
 | 컨트랙트 | `/admin/contracts/check`와 `/deploy`(컨트랙트 계정 센터가 서명하며 ABI와 함께 등록), `/contract/call`(읽기)과 `/contract/send`(쓰기, 호출자 섹션의 사용자 계정이 서명) | [컨트랙트 배포](../features/contract-deployment.md) |
 
@@ -488,7 +488,7 @@ Grafana: **Proxy & Redis** 대시보드(라우트별 요청, 오류, 지연 시�
 | `NFT_CONTRACT 0x… has no contract on this chain (was the chain reset?)` | `proxy/.env`의 `NFT_CONTRACT`가 **체인 초기화 이전**의 컨트랙트를 가리킴 | `NFT_CONTRACT` 줄을 삭제하고 `docker compose up -d --build`를 실행하십시오. 프록시가 체인에서 컬렉션을 찾거나, `/nft/deploy`로 새로 배포하십시오 |
 | `collection 0x… is an old version without buy()` | 버전 2 이전의 컬렉션임 | 새 컬렉션 배포 |
 | `sender not managed by the MPC signer` | `from` 주소가 이 클러스터의 MPC 키가 아님 | `/createaccount`로 계정 생성 |
-| `X-Section-Key is required` | `SECTION_KEY_REQUIRED=true`이거나, 항상 키가 필요한 호출(`/contract/send`, 버전 3 `/nft/transfer`) | 섹션의 키를 보내십시오 ([섹션](../features/sections.md#application-api-section-calls)) |
+| `X-Section-Key is required` | `SECTION_KEY_REQUIRED=true`이거나, 항상 키가 필요한 호출(`/contract/send`) | 섹션의 키를 보내십시오 ([섹션](../features/sections.md#application-api-section-calls)) |
 | `sections are not configured (REGISTRY_CONTRACT, REGISTRY_ADMIN)` (503) | 레지스트리가 없는 프록시에 섹션 호출 또는 관리 호출을 함 | `ansible-playbook 06-proxy.yml`을 실행하거나 `.env`에 둘 다 설정 |
 | `the admin API is off` (404) / `not allowed from this address` (403) / `wrong admin token` (401) | `ADMIN_TOKEN` 또는 `ADMIN_ALLOWED_IPS`가 설정되지 않았거나, 호출자 주소가 목록에 없거나, 토큰이 틀림 | [접근 제어](../deployment/access-control.md) |
 | 로그 `sections: the registry is version 1; this proxy needs version 2` | 레지스트리가 업그레이드되지 않음 | `ansible-playbook 06-proxy.yml 08-check.yml` (버전 2 배포, 마이그레이션) |

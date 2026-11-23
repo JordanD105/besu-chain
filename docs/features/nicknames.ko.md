@@ -41,14 +41,19 @@
 
 ## 동작 방식 {#how-it-works}
 
-1. 애플리케이션이 섹션 키로 `POST /nickname/buy {account, nickname}`을 호출합니다.
-2. 프록시가 이름을 정규화(NFC, 공백 제거)하고 1~256자인지, 사용 가능한지 확인합니다.
-3. MPC 서명기가 **사용자 계정으로** `buyNickname(nickname, consumption)`에 서명하며, 닉네임 가격을
-   값으로 보냅니다.
+1. 애플리케이션이 섹션 키로 `POST /contract/send`를 호출합니다: 함수 `buyNickname`, args `[nickname]`,
+   `from` = 사용자 계정.
+2. 프록시가 이름을 정규화(NFC, 공백 제거)하고 1~256자인지, 사용 가능한지 확인한 뒤 **payee**(섹션의
+   소비 계정)와 **value**(닉네임 가격)를 채웁니다.
+3. MPC 서명기가 **사용자 계정으로** `buyNickname(nickname, consumption)`에 서명합니다.
 4. 컨트랙트가 SectionRegistry에 묻습니다: 구매자가 사용자 계정인가, 수취인이 그 섹션의 소비 계정인가?
    그다음 토큰을 민팅하고 가격을 전달합니다.
-5. 이후 `POST /nickname/edge {account, level}`이 견적 가격으로 `upgradeEdge(level, consumption)`을
-   보내면 테두리가 올라가고 그림이 다시 그려집니다.
+5. 이후 `upgradeEdge`, args `[level]`로 `POST /contract/send`를 호출하면 견적 가격으로
+   `upgradeEdge(level, consumption)`이 전송되어 테두리가 올라가고 그림이 다시 그려집니다.
+
+쓰기에는 별도 라우트가 없습니다. 다른 등록 컨트랙트처럼 범용 [`POST /contract/send`](../reference/proxy-api.md#post-contractsend--write)를
+사용합니다. 이전의 `POST /nickname/buy`와 `POST /nickname/edge`는 제거되었습니다(410). 읽기 라우트
+(`/nickname/edges`, `/nickname/check`, `/nickname/of/:account`, `/nickname/quote`)는 그대로입니다.
 
 - 컬렉션은 **컨트랙트 계정 센터**가 배포하고 SectionRegistry에 공통(common) 컨트랙트로 등록됩니다.
   프록시는 `buyNickname`이 있는 등록 컨트랙트 중 **가장 최근** 것을 사용합니다.
@@ -107,16 +112,20 @@ curl -s -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -X POS
 
 ## 3. 닉네임 구매 {#3-buy-a-nickname}
 
-애플리케이션은 섹션 키로 호출합니다. `account`는 그 섹션의 사용자 계정이며 가격만큼의 ETH가 있어야
-합니다(이 체인에서 가스는 무료).
+애플리케이션은 섹션 키로 호출합니다. `from`은 그 섹션의 사용자 계정이며 가격만큼의 ETH가 있어야
+합니다(이 체인에서 가스는 무료). 컬렉션 주소는 `GET /nickname/edges`의 `collection`입니다. payee와
+`value`는 생략하십시오. 프록시가 채웁니다.
 
 ```bash
 K=sk_…   # 섹션의 API 키
+curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/edges"
+# { "collection": "0xNicknameCollection", "nicknamePrice": "1", "edges": [ … ] }
 curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/check?name=Alice"
 # { "nickname": "Alice", "characters": 5, "available": true, "reason": null, … }
-curl -s -H "X-Section-Key: $K" -H 'Content-Type: application/json' -X POST \
-  --data '{"account":"0xUser","nickname":"Alice"}' http://<proxy>:30000/nickname/buy
-# { "success": true, "nickname": "Alice", "level": 0, "edge": "Simple", "price": "1", "paidTo": "0xConsumption", "txHash": "0x…", "image": "data:image/svg+xml;base64,…" }
+curl -s -X POST http://<proxy>:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xNicknameCollection","function":"buyNickname","args":["Alice"],"from":"0xUser"}'
+# { "success": true, "function": "buyNickname(string,address)", "from": "0xUser", "value": "1.0", "txHash": "0x…",
+#   "events": [ { "name": "NicknameBought", "args": { "tokenId": "…", "buyer": "0xUser", "nickname": "Alice", "price": "…", "paidTo": "0xConsumption" } } ] }
 ```
 
 `GET /nickname/of/0xUser`로 언제든 계정의 닉네임, 레벨, 그림을 얻습니다.
@@ -126,11 +135,13 @@ curl -s -H "X-Section-Key: $K" -H 'Content-Type: application/json' -X POST \
 ```bash
 curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/quote?account=0xUser&level=2"
 # { "account": "0xUser", "level": 2, "price": "1.5" }
-curl -s -H "X-Section-Key: $K" -H 'Content-Type: application/json' -X POST \
-  --data '{"account":"0xUser","level":2}' http://<proxy>:30000/nickname/edge
+curl -s -X POST http://<proxy>:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xNicknameCollection","function":"upgradeEdge","args":[2],"from":"0xUser"}'
+# { "success": true, "value": "1.5", …, "events": [ { "name": "EdgeUpgraded", "args": { "tokenId": "…", "owner": "0xUser", "fromLevel": "0", "toLevel": "2", "price": "…", "paidTo": "0xConsumption" } } ] }
 ```
 
-응답에 새 레벨과 그림이 있습니다. 같거나 낮은 레벨, 없거나 판매 중지된 레벨, 부족한 ETH는 거부됩니다.
+값은 견적(단계 가격 합계)입니다. 이벤트에 새 레벨이 있고, 새 그림은 `GET /nickname/of/0xUser`로
+얻습니다. 같거나 낮은 레벨, 없거나 판매 중지된 레벨, 부족한 ETH는 거부됩니다.
 
 ## 자금과 모니터링 {#money-and-monitoring}
 
@@ -145,17 +156,24 @@ curl -s -H "X-Section-Key: $K" -H 'Content-Type: application/json' -X POST \
 
 ## 오류 {#errors}
 
+503(읽기 라우트)을 제외하고 모두 `POST /contract/send`의 오류입니다.
+
 | 상태 | 메시지(시작 부분) | 원인 |
 |---|---|---|
 | 400 | `nickname: 1 to 256 characters` | 공백 제거 후 비었거나 너무 김 |
 | 400 | `nickname: no control characters and none of …` | 금지된 문자 |
-| 401 | `X-Section-Key is required` | 키 없음 |
-| 403 | `… is not a user account of a section` | `account`가 역할 계정이거나 알 수 없음 |
+| 400 | `args[0]: the edge level to reach (1 or more)` | 올바른 레벨 없이 `upgradeEdge` |
+| 400 | `level N: …` (컨트랙트 사유) | 레벨이 없거나, 판매 중지되었거나, 현재보다 높지 않음 |
+| 400 | `payee: the consumption account of section …` | 다른 계정을 payee로 지정함: 생략하십시오 |
+| 400 | `value: the price is X ETH …` | 가격과 다른 value를 지정함: 생략하십시오 |
+| 400 | `insufficient balance: X ETH is needed` | ETH 부족 |
+| 401 | `X-Section-Key is required` | 키 없음 (관리 호출자도 아님) |
+| 403 | `… is not a user account of a section` | `from`이 역할 계정이거나 알 수 없음 |
 | 403 | `section "…" is disabled` | 섹션이 꺼져 있음 |
-| 404 | `… has no nickname: buy one first` | 구매 전에 테두리 올리기 |
+| 404 | `… has no nickname: buy one first (buyNickname)` | 구매 전에 테두리 올리기 |
 | 409 | `… already has a nickname (one per account)` | 두 번째 구매 |
 | 409 | `nickname "…" is taken` / `is reserved` | 다른 계정이 보유(대소문자 무관)하거나 예약됨 |
-| 400 | `insufficient funds` / 컨트랙트 사유 | ETH 부족; 레벨이 현재보다 높지 않거나, 없거나, 판매 중지됨 |
+| 410 | `/nickname/buy was removed: use POST /contract/send …` | 이전 라우트 `POST /nickname/buy`, `POST /nickname/edge` |
 | 503 | `no nickname collection yet` | 먼저 배포하세요 |
 
 ## 파일 {#files}
@@ -164,6 +182,6 @@ curl -s -H "X-Section-Key: $K" -H 'Content-Type: application/json' -X POST \
 |---|---|
 | `proxy/contracts/NicknameCollection.sol` | 컨트랙트(ERC-721 + ERC-5192 + ERC-4906, 체인 위 SVG) |
 | `proxy/nickname-collection.json` | 컴파일된 아티팩트(`node scripts/compile-contract.js contracts/NicknameCollection.sol NicknameCollection nickname-collection.json`) |
-| `proxy/stress-latest.js` | `/nickname/*`와 `/admin/nickname/*` 라우트 |
+| `proxy/stress-latest.js` | `/nickname/*`와 `/admin/nickname/*` 라우트, `/contract/send`(`knownSend`: payee, 가격, 닉네임 확인) |
 | `chainlens/public/app.js` | Nicknames 페이지(`showNicknames`, `edgeEditor`, `edgePreview`) |
 | `monitoring/grafana/tools/gen_sections_dashboard.py` | Sections 대시보드의 수입과 새 열 |

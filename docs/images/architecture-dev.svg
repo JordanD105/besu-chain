@@ -26,7 +26,7 @@
   <g font-size="13" fill="#334155">
     <text x="352" y="180">POST /createaccount · /transfer</text>
     <text x="352" y="200">GET  /transfer/:txHash</text>
-    <text x="352" y="220">POST /nft/deploy · /nft/mint · /nft/transfer</text>
+    <text x="352" y="220">POST /nft/deploy · /nft/mint · /nft/transfer (v2)</text>
     <text x="352" y="240">GET  /nft/:id · /nft/owner/:addr · /nft/contract</text>
   </g>
   <rect x="352" y="256" width="376" height="98" rx="10" fill="#ffffff" stroke="#93c5fd"/>

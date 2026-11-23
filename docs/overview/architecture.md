@@ -80,9 +80,10 @@ the ports Docker publishes (nftables table `inet besu_docker`).
 never exists. The account is registered under the section on chain and funded from the section's
 upfront account.
 
-**NFT sale (`POST /nft/transfer`):** the buyer signs **one** `buy` transaction with exactly the price.
-On a first sale the collection itself checks that the money goes to a live section's consumption
-account; on a resale it goes to the seller. NFT and money move together or not at all.
+**NFT sale (`POST /contract/send`, function `buy`):** the buyer signs **one** `buy` transaction with
+exactly the price (the proxy fills in the price and the payee). On a first sale the collection itself
+checks that the money goes to a live section's consumption account; on a resale (after the seller's
+`approve`) it goes to the seller. NFT and money move together or not at all.
 
 The money flow of a section: [sections](../features/sections.md).
 

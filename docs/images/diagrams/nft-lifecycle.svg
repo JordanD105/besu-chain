@@ -55,7 +55,7 @@
 <path d="M1202,197.5 L1230,197.5" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
 <rect x="1232" y="110" width="268" height="175" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
 <text x="1366.0" y="144" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">Sell</text>
-<text x="1366.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Sell, or POST /nft/transfer</text>
+<text x="1366.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Sell, or /contract/send (buy)</text>
 <text x="1366.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">+ X-Section-Key (buyer's section)</text>
 <text x="1366.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">buyer signs buy(tokenId, payee)</text>
 <text x="1366.0" y="221" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">atomic: pays the price, gets</text>
