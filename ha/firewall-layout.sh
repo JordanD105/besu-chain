@@ -10,6 +10,8 @@
 #   BESU_HOSTS, MPC_HOSTS, COORDS (the HA pair), MON: space-separated IPs
 #   ADMIN            the bastion / operator host: SSH, MPC admin API, Besu RPC and every service below
 #   PROXY_CLIENTS    applications that call the proxy (VIP:30000)
+#   GATEWAYS         section gateway hosts (proxy VIP:30000 via PROXY_CLIENTS, RPC VIP:8545 here)
+#   HAS_GATEWAY=1    this host runs a section gateway: GATEWAY_PORT (30010) open to GATEWAY_CLIENTS
 #   CHAINLENS_USERS  users of chainlens (:30100 on the monitoring host)
 #   GRAFANA_USERS    users of Grafana (:3000 on the monitoring host)
 #   REMIX_USERS      developers using Remix (:30200 on the monitoring host)
@@ -65,7 +67,7 @@ case "$ROLE" in
     firewall-cmd --permanent -q --add-rich-rule="rule family=\"ipv4\" source address=\"$PEER\" protocol value=\"vrrp\" accept"
     for p in 30303/tcp 30303/udp 30304/tcp 30304/udp; do allow_all "$p" $BESU_HOSTS; done   # val + rpc p2p
     allow_all 9545/tcp $MON; allow_all 9546/tcp $MON                                       # Besu metrics
-    allow_all 8545/tcp $COORDS "$ADMIN"            # HAProxy on the VIP (proxies, coordinators, operator)
+    allow_all 8545/tcp $COORDS $GATEWAYS "$ADMIN"  # HAProxy on the VIP (proxies, coordinators, gateways, operator)
     allow_all 8555/tcp $COORDS $MON "$ADMIN"       # rpc node direct (HAProxy, chainlens -> rpc2, operator)
     allow_all 9100/tcp $COORDS $MPC_HOSTS $MON "$ADMIN"  # coordinator: HAProxy, MPC relay, metrics, admin
     allow_all 30000/tcp $PROXY_CLIENTS $MON "$ADMIN"   # proxy (VIP and this host)
@@ -84,6 +86,7 @@ case "$ROLE" in
   *) echo "unknown ROLE $ROLE (app, node or monitoring)" >&2; exit 1 ;;
 esac
 [ "$HAS_MPC" = 1 ] && allow_all 7000/tcp $COORDS                                           # MPC node
+[ "${HAS_GATEWAY:-0}" = 1 ] && allow_all "${GATEWAY_PORT:-30010}/tcp" "$ADMIN" $MON $GATEWAY_CLIENTS   # section gateway (apps, Prometheus, chainlens)
 firewall-cmd --reload
 echo "firewall for ${host:-$ROLE} applied:"; firewall-cmd --list-rich-rules
 

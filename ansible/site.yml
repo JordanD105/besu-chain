@@ -28,6 +28,9 @@
   ansible.builtin.import_playbook: 12-remix.yml
 - name: Documentation website
   ansible.builtin.import_playbook: 13-docs-site.yml
+- name: Section gateways (gateway_enabled)
+  ansible.builtin.import_playbook: 14-gateway.yml
+  when: gateway_enabled | bool
 # last: it prints the summary with every URL
 - name: Backups
   ansible.builtin.import_playbook: 10-backups.yml

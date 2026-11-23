@@ -48,6 +48,9 @@ vrrp_pass_proxy: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vr
 sender01: "{{ (lookup('ansible.builtin.file', state_dir ~ '/sender01') | trim) if (state_dir ~ '/sender01') is file else '' }}"
 
 ip_of: "{{ dict(groups['servers'] | zip(groups['servers'] | map('extract', hostvars, 'ansible_host'))) }}"
+# Section gateways (14-gateway.yml): the hosts of the gateway_hosts group, each with gateway_section
+gateway_hosts_list: "{{ groups['gateway_hosts'] | default([]) if gateway_enabled | bool else [] }}"
+gateway_host_ips: "{{ gateway_hosts_list | map('extract', ip_of) | list }}"
 coord1_url: "http://{{ hostvars[coordinators[0].host].ansible_host }}:9100"
 
 # Images built on the operator by 02-images.yml (names from proxy/ and chainlens/docker-compose.yml)
@@ -56,11 +59,12 @@ app_images:
   chainlens: localhost/besu-chainlens/chainlens
   remix: localhost/besu-remix/remix
   docs-site: localhost/besu-docs/docs
+  gateway: localhost/besu-gateway/gateway
 chainlens_local_registry: /var/lib/chainlens/deployments   # Deploy page records on the monitoring host
 # Directories of the repository that 01-hosts.yml copies to the hosts
 # (docs: built into the documentation site image by 02-images.yml)
-deployed_dirs: [besu-production, ha, monitoring, mpc-signer/deploy, proxy, chainlens, contracts, remix, docs-site, docs]
-built_apps: "{{ ['proxy', 'chainlens'] + (['remix'] if remix_enabled | bool else []) + (['docs-site'] if docs_site_enabled | bool else []) }}"
+deployed_dirs: [besu-production, ha, monitoring, mpc-signer/deploy, proxy, chainlens, contracts, remix, docs-site, docs, gateway]
+built_apps: "{{ ['proxy', 'chainlens'] + (['remix'] if remix_enabled | bool else []) + (['docs-site'] if docs_site_enabled | bool else []) + (['gateway'] if gateway_enabled | bool else []) }}"
 
 # Dockerfiles of the images 02-images.yml builds: their FROM lines are the base images, saved by
 # save-images.yml as base-<image>.tar in image_archives_dir and loaded from there when missing
@@ -78,6 +82,7 @@ built_image_archives:
   chainlens: chainlens-docker.tar
   remix: remix-docker.tar
   docs-site: docs-site-docker.tar
+  gateway: gateway-docker.tar
 
 # Derived from the IP plan (inventory.yml + settings.yml): used by the generated configs
 ha_primary: "{{ coordinators[0].host }}"     # holds the VIPs normally (keepalived priority 150)

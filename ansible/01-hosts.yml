@@ -79,7 +79,7 @@
       ansible.builtin.command: "{{ repo_dir }}/ha/firewall-layout.sh"
       environment:
         ADMIN: "{{ operator_ip }}"
-        PROXY_CLIENTS: "{{ proxy_client_ips | join(' ') }}"
+        PROXY_CLIENTS: "{{ (proxy_client_ips + gateway_host_ips) | unique | join(' ') }}"
         CHAINLENS_USERS: >-
           {{ (chainlens_ips + (chainlens_deploy_ips if (chainlens_deploy_enabled | bool or chainlens_sections_enabled | bool) else []))
              | unique | join(' ') }}
@@ -95,6 +95,10 @@
         MPC_HOSTS: "{{ groups['mpc_hosts'] | map('extract', ip_of) | join(' ') }}"
         COORDS: "{{ groups['app_hosts'] | map('extract', ip_of) | join(' ') }}"
         MON: "{{ groups['monitoring_hosts'] | map('extract', ip_of) | join(' ') }}"
+        GATEWAYS: "{{ gateway_host_ips | join(' ') }}"
+        HAS_GATEWAY: "{{ '1' if inventory_hostname in gateway_hosts_list else '0' }}"
+        GATEWAY_CLIENTS: "{{ gateway_client_ips | join(' ') }}"
+        GATEWAY_PORT: "{{ gateway_port }}"
       register: fw
       changed_when: false
 

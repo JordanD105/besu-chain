@@ -2287,7 +2287,17 @@ async function showSections() {
         { label: "sections.info", sort: (row) => infoText(row.info), search: (row) => infoText(row.info), cell: (row) => infoText(row.info) }
     ], data.sections, { sort: 0, dir: "asc", key: "sections" });
 
+    // a section whose gateway is offline (or draining): admin writes on it must wait
+    const gatewayNotice = el("div");
+    sectionGet("/api/sections/gateways").then((g) => {
+        const name = (id) => ((data.sections.find((s) => s.id === id) || {}).name || "#" + id);
+        gatewayNotice.replaceChildren(...g.gateways.filter((x) => x.mode !== "online").map((x) => el("div", { class: "card bad-text", style: "margin-bottom:12px" },
+            (x.mode === "unreachable" ? t("gateway.unreachable") : t("gateway.offline")).replace("{section}", name(x.section)).replace("{mode}", x.mode)
+                .replace("{queue}", x.queue || 0).replace("{since}", String(x.since || "").replace("T", " ").slice(0, 16)))));
+    }).catch(() => {});
+
     show(el("div", {}, [
+        gatewayNotice,
         el("section", { class: "card" }, [
             el("div", { class: "card-head" }, [el("h2", {}, t("sections.title")), el("span", { class: "muted" }, t("sections.registry") + " " + short(data.registry))]),
             data.sections.length ? table : el("div", { class: "empty" }, t("sections.none"))

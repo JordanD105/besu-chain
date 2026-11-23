@@ -1942,7 +1942,12 @@ const DEPLOY = {
 const SECTIONS = {
     enabled: String(process.env.SECTIONS_ENABLED || "").toLowerCase() === "true",
     proxy: String(process.env.PROXY_ADMIN_URL || "").replace(/\/$/, ""),
-    proxyToken: process.env.PROXY_ADMIN_TOKEN || ""
+    proxyToken: process.env.PROXY_ADMIN_TOKEN || "",
+    // the section gateways (docs/components/gateway.md): "1=http://192.168.68.137:30010 2=..."
+    gateways: String(process.env.GATEWAYS || "").split(/\s+/).filter(Boolean).map((x) => {
+        const [id, url] = x.split("=");
+        return { section: Number(id), url: String(url || "").replace(/\/$/, "") };
+    }).filter((g) => g.section && /^https?:\/\//.test(g.url))
 };
 if (SECTIONS.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !DEPLOY.allowed.length || !SECTIONS.proxy || !SECTIONS.proxyToken)) {
     console.error("Sections page: ADMIN_TOKEN (16+ characters), ADMIN_ALLOWED_IPS, PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
@@ -2051,6 +2056,19 @@ async function proxyAdmin(method, pathname, body) {
     const data = await response.json().catch(() => ({ error: "the proxy answered HTTP " + response.status }));
     return { status: response.status, data };
 }
+
+// The section gateways' state (offline: admin writes on that section must wait, see the gateway docs)
+app.get("/api/sections/gateways", sectionsGuard, async (req, res) => {
+    res.json({ gateways: await Promise.all(SECTIONS.gateways.map(async (g) => {
+        try {
+            const r = await fetch(g.url + "/gateway/status", { signal: AbortSignal.timeout(3000) });
+            const s = await r.json();
+            return { section: g.section, url: g.url, mode: s.mode, since: s.since, queue: s.queue, spares: s.spares, conflicts: s.conflicts };
+        } catch (error) {
+            return { section: g.section, url: g.url, mode: "unreachable", error: error.message };
+        }
+    })) });
+});
 
 app.get("/api/sections/status", (req, res) => {
     res.json({ enabled: SECTIONS.enabled && ipAllowed(req.socket.remoteAddress) });

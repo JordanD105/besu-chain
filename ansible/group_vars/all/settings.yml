@@ -8,6 +8,8 @@
 operator_ip: ""
 # Applications calling the proxy API (VIP .151:30000)
 proxy_client_ips: []
+# Applications calling a section gateway (:30010 on the gateway hosts, gateway_enabled below)
+gateway_client_ips: []
 # Users of chainlens, the block explorer (monitoring host :30100)
 chainlens_ips: []
 # Users of Grafana, the monitoring dashboards (monitoring host :3000)
@@ -171,3 +173,25 @@ smoke_test: true
 
 # Where the repository goes on every host (the keepalived scripts use /opt/besu-chain/proxy)
 repo_dir: /opt/besu-chain
+
+# Optimistic section gateways (14-gateway.yml, docs/components/gateway.md): one per section, next to
+# its application (the gateway_hosts group of inventory.yml, each host with gateway_section: <id>).
+# The application calls the gateway (:30010) with its section key; while the proxy cannot be reached
+# the gateway answers from its own ledger and sends the queued requests when the link is back. Every
+# limit can change at any time: edit, then rerun 14-gateway.yml (nothing on disk is lost).
+gateway_enabled: false
+gateway_port: 30010
+gateway_defaults:
+  health_check_seconds: 3          # how often it checks the proxy
+  offline_after_failures: 3        # failed checks in a row -> offline
+  offline_max_hours: 24            # after this long offline: no more optimistic answers (503); keep far below the 7-day undo period
+  offline_total_eth: 100           # all the section's payments during one cut
+  offline_per_account_eth: 20      # one account during one cut
+  offline_operations: [transfer, createaccount, avatar_buy, nickname_buy, level_upgrade, undo, account_pool]
+  contract_send_allowed: []        # other contracts allowed offline: "0xContract:function"
+  spare_accounts: 20               # accounts created in advance, for /createaccount while offline
+  spare_alert_below: 5             # alert (GatewaySparesLow) below this
+  correction_webhook: ""           # the application's URL that receives the corrections ("" = report only)
+  report_keep_days: 365
+  sync_seconds: 30                 # how often it reads the chain while online
+gateway_sections: {}               # per section id, only the values that differ, e.g. { 1: { offline_total_eth: 150 } }

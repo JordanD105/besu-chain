@@ -1,0 +1,12 @@
+# Optimistic section gateway, next to a section's application (docs/components/gateway.md).
+# Ansible (14-gateway.yml) writes /etc/besu-gateway/gateway.json and section.key on the host.
+services:
+  gateway:
+    build: .
+    image: localhost/besu-gateway/gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT:-30010}:30010"
+    volumes:
+      - ${GATEWAY_CONFIG_DIR:-/etc/besu-gateway}:/config:ro
+      - ${GATEWAY_DATA_DIR:-/var/lib/besu-gateway}:/data

@@ -42,7 +42,7 @@
         src: templates/targets/{{ item }}.yml.j2
         dest: /opt/monitoring/prometheus/targets.generated/{{ item }}.yml
         mode: "0644"
-      loop: [besu, mpc, proxy, redis, hosts]
+      loop: [besu, mpc, proxy, redis, hosts, gateway]
 
     - name: BIND_IP and image versions
       ansible.builtin.lineinfile:

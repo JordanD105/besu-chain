@@ -1,0 +1,154 @@
+# Section gateways (docs/components/gateway.md) on the hosts of the gateway_hosts group (each with
+# gateway_section: <id>), from the image built by 02-images.yml. gateway_enabled in settings.yml.
+#   ansible-playbook 02-images.yml 14-gateway.yml          (after a change to gateway/)
+#   ansible-playbook 14-gateway.yml                        (after a change to the gateway settings)
+# The gateway holds its section's API key: state/secrets/gateway-section-<id>.key. Once, or to replace it:
+#   ansible-playbook 14-gateway.yml -e gateway_new_key=true
+# makes a NEW key for the section (the old key stops at once) and stores it there: give that key to the
+# section's application, which then calls the gateway (http://<gateway host>:30010) instead of the proxy.
+- name: Hosts have the current code
+  ansible.builtin.import_playbook: code-current.yml
+
+- name: Section gateways
+  hosts: gateway_hosts
+  become: true
+  vars:
+    section_id: "{{ gateway_section | default('') | string }}"
+    key_file: "{{ state_dir }}/secrets/gateway-section-{{ section_id }}.key"
+    admin_url: "http://{{ vip_proxy }}:30000"
+    section_limits: >-
+      {{ gateway_defaults | combine(gateway_sections[section_id | int] | default(gateway_sections[section_id] | default({})), recursive=true) }}
+  tasks:
+    - name: Gateways are on (gateway_enabled) and this host names its section (gateway_section)
+      ansible.builtin.assert:
+        that:
+          - gateway_enabled | bool
+          - section_id is match('^[0-9]+$')
+        fail_msg: "set gateway_enabled: true (settings.yml) and gateway_section: <section id> on this host (inventory.yml, gateway_hosts)"
+
+    - name: The section and its accounts (proxy admin API)
+      ansible.builtin.uri:
+        url: "{{ admin_url }}/admin/sections/{{ section_id }}"
+        headers: { Authorization: "Bearer {{ proxy_admin_token }}" }
+      delegate_to: localhost
+      become: false
+      register: sec
+      no_log: true
+
+    - name: The section's user accounts
+      ansible.builtin.uri:
+        url: "{{ admin_url }}/admin/sections/{{ section_id }}/accounts"
+        headers: { Authorization: "Bearer {{ proxy_admin_token }}" }
+      delegate_to: localhost
+      become: false
+      register: users
+      no_log: true
+
+    - name: Section key stored?
+      ansible.builtin.stat:
+        path: "{{ key_file }}"
+      delegate_to: localhost
+      become: false
+      register: key_stat
+
+    - name: A new key for the section (gateway_new_key=true; the old key stops at once)
+      ansible.builtin.uri:
+        url: "{{ admin_url }}/admin/sections/{{ section_id }}/key"
+        method: POST
+        headers: { Authorization: "Bearer {{ proxy_admin_token }}" }
+      delegate_to: localhost
+      become: false
+      register: new_key
+      when: gateway_new_key | default(false) | bool
+      no_log: true
+
+    - name: Store the new key (state/secrets)
+      ansible.builtin.copy:
+        content: "{{ new_key.json.apiKey }}\n"
+        dest: "{{ key_file }}"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      when: new_key is not skipped
+      no_log: true
+
+    - name: The section key is needed
+      ansible.builtin.assert:
+        that: key_stat.stat.exists or new_key is not skipped
+        fail_msg: >-
+          No key for section {{ section_id }} in {{ key_file }}. Either put the section's current API key
+          there (one line), or run with -e gateway_new_key=true (a new key: the old one stops at once).
+
+    - name: Gateway directories (the container user is uid 1000)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0750"
+      loop: [/etc/besu-gateway, /var/lib/besu-gateway]
+
+    - name: Gateway settings (section, accounts, limits)
+      ansible.builtin.copy:
+        dest: /etc/besu-gateway/gateway.json
+        owner: "1000"
+        group: "1000"
+        mode: "0640"
+        content: >-
+          {{ {
+            'section': {
+              'id': section_id | int,
+              'name': (sec.json.section | default(sec.json)).name,
+              'upfront': (sec.json.section | default(sec.json)).accounts.upfront,
+              'consumption': (sec.json.section | default(sec.json)).accounts.consumption,
+              'payment': (sec.json.section | default(sec.json)).accounts.payment,
+              'users': users.json.accounts | default([]) | map(attribute='address') | list
+            },
+            'proxy': admin_url,
+            'rpc': 'http://' ~ vip_rpc ~ ':8545',
+            'listen': 30010,
+            'limits': section_limits
+          } | to_nice_json }}
+      register: gw_config
+
+    - name: Section key on the host (readable by the container user only)
+      ansible.builtin.copy:
+        content: "{{ lookup('ansible.builtin.file', key_file) | trim }}\n"
+        dest: /etc/besu-gateway/section.key
+        owner: "1000"
+        group: "1000"
+        mode: "0600"
+      register: gw_key
+      no_log: true
+
+    - name: Compose settings
+      ansible.builtin.copy:
+        dest: "{{ repo_dir }}/gateway/.env"
+        mode: "0644"
+        content: |
+          # Managed by Ansible (14-gateway.yml)
+          GATEWAY_PORT={{ gateway_port }}
+      register: gw_env
+
+    - name: Gateway (image from 02-images.yml; restarted when its settings or key changed)
+      ansible.builtin.command: >-
+        docker compose up -d {{ '--force-recreate' if (gw_config.changed or gw_key.changed or gw_env.changed) else '' }}
+      args:
+        chdir: "{{ repo_dir }}/gateway"
+      register: gw_up
+      changed_when: gw_up.stderr is search('Started|Recreated|Created')
+
+    - name: Gateway answering
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:{{ gateway_port }}/gateway/status"
+      register: gw_status
+      until: gw_status.status == 200
+      retries: 30
+      delay: 3
+
+    - name: Gateway status
+      ansible.builtin.debug:
+        msg:
+          - "Section {{ section_id }} ({{ gw_status.json.section.name }}): gateway http://{{ ansible_host }}:{{ gateway_port }}, {{ gw_status.json.mode }}"
+          - "Spare accounts: {{ gw_status.json.spares }} of {{ section_limits.spare_accounts }} (made while online)"
+          - "{{ 'NEW section key in ' ~ key_file ~ ': give it to the application, which calls the gateway from now on' if new_key is not skipped else 'Section key: ' ~ key_file }}"

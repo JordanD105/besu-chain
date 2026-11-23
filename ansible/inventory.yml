@@ -18,3 +18,6 @@ servers:
     app_hosts:    { hosts: { h135: {}, h136: {} } }        # coordinators, proxies, HAProxy, keepalived
     mpc_hosts:    { hosts: { h135: {}, h137: {}, h138: {} } }  # MPC nodes: run by their teams
     monitoring_hosts: { hosts: { h139: {} } }
+    # Section gateways (gateway_enabled in settings.yml): the host next to each section's application,
+    # with the section it serves, e.g.  h137: { gateway_section: 1 }
+    gateway_hosts: { hosts: {} }

@@ -1,0 +1,5 @@
+# The section gateways (docs/components/gateway.md): one entry per gateway host, e.g.
+#   - targets: ["192.168.68.137:30010"]
+#     labels: { name: gateway-1 }
+# Ansible generates this list from the gateway_hosts group (14-gateway.yml, 09-monitoring.yml).
+[]

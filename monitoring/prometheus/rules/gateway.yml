@@ -1,0 +1,50 @@
+groups:
+  - name: gateway
+    rules:
+      - alert: GatewayOffline
+        # the section's gateway cannot reach the proxy: it answers from its own ledger and queues the writes
+        expr: gateway_mode == 1
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Section {{ $labels.section }}: the gateway cannot reach the proxy (offline mode)"
+          description: "Its application keeps working from the gateway's ledger; the requests are queued. No admin writes on this section (transfers, top-ups, sweeps, account changes) until it is back: they would make queued requests fail."
+
+      - alert: GatewayDrainingLong
+        expr: gateway_mode == 2
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Section {{ $labels.section }}: the gateway has been sending its queue for 15 minutes"
+          description: "Check the gateway's log (docker logs on its host) and GET /gateway/status: a request may be failing again and again."
+
+      - alert: GatewayQueueOld
+        expr: gateway_queue_oldest_seconds > 3600
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Section {{ $labels.section }}: a queued request is {{ $value | humanizeDuration }} old"
+          description: "The gateway has been offline (or unable to send) for over an hour. A long cut risks undo periods running out and conflicts after reconnecting."
+
+      - alert: GatewaySparesLow
+        expr: gateway_spare_accounts < gateway_spare_alert_below
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "Section {{ $labels.section }}: {{ $value }} spare accounts left on the gateway"
+          description: "While offline, /createaccount uses spare accounts made in advance. The gateway makes new ones while online (all 3 MPC nodes needed): check the MPC nodes and the gateway log."
+
+      - alert: GatewayConflicts
+        expr: increase(gateway_conflicts_total[1h]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Section {{ $labels.section }}: {{ $value | printf \"%.0f\" }} queued requests were refused after reconnecting"
+          description: "The gateway undid them in its ledger and sent corrections to the application (correction_webhook). Read them: GET /gateway/report on the gateway (with the section key)."
+
+      - alert: GatewayDown
+        expr: up{job="gateway"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "The gateway {{ $labels.name }} does not answer"
+          description: "The section's application cannot work without it. On its host: docker compose ps / logs in /opt/besu-chain/gateway; rerun ansible-playbook 14-gateway.yml."

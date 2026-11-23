@@ -304,6 +304,16 @@
         app: docs-site
       when: docs_site_enabled | bool
 
+- name: Gateway image on the section gateway hosts
+  hosts: gateway_hosts
+  become: true
+  tasks:
+    - name: Gateway image
+      ansible.builtin.include_tasks: tasks/ship-image.yml
+      vars:
+        app: gateway
+      when: gateway_enabled | bool
+
 - name: Third-party images where they run
   hosts: servers
   become: true

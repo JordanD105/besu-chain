@@ -50,6 +50,7 @@ echo "Besu nodes (targets/besu.yml)";        check besu "$T/besu.yml"
 echo "MPC coordinators (targets/mpc.yml)";   check mpc  "$T/mpc.yml"
 echo "Proxy (targets/proxy.yml)";            check proxy "$T/proxy.yml"
 echo "Hosts / node-exporter (targets/hosts.yml)"; check host "$T/hosts.yml"
+echo "Section gateways (targets/gateway.yml)"; check gateway "$T/gateway.yml"
 
 # What Prometheus itself sees (needs the stack running on this host)
 if curl -s -m 3 http://127.0.0.1:9090/-/ready >/dev/null 2>&1; then

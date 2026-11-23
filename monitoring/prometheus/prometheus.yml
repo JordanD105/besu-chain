@@ -44,6 +44,11 @@ scrape_configs:
     file_sd_configs:
       - files: [/etc/prometheus/targets/redis.yml]
 
+  # Section gateways (docs/components/gateway.md): mode, queue, spare accounts (GET /metrics)
+  - job_name: gateway
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/gateway.yml]
+
   # Host CPU / memory / disk (node-exporter on every host, see node-exporter/)
   - job_name: hosts
     file_sd_configs:
