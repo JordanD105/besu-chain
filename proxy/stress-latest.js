@@ -76,6 +76,26 @@ function httpMetricLines() {
 
 app.use(express.json({ limit: "1mb" }));
 
+// Memos (docs/features/memos.md): every transaction carries a memo record at the end of its data.
+// Each request has a context: the caller's own memo (body.memo, checked here for every write),
+// a short request id (links the transactions of one call) and the language of the answer.
+const MEMO = require("./memo/memo.js");
+const { AsyncLocalStorage } = require("node:async_hooks");
+const memoContext = new AsyncLocalStorage();
+
+app.use((req, res, next) => {
+    let u = null;
+
+    try {
+        u = req.method === "POST" && req.body && typeof req.body === "object" ? MEMO.userMemo(req.body.memo) : null;
+    } catch (error) {
+        return res.status(400).json({ error: error.message });
+    }
+
+    const lang = MEMO.lang(req.query && req.query.lang, req.headers["accept-language"], process.env.MEMO_DEFAULT_LANG);
+    memoContext.run({ u, r: crypto.randomBytes(4).toString("hex"), lang }, next);
+});
+
 // =======================
 // Config
 // =======================
@@ -111,6 +131,10 @@ const CONFIG = {
     // monitoring thresholds (0 = off): an upfront account / SENDER01 below them raises an alert
     UPFRONT_LOW_BALANCE_ETH: Number(process.env.UPFRONT_LOW_BALANCE_ETH || 0) || 0,
     SENDER01_LOW_BALANCE_ETH: Number(process.env.SENDER01_LOW_BALANCE_ETH || 0) || 0,
+    // memos (docs/features/memos.md): off only for a test; contracts that must not get a memo trailer
+    // (their memo is kept in the proxy's memo log instead)
+    MEMO_ENABLED: String(process.env.MEMO_ENABLED || "true").toLowerCase() !== "false",
+    MEMO_SKIP_CONTRACTS: (process.env.MEMO_SKIP_CONTRACTS || "").split(/[\s,]+/).filter(Boolean).map((a) => a.toLowerCase()),
     REDIS: {
         host: process.env.REDIS_IP || process.env.IP || BESU_IP,
         port: Number(process.env.REDIS_PORT) || 36379
@@ -499,7 +523,8 @@ async function poolFutures(address, pending) {
 
 // A 0-value transaction from the sender to itself at `nonce`: fills a gap, nothing else.
 async function sendFiller(state, nonce) {
-    const txHash = await sendFromSigner(state.address, state.address, "0", nonce, "0x", 21000n);
+    const data = CONFIG.MEMO_ENABLED ? MEMO.append("0x", MEMO.record({ t: "nonce.fill", p: { nonce } })) : "0x";
+    const txHash = await sendFromSigner(state.address, state.address, "0", nonce, data, transferGas(ethers.getBytes(data)));
     await rememberPendingWei(state.address, nonce, 0n);
     return txHash;
 }
@@ -683,51 +708,76 @@ function trackSendersAtStart() {
 setInterval(checkSenders, SENDER_CHECK_MS).unref();
 setTimeout(trackSendersAtStart, 1000).unref();
 
-const MEMO_LIMIT = 256;
-const MINT_MEMO_LIMIT = 4096;
 
-function memoBytes(memo) {
-    return ethers.toUtf8Bytes(memo || "");
+
+// { t, s, p } + the request's context -> the stored record
+function memoRecord(spec) {
+    const ctx = memoContext.getStore() || {};
+    return MEMO.record(Object.assign({}, spec, { u: spec.u !== undefined ? spec.u : ctx.u, r: ctx.r }));
 }
 
-function clipUtf8(text, limit) {
-    const bytes = memoBytes(text);
-
-    if (bytes.length <= limit) {
-        return text;
-    }
-
-    let size = limit;
-
-    while (size > 0 && (bytes[size] & 0xc0) === 0x80) {
-        size -= 1;
-    }
-
-    return ethers.toUtf8String(bytes.slice(0, size));
+function memoLang() {
+    return (memoContext.getStore() || {}).lang || MEMO.lang(process.env.MEMO_DEFAULT_LANG);
 }
 
-function decodeMemo(input) {
-    if (!input || input === "0x") {
-        return "";
+// The memo fields of an answer
+function memoAnswer(rec) {
+    return MEMO.answer(rec, memoLang());
+}
+
+// Memos that are not on chain (a contract creation, MEMO_SKIP_CONTRACTS): txHash -> record, in Redis
+const memoLogKey = "proxy:memo-log";
+function logMemo(txHash, rec) {
+    if (rec && txHash) {
+        void cache(() => redis.hset(memoLogKey, txHash.toLowerCase(), JSON.stringify(rec)));
     }
+}
 
-    let bytes;
-
+async function loggedMemo(txHash) {
     try {
-        bytes = ethers.getBytes(input);
+        const v = await redis.hget(memoLogKey, txHash.toLowerCase());
+        return v ? JSON.parse(v) : null;
     } catch (error) {
-        return "";
+        return null;
+    }
+}
+
+// The memo of a contract call: <avatar|nickname>.<function> for the platform collections (when the
+// catalogue knows it), else contract.call. Values from the function's arguments and the caller's
+// friendly arguments; prices in ETH.
+function contractMemo(entry, fragment, args, rawArgs, valueWei, section) {
+    const kind = platformKind(entry);
+    const known = kind && MEMO.CATALOGUE.types[`${kind}.${fragment.name}`];
+    const p = {};
+
+    fragment.inputs.forEach((input, i) => {
+        const v = args[i];
+
+        if (!input.name || /uri|attributes|abi|data|metadata/i.test(input.name) || v === undefined || v === null || typeof v === "object") {
+            return;
+        }
+
+        p[input.name] = /price|amount/i.test(input.name) && /^uint/.test(input.type) ? ethers.formatEther(v).replace(/\.0$/, "") : v;
+    });
+
+    if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
+        for (const k of ["nickname", "imageUrl", "image", "name"]) {
+            if (typeof rawArgs[k] === "string" && p[k] === undefined) {
+                p[k] = rawArgs[k];
+            }
+        }
     }
 
-    if (bytes.length > MINT_MEMO_LIMIT || bytes.includes(0)) {
-        return "";
+    if (valueWei > 0n) {
+        p.amount = ethers.formatEther(valueWei).replace(/\.0$/, "");
     }
 
-    try {
-        return ethers.toUtf8String(bytes);
-    } catch (error) {
-        return "";
+    if (!known) {
+        p.function = fragment.name;
+        p.contract = entry.name || entry.address;
     }
+
+    return { t: known ? `${kind}.${fragment.name}` : "contract.call", s: section || undefined, p };
 }
 
 function transferGas(bytes) {
@@ -761,10 +811,11 @@ async function rememberPendingWei(address, nonce, wei) {
     afterSend(sender);
 }
 
-async function pay(sender, recipient, amount, memo = "") {
-    const bytes = memoBytes(memo);
-    const gas = transferGas(bytes);
-    const data = bytes.length === 0 ? "0x" : ethers.hexlify(bytes);
+// memo: { t, s, p } (the amount is added); the caller's memo and the request id come from the context
+async function pay(sender, recipient, amount, memo = { t: "transfer" }) {
+    const rec = memoRecord(Object.assign({}, memo, { p: Object.assign({ amount: String(amount) }, memo.p) }));
+    const data = CONFIG.MEMO_ENABLED ? MEMO.append("0x", rec) : "0x";
+    const gas = transferGas(ethers.getBytes(data));
 
     await assertCanPay(sender, amount);
 
@@ -780,7 +831,7 @@ async function pay(sender, recipient, amount, memo = "") {
 
     await rememberPending(sender, nonce, amount);
 
-    return { txHash, nonce };
+    return { txHash, nonce, memo: rec };
 }
 
 // =======================
@@ -875,7 +926,7 @@ async function createAccount(amount, pool) {
 
     const payment = await withSenderLock(CONFIG.SENDER01, async () => {
         await assertCanPay(CONFIG.SENDER01, amount);
-        return pay(CONFIG.SENDER01, address, amount);
+        return pay(CONFIG.SENDER01, address, amount, { t: "account.fund" });
     });
 
     return {
@@ -885,7 +936,8 @@ async function createAccount(amount, pool) {
         amount,
         pool,
         txHash: payment.txHash,
-        nonce: payment.nonce
+        nonce: payment.nonce,
+        ...memoAnswer(payment.memo)
     };
 }
 
@@ -971,7 +1023,7 @@ app.post("/transfer", async (req, res) => {
             return res.json(await sectionTransfer(section, req.body));
         }
 
-        const { from, to, amount, memo } = req.body;
+        const { from, to, amount } = req.body;
 
         if (!from || !to || !amount) {
             return res.status(400).json({
@@ -982,20 +1034,6 @@ app.post("/transfer", async (req, res) => {
         if (!isAddress(from) || !isAddress(to)) {
             return res.status(400).json({
                 error: "invalid address"
-            });
-        }
-
-        if (memo !== undefined && typeof memo !== "string") {
-            return res.status(400).json({
-                error: "invalid memo"
-            });
-        }
-
-        const memoText = memo === undefined ? "" : memo;
-
-        if (memoBytes(memoText).length > MEMO_LIMIT) {
-            return res.status(400).json({
-                error: "memo is too long"
             });
         }
 
@@ -1020,8 +1058,8 @@ app.post("/transfer", async (req, res) => {
             });
         }
 
-        const { txHash, nonce } = await withSenderLock(sender, () =>
-            pay(sender, recipient, value, memoText)
+        const { txHash, nonce, memo: rec } = await withSenderLock(sender, () =>
+            pay(sender, recipient, value, { t: "transfer" })
         );
 
         res.json({
@@ -1030,8 +1068,8 @@ app.post("/transfer", async (req, res) => {
             from: sender,
             to: recipient,
             amount: value,
-            memo: memoText,
-            nonce
+            nonce,
+            ...memoAnswer(rec)
         });
     } catch (error) {
         console.error(error);
@@ -1162,12 +1200,14 @@ app.get("/transfer/:txHash", async (req, res) => {
             });
         }
 
+        const rec = MEMO.fromTransaction(tx) || await loggedMemo(txHash);
+
         res.json({
             success: true,
             txHash: tx.hash || txHash,
             from: tx.from,
             to: tx.to || null,
-            memo: decodeMemo(tx.input || tx.data)
+            ...memoAnswer(rec)
         });
     } catch (error) {
         console.error(error);
@@ -1278,7 +1318,13 @@ async function sendDataFromSigner(from, to, data, nonce, gas, valueHex) {
     return rpc(CONFIG.SIGNER_RPC, "eth_sendTransaction", [tx]);
 }
 
-async function sendData(from, to, data, valueWei = 0n) {
+// memo: { t, s, p }. A contract creation (no `to`) gets no trailer (the constructor reads its
+// arguments from the end of the code), nor a contract in MEMO_SKIP_CONTRACTS: their memo goes to
+// the memo log.
+async function sendData(from, to, callData, valueWei = 0n, memo = { t: "other" }) {
+    const rec = memoRecord(memo);
+    const onChain = CONFIG.MEMO_ENABLED && to && !CONFIG.MEMO_SKIP_CONTRACTS.includes(String(to).toLowerCase());
+    const data = onChain ? MEMO.append(callData, rec) : callData;
     const valueHex = "0x" + valueWei.toString(16);
     const estimateTx = {
         from,
@@ -1304,10 +1350,15 @@ async function sendData(from, to, data, valueWei = 0n) {
 
     await rememberPendingWei(from, nonce, cost);
 
+    if (!onChain && CONFIG.MEMO_ENABLED) {
+        logMemo(txHash, rec);
+    }
+
     return {
         txHash,
         nonce,
-        gas: gas.toString()
+        gas: gas.toString(),
+        memo: rec
     };
 }
 
@@ -1429,14 +1480,14 @@ async function registryCall(fn, args = [], iface = registryIface, address = CONF
 }
 
 // One registry write at a time, signed by REGISTRY_ADMIN; waits until it is mined.
-function registryWrite(fn, args) {
+function registryWrite(fn, args, memo = { t: "other" }) {
     const run = sectionWriteChain.then(async () => {
         const data = registryIface.encodeFunctionData(fn, args);
         let sent;
 
         try {
             sent = await withSenderLock(CONFIG.REGISTRY_ADMIN, () =>
-                sendData(CONFIG.REGISTRY_ADMIN, CONFIG.REGISTRY_CONTRACT, data)
+                sendData(CONFIG.REGISTRY_ADMIN, CONFIG.REGISTRY_CONTRACT, data, 0n, memo)
             );
         } catch (error) {
             const reason = String(error.message || "").match(/revert(?:ed)?:?\s*(.*)$/i);
@@ -1445,7 +1496,7 @@ function registryWrite(fn, args) {
 
         const receipt = await waitForReceipt(sent.txHash);
         sectionCache.at = 0;
-        return { txHash: sent.txHash, receipt };
+        return { txHash: sent.txHash, receipt, memo: sent.memo };
     });
     sectionWriteChain = run.then(() => {}, () => {});
     return run;
@@ -1676,14 +1727,15 @@ app.post("/admin/sections", adminGuard, adminRoute(async (req) => {
     }
 
     const { key, hash } = newSectionKey();
-    const written = await registryWrite("createSection", [name, accounts.upfront, accounts.consumption, accounts.payment, hash]);
+    const written = await registryWrite("createSection", [name, accounts.upfront, accounts.consumption, accounts.payment, hash],
+        { t: "section.create", p: { name } });
     const created = written.receipt.logs
         .map((log) => { try { return registryIface.parseLog(log); } catch { return null; } })
         .find((log) => log && log.name === "SectionCreated");
     const id = Number(created.args.id);
 
     for (const [k, v] of info) {
-        await registryWrite("setInfo", [id, k, v]);
+        await registryWrite("setInfo", [id, k, v], { t: "section.info", s: [id, name], p: { key: k } });
     }
 
     console.log(`section ${id} "${name}" created: upfront ${accounts.upfront}, consumption ${accounts.consumption}, payment ${accounts.payment}`);
@@ -1693,7 +1745,8 @@ app.post("/admin/sections", adminGuard, adminRoute(async (req) => {
         section: await withBalances(await getSection(id, true)),
         apiKey: key,
         note: "the API key is shown only now: store it for the section's applications",
-        txHash: written.txHash
+        txHash: written.txHash,
+        ...memoAnswer(written.memo)
     };
 }));
 
@@ -1706,26 +1759,26 @@ app.post("/admin/sections/:id/name", adminGuard, adminRoute(async (req) => {
     }
 
     await assertNameFree(name, section.id);
-    const written = await registryWrite("setName", [section.id, name]);
+    const written = await registryWrite("setName", [section.id, name], { t: "section.rename", s: [section.id, name], p: { from: section.name, to: name } });
     console.log(`section ${section.id}: renamed "${section.name}" -> "${name}"`);
-    return { success: true, id: section.id, name, txHash: written.txHash };
+    return { success: true, id: section.id, name, txHash: written.txHash, ...memoAnswer(written.memo) };
 }));
 
 // Info field: { key, value }; an empty value removes the field
 app.post("/admin/sections/:id/info", adminGuard, adminRoute(async (req) => {
     const section = await getSection(req.params.id, true);
     const [key, value] = infoField(req.body.key, req.body.value);
-    const written = await registryWrite("setInfo", [section.id, key, value]);
-    return { success: true, id: section.id, key, value, removed: value === "", txHash: written.txHash };
+    const written = await registryWrite("setInfo", [section.id, key, value], { t: "section.info", s: section, p: { key } });
+    return { success: true, id: section.id, key, value, removed: value === "", txHash: written.txHash, ...memoAnswer(written.memo) };
 }));
 
 // New API key; the old one stops working at once
 app.post("/admin/sections/:id/key", adminGuard, adminRoute(async (req) => {
     const section = await getSection(req.params.id, true);
     const { key, hash } = newSectionKey();
-    const written = await registryWrite("setKey", [section.id, hash]);
+    const written = await registryWrite("setKey", [section.id, hash], { t: "section.key", s: section });
     console.log(`section ${section.id}: API key rotated`);
-    return { success: true, id: section.id, apiKey: key, note: "the API key is shown only now", txHash: written.txHash };
+    return { success: true, id: section.id, apiKey: key, note: "the API key is shown only now", txHash: written.txHash, ...memoAnswer(written.memo) };
 }));
 
 app.post("/admin/sections/:id/active", adminGuard, adminRoute(async (req) => {
@@ -1735,8 +1788,8 @@ app.post("/admin/sections/:id/active", adminGuard, adminRoute(async (req) => {
         throw httpError(400, "active: true or false");
     }
 
-    const written = await registryWrite("setActive", [section.id, req.body.active]);
-    return { success: true, id: section.id, active: req.body.active, txHash: written.txHash };
+    const written = await registryWrite("setActive", [section.id, req.body.active], { t: req.body.active ? "section.enable" : "section.disable", s: section });
+    return { success: true, id: section.id, active: req.body.active, txHash: written.txHash, ...memoAnswer(written.memo) };
 }));
 
 // ---- Admin routes: section money. Each transfer carries a memo naming the operation, so the chain
@@ -1757,8 +1810,12 @@ function adminAmount(value, allowAll) {
 }
 
 // Moves `amountInput` ("all" or ETH) from -> to. With quietIfEmpty, "all" of a zero balance is a no-op.
-async function sectionMove(section, from, to, amountInput, memo, quietIfEmpty = false) {
+// op: topup | sweep | payback | account_replaced | archive_return (with role). The memo names it.
+const MOVE_MEMO = { topup: "section.topup", sweep: "section.sweep", payback: "section.payback", account_replaced: "account.move", archive_return: "section.return" };
+
+async function sectionMove(section, from, to, amountInput, op, quietIfEmpty = false, role = undefined) {
     let amount = amountInput;
+    const memo = { t: MOVE_MEMO[op] || "transfer", s: section, p: role ? { role } : {} };
 
     const result = await withSenderLock(from, async () => {
         if (amount === "all") {
@@ -1780,35 +1837,30 @@ async function sectionMove(section, from, to, amountInput, memo, quietIfEmpty = 
     });
 
     if (!result) {
-        return { success: true, id: section.id, operation: memo, from, to, amount: "0", txHash: null };
+        return { success: true, id: section.id, operation: op, from, to, amount: "0", txHash: null };
     }
 
-    console.log(`section ${section.id}: ${memo}: ${amount} ETH ${from} -> ${to} (${result.txHash})`);
-    const op = / top-up$/.test(memo) ? "topup" : / sweep$/.test(memo) ? "sweep" : / pay back$/.test(memo) ? "payback"
-        : /replaced$/.test(memo) ? "account_replaced" : /archived/.test(memo) ? "archive_return" : "other";
+    console.log(`section ${section.id}: ${op}${role ? " " + role : ""}: ${amount} ETH ${from} -> ${to} (${result.txHash})`);
     countSectionOp(section, op, amount);
-    return { success: true, id: section.id, operation: memo, from, to, amount, txHash: result.txHash, nonce: result.nonce };
+    return { success: true, id: section.id, operation: op, from, to, amount, txHash: result.txHash, nonce: result.nonce, ...memoAnswer(result.memo) };
 }
 
 // SENDER01 -> upfront_i
 app.post("/admin/sections/:id/topup", adminGuard, adminRoute(async (req) => {
     const section = await getSection(req.params.id, true);
-    return sectionMove(section, CONFIG.SENDER01, section.accounts.upfront, adminAmount(req.body.amount, false),
-        `section ${section.id} top-up`);
+    return sectionMove(section, CONFIG.SENDER01, section.accounts.upfront, adminAmount(req.body.amount, false), "topup");
 }));
 
 // consumption_i -> payment_i
 app.post("/admin/sections/:id/sweep", adminGuard, adminRoute(async (req) => {
     const section = await getSection(req.params.id, true);
-    return sectionMove(section, section.accounts.consumption, section.accounts.payment, adminAmount(req.body.amount, true),
-        `section ${section.id} sweep`);
+    return sectionMove(section, section.accounts.consumption, section.accounts.payment, adminAmount(req.body.amount, true), "sweep");
 }));
 
 // payment_i -> SENDER01
 app.post("/admin/sections/:id/payback", adminGuard, adminRoute(async (req) => {
     const section = await getSection(req.params.id, true);
-    return sectionMove(section, section.accounts.payment, CONFIG.SENDER01, adminAmount(req.body.amount, true),
-        `section ${section.id} pay back`);
+    return sectionMove(section, section.accounts.payment, CONFIG.SENDER01, adminAmount(req.body.amount, true), "payback");
 }));
 
 // Replace an account: { role: upfront | consumption | payment }. A new MPC key takes the role; the
@@ -1827,18 +1879,18 @@ app.post("/admin/sections/:id/account", adminGuard, adminRoute(async (req) => {
 
     const previous = section.accounts[role];
     const account = await createMpcAccount(SECTION_ROLES[role].pool);
-    const written = await registryWrite("replaceAccount", [section.id, SECTION_ROLES[role].kind, account]);
+    const written = await registryWrite("replaceAccount", [section.id, SECTION_ROLES[role].kind, account], { t: "account.replace", s: section, p: { role } });
     accountSectionCache.clear();
     console.log(`section ${section.id}: ${role} account ${previous} -> ${account}`);
     let moved;
 
     try {
-        moved = await sectionMove(section, previous, account, "all", `section ${section.id} ${role} account replaced`, true);
+        moved = await sectionMove(section, previous, account, "all", "account_replaced", true, role);
     } catch (error) {
         moved = { error: `the previous account's balance was not moved (${error.message}); move it with this request again` };
     }
 
-    return { success: true, id: section.id, role, previous, account, txHash: written.txHash, balanceMoved: moved };
+    return { success: true, id: section.id, role, previous, account, txHash: written.txHash, balanceMoved: moved, ...memoAnswer(written.memo) };
 }));
 
 // Archive: all money back to SENDER01 (upfront, consumption, payment), then the section is closed
@@ -1853,13 +1905,12 @@ app.post("/admin/sections/:id/archive", adminGuard, adminRoute(async (req) => {
     const returned = {};
 
     for (const role of Object.keys(SECTION_ROLES)) {
-        returned[role] = await sectionMove(section, section.accounts[role], CONFIG.SENDER01, "all",
-            `section ${section.id} archived: ${role} returned`, true);
+        returned[role] = await sectionMove(section, section.accounts[role], CONFIG.SENDER01, "all", "archive_return", true, role);
     }
 
-    const written = await registryWrite("archive", [section.id]);
+    const written = await registryWrite("archive", [section.id], { t: "section.archive", s: section });
     console.log(`section ${section.id} "${section.name}" archived`);
-    return { success: true, id: section.id, archived: true, returned, txHash: written.txHash };
+    return { success: true, id: section.id, archived: true, returned, txHash: written.txHash, ...memoAnswer(written.memo) };
 }));
 
 // eth_getLogs over [fromBlock, head] in chunks of 1000 blocks (Besu limits the range per call)
@@ -1944,14 +1995,15 @@ app.post("/admin/registry/migrate", adminGuard, adminRoute(async (req) => {
         if (earlier) {
             newId = earlier.id;
         } else {
-            const written = await registryWrite("createSection", [s.name, s.upfront, s.consumption, s.payment, s.keyHash]);
+            const written = await registryWrite("createSection", [s.name, s.upfront, s.consumption, s.payment, s.keyHash],
+                { t: "section.migrate", s: [id, s.name] });
             const created = written.receipt.logs
                 .map((log) => { try { return registryIface.parseLog(log); } catch { return null; } })
                 .find((log) => log && log.name === "SectionCreated");
             newId = Number(created.args.id);
 
             if (!s.active) {
-                await registryWrite("setActive", [newId, false]);
+                await registryWrite("setActive", [newId, false], { t: "section.migrate", s: [newId, s.name] });
             }
         }
 
@@ -1973,7 +2025,7 @@ app.post("/admin/registry/migrate", adminGuard, adminRoute(async (req) => {
         }
 
         for (let i = 0; i < missing.length; i += 100) {
-            await registryWrite("addAccounts", [newId, missing.slice(i, i + 100)]);
+            await registryWrite("addAccounts", [newId, missing.slice(i, i + 100)], { t: "section.migrate", s: [newId, s.name] });
         }
 
         done.push({ id, newId, name: s.name, active: s.active, users: users.length, added: missing.length, resumed: Boolean(earlier) });
@@ -2288,7 +2340,8 @@ app.post("/admin/contract/deploy", adminGuard, adminRoute(async (req) => {
 
 async function deployAndRegister(input) {
     await deployCheck(input);
-    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, input.data));
+    const deployMemo = { t: "contract.deploy", p: { name: input.name, kind: input.kind } };
+    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, input.data, 0n, deployMemo));
     const receipt = await receiptOf(sent.txHash);
 
     if (BigInt(receipt.status) !== 1n || !receipt.contractAddress) {
@@ -2298,7 +2351,7 @@ async function deployAndRegister(input) {
     const address = ethers.getAddress(receipt.contractAddress);
     const code = await rpc(CONFIG.BESU_RPC, "eth_getCode", [address, "latest"]);
     const check = codeCheck(input, code);
-    const registered = await registryWrite("registerContract", [address, CONTRACT_KINDS[input.kind], input.name, JSON.stringify(input.abi)]);
+    const registered = await registryWrite("registerContract", [address, CONTRACT_KINDS[input.kind], input.name, JSON.stringify(input.abi)], deployMemo);
     contractBook.byAddress.set(address.toLowerCase(), {
         address, kind: input.kind, name: input.name, abi: input.abi, iface: input.iface, registeredIn: parseInt(registered.receipt.blockNumber, 16)
     });
@@ -3290,7 +3343,8 @@ app.post("/contract/send", async (req, res) => {
         let sent;
 
         try {
-            sent = await withSenderLock(from, () => sendData(from, entry.address, data, valueWei));
+            sent = await withSenderLock(from, () => sendData(from, entry.address, data, valueWei,
+                contractMemo(entry, fragment, args, req.body.args, valueWei, section)));
         } catch (error) {
             if (error.statusCode) {
                 throw error;
@@ -3325,7 +3379,8 @@ app.post("/contract/send", async (req, res) => {
             blockNumber: Number(BigInt(receipt.blockNumber)),
             gasUsed: Number(BigInt(receipt.gasUsed)),
             result: ok ? await friendlySend(entry, fragment, args, events) : null,
-            events
+            events,
+            ...memoAnswer(sent.memo)
         });
     } catch (error) {
         if (!error.statusCode) {
@@ -3375,7 +3430,8 @@ app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
     let sent;
 
     try {
-        sent = await withSenderLock(center, () => sendData(center, entry.address, data, valueWei));
+        sent = await withSenderLock(center, () => sendData(center, entry.address, data, valueWei,
+            contractMemo(entry, fragment, args, b.args, valueWei, null)));
     } catch (error) {
         if (error.statusCode) {
             throw error;
@@ -3403,7 +3459,8 @@ app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
         blockNumber: Number(BigInt(receipt.blockNumber)),
         gasUsed: Number(BigInt(receipt.gasUsed)),
         result: await friendlySend(entry, fragment, args, events),
-        events
+        events,
+        ...memoAnswer(sent.memo)
     };
 }));
 
@@ -3736,11 +3793,11 @@ async function createSectionAccount(section, amount, pool) {
     const funder = section.accounts.upfront;
     await assertCanPay(funder, amount);
     const address = await createMpcAccount(pool);
-    const registered = await registryWrite("addAccount", [section.id, address]);
+    const registered = await registryWrite("addAccount", [section.id, address], { t: "account.create", s: section, p: { account: address } });
     accountSectionCache.set(address.toLowerCase(), { id: section.id, kind: ACCOUNT_USER });
     const payment = await withSenderLock(funder, async () => {
         await assertCanPay(funder, amount);
-        return pay(funder, address, amount);
+        return pay(funder, address, amount, { t: "account.fund", s: section, p: { account: address } });
     });
     countSectionOp(section, "create_account", amount);
 
@@ -3753,7 +3810,8 @@ async function createSectionAccount(section, amount, pool) {
         pool,
         txHash: payment.txHash,
         nonce: payment.nonce,
-        registryTxHash: registered.txHash
+        registryTxHash: registered.txHash,
+        ...memoAnswer(payment.memo)
     };
 }
 
@@ -3771,15 +3829,7 @@ async function sectionTransfer(section, body) {
         throw httpError(400, "missing parameters: account, amount");
     }
 
-    if (memo !== undefined && typeof memo !== "string") {
-        throw httpError(400, "invalid memo");
-    }
-
-    const memoText = memo === undefined ? "" : memo;
-
-    if (memoBytes(memoText).length > MEMO_LIMIT) {
-        throw httpError(400, "memo is too long");
-    }
+    MEMO.userMemo(memo);  // checked (the request's context holds it)
 
     const amountText = String(amount).trim();
     const negative = amountText.startsWith("-");
@@ -3793,7 +3843,8 @@ async function sectionTransfer(section, body) {
     await assertSectionUser(section, user);
     const sender = negative ? section.accounts.upfront : user;
     const recipient = negative ? user : section.accounts.consumption;
-    const { txHash, nonce } = await withSenderLock(sender, () => pay(sender, recipient, value, memoText));
+    const { txHash, nonce, memo: rec } = await withSenderLock(sender, () =>
+        pay(sender, recipient, value, { t: negative ? "transfer.out" : "transfer.in", s: section }));
     countSectionOp(section, negative ? "transfer_out" : "transfer_in", value);
 
     return {
@@ -3804,8 +3855,8 @@ async function sectionTransfer(section, body) {
         from: sender,
         to: recipient,
         amount: value,
-        memo: memoText,
-        nonce
+        nonce,
+        ...memoAnswer(rec)
     };
 }
 

@@ -651,3 +651,7 @@ body.light .stat-date { color-scheme: light; }
 .edge-fields label { display: grid; gap: 4px; }
 .edge-fields input[type="color"] { width: 100%; height: 32px; padding: 0; border: 0; background: none; }
 .edge-fields input[type="checkbox"] { width: 20px; height: 20px; }
+
+/* memo field of the admin forms (docs/features/memos.md) */
+.memo-box { display: flex; flex-direction: column; gap: 4px; max-width: 640px; }
+.memo-box .small { font-size: 12px; }

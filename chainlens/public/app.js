@@ -537,6 +537,23 @@ function memoUrl(url) {
     return memoImage(url);
 }
 
+// The memo of a transaction in the page's language (docs/features/memos.md)
+function memoOf(tx) {
+    return (tx.memos && tx.memos[getLocale()]) || tx.memo || "";
+}
+
+// "Memo (optional)": saved with every transaction the forms of this page send
+function memoBox() {
+    const input = el("input", { class: "table-search write-memo", maxlength: "256", placeholder: t("memo.placeholder"), "aria-label": t("memo.field") });
+    return el("label", { class: "memo-box" }, [el("span", { class: "muted" }, t("memo.field")), input, el("span", { class: "muted small" }, t("memo.hint"))]);
+}
+
+function withPageMemo(body) {
+    const input = document.querySelector(".write-memo");
+    const memo = input ? input.value.trim() : "";
+    return memo && body && typeof body === "object" && !Array.isArray(body) && body.memo === undefined ? Object.assign({}, body, { memo }) : body;
+}
+
 function memoNodes(memo) {
     // NFT payment memos end in the NFT's image URL: show the image, full memo as tooltip
     const mint = memo.match(/^(?:New NFT Token mint|NFT transfer|NFT buy|Avatar buy): [\s\S]* - (https?:\/\/\S+)$/);
@@ -574,9 +591,9 @@ function txColumns() {
         { label: "col.from", sort: (tx) => tx.from, cell: (tx) => addr(tx.from) },
         { label: "col.to", sort: (tx) => tx.toLabel || tx.to || tx.contractAddress || "", search: (tx) => [tx.to, tx.toLabel, tx.contractAddress].filter(Boolean).join(" "), cell: (tx) => txTo(tx) },
         { label: "col.value", sort: (tx) => BigInt(tx.valueWei || 0), search: (tx) => tx.value + " ETH", cell: (tx) => tx.value + " ETH" },
-        { label: "col.memo", sort: (tx) => tx.memo || "", search: (tx) => tx.memo || "", cell: (tx) => {
-            const memo = tx.type === "transfer" || tx.functionName === "buy" ? (tx.memo || "") : "";
-            return el("span", { class: "memo-cell" }, memo ? memoNodes(memo) : "—");
+        { label: "col.memo", sort: (tx) => memoOf(tx), search: (tx) => [memoOf(tx), tx.memo, tx.memoType, tx.memoUser].filter(Boolean).join(" "), cell: (tx) => {
+            const memo = memoOf(tx);
+            return el("span", { class: "memo-cell", title: tx.memoType || "" }, memo ? memoNodes(memo) : "—");
         } },
         { label: "col.time", sort: (tx) => tx.timestamp || 0, search: (tx) => stamp(tx.timestamp), cell: (tx) => stamp(tx.timestamp) }
     ];
@@ -634,7 +651,7 @@ function formatCount(value) {
     if (!Number.isFinite(number) || number < 0) {
         return "0";
     }
-    return number.toLocaleString(getLocale() === "zh" ? "zh-CN" : "en-US");
+    return number.toLocaleString(({ zh: "zh-CN", ko: "ko-KR" })[getLocale()] || "en-US");
 }
 
 function syncPercent(status) {
@@ -808,6 +825,10 @@ async function render(options) {
             return showTxs(page, status);
         }
 
+        if (path === "#/memos") {
+            return showMemos(params);
+        }
+
         const tx = path.match(/^#\/transactions\/(0x[0-9a-fA-F]{64})$/);
         if (tx) {
             return showTx(tx[1]);
@@ -969,7 +990,7 @@ function ethText(value) {
     if (value === null || value === undefined) {
         return "—";
     }
-    return Number(value).toLocaleString(getLocale() === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 2 });
+    return Number(value).toLocaleString(({ zh: "zh-CN", ko: "ko-KR" })[getLocale()] || "en-US", { maximumFractionDigits: 2 });
 }
 
 function idCard(label, value, unit, lines, accent) {
@@ -1843,6 +1864,7 @@ async function avatarAdminCard(collection) {
         el("h2", {}, t("nft.adminTitle")),
         el("div", { class: "muted", style: "margin-bottom:12px" }, t("nft.adminNote")),
         el("label", {}, [el("span", { class: "muted" }, t("sections.token")), tokenInput]),
+        memoBox(),
         mint, price, sell, buyers,
         el("h3", {}, t("item.list")), list
     ]);
@@ -1988,7 +2010,7 @@ async function deployPost(path, body) {
     const response = await fetch(path, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: "Bearer " + deployToken() },
-        body: JSON.stringify(body)
+        body: JSON.stringify(withPageMemo(body))
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -2472,11 +2494,11 @@ async function showSection(id) {
     const gatewayBox = el("div");
     const history = dataTable([
         { label: "col.time", sort: (row) => row.timestamp || 0, cell: (row) => stamp(row.timestamp) },
-        { label: "sections.kind", sort: (row) => row.kind, search: (row) => row.kind + " " + (row.memo || ""), cell: (row) => el("span", { class: "badge type" }, row.kind) },
+        { label: "sections.kind", sort: (row) => row.kind, search: (row) => row.kind + " " + memoOf(row), cell: (row) => el("span", { class: "badge type" }, row.kind) },
         { label: "col.value", sort: (row) => Number(row.value), cell: (row) => row.value },
         { label: "col.from", sort: (row) => row.from, cell: (row) => addr(row.from) },
         { label: "col.to", sort: (row) => row.to || "", cell: (row) => (row.to ? addr(row.to) : el("span", {}, "—")) },
-        { label: "sections.memo", sort: (row) => row.memo || "", cell: (row) => row.memo || "" },
+        { label: "sections.memo", sort: (row) => memoOf(row), search: (row) => memoOf(row), cell: (row) => memoOf(row) },
         { label: "col.hash", sort: (row) => row.hash, cell: (row) => ident(row.hash, "#/transactions/" + row.hash) }
     ], data.history, { sort: 0, dir: "desc", key: "section-history" });
 
@@ -2495,6 +2517,7 @@ async function showSection(id) {
                 el("span", { class: "muted" }, t("sections.created")), el("span", {}, stamp(s.createdAt))
             ])
         ]),
+        el("section", { class: "card" }, [memoBox()]),
         el("section", { class: "card stack" }, [
             el("h2", {}, t("sections.money")),
             el("div", { class: "section-actions" }, [
@@ -2626,7 +2649,7 @@ async function nicknamePut(path, body) {
     const response = await fetch(path, {
         method: "PUT",
         headers: { "content-type": "application/json", authorization: "Bearer " + deployToken() },
-        body: JSON.stringify(body)
+        body: JSON.stringify(withPageMemo(body))
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -2758,6 +2781,7 @@ async function showNicknames(q) {
             el("div", { class: "card-head" }, [el("h2", {}, t("nick.title")),
                 el("span", { class: "muted" }, [c.name + " (" + c.symbol + ") ", el("a", { href: "#/contracts/" + c.address }, short(c.address))])]),
             el("div", { class: "muted", style: "margin-bottom:12px" }, t("nick.summary").replace("{n}", data.minted).replace("{levels}", data.levels.length).replace("{days}", c.holdDays)),
+            memoBox(),
             mint, price
         ]),
         el("section", { class: "card stack" }, [
@@ -3036,9 +3060,12 @@ async function showTx(hash) {
                 ]),
                 el("div", { style: "margin-top:8px" }, [t("tx.from") + " ", addr(tx.from), "  " + t("tx.to") + " ", to]),
                 el("div", { style: "margin-top:8px" }, t("tx.status") + " " + (tx.status === "success" ? t("tx.ok") : t("tx.fail"))),
-                tx.type === "transfer"
-                    ? el("div", { class: "memo", style: "margin-top:8px" }, [t("tx.memo") + " ", ...(tx.memo ? memoNodes(tx.memo) : ["—"])])
-                    : null
+                el("div", { class: "memo", style: "margin-top:8px" }, [t("tx.memo") + " ", ...(memoOf(tx) ? memoNodes(memoOf(tx)) : ["—"])]),
+                tx.memoType ? el("div", { class: "muted", style: "margin-top:4px" }, [
+                    t("memo.type") + " ", el("a", { href: "#/memos?type=" + encodeURIComponent(tx.memoType) }, tx.memoType),
+                    tx.memoUser && tx.memoDefaults ? "  · " + t("memo.default") + " " + (tx.memoDefaults[getLocale()] || tx.memoDefaults.en) : "",
+                    tx.memoRequest ? el("span", {}, ["  · ", el("a", { href: "#/memos?request=" + tx.memoRequest }, t("memo.request") + " " + tx.memoRequest)]) : ""
+                ]) : null
             ]),
             el("aside", { class: "side-stat" }, [el("div", {}, t("tx.value")), el("b", {}, tx.value + " ETH")])
         ]),
@@ -3162,3 +3189,63 @@ document.addEventListener("localechange", () => {
     render({ refresh: true });
 });
 render();
+
+// ---- Memos (docs/features/memos.md): every transaction's memo, filtered; export as CSV or JSON
+async function showMemos(params) {
+    const token = showToken;
+    const f = {};
+    ["type", "section", "q", "from", "to", "request"].forEach((k) => { f[k] = params.get(k) || ""; });
+    const query = () => {
+        const p = new URLSearchParams();
+        Object.entries(f).forEach(([k, v]) => { if (v) { p.set(k, v); } });
+        p.set("lang", getLocale());
+        return p;
+    };
+    const data = await api("/api/memos?" + query().toString());
+    if (token !== showToken) {
+        return;
+    }
+    const typeSelect = el("select", { class: "table-search", "aria-label": t("memo.type") },
+        [el("option", { value: "" }, t("memo.allTypes"))].concat(
+            [...new Set(data.types.map((x) => x.split(".")[0] + ".").concat(data.types))].sort()
+                .map((x) => el("option", { value: x }, x.endsWith(".") ? x + "*" : x))));
+    typeSelect.value = f.type;
+    const input = (k, attrs) => {
+        const i = el("input", Object.assign({ class: "table-search", value: f[k], "aria-label": t("memo." + k) }, attrs || {}));
+        return i;
+    };
+    const fields = { section: input("section", { placeholder: "1", inputmode: "numeric" }), q: input("q", { placeholder: t("memo.qHint") }),
+        from: input("from", { type: "date" }), to: input("to", { type: "date" }), request: input("request", { placeholder: "a1b2c3d4" }) };
+    const apply = el("button", { type: "button", class: "fn-run" }, t("memo.apply"));
+    apply.addEventListener("click", () => {
+        f.type = typeSelect.value;
+        Object.entries(fields).forEach(([k, i]) => { f[k] = i.value.trim(); });
+        const p = query();
+        p.delete("lang");
+        location.hash = "#/memos" + (p.toString() ? "?" + p.toString() : "");
+    });
+    const exportQuery = query();
+    exportQuery.set("limit", "10000");
+    const csv = el("a", { class: "fn-run", href: "/api/memos?" + exportQuery.toString() + "&format=csv" }, t("memo.exportCsv"));
+    const json = el("a", { class: "fn-run", href: "/api/memos?" + exportQuery.toString(), target: "_blank" }, t("memo.exportJson"));
+    const label = (k, node) => el("label", {}, [el("span", { class: "muted" }, t("memo." + k)), node]);
+    const table = dataTable([
+        { label: "col.time", sort: (r) => r.time, cell: (r) => stamp(Date.parse(r.time) / 1000) },
+        { label: "memo.type", sort: (r) => r.type, search: (r) => r.type, cell: (r) => (r.type ? el("span", { class: "badge type" }, r.type) : "—") },
+        { label: "col.memo", sort: (r) => r.memo, search: (r) => r.memo + " " + r.userMemo, cell: (r) => el("span", { class: "memo-cell" }, memoNodes(r.memo)) },
+        { label: "memo.section", sort: (r) => r.section || 0, cell: (r) => (r.section ? el("a", { href: "#/sections/" + r.section }, "#" + r.section) : "—") },
+        { label: "col.value", sort: (r) => Number(r.value), cell: (r) => r.value + " ETH" },
+        { label: "memo.request", sort: (r) => r.request, cell: (r) => (r.request ? el("a", { href: "#/memos?request=" + r.request }, r.request) : "—") },
+        { label: "col.hash", sort: (r) => r.hash, cell: (r) => ident(r.hash, "#/transactions/" + r.hash) }
+    ], data.rows, { sort: 0, dir: "desc", key: "memos" });
+    show(el("div", {}, [
+        el("section", { class: "card stack" }, [
+            el("div", { class: "card-head" }, [el("h2", {}, t("memo.title")), el("span", { class: "muted" }, t("memo.count").replace("{n}", data.count))]),
+            el("div", { class: "muted", style: "margin-bottom:10px" }, t("memo.note")),
+            el("div", { class: "deploy-form" }, [label("type", typeSelect), label("section", fields.section), label("q", fields.q),
+                label("from", fields.from), label("to", fields.to), label("request", fields.request),
+                el("div", { class: "deploy-buttons" }, [apply, csv, json])])
+        ]),
+        el("section", { class: "card" }, data.rows.length ? table : el("div", { class: "empty" }, t("memo.none")))
+    ]));
+}

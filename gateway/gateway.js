@@ -16,6 +16,7 @@ const http = require("node:http");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const { DatabaseSync } = require("node:sqlite");
+const MEMO = require("./memo/memo.js");
 
 // ---------------------------------------------------------------- configuration
 
@@ -28,7 +29,7 @@ const L = Object.assign({
     // what is answered while offline: transfer, createaccount, account_pool, "<avatar|nickname|*>:<function>" for the
     // platform's items, "<0xContract>:<function>" for another contract (queued, answered without a result)
     offline_operations: ["transfer", "createaccount", "account_pool", "avatar:buy", "nickname:buy", "nickname:upgradeLevel", "*:undo", "nickname:undoLevel"],
-    spare_accounts: 100, spare_alert_below: 20, answer_gateway_field: false, correction_webhook: "", report_keep_days: 365,
+    spare_accounts: 100, spare_alert_below: 20, answer_gateway_field: false, memo_default_lang: "en", correction_webhook: "", report_keep_days: 365,
     sync_seconds: 30, backup_keep_days: 7
 }, cfg.limits || {});
 const REPORT_TOKEN = (() => {
@@ -125,7 +126,7 @@ function tempHash(uid) {
 // offline (the requests waiting on the proxy are then answered from the ledger).
 const inflight = new Set();
 
-function proxy(method, path, body, timeoutMs = 120000, track = false, connectMs = L.connect_timeout_ms) {
+function proxy(method, path, body, timeoutMs = 120000, track = false, connectMs = L.connect_timeout_ms, extraHeaders = {}) {
     return new Promise((resolve, reject) => {
         const url = new URL(PROXY + path);
         const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
@@ -146,7 +147,7 @@ function proxy(method, path, body, timeoutMs = 120000, track = false, connectMs 
         };
         const req = http.request({
             hostname: url.hostname, port: url.port || 80, path: url.pathname + url.search, method, agent: false,
-            headers: Object.assign({ "x-section-key": KEY }, payload ? { "content-type": "application/json", "content-length": payload.length } : {})
+            headers: Object.assign({ "x-section-key": KEY }, extraHeaders, payload ? { "content-type": "application/json", "content-length": payload.length } : {})
         }, (res) => {
             const chunks = [];
             res.on("data", (c) => chunks.push(c));
@@ -738,6 +739,14 @@ function needFunds(addr, wei) {
     }
 }
 
+// The memo fields of an offline answer: the same record the proxy will write when the request is
+// sent (docs/features/memos.md), in the language of the request
+let answerLang = "en";
+function offlineMemo(t, p, body, uid) {
+    const rec = MEMO.record({ t, s: [SECTION.id, SECTION.name], p, u: MEMO.userMemo(body && body.memo), r: String(uid).replace(/-/g, "").slice(0, 8) });
+    return MEMO.answer(rec, answerLang);
+}
+
 function offlineTransfer(body, uid) {
     const amount = ethToWei(body.amount);
     const user = needUser(body.account);
@@ -751,7 +760,7 @@ function offlineTransfer(body, uid) {
     offlineAllowed("transfer");
     needFunds(from, x);
     const answer = { success: true, section: section(), direction: plus ? "account -> consumption" : "upfront -> account", from, to,
-        amount: weiToEth(x), memo: body.memo || "", txHash: tempHash(uid) };
+        amount: weiToEth(x), txHash: tempHash(uid), ...offlineMemo(plus ? "transfer.in" : "transfer.out", { amount: weiToEth(x) }, body, uid) };
     enqueue({ uid, kind: "transfer", signer: from, path: "/transfer", body, deltas: [[from, -x], [to, x]], spendAccount: from, spendWei: x, answer: { result: answer } });
     return Object.assign(answer, { gateway: gw(uid) });
 }
@@ -767,9 +776,10 @@ function offlineCreateAccount(body, uid) {
     q("UPDATE spares SET used = ? WHERE address = ?").run(now(), spare.address);
     upsertAccount(spare.display, "user", 0n);
     const answer = { success: true, section: section(), address: spare.display, from: SECTION.upfront, amount: weiToEth(amount),
-        pool: body.pool || "small", txHash: amount > 0n ? tempHash(uid) : null, registryTxHash: null };
+        pool: body.pool || "small", txHash: amount > 0n ? tempHash(uid) : null, registryTxHash: null,
+        ...offlineMemo("account.fund", { account: spare.display, amount: weiToEth(amount) }, body, uid) };
     if (amount > 0n) {
-        enqueue({ uid, kind: "createaccount", signer: SECTION.upfront, path: "/transfer", body: { account: spare.display, amount: "-" + weiToEth(amount), memo: "new account" },
+        enqueue({ uid, kind: "createaccount", signer: SECTION.upfront, path: "/transfer", body: { account: spare.display, amount: "-" + weiToEth(amount), memo: body.memo || undefined },
             deltas: [[SECTION.upfront, -amount], [spare.display, amount]], spendAccount: SECTION.upfront, spendWei: amount, answer: { result: answer } });
     }
     enqueue({ uid: uid + ":pool", kind: "account_pool", path: "/account/pool", body: { address: spare.display, pool: body.pool || "small" } });
@@ -816,10 +826,13 @@ function offlineContractSend(body, uid) {
         offlineAllowed(`${lower(body.contract)}:${fn}`);
         enqueue({ uid, kind: "contract_send", signer: body.from, path: "/contract/send", body });
         return { success: true, section: section(), contract: body.contract, function: body.function, from: body.from, txHash: tempHash(uid),
-            result: null, events: [], gateway: gw(uid) };
+            result: null, events: [], gateway: gw(uid), ...offlineMemo("contract.call", { function: fn, contract: body.contract }, body, uid) };
     }
     const base = (from, valueWei, result) => ({ success: true, section: section(), contract: c.display, function: fn, from, value: weiToEth(valueWei),
-        txHash: tempHash(uid), blockNumber: null, gasUsed: null, result, events: [], gateway: gw(uid) });
+        txHash: tempHash(uid), blockNumber: null, gasUsed: null, result, events: [], gateway: gw(uid),
+        ...offlineMemo(MEMO.CATALOGUE.types[`${c.type}.${fn}`] ? `${c.type}.${fn}` : "contract.call",
+            Object.assign({ tokenId: result && result.tokenId, nickname: result && result.nickname, level: result && result.level },
+                valueWei > 0n ? { amount: weiToEth(valueWei) } : {}), body, uid) });
     const tokenKey = (id) => c.address + ":" + id;
 
     if (fn === "buy") {
@@ -1054,7 +1067,7 @@ function signerOf(path, body) {
     return null;
 }
 
-async function passWrite(path, body, uid) {
+async function passWrite(path, body, uid, langHeader = {}) {
     const signer = signerOf(path, body);
     let nonce = null;
     try {
@@ -1064,13 +1077,14 @@ async function passWrite(path, body, uid) {
     }
     let r;
     try {
-        r = await proxy("POST", path, body, 120000, true);
+        r = await proxy("POST", path, body, 120000, true, L.connect_timeout_ms, langHeader);
     } catch (error) {
         if (!error.aborted) {
             proxyFailed();  // a network error counts as a failed health check
         }
         if (error.notSent) {
             // the request never reached the proxy: queued like any offline request
+            answerLang = langHeader["accept-language"] || "en";
             return { status: 200, data: offlineWrite(path, body, uid) };
         }
         if (path === "/createaccount") {
@@ -1080,6 +1094,7 @@ async function passWrite(path, body, uid) {
         // cut off after it was sent: answered from the ledger; before resending, the queue checks the nonce
         let answer;
         try {
+            answerLang = langHeader["accept-language"] || "en";
             answer = offlineWrite(path, body, uid);
         } catch (e) {
             throw httpError(503, "the proxy did not answer: the result is not known yet");
@@ -1358,12 +1373,19 @@ async function handle(req, res) {
 
     const body = req.method === "POST" ? await readBody(req) : undefined;
     const uid = crypto.randomUUID();
+    // the memo language: answered here when offline, passed to the proxy when online
+    const lang = MEMO.lang(url.searchParams.get("lang"), req.headers["accept-language"], L.memo_default_lang);
+    const langHeader = { "accept-language": lang };
+    if (body && typeof body === "object") {
+        MEMO.userMemo(body.memo);  // 400 for a memo that is not a string or too long, as the proxy
+    }
 
     if (req.method === "POST" && WRITES.has(path)) {
         if (state.mode === "online" && !queued()) {
-            const r = await passWrite(path, body, uid);
+            const r = await passWrite(path, body, uid, langHeader);
             return send(res, r.status, plain(r.data));
         }
+        answerLang = lang;
         return send(res, 200, plain(offlineWrite(path, body, uid)));
     }
 
@@ -1371,12 +1393,19 @@ async function handle(req, res) {
         const hash = path.slice(10);
         const row = q("SELECT * FROM outbox WHERE temp_hash = ? OR real_hash = ?").get(hash, hash);
         if (row && !row.real_hash) {
+            const promised = (JSON.parse(row.answer || "null") || {}).result || {};
+            const memoFields = {};
+            for (const k of ["memo", "memoType", "memoText", "memoParams", "userMemo", "memoRequest"]) {
+                if (promised[k] !== undefined) {
+                    memoFields[k] = promised[k];
+                }
+            }
             return send(res, 200, plain({ success: true, txHash: hash, status: row.status === "failed" || row.status === "cancelled" ? "failed" : "pending",
-                error: row.error || undefined, gateway: { mode: state.mode, request: row.uid, status: row.status } }));
+                error: row.error || undefined, ...memoFields, gateway: { mode: state.mode, request: row.uid, status: row.status } }));
         }
         if (state.mode === "online") {
             try {
-                const r = await proxy("GET", "/transfer/" + (row ? row.real_hash : hash), undefined, 30000, true);
+                const r = await proxy("GET", "/transfer/" + (row ? row.real_hash : hash), undefined, 30000, true, L.connect_timeout_ms, langHeader);
                 if (r.status === 200 && row && r.data && r.data.txHash) {
                     r.data.txHash = hash;  // the hash the application was given
                 }
@@ -1394,7 +1423,7 @@ async function handle(req, res) {
     const readPath = path + url.search;
     if (state.mode === "online") {
         try {
-            const r = await proxy(req.method, readPath, body, 120000, true);
+            const r = await proxy(req.method, readPath, body, 120000, true, L.connect_timeout_ms, langHeader);
             if (r.status === 200) {
                 if (path === "/contract/call" && Array.isArray(body.calls)) {
                     body.calls.forEach((c, i) => r.data.results[i] && r.data.results[i].success && remember("/contract/call", { contract: c.contract, function: c.function, args: c.args }, r.data.results[i]));

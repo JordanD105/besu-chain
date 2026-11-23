@@ -272,6 +272,11 @@ function jsonValue(value) {
 }
 
 const app = express();
+// memos (docs/features/memos.md); the request is kept so proxyAdmin can pass the form's memo on
+const MEMO = require("./memo/memo.js");
+const { AsyncLocalStorage } = require("node:async_hooks");
+const requestStore = new AsyncLocalStorage();
+app.use((req, res, next) => requestStore.run({ req }, next));
 app.use(express.static(path.join(__dirname, "public")));
 
 function formatEth(wei) {
@@ -289,30 +294,6 @@ function checksum(address) {
 
 function topicAddress(topic) {
     return checksum("0x" + topic.slice(-40));
-}
-
-function decodeMemo(input) {
-    if (!input || input === "0x") {
-        return null;
-    }
-
-    try {
-        const bytes = ethers.getBytes(input);
-
-        if (bytes.length === 0 || bytes.length > 4096) {
-            return null;
-        }
-
-        for (const byte of bytes) {
-            if (byte === 0 || (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13)) {
-                return null;
-            }
-        }
-
-        return ethers.toUtf8String(bytes);
-    } catch (error) {
-        return null;
-    }
 }
 
 function fmtArg(value) {
@@ -380,24 +361,45 @@ function decodeLogs(logs) {
     }).filter((log) => log.name === "Transfer" || log.args.length > 0 || log.name.startsWith("0x"));
 }
 
-function classify(tx) {
-    if (!tx.to) {
-        return { type: "create", functionName: "create", memo: "" };
+// The memo of a transaction (memo/memo.js): the record at the end of its data, or an older plain-text
+// memo. memos: the text in every language (the caller's own memo, else the default text).
+function memoFields(tx) {
+    const rec = MEMO.fromTransaction(tx);
+    if (!rec) {
+        return { memo: "", memos: null, memoDefaults: null, memoType: null, memoUser: null, memoRequest: null, memoSection: null };
     }
-
-    const memo = decodeMemo(tx.input || tx.data);
-    if ((tx.input || "0x") === "0x" || memo !== null) {
-        return { type: "transfer", functionName: "send", memo: memo || "" };
+    const memos = {};
+    const memoDefaults = {};
+    for (const l of MEMO.LANGS) {
+        memos[l] = MEMO.text(rec, l);
+        memoDefaults[l] = MEMO.describe(rec, l);
     }
-
-    const decoded = decodeInput(tx.input || tx.data);
-    const selector = (tx.input || "0x").slice(0, 10);
+    const legacy = rec.legacy ? MEMO.legacyText(tx.input || tx.data) : null;
     return {
-        type: "call",
-        functionName: decoded ? decoded.name : selector,
-        memo: "",
-        decoded
+        memo: legacy !== null ? legacy : memos.en,
+        memos,
+        memoDefaults,
+        memoType: rec.t,
+        memoUser: rec.u || null,
+        memoRequest: rec.r || null,
+        memoSection: rec.s && rec.s[0] ? Number(rec.s[0]) : null
     };
+}
+
+function classify(tx) {
+    const fields = memoFields(tx);
+    if (!tx.to) {
+        return Object.assign({ type: "create", functionName: "create" }, fields);
+    }
+
+    const callData = MEMO.stripMemo(tx.input || tx.data || "0x");
+    // no call data (a plain transfer with or without a memo), or an older plain-text memo
+    if (callData === "0x" || (fields.memoType && MEMO.decode(tx.input || tx.data) === null)) {
+        return Object.assign({ type: "transfer", functionName: "send" }, fields);
+    }
+
+    const decoded = decodeInput(callData);
+    return Object.assign({ type: "call", functionName: decoded ? decoded.name : callData.slice(0, 10), decoded }, fields);
 }
 
 // A non-JSON reply (e.g. Besu's "403 Host not authorized" when BESU_HOST_ALLOWLIST doesn't contain the
@@ -672,7 +674,13 @@ function ingest(tx, receipt, block) {
         type: kind.type,
         functionName: kind.functionName,
         memo: kind.memo,
-        decoded: kind.decoded || decodeInput(tx.input || tx.data),
+        memos: kind.memos,
+        memoDefaults: kind.memoDefaults,
+        memoType: kind.memoType,
+        memoUser: kind.memoUser,
+        memoRequest: kind.memoRequest,
+        memoSection: kind.memoSection,
+        decoded: kind.decoded || decodeInput(MEMO.stripMemo(tx.input || tx.data || "0x")),
         status: receipt && receipt.status && BigInt(receipt.status) === 0n ? "failed" : "success",
         contractAddress: receipt && receipt.contractAddress ? checksum(receipt.contractAddress) : null,
         events: decodeLogs(receipt && receipt.logs).filter((log) => log.name === "Transfer" || !log.name.startsWith("0x"))
@@ -1191,6 +1199,12 @@ function publicTx(tx) {
         type: tx.type,
         functionName: tx.functionName,
         memo: tx.memo || buyMemo(tx),
+        memos: tx.memos || null,
+        memoDefaults: tx.memoDefaults || null,
+        memoType: tx.memoType || null,
+        memoUser: tx.memoUser || null,
+        memoRequest: tx.memoRequest || null,
+        memoSection: tx.memoSection || null,
         status: tx.status,
         contractAddress: tx.contractAddress,
         decoded: tx.decoded,
@@ -2049,6 +2063,12 @@ function sectionsGuard(req, res, next) {
 }
 
 async function proxyAdmin(method, pathname, body) {
+    // the memo typed in a chainlens form goes with every write it makes
+    const req = (requestStore.getStore() || {}).req;
+    const memo = req && req.body && typeof req.body.memo === "string" ? req.body.memo.trim() : "";
+    if (method === "POST" && memo && body && typeof body === "object" && !Array.isArray(body) && body.memo === undefined) {
+        body = Object.assign({}, body, { memo });
+    }
     const response = await fetch(SECTIONS.proxy + pathname, {
         method,
         headers: { authorization: "Bearer " + SECTIONS.proxyToken, "content-type": "application/json" },
@@ -2114,6 +2134,53 @@ app.post("/api/sections/:id/gateway/ack/:report", sectionsGuard, async (req, res
     } catch (error) {
         res.status(error.status || 502).json({ error: error.message });
     }
+});
+
+// Memo log: every indexed transaction with a memo, filtered; JSON or CSV (format=csv), texts in `lang`.
+//   GET /api/memos?type=avatar.&section=1&q=gift&from=2026-11-01&to=2026-11-30&request=ab12&lang=ko&format=csv
+app.get("/api/memos", (req, res) => {
+    const q = req.query;
+    const lang = MEMO.lang(q.lang, req.headers["accept-language"]);
+    const from = q.from ? Date.parse(q.from) / 1000 : 0;
+    const to = q.to ? Date.parse(q.to) / 1000 + 86400 : Infinity;
+    const text = String(q.q || "").toLowerCase();
+    const type = String(q.type || "");
+    const section = q.section ? Number(q.section) : null;
+    const limit = Math.min(Number(q.limit) || 1000, 10000);
+    const rows = [];
+    for (let i = db.txs.length - 1; i >= 0 && rows.length < limit; i -= 1) {
+        const tx = db.txs[i];
+        if (!tx.memoType && !tx.memo) {
+            continue;
+        }
+        if (type && !(tx.memoType || "").startsWith(type)) {
+            continue;
+        }
+        if (section !== null && tx.memoSection !== section) {
+            continue;
+        }
+        if (q.request && tx.memoRequest !== q.request) {
+            continue;
+        }
+        if (tx.timestamp < from || tx.timestamp >= to) {
+            continue;
+        }
+        const shown = (tx.memos && tx.memos[lang]) || tx.memo || "";
+        if (text && ![shown, tx.memo, tx.memoUser || "", tx.hash, tx.from, tx.to || ""].some((v) => String(v).toLowerCase().includes(text))) {
+            continue;
+        }
+        rows.push({ time: new Date(tx.timestamp * 1000).toISOString(), hash: tx.hash, block: tx.blockNumber, from: tx.from, to: tx.to,
+            value: formatEth(tx.value), type: tx.memoType || "", section: tx.memoSection, memo: shown, userMemo: tx.memoUser || "",
+            request: tx.memoRequest || "", status: tx.status });
+    }
+    if (q.format === "csv") {
+        const cols = ["time", "hash", "block", "from", "to", "value", "type", "section", "memo", "userMemo", "request", "status"];
+        const cell = (v) => (v === null || v === undefined ? "" : /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v));
+        res.type("text/csv; charset=utf-8").attachment("memos.csv")
+            .send("\ufeff" + [cols.join(",")].concat(rows.map((r) => cols.map((c) => cell(r[c])).join(","))).join("\n") + "\n");
+        return;
+    }
+    res.json({ lang, types: Object.keys(MEMO.CATALOGUE.types), count: rows.length, indexed: db.indexed, rows });
 });
 
 app.get("/api/sections/status", (req, res) => {

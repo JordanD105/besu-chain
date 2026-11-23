@@ -14,6 +14,7 @@ RUN --mount=type=bind,source=offline,target=/offline \
     && npm cache clean --force && chown -R node:node /app
 
 COPY --chown=node:node server.js deploy.js ./
+COPY --chown=node:node memo ./memo
 COPY --chown=node:node public ./public
 
 USER node

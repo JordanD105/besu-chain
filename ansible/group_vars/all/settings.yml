@@ -107,6 +107,14 @@ sections_required: false
 upfront_low_balance_eth: 100
 # Alert Sender01Low: SENDER01 (it funds every top-up) below this many ETH. 0 = off.
 sender01_low_balance_eth: 10000
+
+# Memos (docs/features/memos.md): every transaction carries a memo (a type and its values, plus the
+# caller's own memo); readers show it in their language (en, ko, zh). The language of API answers when
+# the caller names none (?lang= or Accept-Language):
+memo_default_lang: en
+# contracts that must not get the memo at the end of their transaction data (a contract that reads its
+# whole msg.data); their memo is kept in the proxy's memo log instead, e.g. ["0xAbc…"]
+memo_skip_contracts: []
 # RPC VIP health (ha/rpc-health.py): an RPC node leaves the VIP when its newest block is older than
 # rpc_max_block_age seconds while another node has newer blocks, or it is more than
 # rpc_max_blocks_behind blocks behind. A node that stays stalled rpc_auto_restart_minutes while the

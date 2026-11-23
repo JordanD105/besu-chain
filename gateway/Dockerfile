@@ -2,6 +2,7 @@
 FROM node:22-alpine
 WORKDIR /app
 COPY --chown=node:node gateway.js ./
+COPY --chown=node:node memo ./memo
 USER node
 EXPOSE 30010
 CMD ["node", "--no-warnings", "gateway.js"]

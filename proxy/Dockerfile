@@ -14,6 +14,7 @@ RUN --mount=type=bind,source=offline,target=/offline \
     && chown -R node:node /app
 
 COPY --chown=node:node stress-latest.js avatar-collection.json section-registry.json section-registry-v1.json nickname-collection.json ./
+COPY --chown=node:node memo ./memo
 
 USER node
 
