@@ -4,7 +4,7 @@ const Redis = require("ioredis");
 const { ethers } = require("ethers");
 const crypto = require("crypto");
 const registryArtifact = require("./section-registry.json");
-const nftV3Artifact = require("./nft-collection-v3.json");
+const avatarArtifact = require("./avatar-collection.json");
 
 require("dotenv").config({
     path: path.join(__dirname, ".env")
@@ -25,7 +25,7 @@ app.use((req, res, next) => {
     httpStats.inFlight += 1;
     res.once("close", () => {
         httpStats.inFlight -= 1;
-        // the route pattern (/nft/:tokenId), never the raw URL: label values stay few
+        // the route pattern (/transfer/:txHash), never the raw URL: label values stay few
         const route = req.route ? (req.baseUrl || "") + req.route.path : "unmatched";
         const code = res.writableFinished ? String(res.statusCode) : "aborted";
         const key = route + "|" + req.method + "|" + code;
@@ -118,7 +118,7 @@ const CONFIG = {
 };
 
 // Redis is an optional cache. The chain is the source of truth for everything the proxy
-// keeps (nonces, pending value, NFT contract, token ids, NFT metadata), and in-process memory
+// keeps (nonces, pending value, avatar token ids), and in-process memory
 // holds the live state. If Redis is down, empty, or restored from an old snapshot, requests keep
 // working: commands fail fast (no offline queue) and the proxy falls back to memory + chain.
 const redis = new Redis({
@@ -162,8 +162,8 @@ async function cache(fn, fallback = null) {
 // Live state (authoritative while the process runs; one proxy replica, see withSenderLock).
 const memNonce = new Map();      // sender -> next nonce to use
 const memPending = new Map();    // sender -> Map(nonce -> wei string) not yet mined
-// NFT collections: the next token id per collection (for a mint through /admin/contract/send)
-const memNft = { nextId: new Map() };
+// Avatar collections: the next token id per collection (for a mint through /admin/contract/send)
+const memAvatar = { nextId: new Map() };
 
 // =======================
 // JSON RPC Client
@@ -1181,11 +1181,11 @@ app.get("/transfer/:txHash", async (req, res) => {
 });
 
 // =======================
-// NFT helpers (mint metadata and token ids)
+// Avatar helpers (mint metadata and token ids)
 // =======================
 
 const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
-const NFT_META_LIMIT = 512 * 1024;
+const AVATAR_META_LIMIT = 512 * 1024;
 const ON_CHAIN_META_LIMIT = 48 * 1024;
 
 function httpError(statusCode, message) {
@@ -1216,7 +1216,7 @@ function onChainTokenUri(metadata) {
     return "data:application/json;base64," + Buffer.from(json, "utf8").toString("base64");
 }
 
-// NFT collections (version 3, contracts/NftCollection.sol) are read and written through the generic
+// Avatar collections (version 3, contracts/AvatarCollection.sol) are read and written through the generic
 // contract API (/contract/*, /admin/contract/send). These helpers build a mint: the next token id
 // (the highest minted so far, from the Transfer events) and the on-chain metadata (a data URI).
 // Version-2 collections (minted by SENDER01) are retired: the proxy no longer reads or sells them.
@@ -1257,16 +1257,16 @@ async function allocateTokenId(contract) {
         throw httpError(500, "token id is too large");
     }
 
-    const key = `nft:nextId:${contract.toLowerCase()}`;
+    const key = `avatar:nextId:${contract.toLowerCase()}`;
 
-    if (!memNft.nextId.has(contract)) {
+    if (!memAvatar.nextId.has(contract)) {
         const stored = Number(await cache(() => redis.get(key)) || 0);
-        memNft.nextId.set(contract, Math.max(memNft.nextId.get(contract) || 0, stored));
+        memAvatar.nextId.set(contract, Math.max(memAvatar.nextId.get(contract) || 0, stored));
     }
 
     // read-modify-write without an await in between: atomic within this process
-    const tokenId = Math.max(memNft.nextId.get(contract), Number(minted)) + 1;
-    memNft.nextId.set(contract, tokenId);
+    const tokenId = Math.max(memAvatar.nextId.get(contract), Number(minted)) + 1;
+    memAvatar.nextId.set(contract, tokenId);
     await cache(() => redis.set(key, tokenId));
     return String(tokenId);
 }
@@ -1498,7 +1498,7 @@ function buildMetadata(body) {
         metadata.properties = properties;
     }
 
-    if (Buffer.byteLength(JSON.stringify(metadata)) > NFT_META_LIMIT) {
+    if (Buffer.byteLength(JSON.stringify(metadata)) > AVATAR_META_LIMIT) {
         throw httpError(400, "metadata is too large");
     }
 
@@ -2107,7 +2107,8 @@ app.post("/admin/registry/migrate", adminGuard, adminRoute(async (req) => {
 // them with /contract/call and change them with /contract/send, signed by a user account of their
 // section. Only registered contracts and only functions of their ABI.
 
-const CONTRACT_KINDS = { common: 1, nft: 2 };
+const CONTRACT_KINDS = { common: 1, avatar: 2 };
+const KIND_ALIASES = { nft: "avatar" };          // the old name, still accepted
 const contractBook = { byAddress: new Map(), scannedTo: -1, at: 0, loading: null };
 
 function requireCenter() {
@@ -2140,7 +2141,7 @@ async function loadContracts(fresh = false) {
                         const abi = JSON.parse(parsed.args.abiJson);
                         contractBook.byAddress.set(address.toLowerCase(), {
                             address,
-                            kind: Number(parsed.args.kind) === 2 ? "nft" : "common",
+                            kind: Number(parsed.args.kind) === 2 ? "avatar" : "common",
                             name: parsed.args.name,
                             abi,
                             iface: new ethers.Interface(abi),
@@ -2287,10 +2288,10 @@ function decodeEvents(entry, receipt) {
 
 function deployInputOf(body) {
     const b = body || {};
-    const kind = String(b.kind || "common");
+    const kind = KIND_ALIASES[String(b.kind || "common")] || String(b.kind || "common");
 
     if (!CONTRACT_KINDS[kind]) {
-        throw httpError(400, "kind: common or nft");
+        throw httpError(400, "kind: common or avatar");
     }
 
     if (!Array.isArray(b.abi) || typeof b.bytecode !== "string" || !/^(0x)?[0-9a-fA-F]+$/.test(b.bytecode)) {
@@ -2558,17 +2559,17 @@ function adminPrice(value) {
 //   GET  /contract/list    the registered contracts
 //   POST /admin/contract/send  write, signed by the contract account center (admin token)
 // "args" is a list (the ABI's raw values: wei, bytes, ...) or an object. With an object, the
-// platform's own contracts (the NFT collection v3 and the nickname collection) take friendly
+// platform's own contracts (the avatar collection and the nickname collection) take friendly
 // values: ETH prices, nickname edge levels, metadata for a mint. Their answers carry a
 // "result" with friendly values too (ETH, decoded metadata, nickname details and levels).
 
-// "nickname" (NicknameCollection version 5: levels only), "nft" (NftCollection v3) or null. An older
+// "nickname" (NicknameCollection version 5: levels only), "avatar" (AvatarCollection) or null. An older
 // nickname collection (version 4, with edge styles) is an ordinary contract: no friendly values.
 function platformKind(entry) {
     if (!entry.platformKind) {
         const setEdge = hasFunction(entry, "setEdge") ? entry.iface.getFunction("setEdge") : null;
         entry.platformKind = hasFunction(entry, "buyNickname") && hasFunction(entry, "upgradeEdge") && setEdge && setEdge.inputs.length === 3 ? "nickname"
-            : hasFunction(entry, "priceOf") && hasFunction(entry, "mint") && hasFunction(entry, "buy") && hasFunction(entry, "minter") ? "nft"
+            : hasFunction(entry, "priceOf") && hasFunction(entry, "mint") && hasFunction(entry, "buy") && hasFunction(entry, "minter") ? "avatar"
                 : "none";
     }
 
@@ -2629,7 +2630,7 @@ const FRIENDLY_KEYS = {
         ownerOf: ["tokenId", "id"], locked: ["tokenId", "id"], reserved: ["tokenId", "id"], setNicknamePrice: ["price"],
         reserve: ["nicknames", "names", "reserved"], addEdge: ["price"], setEdge: ["level", "price", "forSale", "enabled"]
     },
-    nft: {
+    avatar: {
         buy: ["tokenId", "id", "payee"], approve: ["to", "tokenId", "id"], priceOf: ["tokenId", "id"], ownerOf: ["tokenId", "id"],
         tokenURI: ["tokenId", "id"], getApproved: ["tokenId", "id"], balanceOf: ["owner", "account"],
         mint: ["to", "tokenId", "uri", "price", "amount", "name", "image", "description", "attributes", "properties"]
@@ -2722,7 +2723,7 @@ async function friendlyArgsOf(entry, fragment, raw, ctx) {
         }
     }
 
-    if (kind === "nft") {
+    if (kind === "avatar") {
         switch (name) {
         case "buy": return [objectArg(o, "tokenId", "id"), o.payee];
         // approve { tokenId }: puts the token up for (re)sale through the collection itself
@@ -2777,7 +2778,7 @@ async function friendlyCall(entry, fragment, args, decoded) {
         }
     }
 
-    if (kind === "nft") {
+    if (kind === "avatar") {
         switch (name) {
         case "priceOf": return { tokenId: String(args[0]), price: ethText(v[0]) };
         case "ownerOf": return { tokenId: String(args[0]), owner: ethers.getAddress(v[0]) };
@@ -2840,7 +2841,7 @@ async function friendlySend(entry, fragment, args, events) {
         }
     }
 
-    if (kind === "nft") {
+    if (kind === "avatar") {
         const sold = find("Sold");
 
         if (sold) {
@@ -2945,7 +2946,8 @@ app.post("/contract/call", contractRoute(async (req) => {
     return { success: results.every((r) => r.success), results };
 }));
 
-// The registered contracts. ?type=nft|nickname|contract, ?kind=common|nft, ?has=<function>, ?q=<name>,
+// The registered contracts. ?type=avatar|nickname|contract, ?kind=common|avatar (the old name nft is
+// accepted for both), ?has=<function>, ?q=<name>,
 // ?functions=1 (the functions and events of each)
 const symbolCache = new Map();
 
@@ -2958,14 +2960,17 @@ app.get("/contract/list", contractRoute(async (req) => {
     for (const entry of [...(await loadContracts()).values()].sort((a, b) => a.registeredIn - b.registeredIn)) {
         const type = platformKind(entry) || "contract";
 
-        if ((q.type && q.type !== type) || (q.kind && q.kind !== entry.kind) || (q.has && !hasFunction(entry, String(q.has)))
+        const wantType = q.type && (KIND_ALIASES[q.type] || q.type);
+        const wantKind = q.kind && (KIND_ALIASES[q.kind] || q.kind);
+
+        if ((wantType && wantType !== type) || (wantKind && wantKind !== entry.kind) || (q.has && !hasFunction(entry, String(q.has)))
             || (q.q && !entry.name.toLowerCase().includes(String(q.q).toLowerCase()))) {
             continue;
         }
 
         const row = { address: entry.address, name: entry.name, type, kind: entry.kind, registeredIn: entry.registeredIn };
 
-        if (type === "nft" || type === "nickname") {
+        if (type === "avatar" || type === "nickname") {
             if (!symbolCache.has(entry.address)) {
                 const [[symbol], [minter]] = await Promise.all([entryCall(entry, "symbol"), entryCall(entry, "minter")]);
                 symbolCache.set(entry.address, { symbol, minter: ethers.getAddress(minter) });
@@ -3118,7 +3123,7 @@ app.post("/contract/events", contractRoute(async (req) => {
 // block; answers with the status and the contract's decoded events.
 // Functions of the platform's own contracts, sent through /contract/send:
 //   nickname collection: buyNickname(nickname, payee), upgradeEdge(level, payee)
-//   NFT collection v3:   buy(tokenId, payee)
+//   avatar collection:   buy(tokenId, payee)
 // An address input named "payee" is the sender's section's consumption account: filled in when left
 // out, refused when it is another account. The price (value) is filled in when left out. A nickname is
 // trimmed and NFC-normalized (1-256 characters), and the usual refusals get clear messages.
@@ -3138,7 +3143,7 @@ async function knownSend(entry, fragment, args, from, section) {
 
     const name = fragment.name;
     const nicknames = hasFunction(entry, "buyNickname") && hasFunction(entry, "upgradeEdge");
-    const nftV3 = name === "buy" && hasFunction(entry, "priceOf") && hasFunction(entry, "minter") && payeeAt === 1;
+    const avatarBuy = name === "buy" && hasFunction(entry, "priceOf") && hasFunction(entry, "minter") && payeeAt === 1;
 
     if (nicknames && name === "buyNickname") {
         const nickname = nicknameInput(args[0]);
@@ -3179,7 +3184,7 @@ async function knownSend(entry, fragment, args, from, section) {
         }
     }
 
-    if (nftV3) {
+    if (avatarBuy) {
         const tokenId = parseTokenId(args[0]);
 
         if (!tokenId) {
@@ -3217,7 +3222,7 @@ function countKnownSend(section, events) {
             countSectionOp(section, "edge_upgrade", price);
         } else if (event.name === "Sold") {
             const first = center && isAddress(String(event.args.seller)) && ethers.getAddress(String(event.args.seller)) === center;
-            countSectionOp(section, first ? "nft_first_sale" : "nft_resale", price);
+            countSectionOp(section, first ? "avatar_sale" : "avatar_resale", price);
         }
     }
 }
@@ -3369,7 +3374,7 @@ app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
 
     const data = entry.iface.encodeFunctionData(fragment, coerceParams(fragment.inputs, args));
 
-    if (platformKind(entry) === "nft" && fragment.name === "mint") {
+    if (platformKind(entry) === "avatar" && fragment.name === "mint") {
         await assertMintFits(center, entry.address, data);
     }
 
@@ -3410,7 +3415,7 @@ app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
 
 // ---- Deploy templates: the platform's own contracts, compiled into the proxy image
 // POST /admin/contract/check and /admin/contract/deploy with
-//   { "template": "nft-collection", "name": "Dragons", "symbol": "DRG" }
+//   { "template": "avatar-collection", "name": "Dragons", "symbol": "DRG" }   (old name: nft-collection)
 //   { "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "another": false }
 async function templateInput(body) {
     const b = body || {};
@@ -3421,12 +3426,12 @@ async function templateInput(body) {
 
     requireSections();
 
-    if (b.template === "nft-collection") {
+    if (b.template === "avatar-collection" || b.template === "nft-collection") {
         const name = collectionField(b.name, "name", 64);
         const symbol = collectionField(b.symbol, "symbol", 16);
 
         for (const entry of (await loadContracts(true)).values()) {
-            if (platformKind(entry) !== "nft") {
+            if (platformKind(entry) !== "avatar") {
                 continue;
             }
 
@@ -3437,8 +3442,8 @@ async function templateInput(body) {
             }
         }
 
-        return deployInputOf({ kind: "nft", name, abi: nftV3Artifact.abi, bytecode: nftV3Artifact.bytecode,
-            deployedBytecode: nftV3Artifact.deployedBytecode, immutableReferences: nftV3Artifact.immutableReferences,
+        return deployInputOf({ kind: "avatar", name, abi: avatarArtifact.abi, bytecode: avatarArtifact.bytecode,
+            deployedBytecode: avatarArtifact.deployedBytecode, immutableReferences: avatarArtifact.immutableReferences,
             args: [name, symbol, CONFIG.REGISTRY_CONTRACT] });
     }
 
@@ -3456,16 +3461,16 @@ async function templateInput(body) {
             args: [name, symbol, CONFIG.REGISTRY_CONTRACT, adminPrice(b.price === undefined ? "0" : b.price).toString()] });
     }
 
-    throw httpError(400, "template: nft-collection or nickname-collection (or no template: abi and bytecode)");
+    throw httpError(400, "template: avatar-collection or nickname-collection (or no template: abi and bytecode)");
 }
 
 // ---- Removed routes: 410 with the call that replaces each
 const MOVED = [
-    ["post", "/nft/deploy", "POST /admin/contract/deploy { \"template\": \"nft-collection\", \"name\", \"symbol\" }"],
+    ["post", "/nft/deploy", "POST /admin/contract/deploy { \"template\": \"avatar-collection\", \"name\", \"symbol\" }"],
     ["post", "/nft/mint", "POST /admin/contract/send { \"contract\", \"function\": \"mint\", \"args\": { \"name\", \"image\", \"price\" } }"],
     ["post", "/nft/transfer", "POST /contract/send { \"contract\", \"function\": \"buy\", \"args\": { \"tokenId\" }, \"from\": buyer } (a resale: the seller first sends \"approve\" { \"tokenId\" }); version-2 collections are retired"],
-    ["get", "/nft/contract", "GET /contract/list?type=nft"],
-    ["get", "/nft/collections", "GET /contract/list?type=nft"],
+    ["get", "/nft/contract", "GET /contract/list?type=avatar"],
+    ["get", "/nft/collections", "GET /contract/list?type=avatar"],
     ["get", "/nft/owner/:address", "POST /contract/events { \"contract\", \"event\": \"Transfer\", \"where\": { \"to\": address }, \"current\": true }"],
     ["get", "/nft/:tokenId/metadata", "POST /contract/call { \"contract\", \"function\": \"tokenURI\", \"args\": { \"tokenId\" } } (result.metadata)"],
     ["get", "/nft/:tokenId", "POST /contract/call { \"calls\": [ ownerOf, priceOf, tokenURI ] } and POST /contract/events (Transfer from 0x0) for the mint"],
@@ -3493,7 +3498,7 @@ for (const [method, path, use] of MOVED) {
 // ---- Section metrics (step 6): balances refreshed every 15 s (the scrape stays fast), operation
 // counters in memory (they restart at 0 with the proxy; dashboards use increase()).
 const sectionOps = new Map(); // "id|op" -> { id, name, op, count, wei }
-const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "nft_first_sale", "nft_resale", "nickname_sale", "edge_upgrade", "topup", "sweep", "payback", "account_replaced", "archive_return"];
+const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "avatar_sale", "avatar_resale", "nickname_sale", "edge_upgrade", "topup", "sweep", "payback", "account_replaced", "archive_return"];
 const sectionMetrics = { rows: [], sender01: null, error: 0, at: 0 };
 // Names of the platform and section accounts, whether they send now or not (proxy_account_info): the
 // MPC signer dashboard names each key's presignature pool with it. address (lowercase) -> info
@@ -3619,7 +3624,7 @@ function sectionMetricLines() {
         sectionMetrics.rows.map((r) => [`${sec(r.id, r.name)},role="${r.role}",active="${r.active ? 1 : 0}"`, r.eth]));
     metric("proxy_section_active", "gauge", "1 = the section is enabled (archived sections are not listed).",
         [...new Map(sectionMetrics.rows.map((r) => [r.id, r])).values()].map((r) => [sec(r.id, r.name), r.active ? 1 : 0]));
-    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, nft_first_sale, nft_resale, nickname_sale, edge_upgrade, topup, sweep, payback, account_replaced, archive_return).",
+    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, avatar_sale, avatar_resale, nickname_sale, edge_upgrade, topup, sweep, payback, account_replaced, archive_return).",
         [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, e.count]));
     metric("proxy_section_amount_eth_total", "counter", "ETH moved by section operations since the proxy started.",
         [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, Number(ethers.formatEther(e.wei))]));

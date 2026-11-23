@@ -1,19 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @notice ERC-721 collection (version 2). Only the deployer (the proxy minter) can mint.
-/// Every token has a price set at mint. `buy` sells a token in ONE atomic transaction: the
-/// buyer sends exactly the price, receives the token, and the ETH goes to the minter. If any
-/// step fails the whole sale reverts and no ETH moves.
-contract NftCollectionV2 {
-    /// @notice Contract version; the proxy only uses collections with version 2.
-    uint256 public constant version = 2;
+interface ISectionRegistry {
+    function isConsumptionAccount(address account) external view returns (bool);
+}
+
+/// @notice Avatar collection: an ERC-721 collection of avatar images (version 3, docs/features/avatars.md).
+/// Only the deployer (the contract account center) can mint. Every token has a price set at mint, fixed
+/// for good. `buy` sells a
+/// token in ONE atomic transaction: the buyer sends exactly the price and receives the token;
+/// the ETH goes to
+///   - on a first sale (the minter holds the token): `payee`, which must be a live section's
+///     consumption account in the SectionRegistry;
+///   - on a resale: the seller, who must have approved this contract for the token.
+/// If any step fails the whole sale reverts and no ETH moves.
+contract AvatarCollection {
+    /// @notice Contract version (3; version 2, minted by SENDER01, is retired).
+    uint256 public constant version = 3;
 
     bytes4 private constant ERC721_RECEIVED = 0x150b7a02;
 
     string public name;
     string public symbol;
     address public immutable minter;
+    ISectionRegistry public immutable registry;
 
     mapping(uint256 => address) private owners;
     mapping(address => uint256) private balances;
@@ -27,12 +37,14 @@ contract NftCollectionV2 {
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
     event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
-    event Sold(uint256 indexed tokenId, address indexed seller, address indexed buyer, uint256 price);
+    event Sold(uint256 indexed tokenId, address indexed seller, address indexed buyer, uint256 price, address paidTo);
 
-    constructor(string memory name_, string memory symbol_) {
+    constructor(string memory name_, string memory symbol_, address registry_) {
+        require(registry_ != address(0), "no registry");
         name = name_;
         symbol = symbol_;
         minter = msg.sender;
+        registry = ISectionRegistry(registry_);
     }
 
     function supportsInterface(bytes4 interfaceId) public pure returns (bool) {
@@ -110,29 +122,33 @@ contract NftCollectionV2 {
         require(checkOnERC721Received(msg.sender, address(0), to, tokenId, ""), "non receiver");
     }
 
-    /// @notice Buy `tokenId` for exactly its price. The token moves to the caller and the ETH
-    /// goes to the minter, in one transaction. Tokens held by the minter are always for sale;
-    /// any other owner must first approve this contract for the token (or for all tokens).
-    function buy(uint256 tokenId) external payable {
+    /// @notice Buy `tokenId` for exactly its (mint) price. The token moves to the caller; the ETH
+    /// goes to `payee` on a first sale (a live section's consumption account) or to the seller on
+    /// a resale (`payee` is then ignored). Tokens held by the minter are always for sale; any other
+    /// owner must first approve this contract for the token (or for all tokens).
+    function buy(uint256 tokenId, address payee) external payable {
         address seller = ownerOf(tokenId);
         require(msg.sender != seller, "already owner");
         require(msg.value == priceOf[tokenId], "wrong price");
-        require(
-            seller == minter
-                || tokenApprovals[tokenId] == address(this)
-                || operatorApprovals[seller][address(this)],
-            "not for sale"
-        );
+
+        address paidTo;
+        if (seller == minter) {
+            require(registry.isConsumptionAccount(payee), "payee is not a section's consumption account");
+            paidTo = payee;
+        } else {
+            require(tokenApprovals[tokenId] == address(this) || operatorApprovals[seller][address(this)], "not for sale");
+            paidTo = seller;
+        }
 
         transfer(seller, msg.sender, tokenId);
         require(checkOnERC721Received(msg.sender, seller, msg.sender, tokenId, ""), "non receiver");
 
         if (msg.value > 0) {
-            (bool ok, ) = minter.call{value: msg.value}("");
+            (bool ok, ) = paidTo.call{value: msg.value}("");
             require(ok, "payment failed");
         }
 
-        emit Sold(tokenId, seller, msg.sender, msg.value);
+        emit Sold(tokenId, seller, msg.sender, msg.value, paidTo);
     }
 
     function isApprovedOrOwner(address spender, uint256 tokenId) private view returns (bool) {

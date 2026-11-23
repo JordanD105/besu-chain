@@ -539,7 +539,7 @@ function memoUrl(url) {
 
 function memoNodes(memo) {
     // NFT payment memos end in the NFT's image URL: show the image, full memo as tooltip
-    const mint = memo.match(/^(?:New NFT Token mint|NFT transfer|NFT buy): [\s\S]* - (https?:\/\/\S+)$/);
+    const mint = memo.match(/^(?:New NFT Token mint|NFT transfer|NFT buy|Avatar buy): [\s\S]* - (https?:\/\/\S+)$/);
 
     if (mint && isImageUrl(mint[1])) {
         return [addressTip(memoImage(mint[1]), [{ value: memo, copy: false }])];
@@ -1078,8 +1078,8 @@ function balancesTable(sections) {
 
 // ---- Section statistics: week / month / quarter / year (/api/sections/stats). One measure at a time
 // in a column chart (one series, one axis); click a column for that period's table by section.
-const STAT_UNITS = { newUsers: "count", nftSales: "count", nftFirstSales: "count", txs: "count" };
-const STAT_COLUMNS = ["newUsers", "income", "fromUsers", "nftSales", "nftEth", "toUsers", "topup", "sweep", "payback", "txs"];
+const STAT_UNITS = { newUsers: "count", avatarSales: "count", avatarFirstSales: "count", txs: "count" };
+const STAT_COLUMNS = ["newUsers", "income", "fromUsers", "avatarSales", "avatarEth", "toUsers", "topup", "sweep", "payback", "txs"];
 const statState = { period: "month", section: "all", metric: "balances", index: null, from: "", to: "" };
 
 function statQuery() {
@@ -1729,10 +1729,10 @@ async function showContracts(page, type, status) {
 // only listed: transactions are signed by the MPC signer through the proxy or the deploy tools.
 // Mint and sell NFTs of a collection (admin pages' gate), through the proxy's /nft/mint and
 // /contract/send (buy); mint through /admin/contract/send. The buyer must be a user account of a section; its section receives a first sale.
-async function nftAdminCard(collection) {
+async function avatarAdminCard(collection) {
     let status;
     try {
-        status = await api("/api/nftadmin/status");
+        status = await api("/api/avataradmin/status");
     } catch (error) {
         return null;
     }
@@ -1767,7 +1767,7 @@ async function nftAdminCard(collection) {
         button.disabled = true;
         result.replaceChildren(el("span", { class: "muted" }, "…"));
         try {
-            onDone(await deployPost("/api/nftadmin/" + action, body));
+            onDone(await deployPost("/api/avataradmin/" + action, body));
         } catch (error) {
             result.replaceChildren(el("span", { class: "bad-text" }, error.message));
         }
@@ -1874,8 +1874,8 @@ async function showContract(address) {
         ])
     ];
 
-    if (data.type === "ERC721" || (data.record && data.record.kind === "NFT collection")) {
-        const nftCard = await nftAdminCard(data.address);
+    if (data.avatar) {
+        const nftCard = await avatarAdminCard(data.address);
         if (token !== showToken) {
             return;
         }
@@ -2059,7 +2059,7 @@ async function showDeploy() {
             planBox.append(el("div", { class: "kv deploy-plan" }, [
                 ...kv(t("deploy.contract"), plan.name + " (" + plan.creationSize + " bytes)"),
                 ...kv(t("contract.args"), plan.args.length ? JSON.stringify(plan.args) : "—"),
-                ...kv(t("deploy.kind"), plan.kind === "nft" ? t("deploy.kindNft") : t("deploy.kindCommon")),
+                ...kv(t("deploy.kind"), plan.kind === "avatar" || plan.kind === "nft" ? t("deploy.kindAvatar") : t("deploy.kindCommon")),
                 ...kv(t("contract.deployer"), plan.from),
                 ...kv(t("deploy.gas"), plan.gas + " (estimate " + plan.estimate + ")"),
                 ...kv(t("deploy.address"), plan.address)
@@ -2115,7 +2115,7 @@ async function showDeploy() {
 
     const kindSelect = el("select", { class: "deploy-contract", "aria-label": t("deploy.kind") }, [
         el("option", { value: "common" }, t("deploy.kindCommon")),
-        el("option", { value: "nft" }, t("deploy.kindNft"))
+        el("option", { value: "avatar" }, t("deploy.kindAvatar"))
     ]);
     kindSelect.value = deployState.kind;
     kindSelect.addEventListener("change", () => { deployState.kind = kindSelect.value; invalidate(); });

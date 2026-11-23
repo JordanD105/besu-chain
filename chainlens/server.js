@@ -224,7 +224,7 @@ function chainRegistryScan() {
                         const abi = JSON.parse(parsed.args.abiJson);
                         const address = ethers.getAddress(parsed.args.contractAddress);
                         chainRegistry.byAddress.set(address.toLowerCase(), {
-                            record: { name: parsed.args.name, address, abi, kind: Number(parsed.args.kind) === 2 ? "NFT collection" : "common", source: "registry" },
+                            record: { name: parsed.args.name, address, abi, kind: Number(parsed.args.kind) === 2 ? "Avatar collection" : "common", source: "registry" },
                             iface: new ethers.Interface(abi)
                         });
                     } catch (error) {
@@ -1161,8 +1161,8 @@ function contractLabel(address) {
     return (row && row.name) || (entry && entry.record.name) || null;
 }
 
-// A successful buy(tokenId) on an NFT collection: describe it like a payment memo so the
-// explorer can show the NFT image ("NFT buy: <collection> #<id> - <image URL>").
+// A successful buy(tokenId) on an avatar collection: describe it like a payment memo so the
+// explorer can show the avatar image ("Avatar buy: <collection> #<id> - <image URL>").
 function buyMemo(tx) {
     if (tx.status !== "success" || !tx.to || !tx.decoded || tx.decoded.name !== "buy") {
         return "";
@@ -1172,7 +1172,7 @@ function buyMemo(tx) {
     const nft = idArg ? db.nfts.get(tx.to.toLowerCase() + ":" + idArg.value) : null;
     const contract = db.contracts.get(tx.to.toLowerCase());
     const label = (contract && (contract.symbol || contract.name)) || tx.to;
-    const base = `NFT buy: ${label} #${idArg ? idArg.value : "?"}`;
+    const base = `Avatar buy: ${label} #${idArg ? idArg.value : "?"}`;
     const image = nft && nft.metadata && typeof nft.metadata.image === "string" ? nft.metadata.image : "";
 
     return /^https?:\/\/\S+$/.test(image) ? `${base} - ${image}` : base;
@@ -1464,7 +1464,7 @@ setInterval(refreshOverview, 15000).unref();
 // the registry's AccountAdded events. Money flows are classified by the roles of sender and receiver.
 const STAT_PERIODS = { day: 14, week: 12, month: 12, quarter: 8, year: 5 };
 const STAT_MAX_PERIODS = 120; // a date range shows at most this many columns
-const STAT_METRICS = ["newUsers", "income", "fromUsers", "nftSales", "nftFirstSales", "nftEth", "toUsers", "topup", "sweep", "payback", "txs"];
+const STAT_METRICS = ["newUsers", "income", "fromUsers", "avatarSales", "avatarFirstSales", "avatarEth", "toUsers", "topup", "sweep", "payback", "txs"];
 const statsCache = new Map(); // period -> { at, data }
 
 function periodStart(ms, period) {
@@ -1638,10 +1638,10 @@ function buildSectionStats(period, range) {
             add(fid, ms, "income", eth);
         } else if (fr === "user" && tx.functionName === "buy" && eth > 0) {
             const firstSale = (tx.events || []).some((e) => e.name === "Transfer" && e.args[0] && String(e.args[0].value).toLowerCase() === center);
-            add(fid, ms, "nftSales", 1);
-            add(fid, ms, "nftEth", eth);
+            add(fid, ms, "avatarSales", 1);
+            add(fid, ms, "avatarEth", eth);
             if (firstSale) {
-                add(fid, ms, "nftFirstSales", 1);
+                add(fid, ms, "avatarFirstSales", 1);
                 add(fid, ms, "income", eth);
             }
         }
@@ -1836,6 +1836,8 @@ app.get("/api/contracts/:address", async (req, res) => {
         ...(row ? publicContract(row) : { address, label: address, name: "", symbol: "", type: "Contract", txCount: 0 }),
         codeSize: code === "0x" ? 0 : ethers.dataLength(code),
         registered: Boolean(entry),
+        // an avatar collection (the platform's image tokens): mint, buy, priceOf, minter in its ABI
+        avatar: Boolean(entry && entry.iface && ["mint", "buy", "priceOf", "minter"].every((f) => entry.iface.getFunction(f))),
         registryError: registry.error
     };
     if (entry) {
@@ -2002,7 +2004,7 @@ function deployBodyForProxy(body) {
     }
     const art = deployer.loadArtifact(json, body.contract || "", String(body.artifactName || "Contract").replace(/\.json$/i, ""));
     return {
-        kind: body.kind === "nft" ? "nft" : "common",
+        kind: body.kind === "avatar" || body.kind === "nft" ? "avatar" : "common",
         name: String(body.name || "").trim().slice(0, 80) || art.name,
         abi: art.abi,
         bytecode: art.bytecode,
@@ -2049,35 +2051,35 @@ async function proxyAdmin(method, pathname, body) {
     return { status: response.status, data };
 }
 
-// ---- NFT mint and sale from the contract page (admin pages' gate), forwarded to the proxy's
+// ---- Avatar mint and sale from the contract page (admin pages' gate), forwarded to the proxy's
 // /admin/contract/send (mint, signed by the center) and /contract/send (buy, signed by the buyer)
-function nftAdminEnabled() {
+function avatarAdminEnabled() {
     return (DEPLOY.enabled || SECTIONS.enabled) && Boolean(SECTIONS.proxy);
 }
 
-function nftGuard(req, res, next) {
-    if (!nftAdminEnabled()) {
-        return res.status(404).json({ error: "NFT mint and sale need the Deploy or Sections page on" });
+function avatarGuard(req, res, next) {
+    if (!avatarAdminEnabled()) {
+        return res.status(404).json({ error: "avatar mint and sale need the Deploy or Sections page on" });
     }
     if (!ipAllowed(req.socket.remoteAddress)) {
         return res.status(403).json({ error: "only allowed from operator_ip and chainlens_deploy_ips" });
     }
     if (!tokenOk(req)) {
-        console.warn("nft: wrong token from", req.socket.remoteAddress);
+        console.warn("avatar: wrong token from", req.socket.remoteAddress);
         return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
     }
     next();
 }
 
-app.get("/api/nftadmin/status", (req, res) => {
-    res.json({ enabled: nftAdminEnabled() && ipAllowed(req.socket.remoteAddress) });
+app.get("/api/avataradmin/status", (req, res) => {
+    res.json({ enabled: avatarAdminEnabled() && ipAllowed(req.socket.remoteAddress) });
 });
 
 // A sale (version 3): the buyer calls buy(tokenId) through the proxy's /contract/send, which fills in
 // the payee (the buyer's section's consumption account) and the price. The answer keeps the old shape.
 // A mint: the center calls mint through the proxy's /admin/contract/send with friendly args (the proxy
 // builds the metadata, picks the token id and converts the price)
-async function nftMint(body) {
+async function avatarMint(body) {
     const args = { name: body.name, image: body.image, price: body.amount || "0" };
     ["description", "attributes"].forEach((k) => { if (body[k] !== undefined) { args[k] = body[k]; } });
     const r = await proxyAdmin("POST", "/admin/contract/send", { contract: body.collection, function: "mint", args });
@@ -2087,7 +2089,7 @@ async function nftMint(body) {
     return { status: 200, data: Object.assign({}, r.data, { tokenId: r.data.result.tokenId, price: r.data.result.price }) };
 }
 
-async function nftSell(body) {
+async function avatarSell(body) {
     const r = await proxyAdmin("POST", "/contract/send", { contract: body.collection, function: "buy", args: [String(body.tokenId)], from: body.to });
     if (r.status !== 200) {
         return r;
@@ -2098,14 +2100,14 @@ async function nftSell(body) {
     }) };
 }
 
-app.post("/api/nftadmin/:action", express.json({ limit: "256kb" }), nftGuard, async (req, res) => {
+app.post("/api/avataradmin/:action", express.json({ limit: "256kb" }), avatarGuard, async (req, res) => {
     const action = req.params.action;
     if (action !== "mint" && action !== "transfer") {
-        return res.status(404).json({ error: "unknown NFT action" });
+        return res.status(404).json({ error: "unknown avatar action" });
     }
     try {
-        const r = action === "transfer" ? await nftSell(req.body || {}) : await nftMint(req.body || {});
-        console.log("nft:", action, JSON.stringify({ collection: req.body.collection, tokenId: req.body.tokenId, to: req.body.to }), "from", req.socket.remoteAddress, "->", r.status);
+        const r = action === "transfer" ? await avatarSell(req.body || {}) : await avatarMint(req.body || {});
+        console.log("avatar:", action, JSON.stringify({ collection: req.body.collection, tokenId: req.body.tokenId, to: req.body.to }), "from", req.socket.remoteAddress, "->", r.status);
         res.status(r.status).json(r.data);
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });

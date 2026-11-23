@@ -103,7 +103,7 @@ y += 5
 # ---- Requests
 row("Requests", y); y += 1
 timeseries("Requests per second by route", [target(f'sum by (route) (rate(proxy_http_requests_total[{RATE}]))', "{{route}}")],
-           0, y, unit="reqps", stack=True, decimals=2, desc="Route patterns (e.g. /nft/:tokenId), all methods and status codes")
+           0, y, unit="reqps", stack=True, decimals=2, desc="Route patterns (e.g. /transfer/:txHash), all methods and status codes")
 timeseries("Errors per second (4xx and 5xx)", [
     target(f'sum by (route, code) (rate(proxy_http_requests_total{{code=~"5..|aborted"}}[{RATE}]))', "{{route}} {{code}}"),
     target(f'sum by (route, code) (rate(proxy_http_requests_total{{code=~"4.."}}[{RATE}]))', "{{route}} {{code}}", ref="B")],

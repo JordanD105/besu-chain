@@ -960,7 +960,7 @@
       "type": "timeseries",
       "title": "Requests per second by route",
       "id": 14,
-      "description": "Route patterns (e.g. /nft/:tokenId), all methods and status codes",
+      "description": "Route patterns (e.g. /transfer/:txHash), all methods and status codes",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
