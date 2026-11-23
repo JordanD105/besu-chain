@@ -310,7 +310,7 @@ function notice(status) {
 }
 
 async function api(path) {
-    const response = await fetch(path);
+    const response = await fetch(path, { cache: "no-store" });
     const body = await response.json();
 
     if (!response.ok) {
@@ -2251,7 +2251,7 @@ async function showDeploy() {
 // browsers when the server has them on (chainlens_sections_enabled). Uses the admin token of the
 // Deploy page (same token, kept in this tab).
 async function sectionGet(path) {
-    const response = await fetch(path, { headers: { authorization: "Bearer " + deployToken() } });
+    const response = await fetch(path, { cache: "no-store", headers: { authorization: "Bearer " + deployToken() } });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
         const error = new Error(data.error || ("HTTP " + response.status));
