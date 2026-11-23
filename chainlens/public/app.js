@@ -1848,7 +1848,7 @@ async function avatarAdminCard(collection) {
     } catch (error) {
         return null;
     }
-    if (!status.enabled) {
+    if (!status.enabled || !isSignedIn()) {
         return null;
     }
     const post = (action, body) => deployPost("/api/avataradmin/" + action, Object.assign({ collection }, body));
@@ -1883,7 +1883,7 @@ async function avatarAdminCard(collection) {
 
     // the newest avatars with their state, and Undo while it is possible
     const list = el("div", {}, el("span", { class: "muted" }, "…"));
-    deployToken() && sectionGet("/api/avataradmin/items?collection=" + collection).then((d) => {
+    isSignedIn() && sectionGet("/api/avataradmin/items?collection=" + collection).then((d) => {
         list.replaceChildren(dataTable([
             { label: "nft.tokenId", sort: (r) => Number(r.tokenId), cell: (r) => el("a", { href: "#/nfts/" + collection + "/" + r.tokenId }, "#" + r.tokenId) },
             { label: "nft.image", search: (r) => r.image, cell: (r) => el("span", { style: "word-break:break-all" }, r.image) },
@@ -2109,6 +2109,9 @@ async function showDeploy() {
     if (!status.enabled) {
         return show(el("section", { class: "card" }, [el("h2", {}, t("deploy.title")), el("div", { class: "empty" }, t("deploy.off"))]));
     }
+    if (!isSignedIn()) {
+        return show(adminError({ status: 401 }, t("deploy.title")));
+    }
 
     const planBox = el("div");
     const resultBox = el("div");
@@ -2307,7 +2310,7 @@ async function showSections() {
     const message = el("div", { class: "deploy-error" });
     let data;
     try {
-        data = deployToken() ? await sectionGet("/api/sections") : null;
+        data = isSignedIn() ? await sectionGet("/api/sections") : null;
     } catch (error) {
         lastAdminStatus = error.status || 0;
         message.textContent = error.message;
@@ -2317,7 +2320,7 @@ async function showSections() {
     }
     if (!data) {
         // no token or a wrong one: sign in; any other error: the error itself (not the sign-in)
-        return show(!deployToken() || lastAdminStatus === 401 ? adminError({ status: 401 }, t("sections.title"))
+        return show(!isSignedIn() || lastAdminStatus === 401 ? adminError({ status: 401 }, t("sections.title"))
             : el("section", { class: "card" }, [el("h2", {}, t("sections.title")), uiError(message.textContent)]));
     }
 
@@ -2394,6 +2397,9 @@ async function showSection(id, tab) {
     }
     if (!status.enabled) {
         return show(el("section", { class: "card" }, [el("h2", {}, t("sections.title")), el("div", { class: "empty" }, t("sections.off"))]));
+    }
+    if (!isSignedIn()) {
+        return show(adminError({ status: 401 }, t("sections.title")));
     }
     let data;
     try {
@@ -2794,7 +2800,7 @@ async function showNicknames(q) {
     const message = el("div", { class: "deploy-error" });
     let data;
     try {
-        data = deployToken() ? await sectionGet("/api/nicknames" + (q ? "?q=" + encodeURIComponent(q) : "")) : null;
+        data = isSignedIn() ? await sectionGet("/api/nicknames" + (q ? "?q=" + encodeURIComponent(q) : "")) : null;
     } catch (error) {
         lastAdminStatus = error.status || 0;
         message.textContent = error.message;
@@ -2804,7 +2810,7 @@ async function showNicknames(q) {
     }
     if (!data) {
         // no token or a wrong one: sign in; any other error: the error itself (not the sign-in)
-        return show(!deployToken() || lastAdminStatus === 401 ? adminError({ status: 401 }, t("nick.title"))
+        return show(!isSignedIn() || lastAdminStatus === 401 ? adminError({ status: 401 }, t("nick.title"))
             : el("section", { class: "card" }, [el("h2", {}, t("nick.title")), uiError(message.textContent)]));
     }
 
@@ -2907,7 +2913,7 @@ let lastAdminStatus = 0;
 function paintChrome(status) {
     const admin = status.admin || {};
     adminState.allowed = Boolean(admin.allowed);
-    adminState.signedIn = adminState.allowed && Boolean(deployToken()) && sessionStorage.getItem("chainlens.adminOk") === deployToken();
+    adminState.signedIn = adminState.allowed && isSignedIn();
     document.querySelectorAll(".admin-only").forEach((node) => { node.hidden = !adminState.allowed; });
     document.querySelectorAll('[data-admin="sections"]').forEach((node) => { node.hidden = !adminState.allowed || !admin.sections; });
     document.querySelectorAll('[data-admin="deploy"]').forEach((node) => { node.hidden = !adminState.allowed || !admin.deploy; });
@@ -2993,6 +2999,12 @@ document.querySelector("#admin-chip").addEventListener("click", () => {
         signInDialog();
     }
 });
+
+// Signed in = a token that was checked in this browser session (the chip in the top bar says the same)
+function isSignedIn() {
+    const token = deployToken();
+    return Boolean(token) && sessionStorage.getItem("chainlens.adminOk") === token;
+}
 
 // An admin page's error: 401 -> sign in; anything else -> the real message
 function adminError(error, title) {
@@ -3395,6 +3407,9 @@ async function showActivity(params, status) {
 // ---- Admin → Avatars: pick a collection, then mint, price, sell, undo (the avatar card)
 async function showAvatarAdmin(selected) {
     const token = showToken;
+    if (!isSignedIn()) {
+        return show(adminError({ status: 401 }, t("nav.avatarAdmin")));
+    }
     const data = await api("/api/contracts?limit=1000&type=avatar");
     if (token !== showToken) {
         return;
@@ -3431,6 +3446,9 @@ async function showAvatarAdmin(selected) {
 // ---- Admin → Gateways: every section gateway, its mode and open corrections
 async function showGateways() {
     const token = showToken;
+    if (!isSignedIn()) {
+        return show(adminError({ status: 401 }, t("nav.gateways")));
+    }
     let data;
     let sections;
     try {
