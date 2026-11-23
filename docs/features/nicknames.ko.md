@@ -94,6 +94,9 @@
 
 ## 1. 컬렉션 배포 {#1-deploy-the-collection}
 
+**Ansible이 배포합니다:** 닉네임 컬렉션이 없으면 `08-check.yml`이 `platform_nickname_collection`(기본: *Nicknames*,
+NICK, 7일)을 배포합니다([Ansible](../deployment/ansible.md#platform-contracts)). 직접 배포하려면:
+
 한 번, chainlens **Nicknames**(`#/nicknames`, `chainlens_sections_enabled: true`일 때 표시)에서: 이름, 심볼,
 **Undo period (days)**를 입력하고 **Deploy the nickname collection**. 또는 관리 API와
 `nickname-collection` 템플릿으로(`holdDays`: 기본 7, 테스트용 소수 허용):

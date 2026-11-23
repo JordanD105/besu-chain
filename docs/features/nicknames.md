@@ -95,6 +95,10 @@ sale instead. An undone sale puts the level back to 0.
 
 ## 1. Deploy the collection
 
+**Ansible deploys it:** `08-check.yml` deploys `platform_nickname_collection` (default: *Nicknames*,
+NICK, 7 days) when no nickname collection exists ([Ansible](../deployment/ansible.md#platform-contracts)).
+By hand:
+
 Once, in chainlens **Nicknames** (`#/nicknames`, shown when `chainlens_sections_enabled: true`): name,
 symbol and **Undo period (days)**, then **Deploy the nickname collection**. Or with the admin API and
 the `nickname-collection` template (`holdDays`: default 7, decimals allowed for tests):

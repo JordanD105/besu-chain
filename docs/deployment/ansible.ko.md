@@ -35,7 +35,7 @@ Ansible은 전체 프로덕션 구성([프로덕션 구성](../overview/producti
 | 5 | `05-besu.yml` | .135–.138 | 6개 노드 키(각 호스트에서), `SENDER01`에 자금이 지급된 제네시스(1회), 검증자, 그다음 RPC 노드 |
 | 6 | `06-proxy.yml` | 운영자, .135, .136 | SectionRegistry(1회, 또는 이전 버전의 업그레이드), 컨트랙트 계정 센터(1회), 프록시 설정(여기서 프록시를 시작하지 않으며, 실행 중인 프록시는 업데이트됩니다), 두 호스트의 redis-exporter |
 | 7 | `07-ha.yml` | .135, .136 | RPC 상태 검사기(`besu-rpc-health`), HAProxy, keepalived: VIP는 .135에 있으며, 프록시 VIP를 보유한 호스트에서 프록시가 시작됩니다 |
-| 8 | `08-check.yml` | 운영자 | VIP를 통한 Besu, MPC, 프록시 점검. 프록시 관리 API와 SectionRegistry, 이전 레지스트리의 마이그레이션(1회), 1회: 테스트 계정 + 전송 |
+| 8 | `08-check.yml` | 운영자 | VIP를 통한 Besu, MPC, 프록시 점검. 프록시 관리 API와 SectionRegistry, 이전 레지스트리의 마이그레이션(1회), 1회: 테스트 계정 + 전송, **플랫폼 컨트랙트**(1회): 이체 취소 컨트랙트, 아래 설정의 아바타 컬렉션과 닉네임 컬렉션 |
 | 9 | `09-monitoring.yml` | .139 | Prometheus와 Grafana: 파일, IP 계획에서 생성된 대상, 설정, 규칙 변경 후 다시 로드. 모든 대상을 점검합니다 |
 | 10 | `10-backups.yml` | .135–.138 | 일일 체인 스냅샷 cron(val3), 노드 키 백업(GPG), MPC 키 조각 백업(선택). URL과 수동으로 남는 작업을 출력합니다 |
 | 11 | `11-chainlens.yml` | .139 | chainlens([Chainlens](../components/chainlens.md)). Deploy 페이지 기록을 운영자 저장소로 다시 복사합니다 |
@@ -214,6 +214,19 @@ MPC 이미지 버전이 변경되면 MPC 노드 팀은 `site.yml`을 다시 실�
 제공합니다. `02-images.yml`이 `docs/`로부터 이미지를 빌드하고 `13-docs-site.yml`이 시작합니다.
 `false`이면 중지합니다. 열 수 있는 대상: `docs_ips`. 자세한 내용:
 [문서 웹사이트](../components/docs-site.md).
+
+### 플랫폼 컨트랙트 {#platform-contracts}
+
+`08-check.yml`이 한 번 배포합니다(컨트랙트 계정 센터가 서명, 프록시 VIP를 통해). 이미 있는 컨트랙트는 유지되므로
+(프록시가 409로 응답) 다시 실행해도 바뀌는 것이 없습니다.
+
+| 설정 | 기본값 | 의미 |
+|---|---|---|
+| `platform_avatar_collections` | `[{ name: Avatars, symbol: AVT, hold_days: 7 }]` | 배포할 아바타 컬렉션(한 줄에 하나; `[]` = 없음). 같은 이름이나 심볼의 아바타 컬렉션이 있으면 유지 |
+| `platform_nickname_collection` | `{ name: Nicknames, symbol: NICK, hold_days: 7 }` | 닉네임 컬렉션(`{}` = 없음). 닉네임 컬렉션이 이미 있으면 유지 |
+| `transfer_undo_days` | `7` | +x / −x의 취소 기간([이체 취소](../features/transfer-undo.md)). 이체 취소 컨트랙트는 항상 배포 |
+
+플레이는 예를 들어 `avatar collection Avatars: deployed`, `nickname collection Nicknames: exists`를 출력합니다.
 
 ### 섹션 게이트웨이 {#section-gateways}
 

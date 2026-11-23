@@ -81,6 +81,10 @@ chainlens 관리 페이지는 운영자 머신 또는 `chainlens_deploy_ips`에 
   P=http://192.168.68.151:30000; T=$(cat ansible/state/secrets/proxy_admin_token)
   ```
 
+> **Ansible이 하나를 배포합니다:** `08-check.yml`이 `platform_avatar_collections`의 아바타 컬렉션(기본: *Avatars*,
+> AVT, 7일)을 한 번 배포합니다([Ansible](../deployment/ansible.md#platform-contracts)). 아래 단계는 다른 컬렉션을
+> 만들거나 직접 배포할 때입니다.
+
 ## 1. Remix에서 컴파일 {#1-compile-in-remix}
 
 저장소에 컴파일된 아티팩트가 이미 있습니다: `proxy/avatar-collection.json`(템플릿이 사용). Remix 컴파일은

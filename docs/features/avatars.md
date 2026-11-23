@@ -84,6 +84,10 @@ on h139). Use the chainlens admin pages from the operator machine or a PC in
   P=http://192.168.68.151:30000; T=$(cat ansible/state/secrets/proxy_admin_token)
   ```
 
+> **Ansible deploys one for you:** `08-check.yml` deploys the avatar collections of
+> `platform_avatar_collections` (default: *Avatars*, AVT, 7 days) once ([Ansible](../deployment/ansible.md#platform-contracts)).
+> The steps below are for another collection, or by hand.
+
 ## 1. Compile in Remix
 
 The repository already has the compiled artifact: `proxy/avatar-collection.json` (the template

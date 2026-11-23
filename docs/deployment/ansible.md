@@ -35,7 +35,7 @@ All commands below run in `ansible/` on the operator.
 | 5 | `05-besu.yml` | .135–.138 | 6 node keys (on their hosts), genesis (once) with `SENDER01` funded, validators, then RPC nodes |
 | 6 | `06-proxy.yml` | operator, .135, .136 | the SectionRegistry (once, or an upgrade of an older version), the contract account center (once), proxy settings (the proxy is not started here; a running one is updated), redis-exporter on both hosts |
 | 7 | `07-ha.yml` | .135, .136 | RPC health checker (`besu-rpc-health`), HAProxy, keepalived: VIPs on .135, the proxy started on the host holding the proxy VIP |
-| 8 | `08-check.yml` | operator | Besu, MPC and proxy through the VIPs; the proxy admin API and the SectionRegistry; migration of an older registry (once); once: test account + transfer |
+| 8 | `08-check.yml` | operator | Besu, MPC and proxy through the VIPs; the proxy admin API and the SectionRegistry; migration of an older registry (once); once: test account + transfer; **platform contracts** (once): the transfer-undo contract, the avatar collections and the nickname collection of the settings below |
 | 9 | `09-monitoring.yml` | .139 | Prometheus and Grafana: files, targets from the IP plan, settings, reload after a rule change; every target checked |
 | 10 | `10-backups.yml` | .135–.138 | daily chain snapshot cron (val3), node key backups (GPG), MPC share backups (opt-in); prints the URLs and what stays manual |
 | 11 | `11-chainlens.yml` | .139 | chainlens ([Chainlens](../components/chainlens.md)); copies Deploy page records back to the operator's repository |
@@ -216,6 +216,19 @@ Who may open it: `remix_ips`. More: [Remix IDE (self-hosted)](../components/remi
 (`.139:30300`), built from `docs/` into an image by `02-images.yml` and started by
 `13-docs-site.yml`; `false` stops it. Who may open it: `docs_ips`. More:
 [Documentation website](../components/docs-site.md).
+
+### Platform contracts
+
+Deployed once by `08-check.yml` (signed by the contract account center, through the proxy VIP). A
+contract that exists already is kept (the proxy answers 409), so reruns change nothing.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `platform_avatar_collections` | `[{ name: Avatars, symbol: AVT, hold_days: 7 }]` | avatar collections to deploy (one line each; `[]` = none). An avatar collection with the same name or symbol is kept |
+| `platform_nickname_collection` | `{ name: Nicknames, symbol: NICK, hold_days: 7 }` | the nickname collection (`{}` = none). Kept when a nickname collection exists already |
+| `transfer_undo_days` | `7` | the undo period of +x / −x ([transfer undo](../features/transfer-undo.md)); the transfer-undo contract is always deployed |
+
+The play prints, for example, `avatar collection Avatars: deployed`, `nickname collection Nicknames: exists`.
 
 ### Section gateways
 
