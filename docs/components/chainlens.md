@@ -40,7 +40,8 @@
 | **Accounts** | `#/accounts` | every account with balance and transaction count; the **Section** column (section and role: user, upfront, consumption, payment, retired; system accounts SENDER01, contract center, registry admin) and a section filter. An account's page shows its section, transactions and tokens |
 | **NFTs** | `#/nfts` | NFTs (ERC-721 tokens) of every collection, avatars and nicknames, with image, owner and price; an NFT's page shows its metadata and history |
 | **Contracts** | `#/contracts` | contracts seen on chain; registered ones (deployed through the proxy or recorded in `contracts/deployments/`) have a page with their functions: **view / pure functions run in the page** (read only). Avatar collections get the **Mint and sell avatars** card (admin) |
-| **Transactions** / **Blocks** | `#/transactions`, `#/blocks` | lists and detail pages (decoded function calls, events, memos) |
+| **Transactions** / **Blocks** | `#/transactions`, `#/blocks` | lists and detail pages (decoded function calls, events, the memo of every transaction in the page's language) |
+| **Memos** | `#/memos` | the [memo](../features/memos.md) of every transaction: filters (type, section, text, dates, request id), export CSV / JSON (`GET /api/memos`) |
 | **Network** | `#/network` | the node chainlens reads: peers, versions |
 | **API** | `#/api` | chainlens's own JSON API (`/api/...`) |
 

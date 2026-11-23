@@ -39,6 +39,8 @@ gateway keeps answering while the proxy can't be reached (queued writes, a `gate
 | **Addresses** | `0x…` (any letter case) |
 | **Answers** | JSON. Success: `{ "success": true, … }`. Failure: an HTTP status and `{ "error": "…" }` |
 | **Who may call** | the firewall's `proxy_client_ips` ([access control](../deployment/access-control.md)); the admin API also needs the admin token and an admin address |
+| **Memo** | every write route takes an optional `"memo"` (at most 256 bytes); every transaction gets a memo, and write answers carry `memo`, `memoType`, `memoText`, `memoParams`, `userMemo`, `memoRequest` ([memos](#memos)) |
+| **Language** | `?lang=` (`en`, `ko`, `zh`) or `Accept-Language`: the language of the memo texts |
 
 Three kinds of callers:
 
@@ -103,7 +105,8 @@ A section's accounts can't be moved this way (403).
 
 ### `GET /transfer/:txHash` — status of a transfer
 
-Status (pending, mined, failed) and the memo.
+Status (pending, mined, failed) and the memo: `memo` (the caller's text, else the default text in
+the asked language), `memoType`, `memoText`, `memoParams`, `userMemo`, `memoRequest`.
 
 ---
 
@@ -541,7 +544,8 @@ only its price.
 | `POST /admin/sections/:id/accounts` | `{ "amount": "5", "pool": "small" }` | create a user account (as `/createaccount`) |
 | `POST /admin/sections/:id/transfer` | `{ "account", "amount", "memo" }` | +x / −x for a user account (as `/transfer`) |
 
-Every money movement carries a memo naming the operation.
+Every transaction carries a memo naming the operation (`section.topup`, `section.sweep`, …), plus the
+`memo` of the request when given ([memos](#memos)).
 
 ---
 
@@ -641,6 +645,28 @@ GET /nft/collections
 → 410 { "error": "GET /nft/collections was removed: use GET /contract/list?type=avatar" }
 ```
 
+
+---
+
+## Memos
+
+Every transaction the proxy sends carries a memo record at the end of its data: the memo type, the
+section, the values, the caller's `memo` and a request id. Readers show it in English, Korean or
+Chinese. The whole design: [memos](../features/memos.md).
+
+| | |
+|---|---|
+| **Parameter** | `"memo": "order 1234"` on any write route (`/transfer`, `/createaccount`, `/contract/send`, `/admin/…`); a string of at most 256 UTF-8 bytes, else 400 |
+| **Answer fields** | `memo` (what to show), `memoType`, `memoText` (the default text), `memoParams`, `userMemo`, `memoRequest` |
+| **Language** | `?lang=ko` (or `en`, `zh`), else `Accept-Language`, else `memo_default_lang` |
+| **Read back** | `GET /transfer/:txHash`; chainlens (every transaction, the Memos page, `GET /api/memos`) |
+
+```json
+POST /contract/send?lang=ko   { "contract": "0xAvatars", "function": "buy", "args": { "imageUrl": "https://…/fox.png" }, "from": "0xUser", "memo": "gift for mom" }
+→ { "success": true, …, "memo": "gift for mom", "memoType": "avatar.buy",
+    "memoText": "Shop B: 아바타 #1 0.12 ETH에 구매", "memoParams": { "tokenId": "1", "imageUrl": "https://…/fox.png", "amount": "0.12" },
+    "userMemo": "gift for mom", "memoRequest": "47181dc1" }
+```
 
 ---
 

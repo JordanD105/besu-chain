@@ -39,7 +39,8 @@
 | **Accounts** | `#/accounts` | 모든 계정의 잔액과 트랜잭션 수; **Section** 열(섹션 및 역할: user, upfront, consumption, payment, retired; 시스템 계정 SENDER01, 컨트랙트 센터, 레지스트리 관리자)과 섹션 필터. 계정 페이지에는 해당 계정의 섹션, 트랜잭션, 토큰이 표시됩니다 |
 | **NFTs** | `#/nfts` | 모든 컬렉션(아바타와 닉네임)의 NFT(ERC-721 토큰)와 이미지, 소유자, 가격; NFT 페이지에는 메타데이터와 이력이 표시됩니다 |
 | **Contracts** | `#/contracts` | 체인에서 확인된 컨트랙트; 등록된 컨트랙트(프록시를 통해 배포되었거나 `contracts/deployments/`에 기록된 컨트랙트)에는 함수 목록이 있는 페이지가 있으며, **view / pure 함수는 페이지에서 실행됩니다**(읽기 전용). 아바타 컬렉션에는 **Mint and sell avatars** 카드(관리자용)가 표시됩니다 |
-| **Transactions** / **Blocks** | `#/transactions`, `#/blocks` | 목록 및 상세 페이지(디코딩된 함수 호출, 이벤트, 메모) |
+| **Transactions** / **Blocks** | `#/transactions`, `#/blocks` | 목록 및 상세 페이지(디코딩된 함수 호출, 이벤트, 페이지 언어로 된 모든 트랜잭션의 메모) |
+| **Memos** | `#/memos` | 모든 트랜잭션의 [메모](../features/memos.md): 필터(종류, 섹션, 텍스트, 날짜, 요청 id), CSV / JSON 내보내기(`GET /api/memos`) |
 | **Network** | `#/network` | chainlens가 읽는 노드: 피어, 버전 |
 | **API** | `#/api` | chainlens 자체 JSON API(`/api/...`) |
 

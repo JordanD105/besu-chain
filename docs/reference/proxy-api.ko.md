@@ -39,6 +39,8 @@
 | **주소** | `0x…` (대소문자 무관) |
 | **응답** | JSON. 성공: `{ "success": true, … }`. 실패: HTTP 상태 코드와 `{ "error": "…" }` |
 | **호출 가능 대상** | 방화벽의 `proxy_client_ips` ([접근 제어](../deployment/access-control.md)). 관리 API는 관리 토큰과 관리자 주소도 필요합니다 |
+| **메모** | 모든 쓰기 라우트가 선택적 `"memo"`(최대 256바이트)를 받습니다. 모든 트랜잭션에 메모가 붙고, 쓰기 응답에 `memo`, `memoType`, `memoText`, `memoParams`, `userMemo`, `memoRequest`가 있습니다([메모](#memos)) |
+| **언어** | `?lang=` (`en`, `ko`, `zh`) 또는 `Accept-Language`: 메모 문구의 언어 |
 
 호출자는 세 종류입니다.
 
@@ -103,7 +105,8 @@ MPC 노드 3개가 분산 키 생성을 실행합니다. 개인 키는 어디에
 
 ### `GET /transfer/:txHash` — 이체 상태 {#get-transfertxhash--status-of-a-transfer}
 
-상태(pending, mined, failed)와 메모를 반환합니다.
+상태(pending, mined, failed)와 메모를 반환합니다: `memo`(호출자 문구, 없으면 요청한 언어의 기본 문구), `memoType`,
+`memoText`, `memoParams`, `userMemo`, `memoRequest`.
 
 ---
 
@@ -625,6 +628,27 @@ GET /nft/collections
 → 410 { "error": "GET /nft/collections was removed: use GET /contract/list?type=avatar" }
 ```
 
+
+---
+
+## 메모 {#memos}
+
+프록시가 보내는 모든 트랜잭션에는 데이터 끝에 메모 레코드가 붙습니다: 메모 종류, 섹션, 값, 호출자의 `memo`,
+요청 id. 읽는 쪽은 영어, 한국어, 중국어로 봅니다. 전체 설계: [메모](../features/memos.md).
+
+| | |
+|---|---|
+| **파라미터** | 모든 쓰기 라우트(`/transfer`, `/createaccount`, `/contract/send`, `/admin/…`)에 `"memo": "order 1234"`. UTF-8 최대 256바이트 문자열, 아니면 400 |
+| **응답 필드** | `memo`(보여줄 것), `memoType`, `memoText`(기본 문구), `memoParams`, `userMemo`, `memoRequest` |
+| **언어** | `?lang=ko`(또는 `en`, `zh`), 없으면 `Accept-Language`, 없으면 `memo_default_lang` |
+| **다시 읽기** | `GET /transfer/:txHash`; chainlens(모든 트랜잭션, 메모 페이지, `GET /api/memos`) |
+
+```json
+POST /contract/send?lang=ko   { "contract": "0xAvatars", "function": "buy", "args": { "imageUrl": "https://…/fox.png" }, "from": "0xUser", "memo": "gift for mom" }
+→ { "success": true, …, "memo": "gift for mom", "memoType": "avatar.buy",
+    "memoText": "Shop B: 아바타 #1 0.12 ETH에 구매", "memoParams": { "tokenId": "1", "imageUrl": "https://…/fox.png", "amount": "0.12" },
+    "userMemo": "gift for mom", "memoRequest": "47181dc1" }
+```
 
 ---
 

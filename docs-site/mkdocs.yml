@@ -83,6 +83,7 @@ plugins:
             Contract records: 컨트랙트 기록
             Avatars: 아바타
             Nicknames: 닉네임
+            Memos: 메모
             Operations: 운영
             Alerts: 알림
             Alert runbook: 알림 런북
@@ -153,6 +154,7 @@ nav:
       - Contract records: features/contract-records.md
       - Avatars: features/avatars.md
       - Nicknames: features/nicknames.md
+      - Memos: features/memos.md
   - Operations:
       - Alerts: operations/alerts.md
       - Alert runbook: operations/alert-runbook.md
