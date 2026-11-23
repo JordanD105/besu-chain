@@ -685,7 +685,7 @@ function offlineContractSend(body, uid) {
             undoUntil: iso(paidAt + holdMs(c)), undone: false, undoable: true, current: true, pending: true });
         saveItem(it);
         const result = Object.assign(summary(c, it), { buyer: user.display, paid: it.price, paidTo: SECTION.consumption, undoUntil: iso(paidAt + holdMs(c)) });
-        enqueue({ uid, kind: c.type + "_buy", signer: user.display, path: "/contract/send", body: { contract: c.display, function: "buy", args: { tokenId: String(tokenId) }, from: user.display },
+        enqueue({ uid, kind: c.type + "_buy", signer: user.display, path: "/contract/send", body: { contract: c.display, function: "buy", args: { tokenId: String(tokenId) }, from: user.display, value: it.price },
             token: tokenKey(tokenId), deltas: [[user.display, -price], [SECTION.consumption, price]], spendAccount: user.display, spendWei: price, answer: { result } });
         return base(user.display, price, result);
     }
@@ -722,7 +722,7 @@ function offlineContractSend(body, uid) {
         saveItem(it);
         const result = Object.assign(summary(c, it), { fromLevel, paid: weiToEth(price), paidTo: SECTION.consumption, undoUntil: iso(paidAt + holdMs(c)) });
         enqueue({ uid, kind: "level_upgrade", signer: user.display, path: "/contract/send",
-            body: { contract: c.display, function: "upgradeLevel", args: { tokenId: String(it.token_id), level: to }, from: user.display },
+            body: { contract: c.display, function: "upgradeLevel", args: { tokenId: String(it.token_id), level: to }, from: user.display, value: weiToEth(price) },
             token: tokenKey(it.token_id), deltas: [[user.display, -price], [SECTION.consumption, price]], spendAccount: user.display, spendWei: price, answer: { result } });
         return base(user.display, price, result);
     }
@@ -770,7 +770,7 @@ function offlineContractSend(body, uid) {
             result = { tokenId: String(it.token_id), undone: "level", level: target.fromLevel, undoneLevel: target.toLevel, refunded: weiToEth(refund) };
         }
         saveItem(it);
-        enqueue({ uid, kind: fn, signer: payer, path: "/contract/send", body: { contract: c.display, function: fn, args: { tokenId: String(it.token_id) } },
+        enqueue({ uid, kind: fn, signer: payer, path: "/contract/send", body: { contract: c.display, function: fn, args: { tokenId: String(it.token_id) }, value: weiToEth(refund) },
             token: tokenKey(it.token_id), deltas: [[payer, -refund], [buyer, refund]], spendAccount: payer, spendWei: refund, answer: { result } });
         return base(payer, refund, result);
     }
