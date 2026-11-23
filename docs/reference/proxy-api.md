@@ -144,11 +144,12 @@ collection version 3 and the nickname collection) use the same calls, with frien
 
 Numbers may be strings or numbers, addresses `0x…`, booleans `true` / `false`, arrays and tuples
 as JSON. With an object on the **platform's contracts**, the values are **friendly**: prices in
-ETH, colors `#rrggbb`, pattern names, metadata for a mint ([table below](#friendly-values-of-the-platform-contracts)).
+ETH, metadata for a mint ([table below](#friendly-values-of-the-platform-contracts)).
 On other contracts an object only puts the values in the ABI's order.
 
 - A missing or misnamed value: 400 `args: no value for "account" (quote(address,uint8)); given: acct`.
 - An unknown name on another contract: 400 `args: unknown name(s) x; f(uint256) takes a, b`.
+- An unknown name on the platform's contracts: 400 `args: unknown name(s) color; setEdge takes level, price, forSale, enabled`.
 - Nicknames are always trimmed and NFC-normalized, also in a list.
 
 ### `POST /contract/call` — read
@@ -253,6 +254,8 @@ with `success: false`.
 ```
 
 Oldest first. `current: true` marks the nickname collection in use (the latest registered one).
+Only a version-5 collection is `type: "nickname"`; an older one (version 4, with edge styles) is an
+ordinary contract (`type: "contract"`, no friendly values).
 `center` is the contract account center's address (the deployer and minter).
 
 ### Friendly values of the platform contracts
@@ -274,13 +277,12 @@ Oldest first. `current: true` marks the nickname collection in use (the latest r
 | nickname | `edgeInfo` | `{ level }` |
 | nickname | `tokenURI`, `ownerOf`, `edgeOf`, `nicknameById`, `locked`, `reserved` | `{ tokenId }` |
 | nickname | `setNicknamePrice` (center) | `{ price }` (ETH) |
-| nickname | `addEdge` (center) | `{ name, price, color, color2, width, radius, pattern }`: `name`, `price` and `color` required |
-| nickname | `setEdge` (center) | `{ level, …only the fields to change }` (also `enabled`) |
+| nickname | `addEdge` (center) | `{ price }`: the new level's step price (ETH); it is for sale |
+| nickname | `setEdge` (center) | `{ level, price, forSale }`: omitted fields keep their values (`enabled` is an alias of `forSale`) |
 | nickname | `reserve` (center) | `{ nicknames: [ … ], reserved }`: 1 to 100 names; `reserved: false` frees them |
 
-Edge style values: `color`, `color2` `#rrggbb`; `width` 1–20; `radius` 0–40; `pattern` `solid`,
-`double`, `dashed`, `gradient` or `glow`; `name` 1–32 bytes. Defaults for `addEdge`: `color2` =
-`color`, width 3, radius 12, `solid`.
+A level stores only its step price and whether it is for sale. Level 0 always has price 0 and is
+always for sale.
 
 **Results** (`result`):
 
@@ -294,17 +296,17 @@ Edge style values: `color`, `color2` `#rrggbb`; `width` 1–20; `radius` 0–40;
 | NFT | `mint` | `{ minted, tokenId, owner, price, metadata }` |
 | NFT | `approve` | `{ tokenId, approved, forSale }` (`forSale`: approved to the collection) |
 | nickname | `nicknamePrice` | `{ price }` |
-| nickname | `edgeCount` | `{ count, edges: [ { level, name, price, enabled, style: { color, color2, width, radius, pattern } } ] }` |
-| nickname | `edgeInfo` | one edge `{ level, name, price, enabled, style }` |
+| nickname | `edgeCount` | `{ count, edges: [ { level, price, forSale } ] }` |
+| nickname | `edgeInfo` | one edge `{ level, price, forSale }` |
 | nickname | `quote` | `{ account, level, price }`: the sum of the step prices up to `level` |
 | nickname | `isAvailable` | `{ nickname, characters, tokenId, available, reason }` (`reason`: `taken`, `reserved` or `null`) |
 | nickname | `idOf` | `{ nickname, tokenId }` |
-| nickname | `nicknameOf` | `{ nickname, tokenId, account, level, edge, image }` (`image`: SVG data URI), or `{ account, nickname: null }` |
-| nickname | `edgeOf` | `{ tokenId, level, edge }` |
-| nickname | `tokenURI` | `{ tokenId, metadata, image }` |
+| nickname | `nicknameOf` | `{ nickname, tokenId, account, level }`, or `{ account, nickname: null }` |
+| nickname | `edgeOf` | `{ tokenId, level }` |
+| nickname | `tokenURI` | `{ tokenId, metadata }` (`metadata`: `{ name, description, attributes: [ { trait_type: "edge level", display_type: "number", value } ] }`, no image) |
 | nickname | `ownerOf` | `{ tokenId, owner }` |
 | nickname | `buyNickname`, `upgradeEdge` | the nickname details (as `nicknameOf`) + `price`, `paidTo` |
-| nickname | `setEdge`, `addEdge` | `{ edge }` |
+| nickname | `setEdge`, `addEdge` | `{ edge: { level, price, forSale } }` |
 | nickname | `setNicknamePrice` | `{ nicknamePrice }` |
 | nickname | `reserve` | `{ reserved, nicknames }` |
 | any other | a read | the one value, or an object of the named values; JSON data URIs decoded |
@@ -319,8 +321,8 @@ Prices are in ETH.
 | 404 | `0x… is not a registered contract` |
 | 400 | `function "x" is not in the contract's ABI` / `several functions have this name, give the signature …` |
 | 400 | `… changes state: use POST /contract/send` / `… only reads: use POST /contract/call` |
-| 400 | `args: no value for "…" (…); given: …` / `args: unknown name(s) …` / `args: a list (raw ABI values) or an object (by name)` |
-| 400 | friendly values: `price: ETH, e.g. "0.5"`, `color: a color #RRGGBB`, `pattern: solid, double, …`, `nicknames: a list of 1 to 100 nicknames` |
+| 400 | `args: no value for "…" (…); given: …` / `args: unknown name(s) …; setEdge takes level, price, forSale, enabled` / `args: a list (raw ABI values) or an object (by name)` |
+| 400 | friendly values: `price: ETH, e.g. "0.5"`, `nicknames: a list of 1 to 100 nicknames` |
 | 404 | `level: no edge level 40 (levels 0-3)` (`setEdge`) |
 | 400 | `call reverted: …` (a read) / `calls: a list of 1 to 50 reads …` |
 | 400 | `event: one of …` / `where: Sold has no argument …` / `current: only with event Transfer and where.to …` |
@@ -408,10 +410,10 @@ a user account of the caller's section.
 
 | Task | Call | `result` |
 |---|---|---|
-| edge levels | `POST /contract/call` `edgeCount` | `{ count, edges: [ … ] }` |
+| edge levels | `POST /contract/call` `edgeCount` | `{ count, edges: [ { level, price, forSale } ] }` |
 | nickname price | `POST /contract/call` `nicknamePrice` | `{ price }` |
 | is a name free | `POST /contract/call` `isAvailable` `{ nickname }` | `{ nickname, characters, tokenId, available, reason }` |
-| an account's nickname | `POST /contract/call` `nicknameOf` `{ account }` | `{ nickname, tokenId, account, level, edge, image }` or `{ account, nickname: null }` |
+| an account's nickname | `POST /contract/call` `nicknameOf` `{ account }` | `{ nickname, tokenId, account, level }` or `{ account, nickname: null }` |
 | price of a level | `POST /contract/call` `quote` `{ account, level }` | `{ account, level, price }` |
 | buy | `POST /contract/send` `buyNickname` `{ nickname }`, `from` | the nickname + `price`, `paidTo` |
 | raise the edge | `POST /contract/send` `upgradeEdge` `{ level }`, `from` | the nickname + `price`, `paidTo` |
@@ -420,12 +422,12 @@ a user account of the caller's section.
 ```bash
 curl -s -X POST $P/contract/call -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
   -d '{"calls":[{"contract":"0xNicknames","function":"edgeCount"},{"contract":"0xNicknames","function":"nicknamePrice"},{"contract":"0xNicknames","function":"isAvailable","args":{"nickname":"  Alice "}}]}'
-# → results: { "count": 4, "edges": [ { "level": 0, "name": "Simple", "price": "0", "enabled": true, "style": { "color": "#94a3b8", … } }, … ] },
+# → results: { "count": 4, "edges": [ { "level": 0, "price": "0", "forSale": true }, { "level": 1, "price": "0.5", "forSale": true }, … ] },
 #            { "price": "1" }, { "nickname": "Alice", "characters": 5, "tokenId": "…", "available": true, "reason": null }
 curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
   -d '{"contract":"0xNicknames","function":"buyNickname","args":{"nickname":"Alice"},"from":"0xUser"}'
 # → { "success": true, "value": "1.0", …, "result": { "nickname": "Alice", "tokenId": "…", "account": "0xUser", "level": 0,
-#     "edge": "Simple", "image": "data:image/svg+xml;base64,…", "price": "1", "paidTo": "<consumption account>" } }
+#     "price": "1", "paidTo": "<consumption account>" } }
 ```
 
 Names: 1–256 characters after NFC and trimming, no control characters and none of `< > & " ' \`,
@@ -486,7 +488,7 @@ template instead of `abi` and `bytecode`; the registry's address is filled in.
 | Template | Body | Registered as |
 |---|---|---|
 | `nft-collection` | `{ "template": "nft-collection", "name": "Dragons", "symbol": "DRG" }` (both required). Names and symbols are unique among the NFT collections, any case: else 409 | kind NFT |
-| `nickname-collection` | `{ "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "edge0": "Simple", "another": false }` (these values are the defaults, except `price`: default 0) | common |
+| `nickname-collection` | `{ "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "another": false }` (these values are the defaults, except `price`: default 0) | common |
 
 A second nickname collection is refused (409 `a nickname collection exists at 0x… (send "another": true …)`)
 unless `"another": true`: the new one is used from then on. An unknown template: 400
@@ -502,15 +504,15 @@ owner of the platform's contracts). Any registered contract; friendly `args` and
 |---|---|
 | `mint` (NFT) | `{ "name", "image", "description", "attributes", "properties", "price": "0.5" }` |
 | `setNicknamePrice` | `{ "price": "1" }` (new buyers) |
-| `addEdge` | `{ "name": "Gold", "price": "1", "color": "#f59e0b", "color2": "#fde68a", "width": 6, "radius": 20, "pattern": "gradient" }` |
-| `setEdge` | `{ "level": 2, "color": "#ff0000" }`: only the fields to change; existing nicknames redraw. Level 0 keeps price 0 and stays enabled |
+| `addEdge` | `{ "price": "1" }`: the next level's step price |
+| `setEdge` | `{ "level": 3, "price": "2", "forSale": false }`: omitted fields keep their values. Level 0 keeps price 0 and stays for sale |
 | `reserve` | `{ "nicknames": ["admin"], "reserved": true }` (up to 100; `false` frees them) |
 
 ```json
-{ "contract": "0xNicknames", "function": "setEdge", "args": { "level": 1, "color": "#ff0000" } }
-→ { "success": true, "function": "setEdge(uint8,string,uint256,bool,bytes3,bytes3,uint8,uint8,uint8)", "from": "<center>",
-    "txHash": "0x…", "result": { "edge": { "level": 1, "name": "Silver", "price": "0.5", "enabled": true,
-    "style": { "color": "#ff0000", "color2": "#64748b", "width": 4, … } } }, "events": [ … ] }
+{ "contract": "0xNicknames", "function": "setEdge", "args": { "level": 3, "forSale": false } }
+→ { "success": true, "function": "setEdge(uint8,uint256,bool)", "from": "<center>",
+    "txHash": "0x…", "result": { "edge": { "level": 3, "price": "2", "forSale": false } },
+    "events": [ { "name": "EdgeSet", "args": { "level": "3", "stepPrice": "2", "forSale": false } } ] }
 ```
 
 A revert answers 400 (`the transaction would revert: …` before signing, `reverted in block N` after).
@@ -539,8 +541,8 @@ These routes answer **410**; the message names the call that replaces each. `0xC
 | `POST /nickname/edge` | `POST /contract/send` `upgradeEdge` `{ level }`, `from` |
 | `POST /admin/nickname/deploy` | `POST /admin/contract/deploy` `{ "template": "nickname-collection", … }` |
 | `PUT /admin/nickname/price` | `POST /admin/contract/send` `setNicknamePrice` `{ price }` |
-| `POST /admin/nickname/edges` | `POST /admin/contract/send` `addEdge` `{ name, price, color, … }` |
-| `PUT /admin/nickname/edges/:level` | `POST /admin/contract/send` `setEdge` `{ level, …changes }` |
+| `POST /admin/nickname/edges` | `POST /admin/contract/send` `addEdge` `{ price }` |
+| `PUT /admin/nickname/edges/:level` | `POST /admin/contract/send` `setEdge` `{ level, price, forSale }` |
 | `POST /admin/nickname/reserve` | `POST /admin/contract/send` `reserve` `{ nicknames, reserved }` |
 | `GET /admin/contracts` | `GET /contract/list` (`center`: the contract account center) |
 | `POST /admin/contracts/check` | `POST /admin/contract/check` (same body) |

@@ -221,7 +221,7 @@ take them as constructor arguments when the center must not hold them.
 
 Only **registered** contracts, only functions of **their ABI**. `function` is a name, or the
 signature (`transfer(address,uint256)`) when the name is overloaded. `args` is a list (the raw ABI
-values) or an object (by input name; friendly values on the platform's contracts: ETH, colors,
+values) or an object (by input name; friendly values on the platform's contracts: ETH,
 metadata). Numbers as strings or numbers, addresses `0x…`, booleans `true`/`false`, arrays and
 tuples as JSON (or JSON text). A transaction that would revert is refused before it is signed, with
 the reason (`the transaction would revert: …`). `NftCollection.mint` can't be used this way: only

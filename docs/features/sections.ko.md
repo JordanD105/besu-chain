@@ -219,7 +219,7 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 
 **등록된** 컨트랙트만, **해당 ABI**의 함수만 사용할 수 있습니다. `function`은 이름이며, 이름이 오버로드된 경우
 시그니처(`transfer(address,uint256)`)입니다. `args`는 목록(원시 ABI 값) 또는 객체(입력 이름으로 지정.
-플랫폼 컨트랙트에서는 ETH, 색상, 메타데이터 같은 친화적인 값)입니다. 숫자는 문자열 또는 숫자, 주소는
+플랫폼 컨트랙트에서는 ETH, 메타데이터 같은 친화적인 값)입니다. 숫자는 문자열 또는 숫자, 주소는
 `0x…`, 불리언은 `true`/`false`, 배열과 튜플은 JSON(또는 JSON 텍스트)입니다. revert될 트랜잭션은 서명
 전에 이유와 함께 거부됩니다(`the transaction would revert: …`). `NftCollection.mint`는 이 방식으로
 사용할 수 없습니다. 센터만 민팅하므로 `not minter`로 revert됩니다. `POST /admin/contract/send`를

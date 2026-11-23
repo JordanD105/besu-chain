@@ -65,7 +65,7 @@
 |---|---|---|---|
 | **Deploy** (`#/deploy`) | `chainlens_deploy_enabled: true` | 컴파일된 컨트랙트(Remix / Hardhat / Foundry 아티팩트)를 컨트랙트 계정 센터로 배포하고, 먼저 검사한 뒤 등록합니다 | [컨트랙트 배포](../features/contract-deployment.md) |
 | **Sections** (`#/sections`) | `chainlens_sections_enabled: true` | 섹션 생성, 충전, 스윕, 반환, 이름 변경, 정보 필드, 키, 계정 교체, 보관; 섹션의 사용자 계정 | [섹션](../features/sections.md) |
-| **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | 닉네임 컬렉션 배포, 가격, 테두리 레벨(실시간 미리보기), 예약된 이름; 닉네임 목록 | [닉네임](../features/nicknames.md) |
+| **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | 닉네임 컬렉션 배포, 가격, 테두리 레벨(단계 가격, 판매 여부, 보유자 수; 레벨 추가), 예약된 이름; 닉네임 목록(닉네임, 테두리 레벨, 계정) | [닉네임](../features/nicknames.md) |
 | **Mint and sell** (NFT 컬렉션 페이지) | 위 둘 중 하나 | NFT 민팅(가격은 민팅 시 확정); 섹션의 사용자 계정에 판매 | [NFT 워크플로](../features/nft-workflow.md) |
 
 ![chainlens Sections 페이지: 섹션 목록과 New section 양식](../images/screenshots/chainlens-sections.png)

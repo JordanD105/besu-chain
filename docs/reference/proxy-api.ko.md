@@ -143,12 +143,12 @@ SectionRegistry에 등록된 모든 컨트랙트(컨트랙트 계정 센터가 �
 | 생략 | 인수 없음 | |
 
 숫자는 문자열 또는 숫자, 주소는 `0x…`, 불리언은 `true` / `false`, 배열과 튜플은 JSON으로 씁니다.
-**플랫폼 컨트랙트**에 객체를 쓰면 값이 **친화적**입니다: ETH 가격, `#rrggbb` 색상, 패턴 이름,
-민팅용 메타데이터([아래 표](#friendly-values-of-the-platform-contracts)). 다른 컨트랙트에서는
+**플랫폼 컨트랙트**에 객체를 쓰면 값이 **친화적**입니다: ETH 가격, 민팅용 메타데이터([아래 표](#friendly-values-of-the-platform-contracts)). 다른 컨트랙트에서는
 객체가 값을 ABI 순서로 놓기만 합니다.
 
 - 빠졌거나 이름이 틀린 값: 400 `args: no value for "account" (quote(address,uint8)); given: acct`.
 - 다른 컨트랙트에서 알 수 없는 이름: 400 `args: unknown name(s) x; f(uint256) takes a, b`.
+- 플랫폼 컨트랙트에서 알 수 없는 이름: 400 `args: unknown name(s) color; setEdge takes level, price, forSale, enabled`.
 - 닉네임은 목록에서도 항상 앞뒤 공백 제거와 NFC 정규화를 거칩니다.
 
 ### `POST /contract/call` — 읽기 {#post-contractcall--read}
@@ -252,6 +252,8 @@ payable 함수에만 사용합니다.
 ```
 
 오래된 것부터 나열합니다. `current: true`는 사용 중인 닉네임 컬렉션(가장 최근에 등록된 것)입니다.
+버전 5 컬렉션만 `type: "nickname"`입니다. 이전 컬렉션(버전 4, 테두리 스타일 포함)은 일반
+컨트랙트(`type: "contract"`, 친화적 값 없음)입니다.
 
 ### 플랫폼 컨트랙트의 친화적인 값 {#friendly-values-of-the-platform-contracts}
 
@@ -272,13 +274,11 @@ payable 함수에만 사용합니다.
 | 닉네임 | `edgeInfo` | `{ level }` |
 | 닉네임 | `tokenURI`, `ownerOf`, `edgeOf`, `nicknameById`, `locked`, `reserved` | `{ tokenId }` |
 | 닉네임 | `setNicknamePrice` (센터) | `{ price }` (ETH) |
-| 닉네임 | `addEdge` (센터) | `{ name, price, color, color2, width, radius, pattern }`: `name`, `price`, `color` 필수 |
-| 닉네임 | `setEdge` (센터) | `{ level, …바꿀 필드만 }` (`enabled`도 가능) |
+| 닉네임 | `addEdge` (센터) | `{ price }`: 새 레벨의 단계 가격(ETH). 판매 중으로 추가됨 |
+| 닉네임 | `setEdge` (센터) | `{ level, price, forSale }`: 생략한 필드는 그대로 (`enabled`는 `forSale`의 별칭) |
 | 닉네임 | `reserve` (센터) | `{ nicknames: [ … ], reserved }`: 이름 1~100개. `reserved: false`이면 해제 |
 
-테두리 스타일 값: `color`, `color2`는 `#rrggbb`, `width` 1~20, `radius` 0~40, `pattern`은 `solid`,
-`double`, `dashed`, `gradient`, `glow`, `name`은 1~32바이트. `addEdge`의 기본값: `color2` = `color`,
-width 3, radius 12, `solid`.
+레벨에는 단계 가격과 판매 여부만 저장됩니다. 레벨 0은 항상 가격 0이고 항상 판매 중입니다.
 
 **결과**(`result`):
 
@@ -292,17 +292,17 @@ width 3, radius 12, `solid`.
 | NFT | `mint` | `{ minted, tokenId, owner, price, metadata }` |
 | NFT | `approve` | `{ tokenId, approved, forSale }` (`forSale`: 컬렉션에 승인됨) |
 | 닉네임 | `nicknamePrice` | `{ price }` |
-| 닉네임 | `edgeCount` | `{ count, edges: [ { level, name, price, enabled, style: { color, color2, width, radius, pattern } } ] }` |
-| 닉네임 | `edgeInfo` | 테두리 하나 `{ level, name, price, enabled, style }` |
+| 닉네임 | `edgeCount` | `{ count, edges: [ { level, price, forSale } ] }` |
+| 닉네임 | `edgeInfo` | 테두리 하나 `{ level, price, forSale }` |
 | 닉네임 | `quote` | `{ account, level, price }`: `level`까지의 단계 가격 합계 |
 | 닉네임 | `isAvailable` | `{ nickname, characters, tokenId, available, reason }` (`reason`: `taken`, `reserved` 또는 `null`) |
 | 닉네임 | `idOf` | `{ nickname, tokenId }` |
-| 닉네임 | `nicknameOf` | `{ nickname, tokenId, account, level, edge, image }` (`image`: SVG 데이터 URI) 또는 `{ account, nickname: null }` |
-| 닉네임 | `edgeOf` | `{ tokenId, level, edge }` |
-| 닉네임 | `tokenURI` | `{ tokenId, metadata, image }` |
+| 닉네임 | `nicknameOf` | `{ nickname, tokenId, account, level }` 또는 `{ account, nickname: null }` |
+| 닉네임 | `edgeOf` | `{ tokenId, level }` |
+| 닉네임 | `tokenURI` | `{ tokenId, metadata }` (`metadata`: `{ name, description, attributes: [ { trait_type: "edge level", display_type: "number", value } ] }`, 이미지 없음) |
 | 닉네임 | `ownerOf` | `{ tokenId, owner }` |
 | 닉네임 | `buyNickname`, `upgradeEdge` | 닉네임 정보(`nicknameOf`와 같음) + `price`, `paidTo` |
-| 닉네임 | `setEdge`, `addEdge` | `{ edge }` |
+| 닉네임 | `setEdge`, `addEdge` | `{ edge: { level, price, forSale } }` |
 | 닉네임 | `setNicknamePrice` | `{ nicknamePrice }` |
 | 닉네임 | `reserve` | `{ reserved, nicknames }` |
 | 그 밖의 컨트랙트 | 읽기 | 값 하나, 또는 이름 붙은 값의 객체. JSON 데이터 URI는 디코딩 |
@@ -317,8 +317,8 @@ width 3, radius 12, `solid`.
 | 404 | `0x… is not a registered contract` |
 | 400 | `function "x" is not in the contract's ABI` / `several functions have this name, give the signature …` |
 | 400 | `… changes state: use POST /contract/send` / `… only reads: use POST /contract/call` |
-| 400 | `args: no value for "…" (…); given: …` / `args: unknown name(s) …` / `args: a list (raw ABI values) or an object (by name)` |
-| 400 | 친화적인 값: `price: ETH, e.g. "0.5"`, `color: a color #RRGGBB`, `pattern: solid, double, …`, `nicknames: a list of 1 to 100 nicknames` |
+| 400 | `args: no value for "…" (…); given: …` / `args: unknown name(s) …; setEdge takes level, price, forSale, enabled` / `args: a list (raw ABI values) or an object (by name)` |
+| 400 | 친화적인 값: `price: ETH, e.g. "0.5"`, `nicknames: a list of 1 to 100 nicknames` |
 | 404 | `level: no edge level 40 (levels 0-3)` (`setEdge`) |
 | 400 | `call reverted: …` (읽기) / `calls: a list of 1 to 50 reads …` |
 | 400 | `event: one of …` / `where: Sold has no argument …` / `current: only with event Transfer and where.to …` |
@@ -406,10 +406,10 @@ curl -s -X POST $P/contract/events -H "X-Section-Key: $K" -H 'Content-Type: appl
 
 | 작업 | 호출 | `result` |
 |---|---|---|
-| 테두리 레벨 | `POST /contract/call` `edgeCount` | `{ count, edges: [ … ] }` |
+| 테두리 레벨 | `POST /contract/call` `edgeCount` | `{ count, edges: [ { level, price, forSale } ] }` |
 | 닉네임 가격 | `POST /contract/call` `nicknamePrice` | `{ price }` |
 | 이름 사용 가능 여부 | `POST /contract/call` `isAvailable` `{ nickname }` | `{ nickname, characters, tokenId, available, reason }` |
-| 계정의 닉네임 | `POST /contract/call` `nicknameOf` `{ account }` | `{ nickname, tokenId, account, level, edge, image }` 또는 `{ account, nickname: null }` |
+| 계정의 닉네임 | `POST /contract/call` `nicknameOf` `{ account }` | `{ nickname, tokenId, account, level }` 또는 `{ account, nickname: null }` |
 | 레벨 가격 | `POST /contract/call` `quote` `{ account, level }` | `{ account, level, price }` |
 | 구매 | `POST /contract/send` `buyNickname` `{ nickname }`, `from` | 닉네임 + `price`, `paidTo` |
 | 테두리 올리기 | `POST /contract/send` `upgradeEdge` `{ level }`, `from` | 닉네임 + `price`, `paidTo` |
@@ -418,12 +418,12 @@ curl -s -X POST $P/contract/events -H "X-Section-Key: $K" -H 'Content-Type: appl
 ```bash
 curl -s -X POST $P/contract/call -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
   -d '{"calls":[{"contract":"0xNicknames","function":"edgeCount"},{"contract":"0xNicknames","function":"nicknamePrice"},{"contract":"0xNicknames","function":"isAvailable","args":{"nickname":"  Alice "}}]}'
-# → results: { "count": 4, "edges": [ { "level": 0, "name": "Simple", "price": "0", "enabled": true, "style": { "color": "#94a3b8", … } }, … ] },
+# → results: { "count": 4, "edges": [ { "level": 0, "price": "0", "forSale": true }, { "level": 1, "price": "0.5", "forSale": true }, … ] },
 #            { "price": "1" }, { "nickname": "Alice", "characters": 5, "tokenId": "…", "available": true, "reason": null }
 curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: application/json' \
   -d '{"contract":"0xNicknames","function":"buyNickname","args":{"nickname":"Alice"},"from":"0xUser"}'
 # → { "success": true, "value": "1.0", …, "result": { "nickname": "Alice", "tokenId": "…", "account": "0xUser", "level": 0,
-#     "edge": "Simple", "image": "data:image/svg+xml;base64,…", "price": "1", "paidTo": "<consumption account>" } }
+#     "price": "1", "paidTo": "<consumption account>" } }
 ```
 
 이름: NFC와 공백 제거 후 1~256자, 제어 문자와 `< > & " ' \` 불가, A–Z 대소문자 구분 없이 고유,
@@ -484,7 +484,7 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 | 템플릿 | 본문 | 등록 종류 |
 |---|---|---|
 | `nft-collection` | `{ "template": "nft-collection", "name": "Dragons", "symbol": "DRG" }` (둘 다 필수). 이름과 심볼은 NFT 컬렉션 사이에서 대소문자 무관하게 고유: 아니면 409 | NFT |
-| `nickname-collection` | `{ "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "edge0": "Simple", "another": false }` (`price`를 제외하면 이 값들이 기본값입니다. `price`의 기본값은 0) | common |
+| `nickname-collection` | `{ "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "another": false }` (`price`를 제외하면 이 값들이 기본값입니다. `price`의 기본값은 0) | common |
 
 두 번째 닉네임 컬렉션은 `"another": true`가 아니면 거부됩니다(409 `a nickname collection exists at 0x… (send "another": true …)`).
 `another: true`이면 그때부터 새 컬렉션이 사용됩니다. 알 수 없는 템플릿: 400
@@ -500,15 +500,15 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 |---|---|
 | `mint` (NFT) | `{ "name", "image", "description", "attributes", "properties", "price": "0.5" }` |
 | `setNicknamePrice` | `{ "price": "1" }` (새 구매자) |
-| `addEdge` | `{ "name": "Gold", "price": "1", "color": "#f59e0b", "color2": "#fde68a", "width": 6, "radius": 20, "pattern": "gradient" }` |
-| `setEdge` | `{ "level": 2, "color": "#ff0000" }`: 바꿀 필드만. 기존 닉네임도 다시 그려집니다. 레벨 0은 가격 0과 활성 상태 유지 |
+| `addEdge` | `{ "price": "1" }`: 다음 레벨의 단계 가격 |
+| `setEdge` | `{ "level": 3, "price": "2", "forSale": false }`: 생략한 필드는 그대로. 레벨 0은 가격 0과 판매 중 상태 유지 |
 | `reserve` | `{ "nicknames": ["admin"], "reserved": true }` (최대 100개. `false`이면 해제) |
 
 ```json
-{ "contract": "0xNicknames", "function": "setEdge", "args": { "level": 1, "color": "#ff0000" } }
-→ { "success": true, "function": "setEdge(uint8,string,uint256,bool,bytes3,bytes3,uint8,uint8,uint8)", "from": "<center>",
-    "txHash": "0x…", "result": { "edge": { "level": 1, "name": "Silver", "price": "0.5", "enabled": true,
-    "style": { "color": "#ff0000", "color2": "#64748b", "width": 4, … } } }, "events": [ … ] }
+{ "contract": "0xNicknames", "function": "setEdge", "args": { "level": 3, "forSale": false } }
+→ { "success": true, "function": "setEdge(uint8,uint256,bool)", "from": "<center>",
+    "txHash": "0x…", "result": { "edge": { "level": 3, "price": "2", "forSale": false } },
+    "events": [ { "name": "EdgeSet", "args": { "level": "3", "stepPrice": "2", "forSale": false } } ] }
 ```
 
 revert는 400으로 응답합니다(서명 전 `the transaction would revert: …`, 서명 후 `reverted in block N`).
@@ -537,8 +537,8 @@ revert는 400으로 응답합니다(서명 전 `the transaction would revert: �
 | `POST /nickname/edge` | `POST /contract/send` `upgradeEdge` `{ level }`, `from` |
 | `POST /admin/nickname/deploy` | `POST /admin/contract/deploy` `{ "template": "nickname-collection", … }` |
 | `PUT /admin/nickname/price` | `POST /admin/contract/send` `setNicknamePrice` `{ price }` |
-| `POST /admin/nickname/edges` | `POST /admin/contract/send` `addEdge` `{ name, price, color, … }` |
-| `PUT /admin/nickname/edges/:level` | `POST /admin/contract/send` `setEdge` `{ level, …changes }` |
+| `POST /admin/nickname/edges` | `POST /admin/contract/send` `addEdge` `{ price }` |
+| `PUT /admin/nickname/edges/:level` | `POST /admin/contract/send` `setEdge` `{ level, price, forSale }` |
 | `POST /admin/nickname/reserve` | `POST /admin/contract/send` `reserve` `{ nicknames, reserved }` |
 | `GET /admin/contracts` | `GET /contract/list` (`center`: 컨트랙트 계정 센터) |
 | `POST /admin/contracts/check` | `POST /admin/contract/check` (같은 본문) |
