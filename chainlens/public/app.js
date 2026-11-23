@@ -3013,9 +3013,45 @@ function notePending(answer) {
     if (hash) {
         pendingTx.set(hash, toast);
         setTimeout(() => { if (pendingTx.get(hash) === toast) { toast.classList.add("late"); } }, 15000);
+        // an admin write answers after it is mined: chainlens may have indexed it already (before this
+        // notice existed, so the live feed passed it). Ask, then keep asking for a minute.
+        watchIndexed(hash, 0);
     } else {
         setTimeout(() => toast.remove(), 6000);
     }
+}
+
+// The transaction is indexed: the notice turns ✓ and the page shows the new data
+function confirmPending(hash) {
+    const toast = pendingTx.get(hash);
+    if (!toast) {
+        return false;
+    }
+    pendingTx.delete(hash);
+    toast.querySelector(".toast-state").textContent = "✓";
+    toast.classList.remove("late");
+    toast.classList.add("done");
+    setTimeout(() => toast.remove(), 6000);
+    return true;
+}
+
+async function watchIndexed(hash, tries) {
+    if (!pendingTx.has(hash) || tries > 30) {
+        return;
+    }
+    try {
+        const r = await fetch("/api/transactions/" + hash, { cache: "no-store" });
+        if (r.ok && confirmPending(hash)) {
+            if (viewReady) {
+                lastViewRefresh = Date.now();
+                render({ refresh: true });
+            }
+            return;
+        }
+    } catch (error) {
+        // try again
+    }
+    setTimeout(() => watchIndexed(hash, tries + 1), tries === 0 ? 500 : 2000);
 }
 
 function liveFeed() {
@@ -3035,13 +3071,8 @@ function liveFeed() {
         }
         let mine = false;
         for (const hash of data.txs) {
-            const toast = pendingTx.get(hash);
-            if (toast) {
+            if (confirmPending(hash)) {
                 mine = true;
-                pendingTx.delete(hash);
-                toast.querySelector(".toast-state").textContent = "✓";
-                toast.classList.add("done");
-                setTimeout(() => toast.remove(), 6000);
             }
         }
         // the page shows new data at once: for my own transactions always, otherwise when the user is not typing
