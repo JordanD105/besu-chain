@@ -2050,7 +2050,7 @@ async function proxyAdmin(method, pathname, body) {
 }
 
 // ---- NFT mint and sale from the contract page (admin pages' gate), forwarded to the proxy's
-// /nft/mint and /contract/send
+// /admin/contract/send (mint, signed by the center) and /contract/send (buy, signed by the buyer)
 function nftAdminEnabled() {
     return (DEPLOY.enabled || SECTIONS.enabled) && Boolean(SECTIONS.proxy);
 }
@@ -2075,24 +2075,26 @@ app.get("/api/nftadmin/status", (req, res) => {
 
 // A sale (version 3): the buyer calls buy(tokenId) through the proxy's /contract/send, which fills in
 // the payee (the buyer's section's consumption account) and the price. The answer keeps the old shape.
-// Version-2 collections are not registered: they still sell through /nft/transfer.
-async function nftSell(body) {
-    const r = await proxyAdmin("POST", "/contract/send", { contract: body.collection, function: "buy", args: [String(body.tokenId)], from: body.to });
-    if (r.status === 404 && /not a registered contract/.test(String(r.data.error))) {
-        return proxyAdmin("POST", "/nft/transfer", body); // version 2 (legacy): sold by SENDER01
-    }
-    const sold = r.status === 200 && (r.data.events || []).find((e) => e.name === "Sold");
-    if (!sold) {
+// A mint: the center calls mint through the proxy's /admin/contract/send with friendly args (the proxy
+// builds the metadata, picks the token id and converts the price)
+async function nftMint(body) {
+    const args = { name: body.name, image: body.image, price: body.amount || "0" };
+    ["description", "attributes"].forEach((k) => { if (body[k] !== undefined) { args[k] = body[k]; } });
+    const r = await proxyAdmin("POST", "/admin/contract/send", { contract: body.collection, function: "mint", args });
+    if (r.status !== 200 || !r.data.result) {
         return r;
     }
-    const minter = await proxyAdmin("POST", "/contract/call", { contract: r.data.contract, function: "minter", args: [] }).catch(() => null);
-    const center = minter && minter.data.outputs ? String(minter.data.outputs[0].value).toLowerCase() : "";
+    return { status: 200, data: Object.assign({}, r.data, { tokenId: r.data.result.tokenId, price: r.data.result.price }) };
+}
+
+async function nftSell(body) {
+    const r = await proxyAdmin("POST", "/contract/send", { contract: body.collection, function: "buy", args: [String(body.tokenId)], from: body.to });
+    if (r.status !== 200) {
+        return r;
+    }
+    const result = r.data.result || {};
     return { status: 200, data: Object.assign({}, r.data, {
-        sale: String(sold.args.seller).toLowerCase() === center ? "first sale" : "resale",
-        tokenId: String(sold.args.tokenId),
-        to: sold.args.buyer,
-        price: String(r.data.value).replace(/\.0$/, ""),
-        paidTo: sold.args.paidTo
+        sale: result.sale, tokenId: result.tokenId, to: result.buyer, price: result.price, paidTo: result.paidTo
     }) };
 }
 
@@ -2102,7 +2104,7 @@ app.post("/api/nftadmin/:action", express.json({ limit: "256kb" }), nftGuard, as
         return res.status(404).json({ error: "unknown NFT action" });
     }
     try {
-        const r = action === "transfer" ? await nftSell(req.body || {}) : await proxyAdmin("POST", "/nft/" + action, req.body || {});
+        const r = action === "transfer" ? await nftSell(req.body || {}) : await nftMint(req.body || {});
         console.log("nft:", action, JSON.stringify({ collection: req.body.collection, tokenId: req.body.tokenId, to: req.body.to }), "from", req.socket.remoteAddress, "->", r.status);
         res.status(r.status).json(r.data);
     } catch (error) {
@@ -2162,7 +2164,8 @@ app.post("/api/sections/:id/:action", sectionsJson, sectionsGuard, async (req, r
 });
 
 // ---- Nicknames page (docs/features/nicknames.md): the nickname collection's edge levels, prices and
-// reserved nicknames, forwarded to the proxy's /admin/nickname API. Same gate as the Sections page.
+// reserved nicknames: read from the proxy's /admin/nickname, written with /admin/contracts/deploy and
+// /admin/contract/send. Same gate as the Sections page.
 async function nicknameForward(req, res, method, pathname, body) {
     try {
         const r = await proxyAdmin(method, pathname, body);
@@ -2177,20 +2180,35 @@ async function nicknameForward(req, res, method, pathname, body) {
 
 app.get("/api/nicknames", sectionsGuard, (req, res) =>
     nicknameForward(req, res, "GET", "/admin/nickname" + (req.query.q ? "?q=" + encodeURIComponent(String(req.query.q).slice(0, 300)) : "")));
+// Writes: the deploy template, and the collection's admin functions signed by the center
+async function nicknameAdminSend(req, res, fn, args) {
+    try {
+        const info = await proxyAdmin("GET", "/admin/nickname");
+        if (info.status !== 200 || !info.data.collection) {
+            return res.status(info.status === 200 ? 404 : info.status).json({ error: info.data.error || "no nickname collection yet" });
+        }
+        const r = await proxyAdmin("POST", "/admin/contract/send", { contract: info.data.collection.address, function: fn, args });
+        console.log("nicknames:", fn, JSON.stringify(args).slice(0, 300), "from", req.socket.remoteAddress, "->", r.status);
+        res.status(r.status).json(r.status === 200 ? Object.assign({}, r.data, r.data.result || {}) : r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+}
+
 app.post("/api/nicknames/deploy", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameForward(req, res, "POST", "/admin/nickname/deploy", req.body || {}));
+    nicknameForward(req, res, "POST", "/admin/contracts/deploy", Object.assign({}, req.body || {}, { template: "nickname-collection" })));
 app.put("/api/nicknames/price", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameForward(req, res, "PUT", "/admin/nickname/price", { price: (req.body || {}).price }));
+    nicknameAdminSend(req, res, "setNicknamePrice", { price: (req.body || {}).price }));
 app.post("/api/nicknames/edges", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameForward(req, res, "POST", "/admin/nickname/edges", req.body || {}));
+    nicknameAdminSend(req, res, "addEdge", req.body || {}));
 app.put("/api/nicknames/edges/:level", sectionsJson, sectionsGuard, (req, res) => {
     if (!/^\d{1,2}$/.test(req.params.level)) {
         return res.status(400).json({ error: "invalid edge level" });
     }
-    return nicknameForward(req, res, "PUT", "/admin/nickname/edges/" + req.params.level, req.body || {});
+    return nicknameAdminSend(req, res, "setEdge", Object.assign({}, req.body || {}, { level: Number(req.params.level) }));
 });
 app.post("/api/nicknames/reserve", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameForward(req, res, "POST", "/admin/nickname/reserve", req.body || {}));
+    nicknameAdminSend(req, res, "reserve", { nicknames: (req.body || {}).nicknames, reserved: (req.body || {}).reserved !== false }));
 
 // The section's user accounts with their balances
 app.get("/api/sections/:id/accounts", sectionsGuard, async (req, res) => {

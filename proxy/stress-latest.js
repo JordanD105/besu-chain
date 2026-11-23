@@ -3,7 +3,6 @@ const express = require("express");
 const Redis = require("ioredis");
 const { ethers } = require("ethers");
 const crypto = require("crypto");
-const nftArtifact = require("./nft-collection.json");
 const registryArtifact = require("./section-registry.json");
 const nftV3Artifact = require("./nft-collection-v3.json");
 
@@ -1184,32 +1183,17 @@ app.get("/transfer/:txHash", async (req, res) => {
 });
 
 // =======================
-// NFT
+// NFT helpers (mint metadata and token ids)
 // =======================
 
-const nftInterface = new ethers.Interface(nftArtifact.abi);
-// version 3 (docs/features/sections.md): minted by the contract account center; buy(tokenId, payee)
-const nftV3Interface = new ethers.Interface(nftV3Artifact.abi);
 const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 const NFT_META_LIMIT = 512 * 1024;
 const ON_CHAIN_META_LIMIT = 48 * 1024;
-
-let nftDeployChain = Promise.resolve();
-
-function withDeployLock(task) {
-    const run = nftDeployChain.then(task, task);
-    nftDeployChain = run.then(() => {}, () => {});
-    return run;
-}
 
 function httpError(statusCode, message) {
     const error = new Error(message);
     error.statusCode = statusCode;
     return error;
-}
-
-function isRevert(error) {
-    return /revert|invalid opcode|out of gas|could not decode/i.test(error.message || "");
 }
 
 function parseTokenId(value) {
@@ -1224,15 +1208,6 @@ function parseTokenId(value) {
     return null;
 }
 
-function nftMetaKey(contract, tokenId) {
-    return `nft:meta:${contract.toLowerCase()}:${tokenId}`;
-}
-
-function metadataUrl(req, tokenId) {
-    const root = CONFIG.NFT_BASE_URL || `${req.protocol}://${req.get("host")}`;
-    return `${root}/nft/${tokenId}/metadata`;
-}
-
 function onChainTokenUri(metadata) {
     const json = JSON.stringify(metadata);
 
@@ -1243,306 +1218,10 @@ function onChainTokenUri(metadata) {
     return "data:application/json;base64," + Buffer.from(json, "utf8").toString("base64");
 }
 
-function nftBytecode() {
-    return nftArtifact.bytecode.startsWith("0x")
-        ? nftArtifact.bytecode
-        : "0x" + nftArtifact.bytecode;
-}
-
-function nftDeployData(name, symbol) {
-    return ethers.hexlify(ethers.concat([
-        nftBytecode(),
-        nftInterface.encodeDeploy([name, symbol])
-    ]));
-}
-
-async function hasCode(address) {
-    const code = await rpc(CONFIG.BESU_RPC, "eth_getCode", [address, "latest"]);
-    return Boolean(code) && code !== "0x";
-}
-
-// NftCollection version 2 (legacy: minted by SENDER01, sales paid to it) and version 3 (minted by
-// the contract account center, first sales paid to a section's consumption account) are supported.
-// Older collections on the chain are ignored by listing/discovery and rejected when selected.
-const versionCache = new Map();
-
-async function collectionVersion(address) {
-    const key = address.toLowerCase();
-
-    if (!versionCache.has(key)) {
-        let v = 0;
-
-        try {
-            v = Number((await callNft(address, "version", []))[0]);
-        } catch (error) {
-            v = 0;
-        }
-
-        versionCache.set(key, v);
-    }
-
-    return versionCache.get(key);
-}
-
-async function isSupportedCollection(address) {
-    const v = await collectionVersion(address);
-    return v === 2 || v === 3;
-}
-
-function oldCollectionError(address) {
-    return httpError(400, `collection ${address} is an old version without buy(); `
-        + "old collections are no longer supported, deploy a new collection with /nft/deploy");
-}
-
-async function nftContractAddress() {
-    const configured = (process.env.NFT_CONTRACT || "").trim();
-
-    if (configured) {
-        if (!isAddress(configured)) {
-            throw httpError(500, "NFT_CONTRACT is not a valid address");
-        }
-
-        const address = ethers.getAddress(configured);
-
-        // e.g. the chain was reset: the configured address belongs to the old chain
-        if (memNft.contract !== address && !await hasCode(address)) {
-            throw httpError(500, `NFT_CONTRACT ${address} has no contract on this chain `
-                + "(was the chain reset?). Remove NFT_CONTRACT from .env to let the proxy "
-                + "find or deploy the collection, or set it to the current address.");
-        }
-
-        if (!await isSupportedCollection(address)) {
-            throw oldCollectionError(address);
-        }
-
-        memNft.contract = address;
-        return address;
-    }
-
-    if (memNft.contract) {
-        return memNft.contract;
-    }
-
-    const stored = await cache(() => redis.get("nft:contract"));
-
-    if (stored && isAddress(stored)) {
-        if (await hasCode(stored) && await isSupportedCollection(stored)) {
-            memNft.contract = ethers.getAddress(stored);
-            return memNft.contract;
-        }
-
-        // stale cache from an old chain: forget it and look on the current chain
-        console.warn(`cached nft:contract ${stored} is missing or an old version; ignoring it`);
-        await cache(() => redis.del("nft:contract"));
-    }
-
-    const found = await discoverNftContract();
-
-    if (found) {
-        await rememberNftContract(found);
-    }
-
-    return found;
-}
-
-async function rememberNftContract(contract) {
-    memNft.contract = ethers.getAddress(contract);
-    await cache(() => redis.set("nft:contract", memNft.contract));
-}
-
-// Every collection SENDER01 deployed lives at one of its CREATE addresses
-// (keccak(rlp(sender, nonce))). Scan them (oldest first) and keep those with code whose
-// minter() is SENDER01. Used when neither memory nor Redis knows the collections.
-let discovery = null;
-
-// Scan once per process (it is only needed on a cold start without Redis); collections
-// deployed later are added to memory directly.
-function discoverCollections() {
-    if (!discovery) {
-        discovery = scanCollections().catch((error) => {
-            discovery = null;
-            throw error;
-        });
-    }
-
-    return discovery;
-}
-
-async function scanCollections() {
-    const sender = ethers.getAddress(CONFIG.SENDER01);
-    const latest = parseInt(await rpc(CONFIG.BESU_RPC, "eth_getTransactionCount", [sender, "latest"]), 16);
-    const found = [];
-
-    for (let nonce = 0; nonce < latest; nonce += 1) {
-        const candidate = ethers.getCreateAddress({ from: sender, nonce });
-
-        if (!await hasCode(candidate)) {
-            continue;
-        }
-
-        try {
-            const minter = (await callNft(candidate, "minter", []))[0];
-
-            if (minter.toLowerCase() === sender.toLowerCase() && await isSupportedCollection(candidate)) {
-                found.push(candidate);
-            }
-        } catch (error) {
-            // not an NftCollection; keep looking
-        }
-    }
-
-    if (found.length > 0) {
-        console.log(`NFT collections recovered from chain: ${found.join(", ")}`);
-    }
-
-    return found;
-}
-
-async function discoverNftContract() {
-    const found = await discoverCollections();
-    return found.length > 0 ? found[0] : null;
-}
-
-async function collectionInfo(contract) {
-    const info = { name: null, symbol: null };
-
-    try {
-        info.name = (await callNft(contract, "name", []))[0];
-        info.symbol = (await callNft(contract, "symbol", []))[0];
-    } catch (error) {
-        // name/symbol are optional for display
-    }
-
-    return info;
-}
-
-// All known collections: memory -> Redis hash nft:collections -> chain discovery.
-async function knownCollections() {
-    if (!memNft.collections) {
-        const stored = await cache(() => redis.hgetall("nft:collections"), null);
-        const collections = new Map();
-
-        if (stored && Object.keys(stored).length > 0) {
-            for (const [address, json] of Object.entries(stored)) {
-                if (isAddress(address) && await hasCode(address) && await isSupportedCollection(address)) {
-                    collections.set(ethers.getAddress(address), JSON.parse(json));
-                }
-            }
-        } else {
-            for (const address of await discoverCollections()) {
-                collections.set(address, await collectionInfo(address));
-            }
-        }
-
-        memNft.collections = collections;
-    }
-
-    const def = await nftContractAddress();
-
-    if (def && !memNft.collections.has(def)) {
-        memNft.collections.set(def, await collectionInfo(def));
-    }
-
-    // version-3 collections registered in the SectionRegistry (deployed by the contract center)
-    if (sectionsConfigured()) {
-        try {
-            for (const entry of (await loadContracts()).values()) {
-                if (entry.kind === "nft" && !memNft.collections.has(entry.address) && await collectionVersion(entry.address) === 3) {
-                    memNft.collections.set(entry.address, await collectionInfo(entry.address));
-                }
-            }
-        } catch (error) {
-            console.warn(`NFT collections from the registry: ${error.message}`);
-        }
-    }
-
-    // best effort: persist anything Redis is missing (e.g. deployed while Redis was down)
-    for (const [address, info] of memNft.collections) {
-        await cache(() => redis.hsetnx("nft:collections", address, JSON.stringify(info)));
-    }
-
-    return memNft.collections;
-}
-
-async function rememberCollection(contract, info) {
-    const address = ethers.getAddress(contract);
-    (await knownCollections()).set(address, info);
-    await cache(() => redis.hset("nft:collections", address, JSON.stringify(info)));
-}
-
-function sameLabel(a, b) {
-    return typeof a === "string" && typeof b === "string" && a.trim().toLowerCase() === b.trim().toLowerCase();
-}
-
-// Collections whose name or symbol equals `label` (case-insensitive).
-async function collectionsByLabel(label) {
-    const matches = [];
-
-    for (const [contract, info] of await knownCollections()) {
-        if (sameLabel(info.name, label) || sameLabel(info.symbol, label)) {
-            matches.push(contract);
-        }
-    }
-
-    return matches;
-}
-
-// Collection for a request: an address, a collection name or symbol, or (empty) the default.
-async function resolveCollection(input) {
-    if (input === undefined || input === null || input === "") {
-        return requireNftContract();
-    }
-
-    if (typeof input !== "string") {
-        throw httpError(400, "collection must be a name, symbol or address");
-    }
-
-    if (isAddress(input)) {
-        const address = ethers.getAddress(input);
-
-        if (!await hasCode(address)) {
-            throw httpError(404, `no contract at ${address} on this chain`);
-        }
-
-        if (!await isSupportedCollection(address)) {
-            throw oldCollectionError(address);
-        }
-
-        return address;
-    }
-
-    const matches = await collectionsByLabel(input);
-
-    if (matches.length === 0) {
-        throw httpError(404, `no NFT collection named "${input.trim()}": list the collections with GET /nft/collections, or create one with POST /nft/deploy {"name": "...", "symbol": "..."}`);
-    }
-
-    if (matches.length > 1) {
-        throw httpError(409, `"${input.trim()}" matches several collections: ${matches.join(", ")}; use the address`);
-    }
-
-    return matches[0];
-}
-
-// body.collection / ?collection= (preferred) or the older body.contract / ?contract=
-function collectionParam(source) {
-    if (!source) {
-        return undefined;
-    }
-
-    return source.collection !== undefined && source.collection !== "" ? source.collection : source.contract;
-}
-
-async function requireNftContract() {
-    const address = await nftContractAddress();
-
-    if (!address) {
-        throw httpError(400, "NFT contract is not deployed");
-    }
-
-    return address;
-}
-
+// NFT collections (version 3, contracts/NftCollection.sol) are read and written through the generic
+// contract API (/contract/*, /admin/contract/send). These helpers build a mint: the next token id
+// (the highest minted so far, from the Transfer events) and the on-chain metadata (a data URI).
+// Version-2 collections (minted by SENDER01) are retired: the proxy no longer reads or sells them.
 async function highestMintedTokenId(contract) {
     const head = BigInt(await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []));
     const span = 5000n;
@@ -1717,76 +1396,6 @@ async function waitForReceipt(txHash) {
     throw new Error("transaction was not mined");
 }
 
-async function callNft(contract, fn, args) {
-    const data = nftInterface.encodeFunctionData(fn, args);
-    const raw = await ethCall(contract, data);
-
-    if (!raw || raw === "0x") {
-        const error = new Error("empty call result");
-        error.empty = true;
-        throw error;
-    }
-
-    return nftInterface.decodeFunctionResult(fn, raw);
-}
-
-async function readOwner(contract, tokenId) {
-    try {
-        const result = await callNft(contract, "ownerOf", [tokenId]);
-        return result[0];
-    } catch (error) {
-        if (error.empty || isRevert(error)) {
-            return null;
-        }
-
-        throw error;
-    }
-}
-
-// Proxy-side record of a mint ({metadata, tokenURI, to, amount, txHash}). Redis is a cache:
-// if it has no record, rebuild {metadata, tokenURI} from the on-chain data: URI.
-async function readStoredNft(contract, tokenId) {
-    let raw = await cache(() => redis.get(nftMetaKey(contract, tokenId)));
-
-    if (!raw && contract === await nftContractAddress()) {
-        // records written before multi-collection support (default collection only)
-        raw = await cache(() => redis.get(`nft:meta:${tokenId}`));
-    }
-
-    if (raw) {
-        return JSON.parse(raw);
-    }
-
-    return nftFromChain(contract, tokenId);
-}
-
-async function nftFromChain(contract, tokenId) {
-    if (!contract) {
-        return null;
-    }
-
-    let tokenURI;
-
-    try {
-        tokenURI = (await callNft(contract, "tokenURI", [tokenId]))[0];
-    } catch (error) {
-        return null;
-    }
-
-    const prefix = "data:application/json;base64,";
-    let metadata = null;
-
-    if (tokenURI.startsWith(prefix)) {
-        try {
-            metadata = JSON.parse(Buffer.from(tokenURI.slice(prefix.length), "base64").toString("utf8"));
-        } catch (error) {
-            metadata = null;
-        }
-    }
-
-    return { metadata, tokenURI, fromChain: true };
-}
-
 function collectionField(value, label, max) {
     if (typeof value !== "string" || value.trim() === "") {
         throw httpError(400, `missing ${label}`);
@@ -1897,607 +1506,6 @@ function buildMetadata(body) {
 
     return metadata;
 }
-
-async function deployCollection(name, symbol) {
-    // names and symbols select collections, so each must identify exactly one
-    for (const label of new Set([name, symbol])) {
-        const taken = await collectionsByLabel(label);
-
-        if (taken.length > 0) {
-            throw httpError(409, `"${label}" is already used by collection ${taken[0]}; choose another name/symbol`);
-        }
-    }
-
-    if (sectionsConfigured() && isAddress(CONFIG.CONTRACT_CENTER)) {
-        return deployCollectionV3(name, symbol);
-    }
-
-    if (!await signerOwns(CONFIG.SENDER01)) {
-        throw new Error("sender01 is not managed by the MPC signer");
-    }
-
-    const data = nftDeployData(name, symbol);
-    const sent = await withSenderLock(CONFIG.SENDER01, () =>
-        sendData(CONFIG.SENDER01, null, data)
-    );
-    const receipt = await waitForReceipt(sent.txHash);
-    const address = receipt.contractAddress;
-
-    if (!address || !isAddress(address)) {
-        throw new Error("deployment did not create a contract");
-    }
-
-    const contract = ethers.getAddress(address);
-    const code = await rpc(CONFIG.BESU_RPC, "eth_getCode", [contract, "latest"]);
-
-    if (!code || code === "0x") {
-        throw new Error("deployment produced no code");
-    }
-
-    const existingDefault = await nftContractAddress();
-
-    if (!existingDefault) {
-        await rememberNftContract(contract);
-    }
-
-    await rememberCollection(contract, { name, symbol });
-
-    return {
-        success: true,
-        contract,
-        default: !existingDefault,
-        txHash: sent.txHash,
-        name,
-        symbol,
-        minter: CONFIG.SENDER01,
-        nonce: sent.nonce
-    };
-}
-
-// Version 3: deployed by the contract account center (its minter), registered in the SectionRegistry
-async function deployCollectionV3(name, symbol) {
-    const bytecode = nftV3Artifact.bytecode.startsWith("0x") ? nftV3Artifact.bytecode : "0x" + nftV3Artifact.bytecode;
-    const data = ethers.concat([bytecode, nftV3Interface.encodeDeploy([name, symbol, CONFIG.REGISTRY_CONTRACT])]);
-    const sent = await withSenderLock(CONFIG.CONTRACT_CENTER, () => sendData(CONFIG.CONTRACT_CENTER, null, data));
-    const receipt = await waitForReceipt(sent.txHash);
-    const contract = ethers.getAddress(receipt.contractAddress);
-    const registered = await registryWrite("registerContract", [contract, CONTRACT_KINDS.nft, name, JSON.stringify(nftV3Artifact.abi)]);
-    contractBook.byAddress.set(contract.toLowerCase(), {
-        address: contract, kind: "nft", name, abi: nftV3Artifact.abi, iface: nftV3Interface, registeredIn: parseInt(registered.receipt.blockNumber, 16)
-    });
-    const existingDefault = await nftContractAddress();
-
-    if (!existingDefault) {
-        await rememberNftContract(contract);
-    }
-
-    await rememberCollection(contract, { name, symbol });
-    console.log(`NFT collection v3 "${name}" (${symbol}) deployed at ${contract} by the center`);
-
-    return {
-        success: true,
-        contract,
-        default: !existingDefault,
-        txHash: sent.txHash,
-        name,
-        symbol,
-        version: 3,
-        minter: ethers.getAddress(CONFIG.CONTRACT_CENTER),
-        registryTxHash: registered.txHash,
-        nonce: sent.nonce
-    };
-}
-
-// Mint (version 2): every NFT is minted to SENDER01 (the collection's minter); nothing is paid.
-// "amount" is the NFT's price, stored on chain in the collection (priceOf); /nft/transfer sells
-// the token with buy(), where the buyer pays exactly that price to SENDER01 in one transaction.
-// Version 3: minted by the contract account center (the collection's minter), which holds the NFT
-// for sale. Not tied to a section.
-async function mintNftV3(contract, metadata, tokenURI, price, priceWei) {
-    requireCenter();
-    const center = ethers.getAddress(CONFIG.CONTRACT_CENTER);
-    const minter = ethers.getAddress((await callNft(contract, "minter", []))[0]);
-
-    if (minter !== center) {
-        throw httpError(400, `the collection's minter ${minter} is not the contract account center`);
-    }
-
-    const tokenId = await allocateTokenId(contract);
-    const key = nftMetaKey(contract, tokenId);
-    const record = { metadata, tokenURI, to: center, price };
-    await cache(() => redis.set(key, JSON.stringify(record)));
-    const data = nftV3Interface.encodeFunctionData("mint", [center, tokenId, tokenURI, priceWei]);
-    let sent;
-
-    try {
-        await assertMintFits(center, contract, data);
-        sent = await withSenderLock(center, () => sendData(center, contract, data));
-    } catch (error) {
-        await cache(() => redis.del(key));
-        throw error;
-    }
-
-    record.txHash = sent.txHash;
-    await cache(() => redis.set(key, JSON.stringify(record)));
-    return { success: true, tokenId, contract, version: 3, owner: center, price, tokenURI, txHash: sent.txHash, nonce: sent.nonce };
-}
-
-async function mintNft(req) {
-    const body = req.body || {};
-
-    if (body.name === undefined || body.image === undefined) {
-        throw httpError(400, "missing parameters");
-    }
-
-    const sender = ethers.getAddress(CONFIG.SENDER01);
-
-    if (body.to !== undefined && body.to !== null && body.to !== "" &&
-        !(isAddress(body.to) && ethers.getAddress(body.to) === sender)) {
-        throw httpError(400, "\"to\" is not supported: NFTs are minted to SENDER01; "
-            + "use /nft/transfer to give or sell one");
-    }
-
-    const price = body.amount === undefined || body.amount === null || body.amount === ""
-        ? "0"
-        : String(body.amount).trim();
-
-    if (!/^\d+(\.\d+)?$/.test(price)) {
-        throw httpError(400, "invalid amount");
-    }
-
-    const priceWei = ethToWei(price);
-    const metadata = buildMetadata(body);
-    const tokenURI = onChainTokenUri(metadata);
-    const contract = await resolveCollection(collectionParam(body));
-
-    if (await collectionVersion(contract) === 3) {
-        return mintNftV3(contract, metadata, tokenURI, price, priceWei);
-    }
-
-    if (!await signerOwns(CONFIG.SENDER01)) {
-        throw new Error("sender01 is not managed by the signer");
-    }
-
-    let minter;
-
-    try {
-        minter = (await callNft(contract, "minter", []))[0];
-    } catch (error) {
-        if (error.empty || isRevert(error)) {
-            throw httpError(400, "NFT contract is not a collection");
-        }
-
-        throw error;
-    }
-
-    if (minter.toLowerCase() !== sender.toLowerCase()) {
-        throw httpError(400, "NFT minter is not sender01");
-    }
-
-    const tokenId = await allocateTokenId(contract);
-    const key = nftMetaKey(contract, tokenId);
-    const record = {
-        metadata,
-        tokenURI,
-        to: sender,
-        price
-    };
-
-    await cache(() => redis.set(key, JSON.stringify(record)));
-
-    const data = nftInterface.encodeFunctionData("mint", [sender, tokenId, tokenURI, priceWei]);
-    let sent;
-
-    try {
-        await assertMintFits(sender, contract, data);
-        sent = await withSenderLock(sender, () => sendData(sender, contract, data));
-    } catch (error) {
-        await cache(() => redis.del(key));
-        throw error;
-    }
-
-    record.txHash = sent.txHash;
-    await cache(() => redis.set(key, JSON.stringify(record)));
-
-    return {
-        success: true,
-        tokenId,
-        contract,
-        owner: sender,
-        price,
-        tokenURI,
-        txHash: sent.txHash,
-        nonce: sent.nonce
-    };
-}
-
-// Sell / transfer an NFT to `to` with the collection's buy(): ONE transaction signed by the
-// buyer, carrying exactly the token's price (set at mint). The NFT moves to the buyer and the
-// ETH goes to SENDER01 atomically; if anything fails the whole sale reverts and no ETH moves.
-// `from` is optional (default: current owner). If the owner is not SENDER01 (a resale), the
-// owner first approves the collection for this token.
-// Version 3 sale: X-Section-Key is required (the admin API's caller may omit it: the section is
-// then the buyer's); the buyer "to" must be a user account of that section, section_i. The buyer signs
-// buy(tokenId, payee) with value = the mint price. First sale (the center holds the NFT): the price
-// goes to section_i's consumption account. Resale: the seller (a user account of section_i) approves
-// the sale if needed, and the price goes to the seller.
-async function transferNft(req) {
-    const body = req.body || {};
-    const tokenId = parseTokenId(body.tokenId);
-
-    if (!body.to || !tokenId) {
-        throw httpError(400, "missing parameters");
-    }
-
-    if (!isAddress(body.to) || (body.from && !isAddress(body.from))) {
-        throw httpError(400, "invalid address");
-    }
-
-    const contract = await resolveCollection(collectionParam(body));
-
-    if (await collectionVersion(contract) === 3) {
-        throw httpError(410, "version-3 collections are sold with POST /contract/send: \"function\": \"buy\", \"args\": [tokenId] "
-            + "from the buyer (payee and value are filled in); a resale needs the seller's approve(collection, tokenId) first, also with /contract/send");
-    }
-
-    const to = ethers.getAddress(body.to);
-    const sender = ethers.getAddress(CONFIG.SENDER01);
-    const owner = await readOwner(contract, tokenId);
-
-    if (!owner) {
-        throw httpError(404, "token not found");
-    }
-
-    const from = body.from ? ethers.getAddress(body.from) : ethers.getAddress(owner);
-
-    if (owner.toLowerCase() !== from.toLowerCase()) {
-        throw httpError(400, "sender is not the token owner");
-    }
-
-    if (from === to) {
-        throw httpError(400, "token is already owned by to");
-    }
-
-    const priceWei = (await callNft(contract, "priceOf", [tokenId]))[0];
-    const price = ethers.formatEther(priceWei).replace(/\.0$/, "");
-
-    if (body.amount !== undefined && body.amount !== null && body.amount !== "" &&
-        ethToWei(String(body.amount).trim()) !== priceWei) {
-        throw httpError(400, `"amount" is not a parameter: the price of this token is ${price} `
-            + "(set at mint)");
-    }
-
-    const buyerOwned = await signerOwns(to);
-
-    if (!buyerOwned) {
-        throw httpError(400, "to address (buyer) is not managed by the signer");
-    }
-
-    // resale: the current owner must allow the collection to sell this token
-    let approveTxHash = null;
-
-    if (from !== sender) {
-        const approved = (await callNft(contract, "getApproved", [tokenId]))[0];
-        const operator = (await callNft(contract, "isApprovedForAll", [from, contract]))[0];
-
-        if (approved.toLowerCase() !== contract.toLowerCase() && !operator) {
-            if (!await signerOwns(from)) {
-                throw httpError(400, "owner is not managed by the signer");
-            }
-
-            const approveData = nftInterface.encodeFunctionData("approve", [contract, tokenId]);
-            const approval = await withSenderLock(from, () => sendData(from, contract, approveData));
-            const receipt = await waitForReceipt(approval.txHash);
-
-            if (!receipt || BigInt(receipt.status) !== 1n) {
-                throw new Error("approval for the sale failed");
-            }
-
-            approveTxHash = approval.txHash;
-        }
-    }
-
-    // the sale: buyer signs buy(tokenId) with value = price (gas estimation rejects a sale
-    // that would revert, e.g. insufficient balance, before anything is sent)
-    const buyData = nftInterface.encodeFunctionData("buy", [tokenId]);
-    let sent;
-
-    try {
-        sent = await withSenderLock(to, () => sendData(to, contract, buyData, priceWei));
-    } catch (error) {
-        if (/insufficient/i.test(error.message)) {
-            throw httpError(400, `insufficient balance: the price of this token is ${price} ETH`);
-        }
-
-        throw error;
-    }
-
-    return {
-        success: true,
-        txHash: sent.txHash,
-        from,
-        to,
-        tokenId,
-        contract,
-        price,
-        approveTxHash,
-        nonce: sent.nonce
-    };
-}
-
-async function ownedInCollection(contract, owner) {
-    const minted = Number(await highestMintedTokenId(contract));
-    const stored = Math.max(
-        memNft.nextId.get(contract) || 0,
-        Number(await cache(() => redis.get(`nft:nextId:${contract.toLowerCase()}`)) || 0)
-    );
-    const latest = Math.max(minted, stored);
-    const tokenIds = [];
-    const batchSize = 20;
-
-    for (let start = 1; start <= latest; start += batchSize) {
-        const ids = [];
-
-        for (let id = start; id < start + batchSize && id <= latest; id += 1) {
-            ids.push(String(id));
-        }
-
-        const owners = await Promise.all(ids.map((id) => readOwner(contract, id)));
-
-        ids.forEach((id, index) => {
-            if (owners[index] && owners[index].toLowerCase() === owner.toLowerCase()) {
-                tokenIds.push(id);
-            }
-        });
-    }
-
-    return tokenIds;
-}
-
-// ?contract=0x... -> that collection only; otherwise every known collection. The top-level
-// contract/tokenIds fields keep the single-collection response shape (default collection).
-async function listOwnedNfts(address, contractParam) {
-    const owner = ethers.getAddress(address);
-
-    if (contractParam) {
-        const contract = await resolveCollection(contractParam);
-        return { success: true, contract, owner, tokenIds: await ownedInCollection(contract, owner) };
-    }
-
-    const def = await requireNftContract();
-    const collections = [];
-
-    for (const contract of (await knownCollections()).keys()) {
-        collections.push({ contract, tokenIds: await ownedInCollection(contract, owner) });
-    }
-
-    const defaultRow = collections.find((row) => row.contract === def);
-
-    return {
-        success: true,
-        contract: def,
-        owner,
-        tokenIds: defaultRow ? defaultRow.tokenIds : [],
-        collections
-    };
-}
-
-app.post("/nft/deploy", async (req, res) => {
-    try {
-        const body = req.body || {};
-
-        if (body.name !== undefined && typeof body.name !== "string") {
-            throw httpError(400, "invalid name");
-        }
-
-        if (body.symbol !== undefined && typeof body.symbol !== "string") {
-            throw httpError(400, "invalid symbol");
-        }
-
-        const name = body.name === undefined ? "Proxy NFT" : body.name;
-        const symbol = body.symbol === undefined ? "PNFT" : body.symbol;
-        const result = await withDeployLock(() => deployCollection(
-            collectionField(name, "name", 64),
-            collectionField(symbol, "symbol", 32)
-        ));
-
-        res.json(result);
-    } catch (error) {
-        console.error(error);
-
-        res.status(error.statusCode || 500).json({
-            error: error.message
-        });
-    }
-});
-
-app.post("/nft/mint", async (req, res) => {
-    try {
-        res.json(await mintNft(req));
-    } catch (error) {
-        console.error(error);
-
-        res.status(error.statusCode || 500).json({
-            error: error.message
-        });
-    }
-});
-
-app.post("/nft/transfer", async (req, res) => {
-    try {
-        res.json(await transferNft(req));
-    } catch (error) {
-        console.error(error);
-
-        res.status(error.statusCode || 500).json({
-            error: error.message
-        });
-    }
-});
-
-app.get("/nft/contract", async (req, res) => {
-    try {
-        const contract = await nftContractAddress();
-
-        if (!contract) {
-            return res.status(404).json({
-                error: "NFT contract is not deployed"
-            });
-        }
-
-        res.json({
-            success: true,
-            contract
-        });
-    } catch (error) {
-        console.error(error);
-
-        res.status(error.statusCode || 500).json({
-            error: error.message
-        });
-    }
-});
-
-// The account that mints a collection's NFTs: read from the contract (version 3: the contract
-// account center), SENDER01 for version 2. Cached: it never changes.
-const minterCache = new Map();
-
-async function collectionMinter(address, version) {
-    const key = address.toLowerCase();
-    if (!minterCache.has(key)) {
-        let minter = ethers.getAddress(CONFIG.SENDER01);
-        if (version >= 3) {
-            try {
-                minter = ethers.getAddress((await callNft(address, "minter", []))[0]);
-            } catch (error) {
-                minter = null;
-            }
-        }
-        minterCache.set(key, minter);
-    }
-    return minterCache.get(key);
-}
-
-app.get("/nft/collections", async (req, res) => {
-    try {
-        const def = await nftContractAddress();
-        const collections = [];
-        for (const [contract, info] of (await knownCollections()).entries()) {
-            const version = await collectionVersion(contract);
-            collections.push({
-                contract,
-                name: info.name,
-                symbol: info.symbol,
-                version,
-                minter: await collectionMinter(contract, version),
-                default: contract === def
-            });
-        }
-
-        res.json({ success: true, collections });
-    } catch (error) {
-        console.error(error);
-
-        res.status(error.statusCode || 500).json({
-            error: error.message
-        });
-    }
-});
-
-app.get("/nft/owner/:address", async (req, res) => {
-    try {
-        if (!isAddress(req.params.address)) {
-            return res.status(400).json({
-                error: "invalid address"
-            });
-        }
-
-        res.json(await listOwnedNfts(req.params.address, collectionParam(req.query)));
-    } catch (error) {
-        console.error(error);
-
-        res.status(error.statusCode || 500).json({
-            error: error.message
-        });
-    }
-});
-
-app.get("/nft/:tokenId/metadata", async (req, res) => {
-    try {
-        const tokenId = parseTokenId(req.params.tokenId);
-
-        if (!tokenId) {
-            return res.status(400).json({
-                error: "invalid token id"
-            });
-        }
-
-        const contract = await resolveCollection(collectionParam(req.query));
-        const stored = await readStoredNft(contract, tokenId);
-
-        if (!stored) {
-            return res.status(404).json({
-                error: "token not found"
-            });
-        }
-
-        res.json(stored.metadata);
-    } catch (error) {
-        console.error(error);
-
-        res.status(error.statusCode || 500).json({
-            error: error.message
-        });
-    }
-});
-
-app.get("/nft/:tokenId", async (req, res) => {
-    try {
-        const tokenId = parseTokenId(req.params.tokenId);
-
-        if (!tokenId) {
-            return res.status(400).json({
-                error: "invalid token id"
-            });
-        }
-
-        const contract = await resolveCollection(collectionParam(req.query));
-        const stored = await readStoredNft(contract, tokenId);
-        const owner = await readOwner(contract, tokenId);
-
-        if (!owner) {
-            if (stored) {
-                return res.status(404).json({
-                    error: "token not minted yet",
-                    tokenId,
-                    txHash: stored.txHash || null
-                });
-            }
-
-            return res.status(404).json({
-                error: "token not found"
-            });
-        }
-
-        const tokenURI = (await callNft(contract, "tokenURI", [tokenId]))[0];
-
-        res.json({
-            success: true,
-            contract,
-            tokenId,
-            owner,
-            tokenURI,
-            txHash: stored ? stored.txHash || null : null,
-            metadata: stored ? stored.metadata : null
-        });
-    } catch (error) {
-        console.error(error);
-
-        res.status(error.statusCode || 500).json({
-            error: error.message
-        });
-    }
-});
 
 // =======================
 // Sections (docs/features/sections.md)
@@ -3379,7 +2387,7 @@ app.get("/admin/contracts", adminGuard, adminRoute(async () => {
 app.post("/admin/contracts/check", adminGuard, adminRoute(async (req) => {
     requireSections();
     requireCenter();
-    const input = deployInputOf(req.body);
+    const input = await templateInput(req.body);
     const estimate = await deployCheck(input);
     const nonce = parseInt(await rpc(CONFIG.BESU_RPC, "eth_getTransactionCount", [CONFIG.CONTRACT_CENTER, "pending"]), 16);
 
@@ -3401,7 +2409,7 @@ app.post("/admin/contracts/check", adminGuard, adminRoute(async (req) => {
 app.post("/admin/contracts/deploy", adminGuard, adminRoute(async (req) => {
     requireSections();
     requireCenter();
-    return deployAndRegister(deployInputOf(req.body));
+    return deployAndRegister(await templateInput(req.body));
 }));
 
 async function deployAndRegister(input) {
@@ -3461,7 +2469,7 @@ async function nicknameCollection(optional = false) {
     const entry = pick(await loadContracts()) || pick(await loadContracts(true));
 
     if (!entry && !optional) {
-        throw httpError(503, "no nickname collection yet: deploy one (POST /admin/nickname/deploy, or the chainlens Nicknames page)");
+        throw httpError(503, "no nickname collection yet: deploy one (POST /admin/contracts/deploy with template nickname-collection, or the chainlens Nicknames page)");
     }
 
     return entry || null;
@@ -3555,33 +2563,6 @@ async function nicknameInfo(address, tokenId) {
     };
 }
 
-// Sign as `from` (its MPC key), wait for the block; a revert or a refusal becomes a 400 with the reason
-async function nicknameSend(from, to, data, valueWei, priceText) {
-    let sent;
-
-    try {
-        sent = await withSenderLock(from, () => sendData(from, to, data, valueWei));
-    } catch (error) {
-        if (error.statusCode) {
-            throw error;
-        }
-
-        if (/insufficient/i.test(error.message)) {
-            throw httpError(400, `insufficient balance: ${priceText} ETH is needed`);
-        }
-
-        throw httpError(400, `refused: ${revertReason(error)}`);
-    }
-
-    const receipt = await receiptOf(sent.txHash);
-
-    if (BigInt(receipt.status) !== 1n) {
-        throw httpError(400, `reverted in block ${BigInt(receipt.blockNumber)} (transaction ${sent.txHash})`);
-    }
-
-    return { txHash: sent.txHash, blockNumber: Number(BigInt(receipt.blockNumber)) };
-}
-
 // Every nickname and its level, from the collection's events (for the admin list and the counts)
 async function scanNicknames(entry) {
     if (nicknameBook.address !== entry.address) {
@@ -3607,93 +2588,7 @@ async function scanNicknames(entry) {
     return nicknameBook.tokens;
 }
 
-function nicknameRoute(handler) {
-    return async (req, res) => {
-        try {
-            res.json(await handler(req));
-        } catch (error) {
-            if (!error.statusCode) {
-                console.error(error);
-            }
-
-            res.status(error.statusCode || 500).json({ error: error.message });
-        }
-    };
-}
-
 // ---- Applications
-
-// The edge levels and the price of a nickname
-app.get("/nickname/edges", nicknameRoute(async (req) => {
-    await sectionFromRequest(req);
-    const entry = await nicknameCollection();
-    const [price] = await nickCall(entry.address, "nicknamePrice");
-    return { collection: entry.address, nicknamePrice: ethText(price), edges: await readEdges(entry.address) };
-}));
-
-// Is a nickname valid and free?
-app.get("/nickname/check", nicknameRoute(async (req) => {
-    await sectionFromRequest(req);
-    const entry = await nicknameCollection();
-    const nickname = nicknameInput(req.query.name);
-    const tokenId = nicknameId(nickname);
-    const [taken, reserved] = await Promise.all([
-        rpc(CONFIG.BESU_RPC, "eth_call", [{ to: entry.address, data: nicknameIface.encodeFunctionData("ownerOf", [tokenId]) }, "latest"])
-            .then(() => true, () => false),
-        nickCall(entry.address, "reserved", [tokenId]).then((r) => r[0])
-    ]);
-    return {
-        nickname,
-        characters: Array.from(nickname).length,
-        tokenId: tokenId.toString(),
-        available: !taken && !reserved,
-        reason: taken ? "taken" : (reserved ? "reserved" : null)
-    };
-}));
-
-// An account's nickname: name, edge level and the picture (SVG, data URI)
-app.get("/nickname/of/:account", nicknameRoute(async (req) => {
-    await sectionFromRequest(req);
-    const entry = await nicknameCollection();
-
-    if (!isAddress(req.params.account)) {
-        throw httpError(400, "account: an address");
-    }
-
-    const [tokenId] = await nickCall(entry.address, "nicknameOf", [ethers.getAddress(req.params.account)]);
-
-    if (tokenId === 0n) {
-        throw httpError(404, `${ethers.getAddress(req.params.account)} has no nickname`);
-    }
-
-    return nicknameInfo(entry.address, tokenId);
-}));
-
-// Price for an account to reach an edge level
-app.get("/nickname/quote", nicknameRoute(async (req) => {
-    await sectionFromRequest(req);
-    const entry = await nicknameCollection();
-
-    if (!isAddress(String(req.query.account || ""))) {
-        throw httpError(400, "account: an address");
-    }
-
-    const level = Number(req.query.level);
-
-    if (!Number.isInteger(level) || level < 1 || level > 255) {
-        throw httpError(400, "level: the edge level to reach (1 or more)");
-    }
-
-    const [price] = await nickCall(entry.address, "quote", [ethers.getAddress(req.query.account), level]);
-    return { account: ethers.getAddress(req.query.account), level, price: ethText(price) };
-}));
-
-// Writes go through POST /contract/send (buyNickname, upgradeEdge): one write path for every contract
-for (const [path, fn] of [["/nickname/buy", "buyNickname(string,address)"], ["/nickname/edge", "upgradeEdge(uint8,address)"]]) {
-    app.post(path, (req, res) => res.status(410).json({
-        error: `${path} was removed: use POST /contract/send with "function": "${fn.split("(")[0]}" on the nickname collection (payee and value are filled in)`
-    }));
-}
 
 // ---- Admin (chainlens Nicknames page): the collection, its edge levels, prices, reserved nicknames
 
@@ -3749,12 +2644,6 @@ function adminPrice(value) {
     return ethToWei(String(value));
 }
 
-// Sign as the center (the minter), wait for the block
-async function centerSend(address, fn, args) {
-    requireCenter();
-    return nicknameSend(CONFIG.CONTRACT_CENTER, address, nicknameIface.encodeFunctionData(fn, args), 0n, "0");
-}
-
 app.get("/admin/nickname", adminGuard, adminRoute(async (req) => {
     const entry = await nicknameCollection(true);
 
@@ -3783,121 +2672,29 @@ app.get("/admin/nickname", adminGuard, adminRoute(async (req) => {
     };
 }));
 
-// Deploy the collection (once), signed by the center, registered in the SectionRegistry
-app.post("/admin/nickname/deploy", adminGuard, adminRoute(async (req) => {
-    requireCenter();
-    const existing = await nicknameCollection(true);
+// ---- Applications: read and write registered contracts (docs/reference/proxy-api.md)
+// One API shape for every registered contract:
+//   POST /contract/call    read (one call, or { "calls": [...] } for up to 50 at once)
+//   POST /contract/send    write, signed by a user account of the caller's section
+//   POST /contract/events  the contract's events (filters, newest first)
+//   GET  /contract/list    the registered contracts
+//   POST /admin/contract/send  write, signed by the contract account center (admin token)
+// "args" is a list (the ABI's raw values: wei, bytes, ...) or an object. With an object, the
+// platform's own contracts (the NFT collection v3 and the nickname collection) take friendly
+// values: ETH prices, "#rrggbb" colors, pattern names, metadata for a mint. Their answers carry a
+// "result" with friendly values too (ETH, decoded metadata and pictures, nickname details).
 
-    if (existing && !(req.body || {}).another) {
-        throw httpError(409, `a nickname collection exists at ${existing.address} (send "another": true to deploy a new one: the new one is used from then on)`);
+// "nickname" (NicknameCollection), "nft" (NftCollection v3) or null
+function platformKind(entry) {
+    if (!entry.platformKind) {
+        entry.platformKind = hasFunction(entry, "buyNickname") && hasFunction(entry, "upgradeEdge") ? "nickname"
+            : hasFunction(entry, "priceOf") && hasFunction(entry, "mint") && hasFunction(entry, "buy") && hasFunction(entry, "minter") ? "nft"
+                : "none";
     }
 
-    const b = req.body || {};
-    const name = String(b.name || "Nicknames").trim().slice(0, 64);
-    const symbol = String(b.symbol || "NICK").trim().slice(0, 16);
-    const edge0 = String(b.edge0 || "Simple").trim();
-    const input = deployInputOf({
-        kind: "common", name, abi: nicknameArtifact.abi, bytecode: nicknameArtifact.bytecode,
-        deployedBytecode: nicknameArtifact.deployedBytecode, immutableReferences: nicknameArtifact.immutableReferences,
-        args: [name, symbol, CONFIG.REGISTRY_CONTRACT, adminPrice(b.price === undefined ? "0" : b.price).toString(), edge0]
-    });
-    return deployAndRegister(input);
-}));
+    return entry.platformKind === "none" ? null : entry.platformKind;
+}
 
-app.put("/admin/nickname/price", adminGuard, adminRoute(async (req) => {
-    const entry = await nicknameCollection();
-    const price = adminPrice((req.body || {}).price);
-    const sent = await centerSend(entry.address, "setNicknamePrice", [price]);
-    return { success: true, nicknamePrice: ethText(price), ...sent };
-}));
-
-// A new edge level (the next number)
-app.post("/admin/nickname/edges", adminGuard, adminRoute(async (req) => {
-    const entry = await nicknameCollection();
-    const e = edgeStyleInput(req.body, null);
-    const [count] = await nickCall(entry.address, "edgeCount");
-    const sent = await centerSend(entry.address, "addEdge", [e.name, e.stepPrice, e.color, e.color2, e.width, e.radius, e.pattern]);
-    const [info] = await nickCall(entry.address, "edgeInfo", [count]);
-    return { success: true, edge: edgeOut(Number(count), info), ...sent };
-}));
-
-// Change a level: name, price, enabled, style (omitted fields keep their value). Never deleted.
-app.put("/admin/nickname/edges/:level", adminGuard, adminRoute(async (req) => {
-    const entry = await nicknameCollection();
-    const level = Number(req.params.level);
-    const edges = await readEdges(entry.address);
-
-    if (!Number.isInteger(level) || !edges[level]) {
-        throw httpError(404, `no edge level ${req.params.level} (levels 0-${edges.length - 1})`);
-    }
-
-    const e = edgeStyleInput(req.body, edges[level]);
-    const sent = await centerSend(entry.address, "setEdge", [level, e.name, e.stepPrice, e.enabled, e.color, e.color2, e.width, e.radius, e.pattern]);
-    const [info] = await nickCall(entry.address, "edgeInfo", [level]);
-    return { success: true, edge: edgeOut(level, info), ...sent };
-}));
-
-// Reserve (or release) nicknames nobody may buy
-app.post("/admin/nickname/reserve", adminGuard, adminRoute(async (req) => {
-    const entry = await nicknameCollection();
-    const names = (req.body || {}).nicknames;
-
-    if (!Array.isArray(names) || names.length < 1 || names.length > 100) {
-        throw httpError(400, "nicknames: a list of 1 to 100 nicknames");
-    }
-
-    const list = names.map(nicknameInput);
-    const reserved = (req.body || {}).reserved !== false;
-    const sent = await centerSend(entry.address, "reserve", [list, reserved]);
-    return { success: true, reserved, nicknames: list, ...sent };
-}));
-
-// ---- Applications: read and write registered contracts
-
-// Read: a view/pure function (eth_call on the latest block). With sections_required, a section key.
-app.post("/contract/call", async (req, res) => {
-    try {
-        await sectionFromRequest(req);
-        const entry = await registeredContract(req.body.contract);
-        const fragment = contractFunction(entry, req.body.function);
-
-        if (fragment.stateMutability !== "view" && fragment.stateMutability !== "pure") {
-            throw httpError(400, `${fragment.format("sighash")} changes state: use POST /contract/send`);
-        }
-
-        const data = entry.iface.encodeFunctionData(fragment, coerceParams(fragment.inputs, req.body.args));
-        let result;
-
-        try {
-            result = await ethCall(entry.address, data);
-        } catch (error) {
-            throw httpError(400, `call reverted: ${revertReason(error)}`);
-        }
-
-        const decoded = entry.iface.decodeFunctionResult(fragment, result);
-        res.json({
-            success: true,
-            contract: entry.address,
-            function: fragment.format("sighash"),
-            outputs: fragment.outputs.map((p, i) => ({ name: p.name || String(i), type: p.format("sighash"), value: jsonValue(decoded[i]) }))
-        });
-    } catch (error) {
-        if (!error.statusCode) {
-            console.error(error);
-        }
-
-        res.status(error.statusCode || 500).json({ error: error.message });
-    }
-});
-
-// Write: a state-changing function, signed by a user account of the caller's section. Waits for the
-// block; answers with the status and the contract's decoded events.
-// Functions of the platform's own contracts, sent through /contract/send:
-//   nickname collection: buyNickname(nickname, payee), upgradeEdge(level, payee)
-//   NFT collection v3:   buy(tokenId, payee)
-// An address input named "payee" is the sender's section's consumption account: filled in when left
-// out, refused when it is another account. The price (value) is filled in when left out. A nickname is
-// trimmed and NFC-normalized (1-256 characters), and the usual refusals get clear messages.
 function hasFunction(entry, name) {
     try {
         entry.iface.getFunction(name);
@@ -3912,6 +2709,499 @@ async function entryCall(entry, fn, args) {
     return entry.iface.decodeFunctionResult(fn, out);
 }
 
+function objectArg(o, ...names) {
+    for (const name of names) {
+        if (o[name] !== undefined) {
+            return o[name];
+        }
+    }
+
+    return undefined;
+}
+
+// An object's values in the ABI's order, by input name (a leading/trailing "_" is ignored)
+function argsByName(fragment, o) {
+    const known = new Set(fragment.inputs.map((p) => p.name.replace(/^_+|_+$/g, "")));
+    const unknown = Object.keys(o).filter((k) => !known.has(k));
+
+    if (unknown.length) {
+        throw httpError(400, `args: unknown name(s) ${unknown.join(", ")}; ${fragment.format("sighash")} takes ${fragment.inputs.map((p) => p.name || "?").join(", ")}`);
+    }
+
+    return fragment.inputs.map((p) => o[p.name.replace(/^_+|_+$/g, "")]);
+}
+
+function ethInput(value, what) {
+    if (value === undefined || value === null || !/^\d+(\.\d+)?$/.test(String(value))) {
+        throw httpError(400, `${what}: ETH, e.g. "0.5"`);
+    }
+
+    return ethToWei(String(value)).toString();
+}
+
+// Friendly object arguments of the platform's contracts -> the ABI's raw values.
+// ctx: { center: true } for /admin/contract/send
+async function friendlyArgs(entry, fragment, raw, ctx) {
+    const kind = platformKind(entry);
+    const name = fragment.name;
+
+    if (raw === undefined || raw === null) {
+        raw = [];
+    }
+
+    if (Array.isArray(raw)) {
+        const args = [...raw];
+
+        // nicknames are always trimmed and NFC-normalized, also as raw values
+        if (kind === "nickname" && ["isAvailable", "idOf"].includes(name) && typeof args[0] === "string") {
+            args[0] = nicknameInput(args[0]);
+        }
+
+        return args;
+    }
+
+    if (typeof raw !== "object") {
+        throw httpError(400, "args: a list (raw ABI values) or an object (by name)");
+    }
+
+    const o = raw;
+    const tokenOnly = () => [objectArg(o, "tokenId", "id")];
+
+    if (kind === "nickname") {
+        switch (name) {
+        case "buyNickname": return [o.nickname, o.payee];
+        case "upgradeEdge": return [objectArg(o, "level", "toLevel"), o.payee];
+        case "quote": return [o.account, objectArg(o, "level", "toLevel")];
+        case "isAvailable": case "idOf": return [nicknameInput(o.nickname)];
+        case "nicknameOf": case "balanceOf": return [objectArg(o, "account", "owner")];
+        case "edgeInfo": return [o.level];
+        case "edgeOf": case "nicknameById": case "tokenURI": case "ownerOf": case "locked": case "reserved": return tokenOnly();
+        case "setNicknamePrice": return [ethInput(o.price, "price")];
+        case "reserve": {
+            const names = objectArg(o, "nicknames", "names");
+
+            if (!Array.isArray(names) || names.length < 1 || names.length > 100) {
+                throw httpError(400, "nicknames: a list of 1 to 100 nicknames");
+            }
+
+            return [names.map(nicknameInput), o.reserved !== false];
+        }
+        case "addEdge": {
+            const e = edgeStyleInput(o, null);
+            return [e.name, e.stepPrice, e.color, e.color2, e.width, e.radius, e.pattern];
+        }
+        case "setEdge": {
+            const level = Number(o.level);
+            const edges = await readEdges(entry.address);
+
+            if (!Number.isInteger(level) || !edges[level]) {
+                throw httpError(404, `level: no edge level ${o.level} (levels 0-${edges.length - 1})`);
+            }
+
+            const e = edgeStyleInput(o, edges[level]);
+            return [level, e.name, e.stepPrice, e.enabled, e.color, e.color2, e.width, e.radius, e.pattern];
+        }
+        default: break;
+        }
+    }
+
+    if (kind === "nft") {
+        switch (name) {
+        case "buy": return [objectArg(o, "tokenId", "id"), o.payee];
+        // approve { tokenId }: puts the token up for (re)sale through the collection itself
+        case "approve": return [o.to || entry.address, objectArg(o, "tokenId", "id")];
+        case "priceOf": case "ownerOf": case "tokenURI": case "getApproved": return tokenOnly();
+        case "balanceOf": return [objectArg(o, "owner", "account")];
+        case "mint": {
+            if (!ctx || !ctx.center) {
+                break;
+            }
+
+            const center = ethers.getAddress(CONFIG.CONTRACT_CENTER);
+            const uri = o.uri || onChainTokenUri(buildMetadata(o));
+            const tokenId = o.tokenId === undefined ? await allocateTokenId(entry.address) : o.tokenId;
+            return [o.to || center, tokenId, uri, ethInput(objectArg(o, "price", "amount") === undefined ? "0" : objectArg(o, "price", "amount"), "price")];
+        }
+        default: break;
+        }
+    }
+
+    return argsByName(fragment, o);
+}
+
+// The friendly "result" of a read
+async function friendlyCall(entry, fragment, args, decoded) {
+    const kind = platformKind(entry);
+    const name = fragment.name;
+    const v = decoded;
+
+    if (kind === "nickname") {
+        switch (name) {
+        case "nicknamePrice": return { price: ethText(v[0]) };
+        case "edgeCount": return { count: Number(v[0]), edges: await readEdges(entry.address) };
+        case "edgeInfo": return edgeOut(Number(args[0]), v[0]);
+        case "quote": return { account: ethers.getAddress(args[0]), level: Number(args[1]), price: ethText(v[0]) };
+        case "idOf": return { nickname: args[0], tokenId: v[0].toString() };
+        case "isAvailable": {
+            const tokenId = nicknameId(args[0]);
+            const [taken, reserved] = await Promise.all([
+                entryCall(entry, "ownerOf", [tokenId]).then(() => true, () => false),
+                entryCall(entry, "reserved", [tokenId]).then((r) => r[0])
+            ]);
+            return { nickname: args[0], characters: Array.from(args[0]).length, tokenId: tokenId.toString(),
+                available: v[0], reason: taken ? "taken" : (reserved ? "reserved" : null) };
+        }
+        case "nicknameOf":
+            return v[0] === 0n ? { account: ethers.getAddress(args[0]), nickname: null } : nicknameInfo(entry.address, v[0]);
+        case "edgeOf": {
+            const [edge] = await entryCall(entry, "edgeInfo", [v[0]]);
+            return { tokenId: String(args[0]), level: Number(v[0]), edge: edge.name };
+        }
+        case "tokenURI": {
+            const meta = decodeDataUri(v[0]) || {};
+            return { tokenId: String(args[0]), metadata: meta, image: meta.image || null };
+        }
+        case "ownerOf": return { tokenId: String(args[0]), owner: ethers.getAddress(v[0]) };
+        default: break;
+        }
+    }
+
+    if (kind === "nft") {
+        switch (name) {
+        case "priceOf": return { tokenId: String(args[0]), price: ethText(v[0]) };
+        case "ownerOf": return { tokenId: String(args[0]), owner: ethers.getAddress(v[0]) };
+        case "balanceOf": return { owner: ethers.getAddress(args[0]), tokens: Number(v[0]) };
+        case "tokenURI": {
+            const meta = decodeDataUri(v[0]);
+            return { tokenId: String(args[0]), metadata: meta, image: meta ? meta.image || null : null, tokenURI: meta ? undefined : v[0] };
+        }
+        default: break;
+        }
+    }
+
+    // any contract: one value, or the named values; JSON data URIs decoded
+    const plain = (x) => {
+        const value = jsonValue(x);
+        return typeof value === "string" && value.startsWith("data:application/json;base64,") ? decodeDataUri(value) : value;
+    };
+
+    if (fragment.outputs.length === 1) {
+        return plain(v[0]);
+    }
+
+    const out = {};
+    fragment.outputs.forEach((p, i) => { out[p.name || String(i)] = plain(v[i]); });
+    return out;
+}
+
+// The friendly "result" of a write, from its events
+async function friendlySend(entry, fragment, args, events) {
+    const kind = platformKind(entry);
+    const find = (n) => events.find((e) => e.name === n);
+
+    if (kind === "nickname") {
+        const bought = find("NicknameBought");
+        const upgraded = find("EdgeUpgraded");
+
+        if (bought || upgraded) {
+            const info = await nicknameInfo(entry.address, BigInt((bought || upgraded).args.tokenId));
+            const paid = (bought || upgraded).args;
+            return { ...info, price: ethText(BigInt(paid.price)), paidTo: paid.paidTo };
+        }
+
+        const edgeSet = find("EdgeSet");
+
+        if (edgeSet) {
+            const [info] = await entryCall(entry, "edgeInfo", [Number(edgeSet.args.level)]);
+            return { edge: edgeOut(Number(edgeSet.args.level), info) };
+        }
+
+        const priceSet = find("NicknamePriceSet");
+
+        if (priceSet) {
+            return { nicknamePrice: ethText(BigInt(priceSet.args.price)) };
+        }
+
+        const reserved = events.filter((e) => e.name === "Reserved");
+
+        if (reserved.length) {
+            return { reserved: reserved[0].args.reserved, nicknames: reserved.map((e) => e.args.nickname) };
+        }
+    }
+
+    if (kind === "nft") {
+        const sold = find("Sold");
+
+        if (sold) {
+            const center = isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : "";
+            return { sale: ethers.getAddress(sold.args.seller) === center ? "first sale" : "resale", tokenId: String(sold.args.tokenId),
+                seller: sold.args.seller, buyer: sold.args.buyer, price: ethText(BigInt(sold.args.price)), paidTo: sold.args.paidTo };
+        }
+
+        const minted = events.find((e) => e.name === "Transfer" && /^0x0{40}$/i.test(String(e.args.from)));
+
+        if (minted) {
+            const tokenId = BigInt(minted.args.tokenId);
+            const [[price], [uri]] = await Promise.all([entryCall(entry, "priceOf", [tokenId]), entryCall(entry, "tokenURI", [tokenId])]);
+            return { minted: true, tokenId: tokenId.toString(), owner: minted.args.to, price: ethText(price), metadata: decodeDataUri(uri) };
+        }
+
+        const approval = find("Approval");
+
+        if (approval) {
+            return { tokenId: String(approval.args.tokenId), approved: approval.args.approved,
+                forSale: String(approval.args.approved).toLowerCase() === entry.address.toLowerCase() };
+        }
+    }
+
+    return null;
+}
+
+// One read: { contract, function, args } -> answer
+async function contractRead(body) {
+    const b = body || {};
+    const entry = await registeredContract(b.contract);
+    const fragment = contractFunction(entry, b.function);
+
+    if (fragment.stateMutability !== "view" && fragment.stateMutability !== "pure") {
+        throw httpError(400, `${fragment.format("sighash")} changes state: use POST /contract/send`);
+    }
+
+    const args = await friendlyArgs(entry, fragment, b.args, null);
+    const data = entry.iface.encodeFunctionData(fragment, coerceParams(fragment.inputs, args));
+    let out;
+
+    try {
+        out = await ethCall(entry.address, data);
+    } catch (error) {
+        throw httpError(400, `call reverted: ${revertReason(error)}`);
+    }
+
+    const decoded = entry.iface.decodeFunctionResult(fragment, out);
+    return {
+        success: true,
+        contract: entry.address,
+        function: fragment.format("sighash"),
+        result: await friendlyCall(entry, fragment, args, decoded),
+        outputs: fragment.outputs.map((p, i) => ({ name: p.name || String(i), type: p.format("sighash"), value: jsonValue(decoded[i]) }))
+    };
+}
+
+function contractRoute(handler) {
+    return async (req, res) => {
+        try {
+            res.json(await handler(req));
+        } catch (error) {
+            if (!error.statusCode) {
+                console.error(error);
+            }
+
+            res.status(error.statusCode || 500).json({ error: error.message });
+        }
+    };
+}
+
+// Read: a view/pure function (eth_call on the latest block). With sections_required, a section key.
+// { "calls": [ {contract, function, args}, ... ] }: up to 50 reads, each answered (or failed) on its own.
+app.post("/contract/call", contractRoute(async (req) => {
+    await sectionFromRequest(req);
+    const calls = (req.body || {}).calls;
+
+    if (calls === undefined) {
+        return contractRead(req.body);
+    }
+
+    if (!Array.isArray(calls) || calls.length < 1 || calls.length > 50) {
+        throw httpError(400, "calls: a list of 1 to 50 reads { contract, function, args }");
+    }
+
+    const results = await Promise.all(calls.map((c) => contractRead(c).catch((error) => {
+        if (!error.statusCode) {
+            console.error(error);
+        }
+
+        return { success: false, status: error.statusCode || 500, error: error.message };
+    })));
+    return { success: results.every((r) => r.success), results };
+}));
+
+// The registered contracts. ?type=nft|nickname|contract, ?kind=common|nft, ?has=<function>, ?q=<name>,
+// ?functions=1 (the functions and events of each)
+const symbolCache = new Map();
+
+app.get("/contract/list", contractRoute(async (req) => {
+    await sectionFromRequest(req);
+    const q = req.query || {};
+    const latestNickname = await nicknameCollection(true);
+    const rows = [];
+
+    for (const entry of [...(await loadContracts()).values()].sort((a, b) => a.registeredIn - b.registeredIn)) {
+        const type = platformKind(entry) || "contract";
+
+        if ((q.type && q.type !== type) || (q.kind && q.kind !== entry.kind) || (q.has && !hasFunction(entry, String(q.has)))
+            || (q.q && !entry.name.toLowerCase().includes(String(q.q).toLowerCase()))) {
+            continue;
+        }
+
+        const row = { address: entry.address, name: entry.name, type, kind: entry.kind, registeredIn: entry.registeredIn };
+
+        if (type === "nft" || type === "nickname") {
+            if (!symbolCache.has(entry.address)) {
+                const [[symbol], [minter]] = await Promise.all([entryCall(entry, "symbol"), entryCall(entry, "minter")]);
+                symbolCache.set(entry.address, { symbol, minter: ethers.getAddress(minter) });
+            }
+
+            Object.assign(row, symbolCache.get(entry.address));
+        }
+
+        if (type === "nickname") {
+            row.current = Boolean(latestNickname && latestNickname.address === entry.address);
+        }
+
+        if (q.functions === "1") {
+            row.functions = entry.iface.fragments.filter((f) => f.type === "function")
+                .map((f) => ({ signature: f.format("sighash"), mutability: f.stateMutability }));
+            row.events = entry.iface.fragments.filter((f) => f.type === "event").map((f) => f.format("sighash"));
+        }
+
+        rows.push(row);
+    }
+
+    return { success: true, contracts: rows };
+}));
+
+// The events of a registered contract, newest first.
+// { contract, event, where: { arg: value }, fromBlock, toBlock, limit (100, max 1000), current }
+// "where" on an indexed argument filters on the chain; on another argument, after decoding.
+// current: true with event "Transfer" and where.to: only tokens that address still owns.
+const blockTimes = new Map();
+
+async function blockTime(number) {
+    if (!blockTimes.has(number)) {
+        const block = await rpc(CONFIG.BESU_RPC, "eth_getBlockByNumber", [ethers.toQuantity(number), false]);
+        blockTimes.set(number, block ? new Date(parseInt(block.timestamp, 16) * 1000).toISOString() : null);
+
+        if (blockTimes.size > 20000) {
+            blockTimes.clear();
+        }
+    }
+
+    return blockTimes.get(number);
+}
+
+function sameValue(a, b) {
+    const x = String(a);
+    const y = String(b);
+    return isAddress(x) && isAddress(y) ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+app.post("/contract/events", contractRoute(async (req) => {
+    await sectionFromRequest(req);
+    const b = req.body || {};
+    const entry = await registeredContract(b.contract);
+    let fragment;
+
+    try {
+        fragment = entry.iface.getEvent(String(b.event || ""));
+    } catch (error) {
+        fragment = null;
+    }
+
+    if (!fragment) {
+        throw httpError(400, `event: one of ${entry.iface.fragments.filter((f) => f.type === "event").map((f) => f.name).join(", ")}`);
+    }
+
+    const where = b.where && typeof b.where === "object" ? b.where : {};
+    const unknown = Object.keys(where).filter((k) => !fragment.inputs.some((p) => p.name === k));
+
+    if (unknown.length) {
+        throw httpError(400, `where: ${fragment.name} has no argument ${unknown.join(", ")} (${fragment.inputs.map((p) => p.name).join(", ")})`);
+    }
+
+    const limit = Math.min(Math.max(Number(b.limit) || 100, 1), 1000);
+    const head = parseInt(await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []), 16);
+    const fromBlock = b.fromBlock === undefined ? entry.registeredIn - 5 : Number(b.fromBlock);
+    const toBlock = b.toBlock === undefined ? head : Math.min(Number(b.toBlock), head);
+
+    if (!Number.isInteger(fromBlock) || !Number.isInteger(toBlock) || fromBlock < 0 || toBlock < fromBlock) {
+        throw httpError(400, "fromBlock / toBlock: block numbers, fromBlock <= toBlock");
+    }
+
+    let topics;
+
+    try {
+        topics = entry.iface.encodeFilterTopics(fragment, fragment.inputs.map((p) => (p.indexed && where[p.name] !== undefined ? where[p.name] : null)));
+    } catch (error) {
+        throw httpError(400, `where: ${error.shortMessage || error.message}`);
+    }
+
+    const rest = fragment.inputs.filter((p) => !p.indexed && where[p.name] !== undefined);
+    const friendly = Boolean(platformKind(entry));
+    const found = [];
+
+    // newest first, 2000 blocks at a time, until the limit
+    for (let end = toBlock; end >= fromBlock && found.length < limit; end -= 2000) {
+        const start = Math.max(fromBlock, end - 1999);
+        const logs = await rpc(CONFIG.BESU_RPC, "eth_getLogs", [{ address: entry.address, fromBlock: ethers.toQuantity(start), toBlock: ethers.toQuantity(end), topics }]);
+
+        for (const log of logs.reverse()) {
+            const parsed = entry.iface.parseLog(log);
+            const args = {};
+            parsed.fragment.inputs.forEach((p, i) => {
+                const value = jsonValue(parsed.args[i]);
+                args[p.name || String(i)] = friendly && ["price", "stepPrice"].includes(p.name) ? ethText(BigInt(value)) : value;
+            });
+
+            if (rest.every((p) => sameValue(jsonValue(parsed.args[p.name]), where[p.name]))) {
+                found.push({ name: parsed.name, args, blockNumber: parseInt(log.blockNumber, 16), txHash: log.transactionHash, logIndex: parseInt(log.logIndex, 16) });
+            }
+        }
+    }
+
+    let events = found.slice(0, limit);
+
+    if (b.current) {
+        if (fragment.name !== "Transfer" || !where.to || !hasFunction(entry, "ownerOf")) {
+            throw httpError(400, "current: only with event Transfer and where.to (the tokens that address owns now)");
+        }
+
+        const seen = new Set();
+        const kept = [];
+
+        for (const e of events) {
+            const id = String(e.args.tokenId);
+
+            if (seen.has(id)) {
+                continue;
+            }
+
+            seen.add(id);
+            const [owner] = await entryCall(entry, "ownerOf", [BigInt(id)]).catch(() => [null]);
+
+            if (owner && sameValue(owner, where.to)) {
+                kept.push(e);
+            }
+        }
+
+        events = kept;
+    }
+
+    for (const e of events) {
+        e.time = await blockTime(e.blockNumber);
+    }
+
+    return { success: true, contract: entry.address, event: fragment.format("sighash"), fromBlock, toBlock,
+        count: events.length, complete: found.length < limit, events };
+}));
+
+// Write: a state-changing function, signed by a user account of the caller's section. Waits for the
+// block; answers with the status and the contract's decoded events.
+// Functions of the platform's own contracts, sent through /contract/send:
+//   nickname collection: buyNickname(nickname, payee), upgradeEdge(level, payee)
+//   NFT collection v3:   buy(tokenId, payee)
+// An address input named "payee" is the sender's section's consumption account: filled in when left
+// out, refused when it is another account. The price (value) is filled in when left out. A nickname is
+// trimmed and NFC-normalized (1-256 characters), and the usual refusals get clear messages.
 async function knownSend(entry, fragment, args, from, section) {
     const payeeAt = fragment.inputs.findIndex((input) => input.name === "payee" && input.type === "address");
 
@@ -4051,7 +3341,7 @@ app.post("/contract/send", async (req, res) => {
         }
 
         await assertSectionUser(section, from);
-        const args = Array.isArray(req.body.args) ? [...req.body.args] : [];
+        const args = await friendlyArgs(entry, fragment, req.body.args, null);
         const known = await knownSend(entry, fragment, args, from, section);
         let valueWei = 0n;
 
@@ -4115,6 +3405,7 @@ app.post("/contract/send", async (req, res) => {
             txHash: sent.txHash,
             blockNumber: Number(BigInt(receipt.blockNumber)),
             gasUsed: Number(BigInt(receipt.gasUsed)),
+            result: ok ? await friendlySend(entry, fragment, args, events) : null,
             events
         });
     } catch (error) {
@@ -4125,6 +3416,156 @@ app.post("/contract/send", async (req, res) => {
         res.status(error.statusCode || 500).json({ error: error.message });
     }
 });
+
+// ---- Admin: write as the contract account center (the minter and owner of the platform's contracts)
+// { contract, function, args, value }. Friendly object args for the platform's contracts, e.g.
+//   mint        { "name", "image", "description", "attributes", "price": "0.5" }   (to, tokenId and uri filled in)
+//   setNicknamePrice { "price": "1" }
+//   addEdge     { "name", "price", "color": "#f59e0b", "color2", "width", "radius", "pattern": "gradient" }
+//   setEdge     { "level": 2, ...only the fields to change }
+//   reserve     { "nicknames": ["admin"], "reserved": true }
+app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
+    requireSections();
+    requireCenter();
+    const b = req.body || {};
+    const entry = await registeredContract(b.contract);
+    const fragment = contractFunction(entry, b.function);
+
+    if (fragment.stateMutability === "view" || fragment.stateMutability === "pure") {
+        throw httpError(400, `${fragment.format("sighash")} only reads: use POST /contract/call`);
+    }
+
+    const center = ethers.getAddress(CONFIG.CONTRACT_CENTER);
+    const args = await friendlyArgs(entry, fragment, b.args, { center: true });
+    let valueWei = 0n;
+
+    if (b.value !== undefined && b.value !== null && String(b.value) !== "" && String(b.value) !== "0") {
+        if (fragment.stateMutability !== "payable") {
+            throw httpError(400, `${fragment.format("sighash")} is not payable: send no value`);
+        }
+
+        valueWei = BigInt(ethInput(b.value, "value"));
+    }
+
+    const data = entry.iface.encodeFunctionData(fragment, coerceParams(fragment.inputs, args));
+
+    if (platformKind(entry) === "nft" && fragment.name === "mint") {
+        await assertMintFits(center, entry.address, data);
+    }
+
+    let sent;
+
+    try {
+        sent = await withSenderLock(center, () => sendData(center, entry.address, data, valueWei));
+    } catch (error) {
+        if (error.statusCode) {
+            throw error;
+        }
+
+        throw httpError(400, `the transaction would revert: ${revertReason(error)}`);
+    }
+
+    const receipt = await receiptOf(sent.txHash);
+    const ok = BigInt(receipt.status) === 1n;
+    const events = ok ? decodeEvents(entry, receipt) : [];
+    console.log(`center -> ${entry.address} ${fragment.format("sighash")} ${ok ? "ok" : "REVERTED"} (${sent.txHash})`);
+
+    if (!ok) {
+        throw httpError(400, `reverted in block ${BigInt(receipt.blockNumber)} (transaction ${sent.txHash})`);
+    }
+
+    return {
+        success: true,
+        contract: entry.address,
+        function: fragment.format("sighash"),
+        from: center,
+        value: ethers.formatEther(valueWei),
+        txHash: sent.txHash,
+        blockNumber: Number(BigInt(receipt.blockNumber)),
+        gasUsed: Number(BigInt(receipt.gasUsed)),
+        result: await friendlySend(entry, fragment, args, events),
+        events
+    };
+}));
+
+// ---- Deploy templates: the platform's own contracts, compiled into the proxy image
+// POST /admin/contracts/check and /admin/contracts/deploy with
+//   { "template": "nft-collection", "name": "Dragons", "symbol": "DRG" }
+//   { "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "edge0": "Simple", "another": false }
+async function templateInput(body) {
+    const b = body || {};
+
+    if (b.template === undefined) {
+        return deployInputOf(b);
+    }
+
+    requireSections();
+
+    if (b.template === "nft-collection") {
+        const name = collectionField(b.name, "name", 64);
+        const symbol = collectionField(b.symbol, "symbol", 16);
+
+        for (const entry of (await loadContracts(true)).values()) {
+            if (platformKind(entry) !== "nft") {
+                continue;
+            }
+
+            const [other] = await entryCall(entry, "symbol").catch(() => [""]);
+
+            if (entry.name.toLowerCase() === name.toLowerCase() || other.toLowerCase() === symbol.toLowerCase()) {
+                throw httpError(409, `a collection named "${entry.name}" (${other}) exists at ${entry.address}: names and symbols are unique`);
+            }
+        }
+
+        return deployInputOf({ kind: "nft", name, abi: nftV3Artifact.abi, bytecode: nftV3Artifact.bytecode,
+            deployedBytecode: nftV3Artifact.deployedBytecode, immutableReferences: nftV3Artifact.immutableReferences,
+            args: [name, symbol, CONFIG.REGISTRY_CONTRACT] });
+    }
+
+    if (b.template === "nickname-collection") {
+        const existing = await nicknameCollection(true);
+
+        if (existing && !b.another) {
+            throw httpError(409, `a nickname collection exists at ${existing.address} (send "another": true to deploy a new one: the new one is used from then on)`);
+        }
+
+        const name = String(b.name || "Nicknames").trim().slice(0, 64);
+        const symbol = String(b.symbol || "NICK").trim().slice(0, 16);
+        const edge0 = String(b.edge0 || "Simple").trim();
+        return deployInputOf({ kind: "common", name, abi: nicknameArtifact.abi, bytecode: nicknameArtifact.bytecode,
+            deployedBytecode: nicknameArtifact.deployedBytecode, immutableReferences: nicknameArtifact.immutableReferences,
+            args: [name, symbol, CONFIG.REGISTRY_CONTRACT, adminPrice(b.price === undefined ? "0" : b.price).toString(), edge0] });
+    }
+
+    throw httpError(400, "template: nft-collection or nickname-collection (or no template: abi and bytecode)");
+}
+
+// ---- Removed routes: 410 with the call that replaces each
+const MOVED = [
+    ["post", "/nft/deploy", "POST /admin/contracts/deploy { \"template\": \"nft-collection\", \"name\", \"symbol\" }"],
+    ["post", "/nft/mint", "POST /admin/contract/send { \"contract\", \"function\": \"mint\", \"args\": { \"name\", \"image\", \"price\" } }"],
+    ["post", "/nft/transfer", "POST /contract/send { \"contract\", \"function\": \"buy\", \"args\": { \"tokenId\" }, \"from\": buyer } (a resale: the seller first sends \"approve\" { \"tokenId\" }); version-2 collections are retired"],
+    ["get", "/nft/contract", "GET /contract/list?type=nft"],
+    ["get", "/nft/collections", "GET /contract/list?type=nft"],
+    ["get", "/nft/owner/:address", "POST /contract/events { \"contract\", \"event\": \"Transfer\", \"where\": { \"to\": address }, \"current\": true }"],
+    ["get", "/nft/:tokenId/metadata", "POST /contract/call { \"contract\", \"function\": \"tokenURI\", \"args\": { \"tokenId\" } } (result.metadata)"],
+    ["get", "/nft/:tokenId", "POST /contract/call { \"calls\": [ ownerOf, priceOf, tokenURI ] } and POST /contract/events (Transfer from 0x0) for the mint"],
+    ["get", "/nickname/edges", "POST /contract/call { \"contract\", \"function\": \"edgeCount\" } (result.edges) and \"nicknamePrice\"; the collection: GET /contract/list?type=nickname"],
+    ["get", "/nickname/check", "POST /contract/call { \"contract\", \"function\": \"isAvailable\", \"args\": { \"nickname\" } }"],
+    ["get", "/nickname/of/:account", "POST /contract/call { \"contract\", \"function\": \"nicknameOf\", \"args\": { \"account\" } }"],
+    ["get", "/nickname/quote", "POST /contract/call { \"contract\", \"function\": \"quote\", \"args\": { \"account\", \"level\" } }"],
+    ["post", "/nickname/buy", "POST /contract/send { \"contract\", \"function\": \"buyNickname\", \"args\": { \"nickname\" }, \"from\" }"],
+    ["post", "/nickname/edge", "POST /contract/send { \"contract\", \"function\": \"upgradeEdge\", \"args\": { \"level\" }, \"from\" }"],
+    ["post", "/admin/nickname/deploy", "POST /admin/contracts/deploy { \"template\": \"nickname-collection\", \"name\", \"symbol\", \"price\", \"edge0\" }"],
+    ["put", "/admin/nickname/price", "POST /admin/contract/send { \"contract\", \"function\": \"setNicknamePrice\", \"args\": { \"price\" } }"],
+    ["post", "/admin/nickname/edges", "POST /admin/contract/send { \"contract\", \"function\": \"addEdge\", \"args\": { \"name\", \"price\", \"color\", ... } }"],
+    ["put", "/admin/nickname/edges/:level", "POST /admin/contract/send { \"contract\", \"function\": \"setEdge\", \"args\": { \"level\", ...changes } }"],
+    ["post", "/admin/nickname/reserve", "POST /admin/contract/send { \"contract\", \"function\": \"reserve\", \"args\": { \"nicknames\", \"reserved\" } }"]
+];
+
+for (const [method, path, use] of MOVED) {
+    app[method](path, (req, res) => res.status(410).json({ error: `${method.toUpperCase()} ${path} was removed: use ${use}` }));
+}
 
 // ---- Section metrics (step 6): balances refreshed every 15 s (the scrape stays fast), operation
 // counters in memory (they restart at 0 with the proxy; dashboards use increase()).
