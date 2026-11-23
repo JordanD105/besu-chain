@@ -41,14 +41,20 @@ The **nickname token** is this page: a name a user buys for themself, which can 
 
 ## How it works
 
-1. The application calls `POST /nickname/buy {account, nickname}` with the section's key.
-2. The proxy normalizes the name (NFC, trim), checks 1–256 characters and that it is free.
-3. The MPC signer signs `buyNickname(nickname, consumption)` **as the user account**, with the
-   nickname price as value.
+1. The application calls `POST /contract/send` with the section's key: function `buyNickname`,
+   args `[nickname]`, `from` = the user account.
+2. The proxy normalizes the name (NFC, trim), checks 1–256 characters and that it is free, and fills
+   in the **payee** (the section's consumption account) and the **value** (the nickname price).
+3. The MPC signer signs `buyNickname(nickname, consumption)` **as the user account**.
 4. The contract asks the SectionRegistry: is the buyer a user account, is the payee its section's
    consumption account? Then it mints the token and forwards the price.
-5. Later, `POST /nickname/edge {account, level}` sends `upgradeEdge(level, consumption)` with the
-   quoted price; the edge is raised and the picture redrawn.
+5. Later, `POST /contract/send` with `upgradeEdge`, args `[level]`, sends
+   `upgradeEdge(level, consumption)` with the quoted price; the edge is raised and the picture redrawn.
+
+Writes have no route of their own: they use the generic [`POST /contract/send`](../reference/proxy-api.md#post-contractsend--write)
+like any registered contract. The old `POST /nickname/buy` and `POST /nickname/edge` were removed
+(410). The read routes (`/nickname/edges`, `/nickname/check`, `/nickname/of/:account`,
+`/nickname/quote`) stay.
 
 - The collection is deployed by the **contract account center** and registered in the SectionRegistry
   as a common contract. The proxy uses the **latest** registered contract that has `buyNickname`.
@@ -107,16 +113,20 @@ The page also changes the nickname price (new buyers only) and **reserves** name
 
 ## 3. Buy a nickname
 
-The application calls with the section's key. `account` is a user account of that section with
-enough ETH for the price (the gas is free on this chain).
+The application calls with the section's key. `from` is a user account of that section with
+enough ETH for the price (the gas is free on this chain). The collection's address is `collection`
+in `GET /nickname/edges`. Leave out the payee and `value`: the proxy fills them in.
 
 ```bash
 K=sk_…   # the section's API key
+curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/edges"
+# { "collection": "0xNicknameCollection", "nicknamePrice": "1", "edges": [ … ] }
 curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/check?name=Alice"
 # { "nickname": "Alice", "characters": 5, "available": true, "reason": null, … }
-curl -s -H "X-Section-Key: $K" -H 'Content-Type: application/json' -X POST \
-  --data '{"account":"0xUser","nickname":"Alice"}' http://<proxy>:30000/nickname/buy
-# { "success": true, "nickname": "Alice", "level": 0, "edge": "Simple", "price": "1", "paidTo": "0xConsumption", "txHash": "0x…", "image": "data:image/svg+xml;base64,…" }
+curl -s -X POST http://<proxy>:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xNicknameCollection","function":"buyNickname","args":["Alice"],"from":"0xUser"}'
+# { "success": true, "function": "buyNickname(string,address)", "from": "0xUser", "value": "1.0", "txHash": "0x…",
+#   "events": [ { "name": "NicknameBought", "args": { "tokenId": "…", "buyer": "0xUser", "nickname": "Alice", "price": "…", "paidTo": "0xConsumption" } } ] }
 ```
 
 `GET /nickname/of/0xUser` gives an account's nickname, level and picture at any time.
@@ -126,11 +136,13 @@ curl -s -H "X-Section-Key: $K" -H 'Content-Type: application/json' -X POST \
 ```bash
 curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/quote?account=0xUser&level=2"
 # { "account": "0xUser", "level": 2, "price": "1.5" }
-curl -s -H "X-Section-Key: $K" -H 'Content-Type: application/json' -X POST \
-  --data '{"account":"0xUser","level":2}' http://<proxy>:30000/nickname/edge
+curl -s -X POST http://<proxy>:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xNicknameCollection","function":"upgradeEdge","args":[2],"from":"0xUser"}'
+# { "success": true, "value": "1.5", …, "events": [ { "name": "EdgeUpgraded", "args": { "tokenId": "…", "owner": "0xUser", "fromLevel": "0", "toLevel": "2", "price": "…", "paidTo": "0xConsumption" } } ] }
 ```
 
-The answer has the new level and picture. A lower or equal level, a level that doesn't exist or is
+The value is the quote (the sum of the step prices); the event has the new level, and
+`GET /nickname/of/0xUser` the new picture. A lower or equal level, a level that doesn't exist or is
 closed for sale, and too little ETH are refused.
 
 ## Money and monitoring
@@ -148,15 +160,24 @@ the consumption account the money goes on with the usual sweep and payback ([sec
 
 | Status | Message (start) | Cause |
 |---|---|---|
+All from `POST /contract/send`, except the 503 (read routes).
+
+| Status | Message (start) | Cause |
+|---|---|---|
 | 400 | `nickname: 1 to 256 characters` | empty after trimming, or too long |
 | 400 | `nickname: no control characters and none of …` | a forbidden character |
-| 401 | `X-Section-Key is required` | no key |
-| 403 | `… is not a user account of a section` | `account` is a role account or unknown |
+| 400 | `args[0]: the edge level to reach (1 or more)` | `upgradeEdge` without a valid level |
+| 400 | `level N: …` (a contract reason) | the level is missing, closed for sale, or not above the current one |
+| 400 | `payee: the consumption account of section …` | a payee was given and it is another account: leave it out |
+| 400 | `value: the price is X ETH …` | a value was given and it is not the price: leave it out |
+| 400 | `insufficient balance: X ETH is needed` | too little ETH |
+| 401 | `X-Section-Key is required` | no key (and not the admin caller) |
+| 403 | `… is not a user account of a section` | `from` is a role account or unknown |
 | 403 | `section "…" is disabled` | the section is turned off |
-| 404 | `… has no nickname: buy one first` | edge raise before a buy |
+| 404 | `… has no nickname: buy one first (buyNickname)` | edge raise before a buy |
 | 409 | `… already has a nickname (one per account)` | a second buy |
 | 409 | `nickname "…" is taken` / `is reserved` | another account has it (any case), or it is reserved |
-| 400 | `insufficient funds` / a contract reason | too little ETH; level not above the current one, missing or closed |
+| 410 | `/nickname/buy was removed: use POST /contract/send …` | the old routes `POST /nickname/buy`, `POST /nickname/edge` |
 | 503 | `no nickname collection yet` | deploy one first |
 
 ## Files
@@ -165,6 +186,6 @@ the consumption account the money goes on with the usual sweep and payback ([sec
 |---|---|
 | `proxy/contracts/NicknameCollection.sol` | the contract (ERC-721 + ERC-5192 + ERC-4906, on-chain SVG) |
 | `proxy/nickname-collection.json` | its compiled artifact (`node scripts/compile-contract.js contracts/NicknameCollection.sol NicknameCollection nickname-collection.json`) |
-| `proxy/stress-latest.js` | the `/nickname/*` and `/admin/nickname/*` routes |
+| `proxy/stress-latest.js` | the `/nickname/*` and `/admin/nickname/*` routes; `/contract/send` (`knownSend`: payee, price and nickname checks) |
 | `chainlens/public/app.js` | the Nicknames page (`showNicknames`, `edgeEditor`, `edgePreview`) |
 | `monitoring/grafana/tools/gen_sections_dashboard.py` | the income and the new columns of the Sections dashboard |

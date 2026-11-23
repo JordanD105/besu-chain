@@ -112,8 +112,7 @@ unless `sections_required: true` (then 401). See [sections](../features/sections
 |---|---|
 | `POST /createaccount` | account of the section, funded from its upfront account |
 | `POST /transfer` | +x / −x (above) |
-| `POST /nft/transfer` | sale of a version-3 NFT to a user account of the section (below) |
-| `POST /contract/send` | a contract transaction signed by a user account of the section (below) |
+| `POST /contract/send` | a contract transaction signed by a user account of the section: also every nickname and version-3 NFT write (below) |
 
 ---
 
@@ -126,7 +125,8 @@ Two versions exist:
 | Deployed and minted by | the **contract account center** | SENDER01 |
 | First sale pays | the buyer's section's **consumption** account (checked by the contract) | SENDER01 |
 | Resale pays | the seller | the seller |
-| `/nft/transfer` | needs `X-Section-Key` (or the admin token, as chainlens does) | no key |
+| Sale | `POST /contract/send` `buy` from the buyer, with `X-Section-Key` (or the admin token, as chainlens does) | `POST /nft/transfer`, no key |
+| Resale | the seller's `approve`, then the buyer's `buy` (both `/contract/send`); may cross sections | `POST /nft/transfer`, no key |
 
 **Choosing a collection:** `collection` in the body, or `?collection=` in the query: its **name**,
 **symbol** (case-insensitive) or **address**. Without it, the default (first) collection is used.
@@ -170,23 +170,36 @@ is the **price** in ETH, stored on chain and fixed for every later sale.
 
 `name` and `image` are required. Token ids start at 1 in each collection.
 
-### `POST /nft/transfer` — sale
+### Version 3: sale and resale with `/contract/send`
 
-The buyer `to` signs **one** `buy` transaction with exactly the price: the NFT and the ETH move
-together or not at all.
+The buyer signs **one** `buy` transaction with exactly the price: the NFT and the ETH move
+together or not at all. Leave out the payee and `value`: the proxy fills in the buyer's section's
+consumption account and `priceOf(tokenId)`.
+
+```bash
+curl -s -X POST http://192.168.68.151:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xCollection","function":"buy","args":["7"],"from":"0xBuyer"}'
+```
+```json
+→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "function": "buy(uint256,address)", "value": "3.0",
+    "txHash": "0x…", "events": [ { "name": "Sold", "args": { "tokenId": "7", "seller": "<center>", "buyer": "0xBuyer", "price": "…", "paidTo": "<consumption account>" } }, … ] }
+```
+
+- **First sale** (the center holds it): the price goes to the buyer's section's consumption account.
+- **Resale** (a user holds it): two calls. First the seller's section sends `approve` from the seller,
+  args `[collectionAddress, tokenId]`; then the buyer's section sends `buy`. The price goes to the
+  seller (the contract ignores the payee). Each section signs only for its own accounts, so seller
+  and buyer may be in different sections.
+- `POST /nft/transfer` on a version-3 collection answers **410** with this pointer.
+
+### `POST /nft/transfer` — sale (version 2)
+
+For version-2 (legacy) collections only; no key. `from` is optional (default: current owner).
 
 ```bash
 curl -s -X POST http://192.168.68.151:30000/nft/transfer -H 'Content-Type: application/json' \
-  -H 'X-Section-Key: sk_…' -d '{"collection":"DRG","to":"0xBuyer…","tokenId":"1"}'
+  -d '{"collection":"OLD","to":"0xBuyer…","tokenId":"1"}'
 ```
-```json
-→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "sale": "first sale",
-    "price": "3", "paidTo": "<consumption account>", "txHash": "0x…", "approveTxHash": null }
-```
-
-- **Version 3:** `to` must be a user account of the key's section; a resale must stay within the
-  section; the seller's approval is sent automatically when needed.
-- **Version 2:** no key; `from` is optional (default: current owner).
 
 ### Reading
 
@@ -205,6 +218,7 @@ Step by step from Remix to a sale: [NFT workflow](../features/nft-workflow.md).
 
 Soulbound nickname tokens with an edge level ([nicknames](../features/nicknames.md)). Every call needs
 `X-Section-Key` (or the admin token); `account` must be a user account of that section. Prices in ETH.
+These routes only read; buying and raising the edge go through [`POST /contract/send`](#post-contractsend--write).
 
 | Endpoint | Body / query | Answer |
 |---|---|---|
@@ -212,8 +226,10 @@ Soulbound nickname tokens with an edge level ([nicknames](../features/nicknames.
 | `GET /nickname/check` | `?name=Alice` | `{ nickname, characters, tokenId, available, reason }` (`reason`: `taken`, `reserved` or `null`) |
 | `GET /nickname/of/:account` | | `{ nickname, tokenId, account, level, edge, image }` (`image`: SVG data URI); 404 without one |
 | `GET /nickname/quote` | `?account=0x…&level=2` | `{ account, level, price }`: the sum of the step prices up to `level` |
-| `POST /nickname/buy` | `{ "account": "0x…", "nickname": "Alice" }` | `{ success, section, nickname, tokenId, account, level, edge, image, price, paidTo, txHash, blockNumber, … }` |
-| `POST /nickname/edge` | `{ "account": "0x…", "level": 2 }` | as `buy`, with the new level |
+| `POST /contract/send` `buyNickname` | `{ "contract": "<collection>", "function": "buyNickname", "args": ["Alice"], "from": "0x…" }` | event `NicknameBought` (below) |
+| `POST /contract/send` `upgradeEdge` | `{ "contract": "<collection>", "function": "upgradeEdge", "args": [2], "from": "0x…" }` | event `EdgeUpgraded` (below) |
+
+`POST /nickname/buy` and `POST /nickname/edge` were removed (410).
 
 Names: 1–256 characters after NFC and trimming, no control characters and none of `< > & " ' \`,
 unique without regard to A–Z case, one per account. The level only goes up.
@@ -232,17 +248,44 @@ functions of their ABI.
 → { "success": true, "function": "balanceOf(address)", "outputs": [ { "name": "0", "type": "uint256", "value": "3" } ] }
 ```
 
-### `POST /contract/send` — write (`X-Section-Key` required)
+### `POST /contract/send` — write
 
 Signed by `from`, a user account of the caller's section. `value` in ETH, only for payable functions.
 
 ```json
 { "contract": "0x…", "function": "transfer(address,uint256)", "args": ["0xTo", "5"], "from": "0xSectionUser", "value": "0" }
-→ { "success": true, "txHash": "0x…", "blockNumber": 123, "gasUsed": 51234, "events": [ { "name": "Transfer", "args": {…} } ] }
+→ { "success": true, "section": { "id": 1, "name": "Shop A" }, "contract": "0x…", "function": "transfer(address,uint256)",
+    "from": "0xSectionUser", "value": "0.0", "txHash": "0x…", "blockNumber": 123, "gasUsed": 51234,
+    "events": [ { "name": "Transfer", "args": {…} } ] }
 ```
 
 `function` is a name or a full signature (needed when the name is overloaded). `NftCollection.mint`
 can't be called this way (only the center mints): use `/nft/mint`.
+
+- **Caller:** `X-Section-Key`, or the admin token from `ADMIN_ALLOWED_IPS` without a key (as chainlens
+  does): the section is then the section of `from`, which must be a user account of an active section.
+- **Payee:** an `address` input named `payee` is set to the sender's section's **consumption** account
+  when left out (shorter `args`, `null` or `""`). Another address → 400.
+- **Price:** for the functions below, a left-out `value` is filled in with the price. Another value → 400.
+- **Metrics:** the section's operations are counted from the events: `NicknameBought` → `nickname_sale`,
+  `EdgeUpgraded` → `edge_upgrade`, `Sold` → `nft_first_sale` (seller = the contract account center)
+  or `nft_resale`.
+
+| Contract | Function, `args` | `value` filled in | Checks before sending | Event |
+|---|---|---|---|---|
+| nickname collection (`collection` of `GET /nickname/edges`) | `buyNickname`, `[nickname]` | `nicknamePrice` | trimmed + NFC, 1–256 characters, no control characters or `< > & " ' \` (400); one per account, taken, reserved (409) | `NicknameBought {tokenId, buyer, nickname, price, paidTo}` |
+| nickname collection | `upgradeEdge`, `[level]` | `quote(from, level)` (sum of the step prices) | level 1 or more (400); has a nickname (404); level exists, open, above the current one (400 `level N: …`) | `EdgeUpgraded {tokenId, owner, fromLevel, toLevel, price, paidTo}` |
+| NFT collection, version 3 | `buy`, `[tokenId]` | `priceOf(tokenId)` | token exists (404); `from` doesn't own it already (400) | `Sold {tokenId, seller, buyer, price, paidTo}` |
+| NFT collection, version 3 | `approve`, `[collection, tokenId]` from the seller | — | — | `Approval` |
+
+| Status | Message (start) |
+|---|---|
+| 400 | `payee: the consumption account of section "…" (0x…); leave it out to fill it in` |
+| 400 | `value: the price is X ETH (leave "value" out to pay it)` |
+| 400 | `insufficient balance: X ETH is needed` |
+| 400 | `the transaction would revert: …` |
+| 401 | `X-Section-Key is required: …` (no key and not the admin caller) |
+| 403 | `… is not a user account of a section` / `section "…" is disabled` |
 
 ---
 
