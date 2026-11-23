@@ -1163,6 +1163,14 @@ async function passWrite(path, body, uid, langHeader = {}) {
 
 // keep the ledger up to date after a write that went through
 async function afterWrite(path, body, data) {
+    // a +x / -x sent online is recorded too, so it can be undone later while offline (cut -1: not a cut's spending)
+    if (path === "/transfer" && /^0x[0-9a-fA-F]{64}$/.test(String(data.txHash || "")) && isAddress(data.from) && isAddress(data.to)) {
+        const w = ethToWei(data.amount);
+        q(`INSERT OR IGNORE INTO outbox (uid, cut, created, kind, signer, path, body, deltas, status, temp_hash, real_hash, result)
+           VALUES (?, -1, ?, 'transfer', ?, '/transfer', ?, ?, 'done', ?, ?, ?)`)
+            .run(crypto.randomUUID(), now(), data.from, JSON.stringify(body), JSON.stringify([[data.from, String(-w)], [data.to, String(w)]]),
+                lower(data.txHash), lower(data.txHash), JSON.stringify(data));
+    }
     if (path === "/createaccount" && isAddress(data.address)) {
         upsertAccount(data.address, "user");
     }
