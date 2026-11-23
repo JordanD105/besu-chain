@@ -18,6 +18,12 @@ servers:
     app_hosts:    { hosts: { h135: {}, h136: {} } }        # coordinators, proxies, HAProxy, keepalived
     mpc_hosts:    { hosts: { h135: {}, h137: {}, h138: {} } }  # MPC nodes: run by their teams
     monitoring_hosts: { hosts: { h139: {} } }
-    # Section gateways (gateway_enabled in settings.yml): the host next to each section's application,
-    # with the section it serves, e.g.  h137: { gateway_section: 1 }
-    gateway_hosts: { hosts: {} }
+
+# Section gateways (gateway_enabled in settings.yml): the host next to each section's application, with the
+# section it serves. One of the servers above (h137: { gateway_section: 1 }), or a host of its own next to
+# the application (gateway-only: Docker, firewall and the gateway, nothing else), e.g.
+#   gw-shop: { ansible_host: 192.168.70.20, gateway_section: 2 }
+gateway_hosts:
+  vars:
+    ansible_user: root
+  hosts: {}

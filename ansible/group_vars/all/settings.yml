@@ -182,16 +182,20 @@ repo_dir: /opt/besu-chain
 gateway_enabled: false
 gateway_port: 30010
 gateway_defaults:
-  health_check_seconds: 3          # how often it checks the proxy
-  offline_after_failures: 3        # failed checks in a row -> offline
+  health_check_seconds: 3          # how often it checks the proxy (its own timer: never delayed by other work)
+  health_timeout_ms: 2000          # one check fails when the proxy has not answered within this
+  recheck_ms: 500                  # after a failed check, the next one comes this soon
+  offline_after_failures: 3        # failed checks in a row -> offline (a request's network error counts as one)
+  connect_timeout_ms: 2000         # a request that cannot connect within this is answered offline (it never reached the proxy)
   offline_max_hours: 24            # after this long offline: no more optimistic answers (503); keep far below the 7-day undo period
-  offline_total_eth: 100           # all the section's payments during one cut
-  offline_per_account_eth: 20      # one account during one cut
-  offline_operations: [transfer, createaccount, avatar_buy, nickname_buy, level_upgrade, undo, account_pool]
-  contract_send_allowed: []        # other contracts allowed offline: "0xContract:function"
-  spare_accounts: 20               # accounts created in advance, for /createaccount while offline
-  spare_alert_below: 5             # alert (GatewaySparesLow) below this
-  correction_webhook: ""           # the application's URL that receives the corrections ("" = report only)
+  # what the gateway answers while offline: transfer, createaccount, account_pool, "<type>:<function>" for avatar and
+  # nickname items ("*:undo" = any type), and "0xContract:function" for other contracts
+  offline_operations: [transfer, createaccount, account_pool, "avatar:buy", "nickname:buy", "nickname:upgradeLevel", "*:undo", "nickname:undoLevel"]
+  spare_accounts: 100              # accounts created in advance, for /createaccount while offline
+  spare_alert_below: 20            # alert (GatewaySparesLow) below this
+  answer_gateway_field: false      # true: answers carry a "gateway" field (mode, queued); false: exactly the proxy's answers
+  correction_webhook: ""           # optional: the application's URL that receives the corrections ("" = chainlens and Grafana only)
   report_keep_days: 365
-  sync_seconds: 30                 # how often it reads the chain while online
-gateway_sections: {}               # per section id, only the values that differ, e.g. { 1: { offline_total_eth: 150 } }
+  sync_seconds: 30                 # how often it reads the chain while online (balances, items, new section accounts)
+  backup_keep_days: 7              # daily database snapshot in /var/lib/besu-gateway/backup
+gateway_sections: {}               # per section id, only the values that differ, e.g. { 1: { spare_accounts: 200 } }

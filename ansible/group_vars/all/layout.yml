@@ -34,6 +34,8 @@ mpc_metrics_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/
 vrrp_pass_rpc: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vrrp_pass_rpc', chars=['ascii_letters', 'digits'], length=8) }}"
 chainlens_deploy_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/chainlens_deploy_token', chars=['hexdigits'], length=48) }}"
 proxy_admin_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/proxy_admin_token', chars=['hexdigits'], length=48) }}"
+# chainlens reads the gateways' corrections and acknowledges them with this (it can do nothing else)
+gateway_report_token: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/gateway_report_token', chars=['hexdigits'], length=48) }}"
 # The SectionRegistry, deployed once by 06-proxy.yml
 registry: "{{ (lookup('ansible.builtin.file', state_dir ~ '/registry.json') | from_json) if (state_dir ~ '/registry.json') is file else {} }}"
 # The block the registry was deployed in (its record from deploy-contract.js), and the contract account center
@@ -47,7 +49,9 @@ vrrp_pass_proxy: "{{ lookup('ansible.builtin.password', state_dir ~ '/secrets/vr
 # SENDER01: written by 04-coordinators.yml after the key ceremony
 sender01: "{{ (lookup('ansible.builtin.file', state_dir ~ '/sender01') | trim) if (state_dir ~ '/sender01') is file else '' }}"
 
-ip_of: "{{ dict(groups['servers'] | zip(groups['servers'] | map('extract', hostvars, 'ansible_host'))) }}"
+ip_of: "{{ dict(all_hosts | zip(all_hosts | map('extract', hostvars, 'ansible_host'))) }}"
+# the five servers and any gateway-only hosts (gateway_hosts that are not servers)
+all_hosts: "{{ (groups['servers'] + (groups['gateway_hosts'] | default([]))) | unique }}"
 # Section gateways (14-gateway.yml): the hosts of the gateway_hosts group, each with gateway_section
 gateway_hosts_list: "{{ groups['gateway_hosts'] | default([]) if gateway_enabled | bool else [] }}"
 gateway_host_ips: "{{ gateway_hosts_list | map('extract', ip_of) | list }}"

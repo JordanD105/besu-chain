@@ -1947,7 +1947,9 @@ const SECTIONS = {
     gateways: String(process.env.GATEWAYS || "").split(/\s+/).filter(Boolean).map((x) => {
         const [id, url] = x.split("=");
         return { section: Number(id), url: String(url || "").replace(/\/$/, "") };
-    }).filter((g) => g.section && /^https?:\/\//.test(g.url))
+    }).filter((g) => g.section && /^https?:\/\//.test(g.url)),
+    // reads the gateways' corrections and acknowledges them (it can do nothing else on a gateway)
+    gatewayToken: process.env.GATEWAY_REPORT_TOKEN || ""
 };
 if (SECTIONS.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !DEPLOY.allowed.length || !SECTIONS.proxy || !SECTIONS.proxyToken)) {
     console.error("Sections page: ADMIN_TOKEN (16+ characters), ADMIN_ALLOWED_IPS, PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
@@ -2063,11 +2065,55 @@ app.get("/api/sections/gateways", sectionsGuard, async (req, res) => {
         try {
             const r = await fetch(g.url + "/gateway/status", { signal: AbortSignal.timeout(3000) });
             const s = await r.json();
-            return { section: g.section, url: g.url, mode: s.mode, since: s.since, queue: s.queue, spares: s.spares, conflicts: s.conflicts };
+            return { section: g.section, url: g.url, mode: s.mode, since: s.since, queue: s.queue, spares: s.spares, conflicts: s.conflicts,
+                corrections: s.corrections, cuts: s.cuts };
         } catch (error) {
             return { section: g.section, url: g.url, mode: "unreachable", error: error.message };
         }
     })) });
+});
+
+// One section's gateway: its status, the corrections and the reconcile reports (GATEWAY_REPORT_TOKEN)
+async function gatewayCall(id, method, pathname, body) {
+    const g = SECTIONS.gateways.find((x) => x.section === Number(id));
+    if (!g) {
+        throw Object.assign(new Error("this section has no gateway"), { status: 404 });
+    }
+    const response = await fetch(g.url + pathname, {
+        method, signal: AbortSignal.timeout(10000),
+        headers: { authorization: "Bearer " + SECTIONS.gatewayToken, "content-type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    const data = await response.json().catch(() => ({ error: "the gateway answered HTTP " + response.status }));
+    if (!response.ok) {
+        throw Object.assign(new Error(data.error || "HTTP " + response.status), { status: response.status === 401 ? 502 : response.status });
+    }
+    return { url: g.url, data };
+}
+
+app.get("/api/sections/:id/gateway", sectionsGuard, async (req, res) => {
+    try {
+        const s = await gatewayCall(req.params.id, "GET", "/gateway/status");
+        let reports = [];
+        let reportError = null;
+        try {
+            reports = (await gatewayCall(req.params.id, "GET", "/gateway/report")).data.reports;
+        } catch (error) {
+            reportError = SECTIONS.gatewayToken ? error.message : "GATEWAY_REPORT_TOKEN is not set";
+        }
+        res.json({ url: s.url, status: s.data, reports, reportError });
+    } catch (error) {
+        res.status(error.status || 502).json({ error: error.message });
+    }
+});
+
+app.post("/api/sections/:id/gateway/ack/:report", sectionsGuard, async (req, res) => {
+    try {
+        const r = await gatewayCall(req.params.id, "POST", "/gateway/report/" + Number(req.params.report) + "/ack", { by: "chainlens " + req.socket.remoteAddress });
+        res.json(r.data);
+    } catch (error) {
+        res.status(error.status || 502).json({ error: error.message });
+    }
 });
 
 app.get("/api/sections/status", (req, res) => {

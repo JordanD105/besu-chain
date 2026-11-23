@@ -39,7 +39,16 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "Section {{ $labels.section }}: {{ $value | printf \"%.0f\" }} queued requests were refused after reconnecting"
-          description: "The gateway undid them in its ledger and sent corrections to the application (correction_webhook). Read them: GET /gateway/report on the gateway (with the section key)."
+          description: "The gateway undid them in its ledger (the account got its ETH back, the item stays with its real owner). See them in chainlens (Sections, Gateway) or GET /gateway/report on the gateway."
+
+      - alert: GatewayCorrectionsOpen
+        # corrections nobody has looked at yet: chainlens, Sections, Gateway, Acknowledge
+        expr: gateway_corrections_open > 0
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "Section {{ $labels.section }}: {{ $value | printf \"%.0f\" }} gateway corrections not acknowledged"
+          description: "Queued requests the chain refused after a cut (an item sold meanwhile, a changed price, ...). Tell the section's team what changed for their users, then press Acknowledge in chainlens (Sections, Gateway)."
 
       - alert: GatewayDown
         expr: up{job="gateway"} == 0

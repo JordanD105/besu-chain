@@ -2293,7 +2293,9 @@ async function showSections() {
         const name = (id) => ((data.sections.find((s) => s.id === id) || {}).name || "#" + id);
         gatewayNotice.replaceChildren(...g.gateways.filter((x) => x.mode !== "online").map((x) => el("div", { class: "card bad-text", style: "margin-bottom:12px" },
             (x.mode === "unreachable" ? t("gateway.unreachable") : t("gateway.offline")).replace("{section}", name(x.section)).replace("{mode}", x.mode)
-                .replace("{queue}", x.queue || 0).replace("{since}", String(x.since || "").replace("T", " ").slice(0, 16)))));
+                .replace("{queue}", x.queue || 0).replace("{since}", String(x.since || "").replace("T", " ").slice(0, 16)))),
+        ...g.gateways.filter((x) => x.corrections && x.corrections.open > 0).map((x) => el("div", { class: "card", style: "margin-bottom:12px" },
+            el("a", { href: "#/sections/" + x.section }, t("gateway.openNotice").replace("{section}", name(x.section)).replace("{n}", x.corrections.open)))));
     }).catch(() => {});
 
     show(el("div", {}, [
@@ -2467,6 +2469,7 @@ async function showSection(id) {
     });
 
     const accountRow = (role, label) => [el("span", { class: "muted" }, label), el("span", {}, [addr(s.accounts[role]), "  ", el("b", {}, s.balances[role] + " ETH")])];
+    const gatewayBox = el("div");
     const history = dataTable([
         { label: "col.time", sort: (row) => row.timestamp || 0, cell: (row) => stamp(row.timestamp) },
         { label: "sections.kind", sort: (row) => row.kind, search: (row) => row.kind + " " + (row.memo || ""), cell: (row) => el("span", { class: "badge type" }, row.kind) },
@@ -2520,11 +2523,98 @@ async function showSection(id) {
                 el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.archiveLabel")), el("div", { class: "section-inputs" }, [archiveButton])])
             ])
         ]),
+        gatewayBox,
         el("section", { class: "card stack" }, [
             el("h2", {}, t("sections.history")),
             data.history.length ? history : el("div", { class: "empty" }, t("sections.noHistory"))
         ])
     ]));
+    gatewayCard(id).then((card) => gatewayBox.replaceChildren(card || "")).catch((error) => gatewayBox.replaceChildren(
+        el("section", { class: "card" }, [el("h2", {}, t("gateway.title")), el("div", { class: "bad-text" }, error.message)])));
+}
+
+// The section's gateway (docs/components/gateway.md): its mode, the corrections (queued requests the chain
+// refused after a cut) with an Acknowledge button, and the reconcile reports. null: the section has no gateway.
+async function gatewayCard(id) {
+    let g;
+    try {
+        g = await sectionGet("/api/sections/" + id + "/gateway");
+    } catch (error) {
+        if (error.status === 404) {
+            return null;
+        }
+        throw error;
+    }
+    const s = g.status;
+    const c = s.corrections || {};
+    const when = (x) => String(x || "").replace("T", " ").slice(0, 19);
+    const corrections = g.reports.filter((r) => r.kind === "conflict");
+    const reconciles = g.reports.filter((r) => r.kind === "reconcile");
+    const openOnly = el("input", { type: "checkbox", "aria-label": t("gateway.openOnly") });
+    openOnly.checked = corrections.some((r) => !r.acked);
+    const list = el("div");
+    const ackButton = (r) => {
+        const b = el("button", { type: "button", class: "fn-run" }, t("gateway.ack"));
+        b.addEventListener("click", async () => {
+            b.disabled = true;
+            try {
+                await deployPost("/api/sections/" + id + "/gateway/ack/" + r.id, {});
+                render();
+            } catch (error) {
+                b.replaceWith(el("span", { class: "bad-text" }, error.message));
+            }
+        });
+        return b;
+    };
+    const what = (r) => {
+        const b = r.body || {};
+        const fn = r.path === "/contract/send" ? (b.function || "") + " " + JSON.stringify(b.args || {}) : r.path + " " + (b.amount || "");
+        return el("span", { style: "word-break:break-word" }, fn);
+    };
+    const drawList = () => {
+        const rows = corrections.filter((r) => !openOnly.checked || !r.acked);
+        list.replaceChildren(rows.length ? dataTable([
+            { label: "col.time", sort: (r) => r.at, cell: (r) => when(r.at) },
+            { label: "gateway.kind", sort: (r) => r.correction || "", search: (r) => r.correction + " " + (r.reason || ""), cell: (r) => el("span", { class: "badge create" }, r.correction || "other") },
+            { label: "gateway.request", sort: (r) => r.path || "", cell: what },
+            { label: "gateway.account", sort: (r) => (r.body || {}).from || (r.body || {}).account || "", cell: (r) => {
+                const a = (r.body || {}).from || (r.body || {}).account;
+                return a ? addr(a) : el("span", {}, "—");
+            } },
+            { label: "gateway.refund", sort: (r) => Number(r.refundEth || 0), cell: (r) => r.refundEth || "0" },
+            { label: "gateway.reason", sort: (r) => r.reason || "", cell: (r) => el("span", { style: "word-break:break-word" }, [r.reason || "",
+                (r.cancelled || []).length ? el("div", { class: "muted" }, t("gateway.cancelled").replace("{n}", r.cancelled.length)) : null]) },
+            { label: "gateway.acked", sort: (r) => (r.acked ? 1 : 0), cell: (r) => (r.acked ? el("span", { class: "muted" }, when(r.acked.at)) : ackButton(r)) }
+        ], rows, { sort: 0, dir: "desc", key: "gateway-corrections" }) : el("div", { class: "empty" }, t("gateway.noCorrections")));
+    };
+    openOnly.addEventListener("change", drawList);
+    drawList();
+    const modeClass = s.mode === "online" ? "type" : "create";
+    return el("section", { class: "card stack" }, [
+        el("div", { class: "card-head" }, [
+            el("h2", {}, [t("gateway.title") + " ", el("span", { class: "badge " + modeClass }, s.mode)]),
+            el("span", { class: "muted" }, g.url)
+        ]),
+        el("div", { class: "muted", style: "margin-bottom:10px" }, t("gateway.note")),
+        el("div", { class: "kv" }, [
+            el("span", { class: "muted" }, t("gateway.since")), el("span", {}, s.since ? when(s.since) : "—"),
+            el("span", { class: "muted" }, t("gateway.queue")), el("span", {}, String(s.queue) + (s.oldestSeconds ? " (" + s.oldestSeconds + " s)" : "")),
+            el("span", { class: "muted" }, t("gateway.spares")), el("span", {}, s.spares + " / " + s.limits.spareAccounts),
+            el("span", { class: "muted" }, t("gateway.cuts")), el("span", {}, String(s.cuts || 0)),
+            el("span", { class: "muted" }, t("gateway.corrections")), el("span", {}, t("gateway.correctionsValue").replace("{open}", c.open || 0).replace("{total}", c.total || 0).replace("{eth}", c.refundedEth || "0")),
+            el("span", { class: "muted" }, t("gateway.lastSync")), el("span", {}, when(s.lastSync) || "—"),
+            el("span", { class: "muted" }, t("gateway.lastBackup")), el("span", {}, when(s.lastBackup) || "—")
+        ]),
+        el("h3", {}, t("gateway.correctionsTitle")),
+        g.reportError ? el("div", { class: "bad-text" }, g.reportError) : el("label", { class: "muted" }, [openOnly, " " + t("gateway.openOnly")]),
+        list,
+        el("h3", {}, t("gateway.reconcileTitle")),
+        reconciles.length ? el("div", {}, reconciles.slice(0, 10).map((r) => el("div", { style: "margin-bottom:6px" }, [
+            el("span", { class: "muted" }, when(r.at) + " "),
+            (r.differences || []).length ? el("span", {}, (r.differences || []).map((d) => short(d.account) + ": " + d.ledger + " → " + d.chain).join(" · "))
+                : el("span", {}, t("gateway.noDifference"))
+        ]))) : el("div", { class: "empty" }, t("gateway.noReconcile"))
+    ]);
 }
 
 // ---- Nicknames page (docs/features/nicknames.md): the nickname collection (deploy it once), the price

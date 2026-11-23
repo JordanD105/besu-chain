@@ -9,8 +9,8 @@
         {{ deployed_dirs | join(' ') }}
       changed_when: false
 
-- name: Prepare the hosts
-  hosts: servers
+- name: Prepare the hosts (the servers, and gateway-only hosts)
+  hosts: servers:gateway_hosts
   become: true
   tasks:
     - name: Packages
@@ -88,7 +88,8 @@
         DOCS_USERS: "{{ docs_ips | join(' ') }}"
         ROLE: >-
           {{ 'app' if inventory_hostname in groups['app_hosts'] else
-             ('monitoring' if inventory_hostname in groups['monitoring_hosts'] else 'node') }}
+             ('monitoring' if inventory_hostname in groups['monitoring_hosts'] else
+              ('node' if inventory_hostname in groups['servers'] else 'gateway')) }}
         PEER: "{{ ip_of[ha_peer] if inventory_hostname in groups['app_hosts'] else '' }}"
         HAS_MPC: "{{ '1' if inventory_hostname in groups['mpc_hosts'] else '0' }}"
         BESU_HOSTS: "{{ groups['besu_hosts'] | map('extract', ip_of) | join(' ') }}"

@@ -43,7 +43,7 @@
           Every host IP and both VIPs must be distinct IPv4 addresses ({{ all_ips }}), vip_prefix a
           mask length (8-32), and app_hosts exactly the two HA hosts.
       vars:
-        all_ips: "{{ groups['servers'] | map('extract', hostvars, 'ansible_host') | list + [vip_rpc, vip_proxy] }}"
+        all_ips: "{{ all_hosts | map('extract', hostvars, 'ansible_host') | list + [vip_rpc, vip_proxy] }}"
 
     - name: Operator tools (docker for the image and genesis, git, curl)
       ansible.builtin.command: "{{ item }}"
@@ -79,7 +79,7 @@
       when: dirty.stdout | length > 0
 
 - name: Host checks
-  hosts: servers
+  hosts: servers:gateway_hosts
   gather_facts: true
   tasks:
     - name: Host matches the IP plan (inventory.yml)

@@ -4,7 +4,7 @@
 # By hand, with the documented addresses (192.168.68.135-.139):
 #   PROXY_CLIENTS="10.1.2.3 10.1.2.4" ADMIN=10.1.2.9 ./firewall-layout.sh 135   (135 136 137 138 139)
 # With any IP plan (Ansible passes these from inventory.yml + settings.yml):
-#   ROLE=app|node|monitoring  this host's role (app = HA pair: coordinator, proxy, HAProxy)
+#   ROLE=app|node|monitoring|gateway  this host's role (app = HA pair: coordinator, proxy, HAProxy; gateway = gateway-only host)
 #   PEER=<ip>                 app only: the other HA host (VRRP)
 #   HAS_MPC=1                 an MPC node runs on this host (port 7000)
 #   BESU_HOSTS, MPC_HOSTS, COORDS (the HA pair), MON: space-separated IPs
@@ -83,7 +83,8 @@ case "$ROLE" in
     allow_all 30200/tcp "$ADMIN" $REMIX_USERS         # Remix IDE (remix/)
     allow_all 30300/tcp "$ADMIN" $DOCS_USERS          # documentation site (docs-site/)
     ;;
-  *) echo "unknown ROLE $ROLE (app, node or monitoring)" >&2; exit 1 ;;
+  gateway) ;;                                         # a gateway-only host: only the gateway port below
+  *) echo "unknown ROLE $ROLE (app, node, monitoring or gateway)" >&2; exit 1 ;;
 esac
 [ "$HAS_MPC" = 1 ] && allow_all 7000/tcp $COORDS                                           # MPC node
 [ "${HAS_GATEWAY:-0}" = 1 ] && allow_all "${GATEWAY_PORT:-30010}/tcp" "$ADMIN" $MON $GATEWAY_CLIENTS   # section gateway (apps, Prometheus, chainlens)

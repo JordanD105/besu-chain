@@ -105,6 +105,7 @@
               'users': users.json.accounts | default([]) | map(attribute='address') | list
             },
             'proxy': admin_url,
+            'registry': { 'address': registry.address | default(''), 'fromBlock': registry_from_block | int },
             'rpc': 'http://' ~ vip_rpc ~ ':8545',
             'listen': 30010,
             'limits': section_limits
@@ -121,6 +122,24 @@
       register: gw_key
       no_log: true
 
+    - name: Report token on the host (chainlens reads and acknowledges the corrections with it)
+      ansible.builtin.copy:
+        content: "{{ gateway_report_token }}\n"
+        dest: /etc/besu-gateway/report.token
+        owner: "1000"
+        group: "1000"
+        mode: "0600"
+      register: gw_token
+      no_log: true
+
+    - name: Backup directory
+      ansible.builtin.file:
+        path: /var/lib/besu-gateway/backup
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0750"
+
     - name: Compose settings
       ansible.builtin.copy:
         dest: "{{ repo_dir }}/gateway/.env"
@@ -132,7 +151,7 @@
 
     - name: Gateway (image from 02-images.yml; restarted when its settings or key changed)
       ansible.builtin.command: >-
-        docker compose up -d {{ '--force-recreate' if (gw_config.changed or gw_key.changed or gw_env.changed) else '' }}
+        docker compose up -d {{ '--force-recreate' if (gw_config.changed or gw_key.changed or gw_token.changed or gw_env.changed) else '' }}
       args:
         chdir: "{{ repo_dir }}/gateway"
       register: gw_up
@@ -151,4 +170,5 @@
         msg:
           - "Section {{ section_id }} ({{ gw_status.json.section.name }}): gateway http://{{ ansible_host }}:{{ gateway_port }}, {{ gw_status.json.mode }}"
           - "Spare accounts: {{ gw_status.json.spares }} of {{ section_limits.spare_accounts }} (made while online)"
+          - "Corrections open: {{ gw_status.json.corrections.open }} (chainlens, Sections, Gateway)"
           - "{{ 'NEW section key in ' ~ key_file ~ ': give it to the application, which calls the gateway from now on' if new_key is not skipped else 'Section key: ' ~ key_file }}"

@@ -261,6 +261,63 @@ matrix_table("ETH moved in the selected time range", f'sum by (section, op) (inc
              "section", "op", desc="Per section and operation, over the dashboard's time range; pages at the bottom")
 y += 9
 
+# Section gateways (docs/components/gateway.md): one per section that has one; the Section filter applies
+GW = 'section=~"$section",section=~"(?i).*$search.*"'
+row("Gateways (sections whose application calls a gateway)", y); y += 1
+panels.append({
+    "type": "table", "title": "Gateways now", "id": nid(), "datasource": DS,
+    "description": "Mode: online, offline (answers from its ledger, queues the writes) or draining (sending the queue). "
+                   "Open corrections: queued requests the chain refused after a cut, not acknowledged yet in chainlens (Sections, Gateway).",
+    "gridPos": {"x": 0, "y": y, "w": 24, "h": 7},
+    "targets": [target(f'max by (section) (gateway_mode{{{GW}}})', instant=True, fmt="table", ref="A"),
+                target(f'max by (section) (gateway_queue_length{{{GW}}})', instant=True, fmt="table", ref="B"),
+                target(f'max by (section) (gateway_queue_oldest_seconds{{{GW}}})', instant=True, fmt="table", ref="C"),
+                target(f'max by (section) (gateway_spare_accounts{{{GW}}})', instant=True, fmt="table", ref="D"),
+                target(f'max by (section) (gateway_corrections_open{{{GW}}})', instant=True, fmt="table", ref="E"),
+                target(f'max by (section) (gateway_corrections_undelivered{{{GW}}})', instant=True, fmt="table", ref="F"),
+                target(f'max by (section) (gateway_cuts_total{{{GW}}})', instant=True, fmt="table", ref="G"),
+                target(f'max by (section) (gateway_offline_seconds_total{{{GW}}})', instant=True, fmt="table", ref="H")],
+    "transformations": [{"id": "merge", "options": {}},
+                        {"id": "organize", "options": {"excludeByName": {"Time": True},
+                         "renameByName": {"section": "Section", "Value #A": "Mode", "Value #B": "Queued", "Value #C": "Oldest queued",
+                                          "Value #D": "Spare accounts", "Value #E": "Open corrections", "Value #F": "Undelivered (webhook)",
+                                          "Value #G": "Cuts", "Value #H": "Time offline"}}}],
+    "options": {"showHeader": True, "cellHeight": "sm", "footer": {"show": False}},
+    "fieldConfig": {"defaults": {"custom": {"align": "auto"}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Mode"}, "properties": [
+            {"id": "mappings", "value": [{"type": "value", "options": {"0": {"text": "online", "color": "green"}, "1": {"text": "offline", "color": "red"},
+                                                                         "2": {"text": "draining", "color": "orange"}}}]},
+            {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+        {"matcher": {"id": "byName", "options": "Oldest queued"}, "properties": [{"id": "unit", "value": "s"}]},
+        {"matcher": {"id": "byName", "options": "Time offline"}, "properties": [{"id": "unit", "value": "s"}]},
+        {"matcher": {"id": "byName", "options": "Open corrections"}, "properties": [
+            {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}]}},
+            {"id": "custom.cellOptions", "value": {"type": "color-background"}}]}]}})
+y += 7
+timeseries("Gateway mode and queue", [
+    target(f'max by (section) (gateway_mode{{{GW}}})', "{{section}} mode (1 offline, 2 draining)", ref="A"),
+    target(f'max by (section) (gateway_queue_length{{{GW}}})', "{{section}} queued", ref="B")],
+    0, y, w=8, desc="Mode 0 online, 1 offline, 2 draining; the queue grows while offline and empties while draining.")
+timeseries("Corrections per $period, by kind", [
+    target(f'sum by (section, kind) (increase(gateway_corrections_total{{{GW}}}[$period] offset -$period))', "{{section}} {{kind}}")],
+    8, y, w=8, bars=True, desc="already_sold, price_changed, level, undo_period_over, balance, other." + NOTE)
+timeseries("ETH given back by corrections per $period", [
+    target(f'sum by (section) (increase(gateway_corrections_refunded_eth_total{{{GW}}}[$period] offset -$period))', "{{section}}")],
+    16, y, w=8, bars=True, desc="The ETH the gateway had taken in its ledger for requests the chain then refused." + NOTE)
+y += 8
+timeseries("Spare accounts", [
+    target(f'max by (section) (gateway_spare_accounts{{{GW}}})', "{{section}}", ref="A"),
+    target(f'max by (section) (gateway_spare_alert_below{{{GW}}})', "{{section}} alert below", ref="B")],
+    0, y, w=8, desc="Accounts made in advance for /createaccount while offline (spare_accounts); GatewaySparesLow below spare_alert_below.")
+timeseries("Cuts per $period", [
+    target(f'sum by (section) (increase(gateway_cuts_total{{{GW}}}[$period] offset -$period))', "{{section}}")],
+    8, y, w=8, bars=True, desc="Times each gateway went offline." + NOTE)
+timeseries("Open and undelivered corrections", [
+    target(f'max by (section) (gateway_corrections_open{{{GW}}})', "{{section}} open", ref="A"),
+    target(f'max by (section) (gateway_corrections_undelivered{{{GW}}})', "{{section}} undelivered", ref="B")],
+    16, y, w=8, desc="Open: not acknowledged in chainlens (GatewayCorrectionsOpen after 1 h). Undelivered: the correction_webhook has not taken them (0 without a webhook).")
+y += 8
+
 dash = {
     "title": "Sections", "uid": "sections", "description": "Per-section balances, low-balance alerts and activity (docs/features/sections.md)",
     "links": [{"title": "Dashboards", "type": "dashboards", "tags": ["production"], "asDropdown": True, "keepTime": True, "includeVars": False, "icon": "external link", "targetBlank": False}],
