@@ -2697,10 +2697,9 @@ function platformKind(entry) {
 
 function hasFunction(entry, name) {
     try {
-        entry.iface.getFunction(name);
-        return true;
+        return Boolean(entry.iface.getFunction(name)); // ethers 6: null when missing
     } catch (error) {
-        return false;
+        return true; // ambiguous: several overloads exist
     }
 }
 
