@@ -162,8 +162,6 @@ async function cache(fn, fallback = null) {
 // Live state (authoritative while the process runs; one proxy replica, see withSenderLock).
 const memNonce = new Map();      // sender -> next nonce to use
 const memPending = new Map();    // sender -> Map(nonce -> wei string) not yet mined
-// Avatar collections: the next token id per collection (for a mint through /admin/contract/send)
-const memAvatar = { nextId: new Map() };
 
 // =======================
 // JSON RPC Client
@@ -1184,8 +1182,6 @@ app.get("/transfer/:txHash", async (req, res) => {
 // Avatar helpers (mint metadata and token ids)
 // =======================
 
-const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
-const AVATAR_META_LIMIT = 512 * 1024;
 const ON_CHAIN_META_LIMIT = 48 * 1024;
 
 function httpError(statusCode, message) {
@@ -1214,61 +1210,6 @@ function onChainTokenUri(metadata) {
     }
 
     return "data:application/json;base64," + Buffer.from(json, "utf8").toString("base64");
-}
-
-// Avatar collections (version 3, contracts/AvatarCollection.sol) are read and written through the generic
-// contract API (/contract/*, /admin/contract/send). These helpers build a mint: the next token id
-// (the highest minted so far, from the Transfer events) and the on-chain metadata (a data URI).
-// Version-2 collections (minted by SENDER01) are retired: the proxy no longer reads or sells them.
-async function highestMintedTokenId(contract) {
-    const head = BigInt(await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []));
-    const span = 5000n;
-    let max = 0n;
-
-    for (let start = 0n; start <= head; start += span) {
-        const end = start + span - 1n > head ? head : start + span - 1n;
-        const logs = await rpc(CONFIG.BESU_RPC, "eth_getLogs", [{
-            address: contract,
-            fromBlock: ethers.toQuantity(start),
-            toBlock: ethers.toQuantity(end),
-            topics: [TRANSFER_TOPIC]
-        }]);
-
-        for (const log of logs) {
-            if (!log.topics || log.topics.length < 4) {
-                continue;
-            }
-
-            const tokenId = BigInt(log.topics[3]);
-
-            if (tokenId > max) {
-                max = tokenId;
-            }
-        }
-    }
-
-    return max;
-}
-
-async function allocateTokenId(contract) {
-    const minted = await highestMintedTokenId(contract);
-
-    if (minted > BigInt(Number.MAX_SAFE_INTEGER)) {
-        throw httpError(500, "token id is too large");
-    }
-
-    const key = `avatar:nextId:${contract.toLowerCase()}`;
-
-    if (!memAvatar.nextId.has(contract)) {
-        const stored = Number(await cache(() => redis.get(key)) || 0);
-        memAvatar.nextId.set(contract, Math.max(memAvatar.nextId.get(contract) || 0, stored));
-    }
-
-    // read-modify-write without an await in between: atomic within this process
-    const tokenId = Math.max(memAvatar.nextId.get(contract), Number(minted)) + 1;
-    memAvatar.nextId.set(contract, tokenId);
-    await cache(() => redis.set(key, tokenId));
-    return String(tokenId);
 }
 
 async function ethCall(to, data) {
@@ -1447,62 +1388,6 @@ function normalizeAttributes(attributes) {
 
         return attribute;
     });
-}
-
-function normalizeProperties(properties) {
-    if (properties === undefined) {
-        return {};
-    }
-
-    if (!properties || typeof properties !== "object" || Array.isArray(properties)) {
-        throw httpError(400, "invalid properties");
-    }
-
-    const clean = {};
-
-    for (const [key, value] of Object.entries(properties)) {
-        if (key === "__proto__" || key === "constructor" || key === "prototype") {
-            continue;
-        }
-
-        const kind = typeof value;
-
-        if (value !== null && kind !== "string" && kind !== "number" && kind !== "boolean") {
-            throw httpError(400, "invalid properties");
-        }
-
-        clean[key] = value;
-    }
-
-    return clean;
-}
-
-function buildMetadata(body) {
-    const name = collectionField(body.name, "name", 200);
-    const image = collectionField(body.image, "image", 500000);
-    const description = body.description === undefined ? "" : body.description;
-
-    if (typeof description !== "string" || description.length > 5000) {
-        throw httpError(400, "invalid description");
-    }
-
-    const metadata = {
-        name,
-        description,
-        image,
-        attributes: normalizeAttributes(body.attributes)
-    };
-    const properties = normalizeProperties(body.properties);
-
-    if (Object.keys(properties).length > 0) {
-        metadata.properties = properties;
-    }
-
-    if (Buffer.byteLength(JSON.stringify(metadata)) > AVATAR_META_LIMIT) {
-        throw httpError(400, "metadata is too large");
-    }
-
-    return metadata;
 }
 
 // =======================
@@ -2441,7 +2326,6 @@ async function deployAndRegister(input) {
 // The collection: the latest registered nickname collection, version 5 (POST /admin/contract/deploy, template nickname-collection).
 
 const nicknameArtifact = require("./nickname-collection.json");
-const nicknameIface = new ethers.Interface(nicknameArtifact.abi);
 const NICKNAME_FORBIDDEN = /[<>&"'\\\u0000-\u001f\u007f]/;
 
 function ethText(wei) {
@@ -2460,18 +2344,6 @@ async function nicknameCollection(optional = false) {
     }
 
     return entry || null;
-}
-
-async function nickCall(address, fn, args = []) {
-    let out;
-
-    try {
-        out = await rpc(CONFIG.BESU_RPC, "eth_call", [{ to: address, data: nicknameIface.encodeFunctionData(fn, args) }, "latest"]);
-    } catch (error) {
-        throw httpError(400, revertReason(error));
-    }
-
-    return nicknameIface.decodeFunctionResult(fn, out);
 }
 
 // What the user typed, trimmed and NFC-normalized: 1-256 characters, none forbidden
@@ -2494,27 +2366,21 @@ function nicknameInput(value) {
     return text;
 }
 
-// The token id of a nickname: keccak256 of its UTF-8 bytes with A-Z lowercased (as the contract)
-function nicknameId(text) {
-    const bytes = ethers.toUtf8Bytes(text).map((c) => (c >= 65 && c <= 90 ? c + 32 : c));
-    return BigInt(ethers.keccak256(bytes));
+// A user level: its number, step price (ETH) and whether it is for sale. Nothing else is stored.
+function levelOut(level, l) {
+    return { level, price: ethText(l.stepPrice), forSale: l.forSale };
 }
 
-// An edge level: its number, step price (ETH) and whether it is for sale. Nothing else is stored.
-function edgeOut(level, e) {
-    return { level, price: ethText(e.stepPrice), forSale: e.forSale };
-}
-
-async function readEdges(address) {
-    const [count] = await nickCall(address, "edgeCount");
-    const edges = [];
+async function readLevels(entry) {
+    const [count] = await entryCall(entry, "levelCount");
+    const levels = [];
 
     for (let level = 0; level < Number(count); level++) {
-        const [e] = await nickCall(address, "edgeInfo", [level]);
-        edges.push(edgeOut(level, e));
+        const [l] = await entryCall(entry, "levelInfo", [level]);
+        levels.push(levelOut(level, l));
     }
 
-    return edges;
+    return levels;
 }
 
 function decodeDataUri(uri) {
@@ -2522,24 +2388,12 @@ function decodeDataUri(uri) {
     return m ? JSON.parse(Buffer.from(m[1], "base64").toString("utf8")) : null;
 }
 
-async function nicknameInfo(address, tokenId) {
-    const [owner] = await nickCall(address, "ownerOf", [tokenId]);
-    const [nickname] = await nickCall(address, "nicknameById", [tokenId]);
-    const [level] = await nickCall(address, "edgeOf", [tokenId]);
-    return { nickname, tokenId: tokenId.toString(), account: ethers.getAddress(owner), level: Number(level) };
-}
-
-// ---- Applications
-
-// ---- Admin (chainlens Nicknames page): the collection, its edge levels, prices, reserved nicknames
-
-// An edge level's price and sale state from friendly input; omitted fields keep the current values
-function edgeLevelInput(body, current) {
+// A user level's price and sale state from friendly input; omitted fields keep the current values
+function levelInput(body, current) {
     const b = body || {};
-    const forSale = b.forSale !== undefined ? b.forSale : b.enabled;
     return {
         stepPrice: b.price === undefined && current ? ethToWei(current.price) : adminPrice(b.price),
-        forSale: forSale === undefined ? (current ? current.forSale : true) : Boolean(forSale)
+        forSale: b.forSale === undefined ? (current ? current.forSale : true) : Boolean(b.forSale)
     };
 }
 
@@ -2549,6 +2403,114 @@ function adminPrice(value) {
     }
 
     return ethToWei(String(value));
+}
+
+// Avatar metadata (no name: the image is the avatar), as an on-chain data URI
+function avatarMetadataUri(o) {
+    const image = collectionField(o.image, "image", 2000);
+    const description = o.description === undefined ? "" : o.description;
+
+    if (typeof description !== "string" || description.length > 5000) {
+        throw httpError(400, "description: text, at most 5000 characters");
+    }
+
+    const metadata = { image };
+
+    if (description) {
+        metadata.description = description;
+    }
+
+    const attributes = normalizeAttributes(o.attributes);
+
+    if (attributes.length) {
+        metadata.attributes = attributes;
+    }
+
+    return { image, uri: onChainTokenUri(metadata) };
+}
+
+// The token id of an image (avatar) or nickname, 404 when not minted
+async function tokenIdOf(entry, key) {
+    const [tokenId] = await entryCall(entry, "tokenOf", [key]);
+
+    if (tokenId === 0n) {
+        throw httpError(404, `${platformKind(entry) === "nickname" ? `nickname "${key}"` : `image ${key}`} is not minted`);
+    }
+
+    return tokenId;
+}
+
+// Every payment for a token, with times and whether each can be undone now (see BoundItems)
+async function paymentsInfo(entry, tokenId) {
+    const [[list], [hold], block] = await Promise.all([
+        entryCall(entry, "paymentsOf", [tokenId]),
+        entryCall(entry, "holdSeconds"),
+        rpc(CONFIG.BESU_RPC, "eth_getBlockByNumber", ["latest", false])
+    ]);
+    const now = BigInt(parseInt(block.timestamp, 16));
+    const iso = (s) => new Date(Number(s) * 1000).toISOString();
+    let sale = -1;
+    list.forEach((p, i) => { if (Number(p.kind) === 0) { sale = i; } });
+    const saleLive = sale >= 0 && !list[sale].undone;
+    let newestLevel = -1;
+
+    if (saleLive) {
+        for (let i = list.length - 1; i > sale; i--) {
+            if (!list[i].undone) {
+                newestLevel = i;
+                break;
+            }
+        }
+    }
+
+    return list.map((p, i) => {
+        const until = BigInt(p.paidAt) + hold;
+        const level = Number(p.kind) === 1;
+        const open = !p.undone && now <= until && (level ? i === newestLevel : i === sale && saleLive);
+        const out = { kind: level ? "level" : "sale" };
+
+        if (level) {
+            Object.assign(out, { fromLevel: Number(p.fromLevel), toLevel: Number(p.toLevel) });
+        }
+
+        return Object.assign(out, { amount: ethText(p.amount), payer: ethers.getAddress(p.payer), paidTo: ethers.getAddress(p.paidTo),
+            paidAt: iso(p.paidAt), undoUntil: iso(until), undone: p.undone, undoable: open, current: i >= sale && saleLive });
+    });
+}
+
+// The token's undo target: the sale (undo) or the newest level upgrade (undoLevel), its refund and payee
+async function undoTarget(entry, fragmentName, tokenId) {
+    const payments = await paymentsInfo(entry, tokenId);
+    const current = payments.filter((p) => p.current && !p.undone);
+
+    if (!current.length) {
+        throw httpError(409, `token ${tokenId} is not sold`);
+    }
+
+    if (fragmentName === "undo") {
+        const sale = current[0];
+
+        if (!sale.undoable) {
+            throw httpError(409, `the undo period of token ${tokenId} ended at ${sale.undoUntil}`);
+        }
+
+        const refund = current.reduce((sum, p) => sum + ethToWei(p.amount), 0n);
+        return { paidTo: sale.paidTo, buyer: sale.payer, refundWei: refund, until: sale.undoUntil };
+    }
+
+    const levels = current.filter((p) => p.kind === "level");
+
+    if (!levels.length) {
+        throw httpError(409, `token ${tokenId} has no level upgrade to undo`);
+    }
+
+    const last = levels[levels.length - 1];
+
+    if (!last.undoable) {
+        throw httpError(409, `the undo period of the level ${last.fromLevel} -> ${last.toLevel} upgrade ended at ${last.undoUntil}`);
+    }
+
+    return { paidTo: last.paidTo, buyer: last.payer, refundWei: ethToWei(last.amount), until: last.undoUntil };
 }
 
 // ---- Applications: read and write registered contracts (docs/reference/proxy-api.md)
@@ -2563,14 +2525,13 @@ function adminPrice(value) {
 // values: ETH prices, nickname edge levels, metadata for a mint. Their answers carry a
 // "result" with friendly values too (ETH, decoded metadata, nickname details and levels).
 
-// "nickname" (NicknameCollection version 5: levels only), "avatar" (AvatarCollection) or null. An older
-// nickname collection (version 4, with edge styles) is an ordinary contract: no friendly values.
+// "nickname" (NicknameCollection version 6) or "avatar" (AvatarCollection version 4): the platform's items
+// (BoundItems: minted by the center, bought once, undo within the hold period), or null. Older
+// collections (avatar 3, nickname 4 and 5) are ordinary contracts to the proxy: no friendly values.
 function platformKind(entry) {
     if (!entry.platformKind) {
-        const setEdge = hasFunction(entry, "setEdge") ? entry.iface.getFunction("setEdge") : null;
-        entry.platformKind = hasFunction(entry, "buyNickname") && hasFunction(entry, "upgradeEdge") && setEdge && setEdge.inputs.length === 3 ? "nickname"
-            : hasFunction(entry, "priceOf") && hasFunction(entry, "mint") && hasFunction(entry, "buy") && hasFunction(entry, "minter") ? "avatar"
-                : "none";
+        const item = hasFunction(entry, "undo") && hasFunction(entry, "paymentsOf") && hasFunction(entry, "tokensOf") && hasFunction(entry, "setPrice");
+        entry.platformKind = item && hasFunction(entry, "upgradeLevel") ? "nickname" : item && hasFunction(entry, "imageOf") ? "avatar" : "none";
     }
 
     return entry.platformKind === "none" ? null : entry.platformKind;
@@ -2622,19 +2583,16 @@ function ethInput(value, what) {
 // Friendly object arguments of the platform's contracts -> the ABI's raw values.
 // ctx: { center: true } for /admin/contract/send
 // The names a friendly object may use, per function of the platform's contracts
+const ITEM_KEYS = {
+    setPrice: ["tokenId", "price"], undo: ["tokenId"], tokensOf: ["account", "owner"], balanceOf: ["account", "owner"],
+    ownerOf: ["tokenId"], priceOf: ["tokenId"], tokenURI: ["tokenId"], paymentsOf: ["tokenId"]
+};
 const FRIENDLY_KEYS = {
-    nickname: {
-        buyNickname: ["nickname", "payee"], upgradeEdge: ["level", "toLevel", "payee"], quote: ["account", "level", "toLevel"],
-        isAvailable: ["nickname"], idOf: ["nickname"], nicknameOf: ["account", "owner"], balanceOf: ["account", "owner"],
-        edgeInfo: ["level"], edgeOf: ["tokenId", "id"], nicknameById: ["tokenId", "id"], tokenURI: ["tokenId", "id"],
-        ownerOf: ["tokenId", "id"], locked: ["tokenId", "id"], reserved: ["tokenId", "id"], setNicknamePrice: ["price"],
-        reserve: ["nicknames", "names", "reserved"], addEdge: ["price"], setEdge: ["level", "price", "forSale", "enabled"]
-    },
-    avatar: {
-        buy: ["tokenId", "id", "payee"], approve: ["to", "tokenId", "id"], priceOf: ["tokenId", "id"], ownerOf: ["tokenId", "id"],
-        tokenURI: ["tokenId", "id"], getApproved: ["tokenId", "id"], balanceOf: ["owner", "account"],
-        mint: ["to", "tokenId", "uri", "price", "amount", "name", "image", "description", "attributes", "properties"]
-    }
+    avatar: { ...ITEM_KEYS, mint: ["image", "price", "description", "attributes"], buy: ["tokenId", "imageUrl", "payee"],
+        tokenOf: ["imageUrl"], imageOf: ["tokenId"] },
+    nickname: { ...ITEM_KEYS, mint: ["nickname", "price"], buy: ["tokenId", "nickname", "payee"], tokenOf: ["nickname"],
+        nicknameOf: ["tokenId"], levelOf: ["tokenId"], addLevel: ["price"], setLevel: ["level", "price", "forSale"],
+        levelInfo: ["level"], quote: ["tokenId", "level"], upgradeLevel: ["tokenId", "level", "payee"], undoLevel: ["tokenId"] }
 };
 
 async function friendlyArgs(entry, fragment, raw, ctx) {
@@ -2655,7 +2613,7 @@ async function friendlyArgs(entry, fragment, raw, ctx) {
         const missing = fragment.inputs.findIndex((p, i) => args[i] === undefined && !(p.name === "payee" && p.type === "address"));
 
         if (missing >= 0) {
-            throw httpError(400, `args: no value for "${fragment.inputs[missing].name.replace(/^_+|_+$/g, "")}" (${fragment.format("sighash")}); given: ${Object.keys(raw).join(", ") || "nothing"}`);
+            throw httpError(400, `args: no value for "${(keys ? keys[missing] : null) || fragment.inputs[missing].name.replace(/^_+|_+$/g, "")}" (${fragment.format("sighash")}); given: ${Object.keys(raw).join(", ") || "nothing"}`);
         }
     }
 
@@ -2674,7 +2632,7 @@ async function friendlyArgsOf(entry, fragment, raw, ctx) {
         const args = [...raw];
 
         // nicknames are always trimmed and NFC-normalized, also as raw values
-        if (kind === "nickname" && ["isAvailable", "idOf"].includes(name) && typeof args[0] === "string") {
+        if (kind === "nickname" && ["mint", "tokenOf"].includes(name) && typeof args[0] === "string") {
             args[0] = nicknameInput(args[0]);
         }
 
@@ -2686,60 +2644,54 @@ async function friendlyArgsOf(entry, fragment, raw, ctx) {
     }
 
     const o = raw;
-    const tokenOnly = () => [objectArg(o, "tokenId", "id")];
+    const id = () => o.tokenId;
 
-    if (kind === "nickname") {
+    if (kind) {
         switch (name) {
-        case "buyNickname": return [o.nickname, o.payee];
-        case "upgradeEdge": return [objectArg(o, "level", "toLevel"), o.payee];
-        case "quote": return [o.account, objectArg(o, "level", "toLevel")];
-        case "isAvailable": case "idOf": return [nicknameInput(o.nickname)];
-        case "nicknameOf": case "balanceOf": return [objectArg(o, "account", "owner")];
-        case "edgeInfo": return [o.level];
-        case "edgeOf": case "nicknameById": case "tokenURI": case "ownerOf": case "locked": case "reserved": return tokenOnly();
-        case "setNicknamePrice": return [ethInput(o.price, "price")];
-        case "reserve": {
-            const names = objectArg(o, "nicknames", "names");
-
-            if (!Array.isArray(names) || names.length < 1 || names.length > 100) {
-                throw httpError(400, "nicknames: a list of 1 to 100 nicknames");
-            }
-
-            return [names.map(nicknameInput), o.reserved !== false];
-        }
-        case "addEdge": return [edgeLevelInput(o, null).stepPrice];
-        case "setEdge": {
-            const level = Number(o.level);
-            const edges = await readEdges(entry.address);
-
-            if (!Number.isInteger(level) || !edges[level]) {
-                throw httpError(404, `level: no edge level ${o.level} (levels 0-${edges.length - 1})`);
-            }
-
-            const e = edgeLevelInput(o, edges[level]);
-            return [level, e.stepPrice, e.forSale];
-        }
+        case "setPrice": return [id(), ethInput(o.price, "price")];
+        case "undo": case "ownerOf": case "priceOf": case "tokenURI": case "paymentsOf":
+        case "imageOf": case "nicknameOf": case "levelOf": case "undoLevel": return [id()];
+        case "tokensOf": case "balanceOf": return [objectArg(o, "account", "owner")];
         default: break;
         }
     }
 
     if (kind === "avatar") {
         switch (name) {
-        case "buy": return [objectArg(o, "tokenId", "id"), o.payee];
-        // approve { tokenId }: puts the token up for (re)sale through the collection itself
-        case "approve": return [o.to || entry.address, objectArg(o, "tokenId", "id")];
-        case "priceOf": case "ownerOf": case "tokenURI": case "getApproved": return tokenOnly();
-        case "balanceOf": return [objectArg(o, "owner", "account")];
         case "mint": {
             if (!ctx || !ctx.center) {
                 break;
             }
 
-            const center = ethers.getAddress(CONFIG.CONTRACT_CENTER);
-            const uri = o.uri || onChainTokenUri(buildMetadata(o));
-            const tokenId = o.tokenId === undefined ? await allocateTokenId(entry.address) : o.tokenId;
-            return [o.to || center, tokenId, uri, ethInput(objectArg(o, "price", "amount") === undefined ? "0" : objectArg(o, "price", "amount"), "price")];
+            const { image, uri } = avatarMetadataUri(o);
+            return [image, uri, ethInput(o.price === undefined ? "0" : o.price, "price")];
         }
+        case "buy": return [o.tokenId !== undefined ? o.tokenId : (o.imageUrl !== undefined ? await tokenIdOf(entry, String(o.imageUrl)) : undefined), o.payee];
+        case "tokenOf": return [o.imageUrl];
+        default: break;
+        }
+    }
+
+    if (kind === "nickname") {
+        switch (name) {
+        case "mint": return [nicknameInput(o.nickname), ethInput(o.price === undefined ? "0" : o.price, "price")];
+        case "buy": return [o.tokenId !== undefined ? o.tokenId : (o.nickname !== undefined ? await tokenIdOf(entry, nicknameInput(o.nickname)) : undefined), o.payee];
+        case "tokenOf": return [nicknameInput(o.nickname)];
+        case "addLevel": return [levelInput(o, null).stepPrice];
+        case "setLevel": {
+            const level = Number(o.level);
+            const levels = await readLevels(entry);
+
+            if (!Number.isInteger(level) || !levels[level]) {
+                throw httpError(404, `level: no level ${o.level} (levels 0-${levels.length - 1})`);
+            }
+
+            const l = levelInput(o, levels[level]);
+            return [level, l.stepPrice, l.forSale];
+        }
+        case "levelInfo": return [o.level];
+        case "quote": return [o.tokenId, o.level];
+        case "upgradeLevel": return [o.tokenId, o.level, o.payee];
         default: break;
         }
     }
@@ -2753,40 +2705,49 @@ async function friendlyCall(entry, fragment, args, decoded) {
     const name = fragment.name;
     const v = decoded;
 
-    if (kind === "nickname") {
+    if (kind) {
+        const minter = async () => ethers.getAddress((await entryCall(entry, "minter"))[0]);
+
         switch (name) {
-        case "nicknamePrice": return { price: ethText(v[0]) };
-        case "edgeCount": return { count: Number(v[0]), edges: await readEdges(entry.address) };
-        case "edgeInfo": return edgeOut(Number(args[0]), v[0]);
-        case "quote": return { account: ethers.getAddress(args[0]), level: Number(args[1]), price: ethText(v[0]) };
-        case "idOf": return { nickname: args[0], tokenId: v[0].toString() };
-        case "isAvailable": {
-            const tokenId = nicknameId(args[0]);
-            const [taken, reserved] = await Promise.all([
-                entryCall(entry, "ownerOf", [tokenId]).then(() => true, () => false),
-                entryCall(entry, "reserved", [tokenId]).then((r) => r[0])
-            ]);
-            return { nickname: args[0], characters: Array.from(args[0]).length, tokenId: tokenId.toString(),
-                available: v[0], reason: taken ? "taken" : (reserved ? "reserved" : null) };
+        case "priceOf": return { tokenId: String(args[0]), price: ethText(v[0]) };
+        case "ownerOf": {
+            const owner = ethers.getAddress(v[0]);
+            return { tokenId: String(args[0]), owner, sold: owner !== await minter() };
         }
-        case "nicknameOf":
-            return v[0] === 0n ? { account: ethers.getAddress(args[0]), nickname: null } : nicknameInfo(entry.address, v[0]);
-        case "edgeOf": return { tokenId: String(args[0]), level: Number(v[0]) };
-        case "tokenURI": return { tokenId: String(args[0]), metadata: decodeDataUri(v[0]) || {} };
-        case "ownerOf": return { tokenId: String(args[0]), owner: ethers.getAddress(v[0]) };
+        case "balanceOf": return { owner: ethers.getAddress(args[0]), tokens: Number(v[0]) };
+        case "paymentsOf": return paymentsInfo(entry, args[0]);
+        case "tokenOf": {
+            if (v[0] === 0n) {
+                return { tokenId: null, minted: false };
+            }
+
+            const [[owner], [price]] = await Promise.all([entryCall(entry, "ownerOf", [v[0]]), entryCall(entry, "priceOf", [v[0]])]);
+            return { tokenId: v[0].toString(), minted: true, sold: ethers.getAddress(owner) !== await minter(), owner: ethers.getAddress(owner), price: ethText(price) };
+        }
+        case "tokensOf": return Promise.all(v[0].map((t) => itemSummary(entry, t)));
         default: break;
         }
     }
 
     if (kind === "avatar") {
         switch (name) {
-        case "priceOf": return { tokenId: String(args[0]), price: ethText(v[0]) };
-        case "ownerOf": return { tokenId: String(args[0]), owner: ethers.getAddress(v[0]) };
-        case "balanceOf": return { owner: ethers.getAddress(args[0]), tokens: Number(v[0]) };
         case "tokenURI": {
             const meta = decodeDataUri(v[0]);
-            return { tokenId: String(args[0]), metadata: meta, image: meta ? meta.image || null : null, tokenURI: meta ? undefined : v[0] };
+            return { tokenId: String(args[0]), metadata: meta, image: meta ? meta.image || null : null };
         }
+        case "imageOf": return { tokenId: String(args[0]), image: v[0] };
+        default: break;
+        }
+    }
+
+    if (kind === "nickname") {
+        switch (name) {
+        case "tokenURI": return { tokenId: String(args[0]), metadata: decodeDataUri(v[0]) || {} };
+        case "nicknameOf": return { tokenId: String(args[0]), nickname: v[0] };
+        case "levelOf": return { tokenId: String(args[0]), level: Number(v[0]) };
+        case "levelCount": return { count: Number(v[0]), levels: await readLevels(entry) };
+        case "levelInfo": return levelOut(Number(args[0]), v[0]);
+        case "quote": return { tokenId: String(args[0]), level: Number(args[1]), price: ethText(v[0]) };
         default: break;
         }
     }
@@ -2806,64 +2767,78 @@ async function friendlyCall(entry, fragment, args, decoded) {
     return out;
 }
 
+// One item: avatar { tokenId, image, price } or nickname { tokenId, nickname, level, price }
+async function itemSummary(entry, tokenId) {
+    const [[price], [text]] = await Promise.all([
+        entryCall(entry, "priceOf", [tokenId]),
+        entryCall(entry, platformKind(entry) === "nickname" ? "nicknameOf" : "imageOf", [tokenId])
+    ]);
+
+    if (platformKind(entry) === "nickname") {
+        const [level] = await entryCall(entry, "levelOf", [tokenId]);
+        return { tokenId: tokenId.toString(), nickname: text, level: Number(level), price: ethText(price) };
+    }
+
+    return { tokenId: tokenId.toString(), image: text, price: ethText(price) };
+}
+
 // The friendly "result" of a write, from its events
 async function friendlySend(entry, fragment, args, events) {
     const kind = platformKind(entry);
     const find = (n) => events.find((e) => e.name === n);
 
-    if (kind === "nickname") {
-        const bought = find("NicknameBought");
-        const upgraded = find("EdgeUpgraded");
-
-        if (bought || upgraded) {
-            const info = await nicknameInfo(entry.address, BigInt((bought || upgraded).args.tokenId));
-            const paid = (bought || upgraded).args;
-            return { ...info, price: ethText(BigInt(paid.price)), paidTo: paid.paidTo };
-        }
-
-        const edgeSet = find("EdgeSet");
-
-        if (edgeSet) {
-            const [info] = await entryCall(entry, "edgeInfo", [Number(edgeSet.args.level)]);
-            return { edge: edgeOut(Number(edgeSet.args.level), info) };
-        }
-
-        const priceSet = find("NicknamePriceSet");
-
-        if (priceSet) {
-            return { nicknamePrice: ethText(BigInt(priceSet.args.price)) };
-        }
-
-        const reserved = events.filter((e) => e.name === "Reserved");
-
-        if (reserved.length) {
-            return { reserved: reserved[0].args.reserved, nicknames: reserved.map((e) => e.args.nickname) };
-        }
+    if (!kind) {
+        return null;
     }
 
-    if (kind === "avatar") {
-        const sold = find("Sold");
+    const minted = find("Minted");
 
-        if (sold) {
-            const center = isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : "";
-            return { sale: ethers.getAddress(sold.args.seller) === center ? "first sale" : "resale", tokenId: String(sold.args.tokenId),
-                seller: sold.args.seller, buyer: sold.args.buyer, price: ethText(BigInt(sold.args.price)), paidTo: sold.args.paidTo };
-        }
+    if (minted) {
+        return { minted: true, ...await itemSummary(entry, BigInt(minted.args.tokenId)) };
+    }
 
-        const minted = events.find((e) => e.name === "Transfer" && /^0x0{40}$/i.test(String(e.args.from)));
+    const priceSet = find("PriceSet");
 
-        if (minted) {
-            const tokenId = BigInt(minted.args.tokenId);
-            const [[price], [uri]] = await Promise.all([entryCall(entry, "priceOf", [tokenId]), entryCall(entry, "tokenURI", [tokenId])]);
-            return { minted: true, tokenId: tokenId.toString(), owner: minted.args.to, price: ethText(price), metadata: decodeDataUri(uri) };
-        }
+    if (priceSet) {
+        return { tokenId: String(priceSet.args.tokenId), price: ethText(BigInt(priceSet.args.price)) };
+    }
 
-        const approval = find("Approval");
+    const hold = async () => (await entryCall(entry, "holdSeconds"))[0];
+    const sold = find("Sold");
 
-        if (approval) {
-            return { tokenId: String(approval.args.tokenId), approved: approval.args.approved,
-                forSale: String(approval.args.approved).toLowerCase() === entry.address.toLowerCase() };
-        }
+    if (sold) {
+        const until = new Date(Date.now() + Number(await hold()) * 1000).toISOString();
+        return { ...await itemSummary(entry, BigInt(sold.args.tokenId)), buyer: sold.args.buyer, paid: ethText(BigInt(sold.args.price)),
+            paidTo: sold.args.paidTo, undoUntil: until };
+    }
+
+    const undone = find("Undone");
+
+    if (undone) {
+        return { tokenId: String(undone.args.tokenId), undone: "sale", buyer: undone.args.buyer, refunded: ethText(BigInt(undone.args.refunded)),
+            by: undone.args.by };
+    }
+
+    const upgraded = find("LevelUpgraded");
+
+    if (upgraded) {
+        const until = new Date(Date.now() + Number(await hold()) * 1000).toISOString();
+        return { ...await itemSummary(entry, BigInt(upgraded.args.tokenId)), fromLevel: Number(upgraded.args.fromLevel),
+            paid: ethText(BigInt(upgraded.args.price)), paidTo: upgraded.args.paidTo, undoUntil: until };
+    }
+
+    const levelUndone = find("LevelUndone");
+
+    if (levelUndone) {
+        return { tokenId: String(levelUndone.args.tokenId), undone: "level", level: Number(levelUndone.args.toLevel),
+            undoneLevel: Number(levelUndone.args.fromLevel), refunded: ethText(BigInt(levelUndone.args.refunded)) };
+    }
+
+    const levelSet = find("LevelSet");
+
+    if (levelSet) {
+        const [info] = await entryCall(entry, "levelInfo", [Number(levelSet.args.level)]);
+        return { level: levelOut(Number(levelSet.args.level), info) };
     }
 
     return null;
@@ -3121,12 +3096,13 @@ app.post("/contract/events", contractRoute(async (req) => {
 
 // Write: a state-changing function, signed by a user account of the caller's section. Waits for the
 // block; answers with the status and the contract's decoded events.
-// Functions of the platform's own contracts, sent through /contract/send:
-//   nickname collection: buyNickname(nickname, payee), upgradeEdge(level, payee)
-//   avatar collection:   buy(tokenId, payee)
-// An address input named "payee" is the sender's section's consumption account: filled in when left
-// out, refused when it is another account. The price (value) is filled in when left out. A nickname is
-// trimmed and NFC-normalized (1-256 characters), and the usual refusals get clear messages.
+// The platform's items (avatar and nickname collections) through /contract/send:
+//   buy(tokenId, payee), nickname upgradeLevel(tokenId, level, payee): signed by "from" (a user account
+//     of the section). The payee (an address input named "payee") is the sender's section's consumption
+//     account: filled in when left out, refused when it is another account; the price (value) is
+//     filled in when left out;
+//   undo(tokenId), nickname undoLevel(tokenId): signed by the account that was paid (the section's
+//     consumption account), which sends the refund; "from" is not needed.
 async function knownSend(entry, fragment, args, from, section) {
     const payeeAt = fragment.inputs.findIndex((input) => input.name === "payee" && input.type === "address");
 
@@ -3141,88 +3117,62 @@ async function knownSend(entry, fragment, args, from, section) {
         }
     }
 
+    const kind = platformKind(entry);
     const name = fragment.name;
-    const nicknames = hasFunction(entry, "buyNickname") && hasFunction(entry, "upgradeEdge");
-    const avatarBuy = name === "buy" && hasFunction(entry, "priceOf") && hasFunction(entry, "minter") && payeeAt === 1;
 
-    if (nicknames && name === "buyNickname") {
-        const nickname = nicknameInput(args[0]);
-        args[0] = nickname;
-        const [has] = await entryCall(entry, "nicknameOf", [from]);
-
-        if (has !== 0n) {
-            throw httpError(409, `${from} already has a nickname (one per account)`);
-        }
-
-        const [available] = await entryCall(entry, "isAvailable", [nickname]);
-
-        if (!available) {
-            const [reserved] = await entryCall(entry, "reserved", [nicknameId(nickname)]);
-            throw httpError(409, reserved ? `nickname "${nickname}" is reserved` : `nickname "${nickname}" is taken`);
-        }
-
-        return { priceWei: (await entryCall(entry, "nicknamePrice"))[0] };
+    if (!kind || !["buy", "upgradeLevel"].includes(name)) {
+        return { priceWei: null };
     }
 
-    if (nicknames && name === "upgradeEdge") {
-        const level = Number(args[0]);
+    const tokenId = parseTokenId(String(args[0]));
 
-        if (!Number.isInteger(level) || level < 1 || level > 255) {
-            throw httpError(400, "args[0]: the edge level to reach (1 or more)");
-        }
-
-        const [tokenId] = await entryCall(entry, "nicknameOf", [from]);
-
-        if (tokenId === 0n) {
-            throw httpError(404, `${from} has no nickname: buy one first (buyNickname)`);
-        }
-
-        try {
-            return { priceWei: (await entryCall(entry, "quote", [from, level]))[0] };
-        } catch (error) {
-            throw httpError(400, `level ${level}: ${revertReason(error)}`);
-        }
+    if (!tokenId) {
+        throw httpError(400, "tokenId: a token id (1, 2, …)");
     }
 
-    if (avatarBuy) {
-        const tokenId = parseTokenId(args[0]);
+    let owner;
 
-        if (!tokenId) {
-            throw httpError(400, "args[0]: the token id");
-        }
+    try {
+        [owner] = await entryCall(entry, "ownerOf", [tokenId]);
+    } catch (error) {
+        throw httpError(404, `token ${tokenId} is not minted`);
+    }
 
-        let owner;
+    const [minter] = await entryCall(entry, "minter");
 
-        try {
-            [owner] = await entryCall(entry, "ownerOf", [tokenId]);
-        } catch (error) {
-            throw httpError(404, "token not found");
-        }
-
-        if (ethers.getAddress(owner) === from) {
-            throw httpError(400, `${from} already owns token ${tokenId}`);
+    if (name === "buy") {
+        if (ethers.getAddress(owner) !== ethers.getAddress(minter)) {
+            throw httpError(409, `token ${tokenId} is already sold`);
         }
 
         return { priceWei: (await entryCall(entry, "priceOf", [tokenId]))[0] };
     }
 
-    return { priceWei: null };
+    if (ethers.getAddress(owner) !== from) {
+        throw httpError(403, `token ${tokenId} is not owned by ${from}`);
+    }
+
+    try {
+        return { priceWei: (await entryCall(entry, "quote", [tokenId, args[1]]))[0] };
+    } catch (error) {
+        throw httpError(400, `level ${args[1]}: ${revertReason(error)}`);
+    }
 }
 
 // Section operation counters from the events of a sent transaction
-function countKnownSend(section, events) {
-    const center = isAddress(CONFIG.CONTRACT_CENTER) ? ethers.getAddress(CONFIG.CONTRACT_CENTER) : null;
+function countKnownSend(section, entry, events) {
+    const kind = platformKind(entry);
+    const eth = (v) => ethers.formatEther(BigInt(v));
 
     for (const event of events) {
-        const price = event.args && event.args.price !== undefined ? ethers.formatEther(BigInt(event.args.price)) : "0";
-
-        if (event.name === "NicknameBought") {
-            countSectionOp(section, "nickname_sale", price);
-        } else if (event.name === "EdgeUpgraded") {
-            countSectionOp(section, "edge_upgrade", price);
-        } else if (event.name === "Sold") {
-            const first = center && isAddress(String(event.args.seller)) && ethers.getAddress(String(event.args.seller)) === center;
-            countSectionOp(section, first ? "avatar_sale" : "avatar_resale", price);
+        if (event.name === "Sold") {
+            countSectionOp(section, `${kind}_sale`, eth(event.args.price));
+        } else if (event.name === "Undone") {
+            countSectionOp(section, `${kind}_undo`, eth(event.args.refunded));
+        } else if (event.name === "LevelUpgraded") {
+            countSectionOp(section, "level_upgrade", eth(event.args.price));
+        } else if (event.name === "LevelUndone") {
+            countSectionOp(section, "level_undo", eth(event.args.refunded));
         }
     }
 }
@@ -3245,29 +3195,73 @@ app.post("/contract/send", async (req, res) => {
             throw httpError(400, `${fragment.format("sighash")} only reads: use POST /contract/call`);
         }
 
-        if (!isAddress(String(req.body.from || ""))) {
-            throw httpError(400, "from: the user account (of this section) that signs");
-        }
+        const kind = platformKind(entry);
+        const undoCall = Boolean(kind) && (fragment.name === "undo" || (kind === "nickname" && fragment.name === "undoLevel"));
+        let from;
+        let args;
+        let known;
 
-        const from = ethers.getAddress(req.body.from);
+        if (undoCall) {
+            // signed by the account that was paid (the section's consumption account), which sends the refund
+            args = await friendlyArgs(entry, fragment, req.body.args, null);
+            const tokenId = parseTokenId(String(args[0]));
 
-        if (!section) {
-            const owner = await accountSection(from);
-
-            if (owner.kind !== ACCOUNT_USER) {
-                throw httpError(403, `${from} is not a user account of a section`);
+            if (!tokenId) {
+                throw httpError(400, "tokenId: a token id (1, 2, …)");
             }
 
-            section = await getSection(owner.id, false);
+            const target = await undoTarget(entry, fragment.name, tokenId);
+            const paid = await accountSection(target.paidTo);
+            const paidSection = paid.id ? await getSection(paid.id, false) : null;
+
+            if (!paidSection) {
+                throw httpError(409, `token ${tokenId} was paid to ${target.paidTo}, not a section's account`);
+            }
+
+            if (section && section.id !== paidSection.id) {
+                throw httpError(403, `token ${tokenId} was paid to section "${paidSection.name}": only its key can undo`);
+            }
+
+            section = paidSection;
+            from = target.paidTo;
+
+            if (req.body.from && (!isAddress(String(req.body.from)) || ethers.getAddress(String(req.body.from)) !== from)) {
+                throw httpError(400, `from: leave it out (an undo is signed by ${from}, the account that was paid)`);
+            }
+
+            const balance = await getBalanceWei(from);
+
+            if (balance < target.refundWei) {
+                throw httpError(409, `the refund needs ${ethText(target.refundWei)} ETH but ${from} (section "${section.name}" consumption) has ${ethText(balance)} ETH`);
+            }
+
+            known = { priceWei: target.refundWei };
+        } else {
+            if (!isAddress(String(req.body.from || ""))) {
+                throw httpError(400, "from: the user account (of this section) that signs");
+            }
+
+            from = ethers.getAddress(req.body.from);
+
+            if (!section) {
+                const owner = await accountSection(from);
+
+                if (owner.kind !== ACCOUNT_USER) {
+                    throw httpError(403, `${from} is not a user account of a section`);
+                }
+
+                section = await getSection(owner.id, false);
+            }
+
+            await assertSectionUser(section, from);
+            args = await friendlyArgs(entry, fragment, req.body.args, null);
+            known = await knownSend(entry, fragment, args, from, section);
         }
 
         if (!section.active) {
             throw httpError(403, `section "${section.name}" is disabled`);
         }
 
-        await assertSectionUser(section, from);
-        const args = await friendlyArgs(entry, fragment, req.body.args, null);
-        const known = await knownSend(entry, fragment, args, from, section);
         let valueWei = 0n;
 
         if (req.body.value !== undefined && req.body.value !== null && String(req.body.value) !== "" && String(req.body.value) !== "0") {
@@ -3314,7 +3308,7 @@ app.post("/contract/send", async (req, res) => {
         const events = ok ? decodeEvents(entry, receipt) : [];
 
         if (ok) {
-            countKnownSend(section, events);
+            countKnownSend(section, entry, events);
         }
 
         console.log(`section ${section.id}: ${from} -> ${entry.address} ${fragment.format("sighash")} ${ok ? "ok" : "REVERTED"} (${sent.txHash})`);
@@ -3344,11 +3338,11 @@ app.post("/contract/send", async (req, res) => {
 
 // ---- Admin: write as the contract account center (the minter and owner of the platform's contracts)
 // { contract, function, args, value }. Friendly object args for the platform's contracts, e.g.
-//   mint        { "name", "image", "description", "attributes", "price": "0.5" }   (to, tokenId and uri filled in)
-//   setNicknamePrice { "price": "1" }
-//   addEdge     { "price": "1" }                      (the next edge level, for sale)
-//   setEdge     { "level": 2, "price", "forSale" }    (omitted fields keep their value)
-//   reserve     { "nicknames": ["admin"], "reserved": true }
+//   avatar mint    { "image", "price": "0.5", "description", "attributes" }   (the metadata uri is built here)
+//   nickname mint  { "nickname", "price": "1" }
+//   setPrice       { "tokenId", "price" }                (until the token is sold)
+//   addLevel       { "price": "1" }                      (nickname: the next user level, for sale)
+//   setLevel       { "level": 2, "price", "forSale" }    (omitted fields keep their value)
 app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
     requireSections();
     requireCenter();
@@ -3416,7 +3410,8 @@ app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
 // ---- Deploy templates: the platform's own contracts, compiled into the proxy image
 // POST /admin/contract/check and /admin/contract/deploy with
 //   { "template": "avatar-collection", "name": "Dragons", "symbol": "DRG" }   (old name: nft-collection)
-//   { "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "another": false }
+//   { "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "another": false }
+// both with "holdDays" (default 7): how long a sale (or nickname level upgrade) can be undone
 async function templateInput(body) {
     const b = body || {};
 
@@ -3425,6 +3420,14 @@ async function templateInput(body) {
     }
 
     requireSections();
+    // how long a sale (or level upgrade) can be undone: holdDays, default 7 (decimals allowed, e.g. for tests)
+    const holdDays = b.holdDays === undefined ? 7 : Number(b.holdDays);
+
+    if (!Number.isFinite(holdDays) || holdDays < 0 || holdDays > 365) {
+        throw httpError(400, "holdDays: 0 to 365 (default 7)");
+    }
+
+    const holdSeconds = String(Math.round(holdDays * 86400));
 
     if (b.template === "avatar-collection" || b.template === "nft-collection") {
         const name = collectionField(b.name, "name", 64);
@@ -3444,7 +3447,7 @@ async function templateInput(body) {
 
         return deployInputOf({ kind: "avatar", name, abi: avatarArtifact.abi, bytecode: avatarArtifact.bytecode,
             deployedBytecode: avatarArtifact.deployedBytecode, immutableReferences: avatarArtifact.immutableReferences,
-            args: [name, symbol, CONFIG.REGISTRY_CONTRACT] });
+            args: [name, symbol, CONFIG.REGISTRY_CONTRACT, holdSeconds] });
     }
 
     if (b.template === "nickname-collection") {
@@ -3458,7 +3461,7 @@ async function templateInput(body) {
         const symbol = String(b.symbol || "NICK").trim().slice(0, 16);
         return deployInputOf({ kind: "common", name, abi: nicknameArtifact.abi, bytecode: nicknameArtifact.bytecode,
             deployedBytecode: nicknameArtifact.deployedBytecode, immutableReferences: nicknameArtifact.immutableReferences,
-            args: [name, symbol, CONFIG.REGISTRY_CONTRACT, adminPrice(b.price === undefined ? "0" : b.price).toString()] });
+            args: [name, symbol, CONFIG.REGISTRY_CONTRACT, holdSeconds] });
     }
 
     throw httpError(400, "template: avatar-collection or nickname-collection (or no template: abi and bytecode)");
@@ -3467,28 +3470,28 @@ async function templateInput(body) {
 // ---- Removed routes: 410 with the call that replaces each
 const MOVED = [
     ["post", "/nft/deploy", "POST /admin/contract/deploy { \"template\": \"avatar-collection\", \"name\", \"symbol\" }"],
-    ["post", "/nft/mint", "POST /admin/contract/send { \"contract\", \"function\": \"mint\", \"args\": { \"name\", \"image\", \"price\" } }"],
-    ["post", "/nft/transfer", "POST /contract/send { \"contract\", \"function\": \"buy\", \"args\": { \"tokenId\" }, \"from\": buyer } (a resale: the seller first sends \"approve\" { \"tokenId\" }); version-2 collections are retired"],
+    ["post", "/nft/mint", "POST /admin/contract/send { \"contract\", \"function\": \"mint\", \"args\": { \"image\", \"price\" } }"],
+    ["post", "/nft/transfer", "POST /contract/send { \"contract\", \"function\": \"buy\", \"args\": { \"tokenId\" }, \"from\": buyer } (avatars are bought once, never resold)"],
     ["get", "/nft/contract", "GET /contract/list?type=avatar"],
     ["get", "/nft/collections", "GET /contract/list?type=avatar"],
-    ["get", "/nft/owner/:address", "POST /contract/events { \"contract\", \"event\": \"Transfer\", \"where\": { \"to\": address }, \"current\": true }"],
+    ["get", "/nft/owner/:address", "POST /contract/call { \"contract\", \"function\": \"tokensOf\", \"args\": { \"account\" } }"],
     ["get", "/nft/:tokenId/metadata", "POST /contract/call { \"contract\", \"function\": \"tokenURI\", \"args\": { \"tokenId\" } } (result.metadata)"],
-    ["get", "/nft/:tokenId", "POST /contract/call { \"calls\": [ ownerOf, priceOf, tokenURI ] } and POST /contract/events (Transfer from 0x0) for the mint"],
-    ["get", "/nickname/edges", "POST /contract/call { \"contract\", \"function\": \"edgeCount\" } (result.edges) and \"nicknamePrice\"; the collection: GET /contract/list?type=nickname"],
-    ["get", "/nickname/check", "POST /contract/call { \"contract\", \"function\": \"isAvailable\", \"args\": { \"nickname\" } }"],
-    ["get", "/nickname/of/:account", "POST /contract/call { \"contract\", \"function\": \"nicknameOf\", \"args\": { \"account\" } }"],
-    ["get", "/nickname/quote", "POST /contract/call { \"contract\", \"function\": \"quote\", \"args\": { \"account\", \"level\" } }"],
-    ["post", "/nickname/buy", "POST /contract/send { \"contract\", \"function\": \"buyNickname\", \"args\": { \"nickname\" }, \"from\" }"],
-    ["post", "/nickname/edge", "POST /contract/send { \"contract\", \"function\": \"upgradeEdge\", \"args\": { \"level\" }, \"from\" }"],
-    ["post", "/admin/nickname/deploy", "POST /admin/contract/deploy { \"template\": \"nickname-collection\", \"name\", \"symbol\", \"price\" }"],
-    ["put", "/admin/nickname/price", "POST /admin/contract/send { \"contract\", \"function\": \"setNicknamePrice\", \"args\": { \"price\" } }"],
-    ["post", "/admin/nickname/edges", "POST /admin/contract/send { \"contract\", \"function\": \"addEdge\", \"args\": { \"price\" } }"],
-    ["put", "/admin/nickname/edges/:level", "POST /admin/contract/send { \"contract\", \"function\": \"setEdge\", \"args\": { \"level\", \"price\", \"forSale\" } }"],
+    ["get", "/nft/:tokenId", "POST /contract/call { \"calls\": [ ownerOf, priceOf, tokenURI, paymentsOf ] }"],
+    ["get", "/nickname/edges", "POST /contract/call { \"contract\", \"function\": \"levelCount\" } (result.levels); the collection: GET /contract/list?type=nickname"],
+    ["get", "/nickname/check", "POST /contract/call { \"contract\", \"function\": \"tokenOf\", \"args\": { \"nickname\" } }"],
+    ["get", "/nickname/of/:account", "POST /contract/call { \"contract\", \"function\": \"tokensOf\", \"args\": { \"account\" } }"],
+    ["get", "/nickname/quote", "POST /contract/call { \"contract\", \"function\": \"quote\", \"args\": { \"tokenId\", \"level\" } }"],
+    ["post", "/nickname/buy", "POST /contract/send { \"contract\", \"function\": \"buy\", \"args\": { \"nickname\" }, \"from\" }"],
+    ["post", "/nickname/edge", "POST /contract/send { \"contract\", \"function\": \"upgradeLevel\", \"args\": { \"tokenId\", \"level\" }, \"from\" }"],
+    ["post", "/admin/nickname/deploy", "POST /admin/contract/deploy { \"template\": \"nickname-collection\", \"name\", \"symbol\" }"],
+    ["put", "/admin/nickname/price", "POST /admin/contract/send { \"contract\", \"function\": \"setPrice\", \"args\": { \"tokenId\", \"price\" } } (each nickname has its own price)"],
+    ["post", "/admin/nickname/edges", "POST /admin/contract/send { \"contract\", \"function\": \"addLevel\", \"args\": { \"price\" } }"],
+    ["put", "/admin/nickname/edges/:level", "POST /admin/contract/send { \"contract\", \"function\": \"setLevel\", \"args\": { \"level\", \"price\", \"forSale\" } }"],
     ["get", "/admin/contracts", "GET /contract/list (\"center\": the contract account center)"],
     ["post", "/admin/contracts/check", "POST /admin/contract/check (same body)"],
     ["post", "/admin/contracts/deploy", "POST /admin/contract/deploy (same body)"],
-    ["get", "/admin/nickname", "GET /contract/list?type=nickname (the collection), POST /contract/call (nicknamePrice, edgeCount, totalSupply) and POST /contract/events (NicknameBought, EdgeUpgraded)"],
-    ["post", "/admin/nickname/reserve", "POST /admin/contract/send { \"contract\", \"function\": \"reserve\", \"args\": { \"nicknames\", \"reserved\" } }"]
+    ["get", "/admin/nickname", "GET /contract/list?type=nickname (the collection), POST /contract/call (levelCount, totalSupply, tokensOf) and POST /contract/events (Sold, Undone, LevelUpgraded, LevelUndone)"],
+    ["post", "/admin/nickname/reserve", "nothing: reserved names are gone (only names the center mints can be bought)"]
 ];
 
 for (const [method, path, use] of MOVED) {
@@ -3498,7 +3501,7 @@ for (const [method, path, use] of MOVED) {
 // ---- Section metrics (step 6): balances refreshed every 15 s (the scrape stays fast), operation
 // counters in memory (they restart at 0 with the proxy; dashboards use increase()).
 const sectionOps = new Map(); // "id|op" -> { id, name, op, count, wei }
-const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "avatar_sale", "avatar_resale", "nickname_sale", "edge_upgrade", "topup", "sweep", "payback", "account_replaced", "archive_return"];
+const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "avatar_sale", "avatar_undo", "nickname_sale", "nickname_undo", "level_upgrade", "level_undo", "topup", "sweep", "payback", "account_replaced", "archive_return"];
 const sectionMetrics = { rows: [], sender01: null, error: 0, at: 0 };
 // Names of the platform and section accounts, whether they send now or not (proxy_account_info): the
 // MPC signer dashboard names each key's presignature pool with it. address (lowercase) -> info
@@ -3624,7 +3627,7 @@ function sectionMetricLines() {
         sectionMetrics.rows.map((r) => [`${sec(r.id, r.name)},role="${r.role}",active="${r.active ? 1 : 0}"`, r.eth]));
     metric("proxy_section_active", "gauge", "1 = the section is enabled (archived sections are not listed).",
         [...new Map(sectionMetrics.rows.map((r) => [r.id, r])).values()].map((r) => [sec(r.id, r.name), r.active ? 1 : 0]));
-    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, avatar_sale, avatar_resale, nickname_sale, edge_upgrade, topup, sweep, payback, account_replaced, archive_return).",
+    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback, account_replaced, archive_return).",
         [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, e.count]));
     metric("proxy_section_amount_eth_total", "counter", "ETH moved by section operations since the proxy started.",
         [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, Number(ethers.formatEther(e.wei))]));

@@ -24,7 +24,15 @@ const input = {
     }
 };
 
-const output = JSON.parse(solc.compile(JSON.stringify(input)));
+// imports ("./BoundItems.sol") are read from the same folder as the source
+const findImports = (importPath) => {
+    try {
+        return { contents: fs.readFileSync(path.join(root, path.dirname(sourceArg), path.basename(importPath)), "utf8") };
+    } catch (error) {
+        return { error: `import ${importPath}: ${error.message}` };
+    }
+};
+const output = JSON.parse(solc.compile(JSON.stringify(input), { import: findImports }));
 for (const error of output.errors || []) {
     console.error(error.formattedMessage || error.message);
 }

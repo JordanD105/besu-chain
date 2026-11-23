@@ -1535,7 +1535,19 @@
         },
         {
           "refId": "Q",
-          "expr": "round(sum by (section) (increase(proxy_section_amount_eth_total{op=~\"edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period])), 0.01)",
+          "expr": "round(sum by (section) (increase(proxy_section_amount_eth_total{op=~\"level_upgrade|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period])), 0.01)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "R",
+          "expr": "round(sum by (section) (increase(proxy_section_amount_eth_total{op=~\"avatar_undo|nickname_undo|level_undo\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period])), 0.01)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1575,7 +1587,8 @@
               "Value #N": "Swept ($period)",
               "Value #O": "Paid back ($period)",
               "Value #P": "Nicknames ($period)",
-              "Value #Q": "Edge upgrades ($period)"
+              "Value #Q": "Level upgrades ($period)",
+              "Value #R": "Undone ($period)"
             },
             "indexByName": {
               "Value #A": 1,
@@ -1594,7 +1607,8 @@
               "Value #N": 13,
               "Value #O": 14,
               "Value #P": 15,
-              "Value #Q": 16
+              "Value #Q": 16,
+              "Value #R": 17
             }
           }
         },
@@ -2453,7 +2467,7 @@
       "type": "bargauge",
       "title": "Most income, last $period: 10 sections",
       "id": 28,
-      "description": "+x from users, avatar sales, nicknames and edge upgrades, per section, in the last period",
+      "description": "+x from users, avatar and nickname sales and level upgrades, minus undone (refunded) payments, per section, in the last period",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2467,7 +2481,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(10, sum by (section) (increase(proxy_section_amount_eth_total{op=~\"transfer_in|avatar_sale|nft_first_sale|nickname_sale|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period])) > 0)",
+          "expr": "topk(10, (sum by (section) (increase(proxy_section_amount_eth_total{op=~\"transfer_in|avatar_sale|nft_first_sale|nickname_sale|level_upgrade|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period])) - sum by (section) (increase(proxy_section_amount_eth_total{op=~\"avatar_undo|nickname_undo|level_undo\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period]))) > 0)",
           "legendFormat": "{{section}}",
           "datasource": {
             "type": "prometheus",
@@ -2666,7 +2680,7 @@
       "type": "timeseries",
       "title": "Operations per $period",
       "id": 31,
-      "description": "All selected sections, per kind of operation: create_account, transfer_in (+x), transfer_out (-x), avatar_sale, avatar_resale, nickname_sale, edge_upgrade, topup, sweep, payback (nft_first_sale and nft_resale before the avatar rename). One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
+      "description": "All selected sections, per kind of operation: create_account, transfer_in (+x), transfer_out (-x), avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback (older names kept for history: nft_first_sale, nft_resale, avatar_resale, edge_upgrade). One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2784,7 +2798,7 @@
       "type": "timeseries",
       "title": "Income per $period: top 10 sections",
       "id": 33,
-      "description": "+x, avatar sales, nicknames and edge upgrades; the 10 sections with the most income in each period. One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
+      "description": "+x, avatar and nickname sales and level upgrades, minus undos; the 10 sections with the most income in each period. One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2798,7 +2812,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(10, sum by (section) (increase(proxy_section_amount_eth_total{op=~\"transfer_in|avatar_sale|nft_first_sale|nickname_sale|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period] offset -$period)))",
+          "expr": "topk(10, (sum by (section) (increase(proxy_section_amount_eth_total{op=~\"transfer_in|avatar_sale|nft_first_sale|nickname_sale|level_upgrade|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period] offset -$period)) - sum by (section) (increase(proxy_section_amount_eth_total{op=~\"avatar_undo|nickname_undo|level_undo\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period] offset -$period))))",
           "legendFormat": "{{section}}",
           "datasource": {
             "type": "prometheus",

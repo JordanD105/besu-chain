@@ -1,272 +1,163 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface INicknameRegistry {
-    function isConsumptionAccount(address account) external view returns (bool);
-    function sectionOfAccount(address account) external view returns (uint256);
-    function accountKind(address account) external view returns (uint8);
-}
+import "./BoundItems.sol";
 
-/// @notice Nickname tokens (version 5, docs/features/nicknames.md): one ERC-721 token per nickname,
-/// bound to its buyer (ERC-5192, never transferable), one per account, with an EDGE LEVEL (a number),
-/// raised by paying more and never lowered. The token holds only its nickname and level: how a level
-/// looks is up to the applications.
-///   - `buyNickname`: a user account of a section buys a free nickname at `nicknamePrice`, edge 0;
-///   - `upgradeEdge`: its owner pays the step prices up to a higher edge level.
-/// In both, the ETH goes in the same transaction to the buyer's section's consumption account.
-/// The edge levels (step price, for sale or not) are set by the minter, the contract account center.
-/// `tokenURI` is JSON: the nickname and its edge level (no picture).
-/// Nicknames compare without case for A-Z ("Alice" = "alice"); the proxy trims and NFC-normalizes.
-contract NicknameCollection {
-    uint256 public constant version = 5;
+/// @notice Nickname collection (version 6, docs/features/nicknames.md): nicknames minted by the contract
+/// account center, each bought once by a section's user account and bound to it (no resale; an
+/// account may hold many). A nickname has a USER LEVEL, raised by its owner by paying the step prices
+/// (`upgradeLevel`), never lowered except by an undo:
+///   - `undo` (BoundItems): the sale, within the hold period: everything paid is refunded, the level
+///     goes back to 0 and the nickname back to the minter, for sale again;
+///   - `undoLevel`: the newest level upgrade, within the hold period of that upgrade: the level goes
+///     back to the one before and only that upgrade's price is refunded.
+/// Both are called by the account that was paid (the section's consumption account), which sends the
+/// refund. Names are unique without regard to A-Z case; `tokenOf(nickname)` finds a name's token.
+/// `tokenURI` is JSON: the nickname and its user level (no picture).
+contract NicknameCollection is BoundItems {
+    uint256 public constant version = 6;
     string public constant collectionType = "nickname";
     uint256 public constant MAX_NAME_BYTES = 1024;  // 256 characters of up to 4 bytes (the proxy counts characters)
-    uint256 public constant MAX_EDGES = 32;
+    uint256 public constant MAX_LEVELS = 32;
 
-    uint8 private constant ACCOUNT_USER = 1;
-    bytes4 private constant IID_ERC165 = 0x01ffc9a7;
-    bytes4 private constant IID_ERC721 = 0x80ac58cd;
-    bytes4 private constant IID_METADATA = 0x5b5e139f;
-    bytes4 private constant IID_ERC4906 = 0x49064906;
-    bytes4 private constant IID_ERC5192 = 0xb45a3c0e;
-
-    /// @notice What an edge level costs. Nothing else is stored about a level.
-    struct Edge {
-        uint256 stepPrice;  // wei, to reach this level from the one below (level 0: 0)
-        bool forSale;       // can be bought; tokens already at the level keep it
+    /// @notice What a user level costs: the step from the level below. Nothing else is stored.
+    struct Level {
+        uint256 stepPrice;  // wei (level 0: 0)
+        bool forSale;       // can be bought; nicknames already at the level keep it
     }
 
-    string public name;
-    string public symbol;
-    address public immutable minter;
-    INicknameRegistry public immutable registry;
+    Level[] private levels;
+    mapping(uint256 => string) public nicknameOf;   // tokenId -> nickname
+    mapping(uint256 => uint8) public levelOf;       // tokenId -> user level
+    mapping(bytes32 => uint256) private byName;     // keccak256(lowercase nickname) -> tokenId
 
-    uint256 public nicknamePrice;  // wei, a new nickname at edge 0
-    uint256 public totalSupply;
-    Edge[] private edges;
+    event LevelSet(uint8 indexed level, uint256 stepPrice, bool forSale);
+    event LevelUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromLevel, uint8 toLevel, uint256 price, address paidTo);
+    event LevelUndone(uint256 indexed tokenId, address indexed owner, uint8 fromLevel, uint8 toLevel, uint256 refunded, address by);
 
-    mapping(uint256 => address) private owners;
-    mapping(address => uint256) public nicknameOf;  // account -> tokenId (0: none)
-    mapping(uint256 => string) private displayNames;
-    mapping(uint256 => uint8) public edgeOf;
-    mapping(uint256 => bool) public reserved;        // tokenId of a reserved nickname
-
-    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
-    event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
-    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
-    event Locked(uint256 tokenId);                   // ERC-5192
-    event MetadataUpdate(uint256 tokenId);           // ERC-4906
-    event NicknameBought(uint256 indexed tokenId, address indexed buyer, string nickname, uint256 price, address paidTo);
-    event EdgeUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromLevel, uint8 toLevel, uint256 price, address paidTo);
-    event EdgeSet(uint8 indexed level, uint256 stepPrice, bool forSale);
-    event NicknamePriceSet(uint256 price);
-    event Reserved(uint256 indexed tokenId, string nickname, bool reserved);
-
-    modifier onlyMinter() {
-        require(msg.sender == minter, "not minter");
-        _;
+    constructor(string memory name_, string memory symbol_, address registry_, uint256 holdSeconds_)
+        BoundItems(name_, symbol_, registry_, holdSeconds_)
+    {
+        levels.push(Level(0, true));
+        emit LevelSet(0, 0, true);
     }
 
-    constructor(string memory name_, string memory symbol_, address registry_, uint256 nicknamePrice_) {
-        require(registry_ != address(0), "no registry");
-        name = name_;
-        symbol = symbol_;
-        minter = msg.sender;
-        registry = INicknameRegistry(registry_);
-        nicknamePrice = nicknamePrice_;
-        edges.push(Edge(0, true));
-        emit EdgeSet(0, 0, true);
-        emit NicknamePriceSet(nicknamePrice_);
+    // ---------------------------------------------------------------- the center
+
+    /// @notice Mint `nickname` for sale at `price` (wei). Names are unique (A-Z case does not count).
+    function mint(string calldata nickname, uint256 price) external onlyMinter returns (uint256 tokenId) {
+        require(_valid(bytes(nickname)), "nickname: 1-1024 bytes, no control characters, no < > & \" ' \\");
+        bytes32 key = keccak256(_lower(bytes(nickname)));
+        require(byName[key] == 0, "this nickname is already minted");
+        tokenId = _mint(price);
+        byName[key] = tokenId;
+        nicknameOf[tokenId] = nickname;
     }
 
-    // ---------------------------------------------------------------- buying and upgrading
-
-    /// @notice Buy `nickname` (edge 0) for exactly `nicknamePrice`, paid to `payee`: the consumption
-    /// account of the buyer's own section. The buyer must be a section's user account with no nickname.
-    function buyNickname(string calldata nickname, address payee) external payable returns (uint256 tokenId) {
-        require(nicknameOf[msg.sender] == 0, "already has a nickname");
-        _checkPayee(payee);
-        require(msg.value == nicknamePrice, "wrong price");
-        tokenId = idOf(nickname);
-        require(owners[tokenId] == address(0), "nickname taken");
-        require(!reserved[tokenId], "nickname reserved");
-
-        owners[tokenId] = msg.sender;
-        nicknameOf[msg.sender] = tokenId;
-        displayNames[tokenId] = nickname;
-        totalSupply += 1;
-        emit Transfer(address(0), msg.sender, tokenId);
-        emit Locked(tokenId);
-        _pay(payee);
-        emit NicknameBought(tokenId, msg.sender, nickname, msg.value, payee);
+    /// @notice Add the next user level, for sale at `stepPrice`.
+    function addLevel(uint256 stepPrice) external onlyMinter returns (uint8 level) {
+        require(levels.length < MAX_LEVELS, "too many levels");
+        level = uint8(levels.length);
+        levels.push(Level(stepPrice, true));
+        emit LevelSet(level, stepPrice, true);
     }
 
-    /// @notice Raise the edge of the caller's nickname to `toLevel`, paying the step prices of every
-    /// level above the current one up to `toLevel` (each must be for sale) to `payee` (as above).
-    function upgradeEdge(uint8 toLevel, address payee) external payable {
-        uint256 tokenId = nicknameOf[msg.sender];
-        require(tokenId != 0, "no nickname");
-        _checkPayee(payee);
-        uint8 fromLevel = edgeOf[tokenId];
+    /// @notice Change a level's step price or sale state. Levels are never removed; level 0 stays free
+    /// and for sale.
+    function setLevel(uint8 level, uint256 stepPrice, bool forSale) external onlyMinter {
+        require(level < levels.length, "no such level");
+        require(level > 0 || (stepPrice == 0 && forSale), "level 0: price 0, always for sale");
+        levels[level] = Level(stepPrice, forSale);
+        emit LevelSet(level, stepPrice, forSale);
+    }
+
+    // ---------------------------------------------------------------- the owner and the section
+
+    /// @notice Raise the user level of `tokenId` (the caller's) to `toLevel`, paying every step price
+    /// above the current level, at once to `payee` (the owner's section's consumption account).
+    function upgradeLevel(uint256 tokenId, uint8 toLevel, address payee) external payable {
+        require(ownerOf(tokenId) == msg.sender && msg.sender != minter, "not the owner");
+        _checkBuyer(payee);
+        uint8 fromLevel = levelOf[tokenId];
         require(msg.value == _priceUp(fromLevel, toLevel), "wrong price");
-        edgeOf[tokenId] = toLevel;
-        _pay(payee);
-        emit EdgeUpgraded(tokenId, msg.sender, fromLevel, toLevel, msg.value, payee);
+        levelOf[tokenId] = toLevel;
+        payments[tokenId].push(Payment(PAYMENT_LEVEL, fromLevel, toLevel, false, uint64(block.timestamp), msg.sender, payee, msg.value));
+        _pay(payee, msg.value);
+        emit LevelUpgraded(tokenId, msg.sender, fromLevel, toLevel, msg.value, payee);
         emit MetadataUpdate(tokenId);
     }
 
-    /// @notice Price for `account` to reach `toLevel` now (reverts if not possible).
-    function quote(address account, uint8 toLevel) external view returns (uint256) {
-        uint256 tokenId = nicknameOf[account];
-        require(tokenId != 0, "no nickname");
-        return _priceUp(edgeOf[tokenId], toLevel);
+    /// @notice Undo the newest level upgrade of `tokenId` within the hold period of that upgrade: only
+    /// the account that was paid, sending exactly that upgrade's price. The level goes back to the one
+    /// before; earlier upgrades and the sale stay.
+    function undoLevel(uint256 tokenId) external payable {
+        uint256 s = saleIndex[tokenId];
+        require(s != 0, "not sold");
+        Payment[] storage p = payments[tokenId];
+        uint256 i = p.length;
+        while (i > s && p[i - 1].undone) {
+            i--;
+        }
+        require(i > s, "no level upgrade to undo");
+        Payment storage last = p[i - 1];
+        require(msg.sender == last.paidTo, "only the account that was paid can undo");
+        require(block.timestamp <= uint256(last.paidAt) + holdSeconds, "the undo period is over");
+        require(msg.value == last.amount, "the refund must be exactly what was paid");
+        last.undone = true;
+        levelOf[tokenId] = last.fromLevel;
+        _pay(last.payer, last.amount);
+        emit LevelUndone(tokenId, owners[tokenId], last.toLevel, last.fromLevel, last.amount, msg.sender);
+        emit MetadataUpdate(tokenId);
     }
 
-    /// @notice True when `nickname` is valid, not taken and not reserved.
-    function isAvailable(string calldata nickname) external view returns (bool) {
+    // ---------------------------------------------------------------- reads
+
+    /// @notice The token of `nickname` (0: not minted).
+    function tokenOf(string calldata nickname) external view returns (uint256) {
         if (!_valid(bytes(nickname))) {
-            return false;
+            return 0;
         }
-        uint256 tokenId = uint256(keccak256(_lower(bytes(nickname))));
-        return owners[tokenId] == address(0) && !reserved[tokenId];
+        return byName[keccak256(_lower(bytes(nickname)))];
     }
 
-    /// @notice The token id of `nickname` (whether bought or not): keccak256 of its lowercase (A-Z) bytes.
-    function idOf(string calldata nickname) public pure returns (uint256) {
-        require(_valid(bytes(nickname)), "nickname: 1-1024 bytes, no control characters, no < > & \" ' \\");
-        return uint256(keccak256(_lower(bytes(nickname))));
+    function levelCount() external view returns (uint256) {
+        return levels.length;
     }
 
-    function nicknameById(uint256 tokenId) external view returns (string memory) {
-        return displayNames[tokenId];
+    function levelInfo(uint8 level) external view returns (Level memory) {
+        require(level < levels.length, "no such level");
+        return levels[level];
     }
 
-    // ---------------------------------------------------------------- edge levels (the center)
-
-    function edgeCount() external view returns (uint256) {
-        return edges.length;
+    /// @notice Price to raise `tokenId` to `toLevel` now (reverts if not possible).
+    function quote(uint256 tokenId, uint8 toLevel) external view returns (uint256) {
+        require(ownerOf(tokenId) != minter, "not sold");
+        return _priceUp(levelOf[tokenId], toLevel);
     }
 
-    function edgeInfo(uint8 level) external view returns (Edge memory) {
-        require(level < edges.length, "no such edge level");
-        return edges[level];
-    }
-
-    function setNicknamePrice(uint256 price) external onlyMinter {
-        nicknamePrice = price;
-        emit NicknamePriceSet(price);
-    }
-
-    /// @notice Add the next edge level, for sale at `stepPrice`.
-    function addEdge(uint256 stepPrice) external onlyMinter returns (uint8 level) {
-        require(edges.length < MAX_EDGES, "too many edge levels");
-        level = uint8(edges.length);
-        edges.push(Edge(stepPrice, true));
-        emit EdgeSet(level, stepPrice, true);
-    }
-
-    /// @notice Change a level's step price or sale state. Levels are never removed. Level 0 stays for
-    /// sale and costs nothing.
-    function setEdge(uint8 level, uint256 stepPrice, bool forSale) external onlyMinter {
-        require(level < edges.length, "no such edge level");
-        require(level > 0 || (stepPrice == 0 && forSale), "level 0: price 0, always for sale");
-        edges[level] = Edge(stepPrice, forSale);
-        emit EdgeSet(level, stepPrice, forSale);
-    }
-
-    /// @notice Reserve (or release) nicknames nobody may buy; a nickname already bought is not affected.
-    function reserve(string[] calldata nicknames, bool isReserved) external onlyMinter {
-        for (uint256 i = 0; i < nicknames.length; i++) {
-            uint256 tokenId = idOf(nicknames[i]);
-            reserved[tokenId] = isReserved;
-            emit Reserved(tokenId, nicknames[i], isReserved);
-        }
-    }
-
-    // ---------------------------------------------------------------- ERC-721 (bound: no transfers)
-
-    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-        return interfaceId == IID_ERC165 || interfaceId == IID_ERC721 || interfaceId == IID_METADATA
-            || interfaceId == IID_ERC4906 || interfaceId == IID_ERC5192;  // ERC-4906: MetadataUpdate on an upgrade
-    }
-
-    function balanceOf(address owner) external view returns (uint256) {
-        require(owner != address(0), "zero address");
-        return nicknameOf[owner] == 0 ? 0 : 1;
-    }
-
-    function ownerOf(uint256 tokenId) public view returns (address) {
-        address owner = owners[tokenId];
-        require(owner != address(0), "no such token");
-        return owner;
-    }
-
-    /// @notice ERC-5192: every nickname is bound to its buyer.
-    function locked(uint256 tokenId) external view returns (bool) {
-        ownerOf(tokenId);
-        return true;
-    }
-
-    function getApproved(uint256 tokenId) external view returns (address) {
-        ownerOf(tokenId);
-        return address(0);
-    }
-
-    function isApprovedForAll(address, address) external pure returns (bool) {
-        return false;
-    }
-
-    function approve(address, uint256) external pure {
-        revert("nickname is bound to its buyer");
-    }
-
-    function setApprovalForAll(address, bool) external pure {
-        revert("nickname is bound to its buyer");
-    }
-
-    function transferFrom(address, address, uint256) external pure {
-        revert("nickname is bound to its buyer");
-    }
-
-    function safeTransferFrom(address, address, uint256) external pure {
-        revert("nickname is bound to its buyer");
-    }
-
-    function safeTransferFrom(address, address, uint256, bytes calldata) external pure {
-        revert("nickname is bound to its buyer");
-    }
-
-    /// @notice data:application/json (base64): the nickname and its edge level. No picture.
-    function tokenURI(uint256 tokenId) external view returns (string memory) {
+    /// @notice data:application/json (base64): the nickname and its user level. No picture.
+    function tokenURI(uint256 tokenId) external view override returns (string memory) {
         ownerOf(tokenId);
         bytes memory json = abi.encodePacked(
-            '{"name":"', displayNames[tokenId], '","description":"Nickname","attributes":[{"trait_type":"edge level","display_type":"number","value":',
-            _str(edgeOf[tokenId]), '}]}'
+            '{"name":"', nicknameOf[tokenId], '","description":"Nickname","attributes":[{"trait_type":"user level","display_type":"number","value":',
+            _str(levelOf[tokenId]), '}]}'
         );
         return string(abi.encodePacked("data:application/json;base64,", _base64(json)));
     }
 
     // ---------------------------------------------------------------- internals
 
-    function _checkPayee(address payee) private view {
-        require(registry.accountKind(msg.sender) == ACCOUNT_USER, "buyer is not a section's user account");
-        require(registry.isConsumptionAccount(payee) && registry.sectionOfAccount(payee) == registry.sectionOfAccount(msg.sender),
-            "payee is not the buyer's section's consumption account");
+    function _afterUndo(uint256 tokenId) internal override {
+        levelOf[tokenId] = 0;
+        emit MetadataUpdate(tokenId);
     }
 
     function _priceUp(uint8 fromLevel, uint8 toLevel) private view returns (uint256 total) {
-        require(toLevel > fromLevel, "edge can only go up");
-        require(toLevel < edges.length, "no such edge level");
+        require(toLevel > fromLevel, "the level can only go up");
+        require(toLevel < levels.length, "no such level");
         for (uint256 l = uint256(fromLevel) + 1; l <= toLevel; l++) {
-            require(edges[l].forSale, "edge level not for sale");
-            total += edges[l].stepPrice;
-        }
-    }
-
-    function _pay(address payee) private {
-        if (msg.value > 0) {
-            (bool ok, ) = payee.call{value: msg.value}("");
-            require(ok, "payment failed");
+            require(levels[l].forSale, "level not for sale");
+            total += levels[l].stepPrice;
         }
     }
 

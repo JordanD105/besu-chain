@@ -1078,8 +1078,8 @@ function balancesTable(sections) {
 
 // ---- Section statistics: week / month / quarter / year (/api/sections/stats). One measure at a time
 // in a column chart (one series, one axis); click a column for that period's table by section.
-const STAT_UNITS = { newUsers: "count", avatarSales: "count", avatarFirstSales: "count", txs: "count" };
-const STAT_COLUMNS = ["newUsers", "income", "fromUsers", "avatarSales", "avatarEth", "toUsers", "topup", "sweep", "payback", "txs"];
+const STAT_UNITS = { newUsers: "count", avatarSales: "count", nicknameSales: "count", levelUpgrades: "count", txs: "count" };
+const STAT_COLUMNS = ["newUsers", "income", "fromUsers", "avatarSales", "avatarEth", "nicknameSales", "levelUpgrades", "nicknameEth", "refunds", "toUsers", "topup", "sweep", "payback", "txs"];
 const statState = { period: "month", section: "all", metric: "balances", index: null, from: "", to: "" };
 
 function statQuery() {
@@ -1727,8 +1727,64 @@ async function showContracts(page, type, status) {
 // A contract: details, and its functions when the contract is in the registry
 // (contracts/deployments). View/pure functions can be run (eth_call); state-changing functions are
 // only listed: transactions are signed by the MPC signer through the proxy or the deploy tools.
-// Mint and sell NFTs of a collection (admin pages' gate), through the proxy's /nft/mint and
-// /contract/send (buy); mint through /admin/contract/send. The buyer must be a user account of a section; its section receives a first sale.
+// A small form helper: labelled inputs and a button that runs an action and shows its answer
+function itemForm(title, note, fields, label, action, onDone) {
+    const result = el("span", { class: "muted" });
+    const button = el("button", { type: "button", class: "fn-run deploy-go" }, label);
+    button.addEventListener("click", async () => {
+        button.disabled = true;
+        result.className = "muted";
+        result.textContent = t("nick.signing");
+        try {
+            const r = await action();
+            result.textContent = onDone ? onDone(r) : t("item.done");
+            if (!onDone) {
+                render();
+            }
+        } catch (error) {
+            result.className = "bad-text";
+            result.textContent = error.message;
+        }
+        button.disabled = false;
+    });
+    return el("div", { class: "deploy-form" }, [el("h3", {}, title), note ? el("div", { class: "muted" }, note) : null]
+        .concat(fields.map(([key, input]) => el("label", {}, [el("span", { class: "muted" }, t(key)), input])))
+        .concat([el("div", { class: "deploy-buttons" }, [button, result])]));
+}
+
+function itemInput(key, attrs) {
+    return el("input", Object.assign({ class: "table-search", placeholder: t(key), "aria-label": t(key) }, attrs || {}));
+}
+
+// When a sold item can still be undone: "until <date>" or "—"
+function undoCell(row, level) {
+    const until = level ? row.levelUndoUntil : row.undoUntil;
+    const can = level ? row.canUndoLevel : row.canUndo;
+    return can && until ? t("item.until").replace("{date}", until.replace("T", " ").slice(0, 16)) : "—";
+}
+
+// A button that undoes a sale (or a nickname's newest level upgrade) after a confirmation
+function undoButton(label, confirmText, path, body) {
+    const b = el("button", { type: "button", class: "fn-run" }, label);
+    b.addEventListener("click", async () => {
+        if (!window.confirm(confirmText)) {
+            return;
+        }
+        b.disabled = true;
+        try {
+            await deployPost(path, body || {});
+            render();
+        } catch (error) {
+            window.alert(error.message);
+            b.disabled = false;
+        }
+    });
+    return b;
+}
+
+// Mint, price, sell and undo avatars of a collection (admin pages' gate), through the proxy's
+// /admin/contract/send (mint, setPrice: the center) and /contract/send (buy: the buyer; undo: the
+// consumption account that was paid)
 async function avatarAdminCard(collection) {
     let status;
     try {
@@ -1739,100 +1795,56 @@ async function avatarAdminCard(collection) {
     if (!status.enabled) {
         return null;
     }
-    const result = el("div", { class: "deploy-error" });
     const tokenInput = el("input", { class: "table-search", type: "password", placeholder: t("sections.token"), "aria-label": t("sections.token"), autocomplete: "off", value: deployToken() });
     tokenInput.addEventListener("input", () => setDeployToken(tokenInput.value.trim()));
-    const labelled = (key, input) => el("label", {}, [el("span", { class: "muted" }, t(key)), input]);
-    const field = (key, attrs) => el("input", Object.assign({ class: "table-search", placeholder: t(key), "aria-label": t(key) }, attrs || {}));
-    const mName = field("nft.name", { placeholder: "Red dragon" });
-    const mDesc = field("nft.description");
-    const mImage = field("nft.image", { placeholder: "https://…/red.png" });
-    const mPrice = field("nft.price", { value: "0" });
-    const mAttrs = field("nft.attributes", { placeholder: '[{"trait_type":"level","value":"1"}]' });
-    const mintButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("nft.mint"));
-    const sTokenId = field("nft.tokenId", { placeholder: "1" });
-    const sBuyer = field("nft.buyer", { list: "nft-buyers", placeholder: "0x…" });
-    const buyers = el("datalist", { id: "nft-buyers" });
-    const sellButton = el("button", { type: "button", class: "fn-run deploy-go" }, t("nft.sell"));
+    const post = (action, body) => deployPost("/api/avataradmin/" + action, Object.assign({ collection }, body));
 
-    // the section user accounts, as suggestions for the buyer
+    const m = { image: itemInput("nft.image", { placeholder: "https://…/fox.png" }), price: itemInput("nft.price", { value: "0" }),
+        description: itemInput("nft.description"), attributes: itemInput("nft.attributes", { placeholder: '[{"trait_type":"level","value":"1"}]' }) };
+    const mint = itemForm(t("nft.mint"), null, [["nft.image", m.image], ["nft.price", m.price], ["nft.description", m.description], ["nft.attributes", m.attributes]],
+        t("nft.mint"), () => {
+            let attributes;
+            if (m.attributes.value.trim()) {
+                attributes = JSON.parse(m.attributes.value);
+            }
+            if (!m.image.value.trim()) {
+                throw new Error(t("item.imageRequired"));
+            }
+            return post("mint", { image: m.image.value.trim(), price: m.price.value.trim() || "0", description: m.description.value.trim(), attributes });
+        }, (r) => t("item.minted").replace("{id}", r.tokenId).replace("{price}", r.price));
+
+    const p = { tokenId: itemInput("nft.tokenId", { placeholder: "1" }), price: itemInput("nft.price") };
+    const price = itemForm(t("item.setPrice"), t("item.setPriceNote"), [["nft.tokenId", p.tokenId], ["nft.price", p.price]], t("nick.save"),
+        () => post("price", { tokenId: p.tokenId.value.trim(), price: p.price.value.trim() }), (r) => t("item.priceSet").replace("{id}", r.tokenId).replace("{price}", r.price));
+
+    const s = { token: itemInput("item.tokenOrImage", { placeholder: "1 or https://…/fox.png" }), buyer: itemInput("nft.buyer", { list: "avatar-buyers", placeholder: "0x…" }) };
+    const buyers = el("datalist", { id: "avatar-buyers" });
     api("/api/accounts?limit=20000").then((d) => {
         buyers.replaceChildren(...d.items.filter((a) => a.role === "user").map((a) => el("option", { value: a.address }, a.section + " · " + a.balance + " ETH")));
     }).catch(() => {});
+    const sell = itemForm(t("nft.sell"), t("nft.sellNote"), [["item.tokenOrImage", s.token], ["nft.buyer", s.buyer]], t("nft.sell"), () => {
+        const v = s.token.value.trim();
+        return post("sell", Object.assign({ to: s.buyer.value.trim() }, /^\d+$/.test(v) ? { tokenId: v } : { imageUrl: v }));
+    }, (r) => t("item.sold").replace("{id}", r.tokenId).replace("{price}", r.paid).replace("{until}", String(r.undoUntil || "").replace("T", " ").slice(0, 16)));
 
-    const run = async (button, action, body, confirmText, onDone) => {
-        if (!window.confirm(confirmText)) {
-            return;
-        }
-        button.disabled = true;
-        result.replaceChildren(el("span", { class: "muted" }, "…"));
-        try {
-            onDone(await deployPost("/api/avataradmin/" + action, body));
-        } catch (error) {
-            result.replaceChildren(el("span", { class: "bad-text" }, error.message));
-        }
-        button.disabled = false;
-    };
-    mintButton.addEventListener("click", () => {
-        let attributes;
-        if (mAttrs.value.trim()) {
-            try {
-                attributes = JSON.parse(mAttrs.value);
-            } catch (error) {
-                result.replaceChildren(el("span", { class: "bad-text" }, t("nft.attributesJson")));
-                return;
-            }
-        }
-        if (!mName.value.trim() || !mImage.value.trim()) {
-            result.replaceChildren(el("span", { class: "bad-text" }, t("nft.nameImage")));
-            return;
-        }
-        const body = { collection, name: mName.value.trim(), image: mImage.value.trim(), amount: mPrice.value.trim() || "0" };
-        if (mDesc.value.trim()) {
-            body.description = mDesc.value.trim();
-        }
-        if (attributes) {
-            body.attributes = attributes;
-        }
-        run(mintButton, "mint", body, t("nft.confirmMint").replace("{name}", body.name).replace("{price}", body.amount), (r) => {
-            sTokenId.value = r.tokenId;
-            result.replaceChildren(el("span", {}, t("nft.minted").replace("{id}", r.tokenId).replace("{price}", r.price) + " "),
-                el("a", { href: "#/nfts/" + r.contract + "/" + r.tokenId }, t("nft.open")), " ", ident(r.txHash, "#/transactions/" + r.txHash));
-        });
-    });
-    sellButton.addEventListener("click", () => {
-        const tokenId = sTokenId.value.trim();
-        const to = sBuyer.value.trim();
-        if (!/^\d+$/.test(tokenId) || !/^0x[0-9a-fA-F]{40}$/.test(to)) {
-            result.replaceChildren(el("span", { class: "bad-text" }, t("nft.sellFields")));
-            return;
-        }
-        run(sellButton, "transfer", { collection, tokenId, to }, t("nft.confirmSell").replace("{id}", tokenId).replace("{to}", short(to)), (r) => {
-            result.replaceChildren(el("span", {}, t("nft.sold").replace("{sale}", r.sale || "sale").replace("{price}", r.price).replace("{paidTo}", short(r.paidTo || r.from)) + " "),
-                el("a", { href: "#/nfts/" + r.contract + "/" + r.tokenId }, t("nft.open")), " ", ident(r.txHash, "#/transactions/" + r.txHash));
-        });
-    });
+    // the newest avatars with their state, and Undo while it is possible
+    const list = el("div", {}, el("span", { class: "muted" }, "…"));
+    deployToken() && sectionGet("/api/avataradmin/items?collection=" + collection).then((d) => {
+        list.replaceChildren(dataTable([
+            { label: "nft.tokenId", sort: (r) => Number(r.tokenId), cell: (r) => el("a", { href: "#/nfts/" + collection + "/" + r.tokenId }, "#" + r.tokenId) },
+            { label: "nft.image", search: (r) => r.image, cell: (r) => el("span", { style: "word-break:break-all" }, r.image) },
+            { label: "nft.price", sort: (r) => Number(r.price), cell: (r) => r.price + " ETH" },
+            { label: "nft.owner", search: (r) => r.owner, cell: (r) => (r.sold ? el("a", { href: "#/accounts/" + r.owner }, short(r.owner)) : el("span", { class: "muted" }, t("item.forSale"))) },
+            { label: "item.undo", cell: (r) => (r.canUndo ? el("span", {}, [undoCell(r, false) + " ", undoButton(t("item.undo"), t("item.confirmUndo").replace("{id}", r.tokenId), "/api/avataradmin/undo", { collection, tokenId: r.tokenId })]) : "—") }
+        ], d.rows, { sort: 0, dir: "desc", key: "avatar-items" }));
+    }).catch((error) => list.replaceChildren(el("span", { class: "bad-text" }, error.message)));
 
     return el("section", { class: "card stack" }, [
         el("h2", {}, t("nft.adminTitle")),
         el("div", { class: "muted", style: "margin-bottom:12px" }, t("nft.adminNote")),
-        el("div", { class: "deploy-form" }, [
-            el("label", {}, [el("span", { class: "muted" }, t("sections.token")), tokenInput]),
-            el("h3", {}, t("nft.mint")),
-            labelled("nft.name", mName),
-            labelled("nft.price", mPrice),
-            labelled("nft.image", mImage),
-            labelled("nft.description", mDesc),
-            labelled("nft.attributes", mAttrs),
-            el("div", { class: "deploy-buttons" }, [mintButton]),
-            el("h3", {}, t("nft.sell")),
-            el("div", { class: "muted" }, t("nft.sellNote")),
-            labelled("nft.tokenId", sTokenId),
-            labelled("nft.buyer", sBuyer),
-            buyers,
-            el("div", { class: "deploy-buttons" }, [sellButton])
-        ]),
-        result
+        el("label", {}, [el("span", { class: "muted" }, t("sections.token")), tokenInput]),
+        mint, price, sell, buyers,
+        el("h3", {}, t("item.list")), list
     ]);
 }
 
@@ -2523,17 +2535,12 @@ async function nicknamePut(path, body) {
     return data;
 }
 
-// An edge level: its step price and whether it is for sale (a token stores only its level)
-function edgeEditor(edge, onSave, saveLabel) {
-    const isZero = edge && edge.level === 0;
-    const price = el("input", { class: "table-search", value: edge ? edge.price : "", placeholder: "0.5", "aria-label": t("nick.stepPrice") });
+// A user level: its step price and whether it is for sale (level 0 is free and always for sale)
+function levelEditor(level, onSave, saveLabel) {
+    const isZero = level && level.level === 0;
+    const price = el("input", { class: "table-search", value: level ? level.price : "", placeholder: "0.5", "aria-label": t("nick.stepPrice") });
     const forSale = el("input", { type: "checkbox", "aria-label": t("nick.forSale") });
-    forSale.checked = edge ? edge.forSale : true;
-    if (isZero) {
-        price.value = "0";
-        price.disabled = true;
-        forSale.disabled = true;
-    }
+    forSale.checked = level ? level.forSale : true;
     const save = el("button", { type: "button", class: "fn-run" }, saveLabel);
     const result = el("span", { class: "muted" });
     save.addEventListener("click", async () => {
@@ -2552,11 +2559,11 @@ function edgeEditor(edge, onSave, saveLabel) {
     const field = (label, input) => el("label", {}, [el("span", { class: "muted" }, label), input]);
     return el("div", { class: "edge-editor" }, [
         el("div", { class: "edge-editor-head" }, [
-            el("b", {}, edge ? t("nick.level").replace("{n}", edge.level) : t("nick.newLevel")),
-            edge ? el("span", { class: "muted" }, t("nick.holders").replace("{n}", edge.holders || 0)) : null
+            el("b", {}, level ? t("nick.level").replace("{n}", level.level) : t("nick.newLevel")),
+            level ? el("span", { class: "muted" }, t("nick.holders").replace("{n}", level.holders || 0)) : null
         ]),
         el("div", { class: "edge-fields" }, isZero ? [el("span", { class: "muted" }, t("nick.level0"))]
-            : [field(t("nick.stepPrice"), price)].concat(edge ? [field(t("nick.forSale"), forSale)] : [])),
+            : [field(t("nick.stepPrice"), price)].concat(level ? [field(t("nick.forSale"), forSale)] : [])),
         isZero ? null : el("div", { class: "deploy-buttons" }, [save, result])
     ]);
 }
@@ -2590,78 +2597,40 @@ async function showNicknames(q) {
 
     if (!data.collection) {
         const f = {
-            name: el("input", { class: "table-search", value: "Nicknames", "aria-label": t("nick.collectionName") }),
-            symbol: el("input", { class: "table-search", value: "NICK", "aria-label": t("nick.symbol") }),
-            price: el("input", { class: "table-search", value: "1", "aria-label": t("nick.price") })
+            name: itemInput("nick.collectionName", { value: "Nicknames" }),
+            symbol: itemInput("nick.symbol", { value: "NICK" }),
+            holdDays: itemInput("item.holdDays", { value: "7" })
         };
-        const go = el("button", { type: "button", class: "fn-run deploy-go" }, t("nick.deploy"));
-        const result = el("div");
-        go.addEventListener("click", async () => {
-            if (!window.confirm(t("nick.confirmDeploy"))) {
-                return;
-            }
-            go.disabled = true;
-            result.replaceChildren(el("span", { class: "muted" }, t("nick.signing")));
-            try {
-                await deployPost("/api/nicknames/deploy", { name: f.name.value.trim(), symbol: f.symbol.value.trim(), price: f.price.value.trim() });
-                render();
-            } catch (error) {
-                result.replaceChildren(el("span", { class: "bad-text" }, error.message));
-                go.disabled = false;
-            }
-        });
-        const field = (label, input) => el("label", {}, [el("span", { class: "muted" }, label), input]);
         return show(el("section", { class: "card stack" }, [
             el("h2", {}, t("nick.title")),
             el("div", { class: "muted", style: "margin-bottom:12px" }, t("nick.noCollection")),
-            el("div", { class: "deploy-form" }, [field(t("nick.collectionName"), f.name), field(t("nick.symbol"), f.symbol),
-                field(t("nick.price"), f.price), el("div", { class: "deploy-buttons" }, [go])]),
-            result, message
+            itemForm(t("nick.deploy"), null, [["nick.collectionName", f.name], ["nick.symbol", f.symbol], ["item.holdDays", f.holdDays]], t("nick.deploy"), () => {
+                if (!window.confirm(t("nick.confirmDeploy"))) {
+                    throw new Error(t("item.cancelled"));
+                }
+                return deployPost("/api/nicknames/deploy", { name: f.name.value.trim(), symbol: f.symbol.value.trim(), holdDays: f.holdDays.value.trim() });
+            }),
+            message
         ]));
     }
 
-    // price of a nickname
-    const priceInput = el("input", { class: "table-search", value: data.nicknamePrice, "aria-label": t("nick.price") });
-    const priceSave = el("button", { type: "button", class: "fn-run" }, t("nick.save"));
-    const priceResult = el("span", { class: "muted" });
-    priceSave.addEventListener("click", async () => {
-        priceSave.disabled = true;
-        priceResult.textContent = t("nick.signing");
-        try {
-            await nicknamePut("/api/nicknames/price", { price: priceInput.value.trim() });
-            render();
-        } catch (error) {
-            priceResult.className = "bad-text";
-            priceResult.textContent = error.message;
-            priceSave.disabled = false;
+    // mint names (one per line), change a price
+    const names = el("textarea", { class: "table-search", rows: "3", placeholder: t("nick.mintPlaceholder"), "aria-label": t("nick.mintNames") });
+    const mintPrice = itemInput("nft.price", { value: "1" });
+    const mint = itemForm(t("nick.mintNames"), t("nick.mintNote"), [["nick.mintNames", names], ["nft.price", mintPrice]], t("nick.mintNames"), () => {
+        const list = names.value.split("\n").map((x) => x.trim()).filter(Boolean);
+        if (!list.length) {
+            throw new Error(t("nick.mintNone"));
         }
+        return deployPost("/api/nicknames/mint", { nicknames: list, price: mintPrice.value.trim() || "0" });
+    }, (r) => {
+        names.value = r.results.filter((x) => x.error).map((x) => x.nickname).join("\n");
+        setTimeout(render, 1500);
+        return r.results.map((x) => x.error ? x.nickname + ": " + x.error : x.nickname + " #" + x.tokenId).join(" · ");
     });
-
-    // reserved nicknames
-    const reserveText = el("textarea", { class: "table-search", rows: "3", placeholder: t("nick.reservePlaceholder"), "aria-label": t("nick.reserved") });
-    const reserveResult = el("span", { class: "muted" });
-    const reserveButton = (label, reserved) => {
-        const b = el("button", { type: "button", class: "fn-run" }, label);
-        b.addEventListener("click", async () => {
-            const nicknames = reserveText.value.split("\n").map((x) => x.trim()).filter(Boolean);
-            if (!nicknames.length) {
-                return;
-            }
-            b.disabled = true;
-            reserveResult.className = "muted";
-            reserveResult.textContent = t("nick.signing");
-            try {
-                await deployPost("/api/nicknames/reserve", { nicknames, reserved });
-                reserveText.value = "";
-                reserveResult.textContent = (reserved ? t("nick.reservedDone") : t("nick.releasedDone")).replace("{n}", nicknames.length);
-            } catch (error) {
-                reserveResult.className = "bad-text";
-                reserveResult.textContent = error.message;
-            }
-            b.disabled = false;
-        });
-        return b;
-    };
+    const p = { tokenId: itemInput("nft.tokenId", { placeholder: "1" }), price: itemInput("nft.price") };
+    const price = itemForm(t("item.setPrice"), t("item.setPriceNote"), [["nft.tokenId", p.tokenId], ["nft.price", p.price]], t("nick.save"),
+        () => nicknamePut("/api/nicknames/price/" + encodeURIComponent(p.tokenId.value.trim()), { price: p.price.value.trim() }));
 
     // nicknames
     const search = el("input", { class: "table-search", value: q, placeholder: t("nick.search"), "aria-label": t("nick.search") });
@@ -2671,37 +2640,35 @@ async function showNicknames(q) {
         }
     });
     const list = dataTable([
-        { label: "nick.nickname", sort: (row) => row.nickname.toLowerCase(), search: (row) => row.nickname, cell: (row) => row.nickname },
-        { label: "nick.edge", sort: (row) => row.level, cell: (row) => el("span", { class: "badge type" }, String(row.level)) },
-        { label: "nick.account", sort: (row) => row.account, search: (row) => row.account, cell: (row) => el("a", { href: "#/accounts/" + row.account }, short(row.account)) }
-    ], data.list, { sort: 1, dir: "desc", key: "nicknames" });
+        { label: "nft.tokenId", sort: (r) => Number(r.tokenId), cell: (r) => "#" + r.tokenId },
+        { label: "nick.nickname", sort: (r) => r.nickname.toLowerCase(), search: (r) => r.nickname, cell: (r) => r.nickname },
+        { label: "nft.price", sort: (r) => Number(r.price), cell: (r) => r.price + " ETH" },
+        { label: "nick.account", search: (r) => r.owner, cell: (r) => (r.sold ? el("a", { href: "#/accounts/" + r.owner }, short(r.owner)) : el("span", { class: "muted" }, t("item.forSale"))) },
+        { label: "nick.edge", sort: (r) => r.level, cell: (r) => (r.sold ? el("span", { class: "badge type" }, String(r.level)) : "—") },
+        { label: "item.undo", cell: (r) => el("span", {}, [
+            r.canUndo ? el("span", {}, [undoCell(r, false) + " ", undoButton(t("item.undo"), t("item.confirmUndo").replace("{id}", r.tokenId), "/api/nicknames/undo/" + r.tokenId)]) : null,
+            r.canUndoLevel ? el("span", {}, [" " + undoCell(r, true) + " ", undoButton(t("item.undoLevel"), t("item.confirmUndoLevel").replace("{id}", r.tokenId), "/api/nicknames/undolevel/" + r.tokenId)]) : null,
+            !r.canUndo && !r.canUndoLevel ? "—" : null
+        ]) }
+    ], data.list, { sort: 0, dir: "desc", key: "nicknames" });
 
     const c = data.collection;
     show(el("div", {}, [
-        el("section", { class: "card" }, [
+        el("section", { class: "card stack" }, [
             el("div", { class: "card-head" }, [el("h2", {}, t("nick.title")),
                 el("span", { class: "muted" }, [c.name + " (" + c.symbol + ") ", el("a", { href: "#/contracts/" + c.address }, short(c.address))])]),
-            el("div", { class: "muted", style: "margin-bottom:12px" }, t("nick.summary").replace("{n}", data.nicknames).replace("{levels}", data.edges.length)),
-            el("div", { class: "deploy-form" }, [
-                el("label", {}, [el("span", { class: "muted" }, t("nick.price")), priceInput]),
-                el("div", { class: "deploy-buttons" }, [priceSave, priceResult])
-            ])
+            el("div", { class: "muted", style: "margin-bottom:12px" }, t("nick.summary").replace("{n}", data.minted).replace("{levels}", data.levels.length).replace("{days}", c.holdDays)),
+            mint, price
         ]),
         el("section", { class: "card stack" }, [
             el("h2", {}, t("nick.edges")),
             el("div", { class: "muted", style: "margin-bottom:12px" }, t("nick.edgesNote")),
-            el("div", { class: "edge-list" }, data.edges.map((edge) => edgeEditor(edge, (v) => nicknamePut("/api/nicknames/edges/" + edge.level, v), t("nick.save")))
-                .concat([edgeEditor(null, (v) => deployPost("/api/nicknames/edges", v), t("nick.add"))]))
-        ]),
-        el("section", { class: "card stack" }, [
-            el("h2", {}, t("nick.reserved")),
-            el("div", { class: "muted", style: "margin-bottom:12px" }, t("nick.reservedNote")),
-            reserveText,
-            el("div", { class: "deploy-buttons" }, [reserveButton(t("nick.reserve"), true), reserveButton(t("nick.release"), false), reserveResult])
+            el("div", { class: "edge-list" }, data.levels.map((l) => levelEditor(l, (v) => nicknamePut("/api/nicknames/levels/" + l.level, v), t("nick.save")))
+                .concat([levelEditor(null, (v) => deployPost("/api/nicknames/levels", v), t("nick.add"))]))
         ]),
         el("section", { class: "card" }, [
             el("div", { class: "card-head" }, [el("h2", {}, t("nick.list")), search]),
-            el("div", { class: "muted", style: "margin-bottom:8px" }, t("nick.listed").replace("{n}", data.listed).replace("{m}", data.matching)),
+            el("div", { class: "muted", style: "margin-bottom:8px" }, t("nick.listed").replace("{n}", data.list.length).replace("{m}", data.minted)),
             data.list.length ? list : el("div", { class: "empty" }, t("nick.none"))
         ]),
         message

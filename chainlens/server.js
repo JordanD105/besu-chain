@@ -1464,7 +1464,7 @@ setInterval(refreshOverview, 15000).unref();
 // the registry's AccountAdded events. Money flows are classified by the roles of sender and receiver.
 const STAT_PERIODS = { day: 14, week: 12, month: 12, quarter: 8, year: 5 };
 const STAT_MAX_PERIODS = 120; // a date range shows at most this many columns
-const STAT_METRICS = ["newUsers", "income", "fromUsers", "avatarSales", "avatarFirstSales", "avatarEth", "toUsers", "topup", "sweep", "payback", "txs"];
+const STAT_METRICS = ["newUsers", "income", "fromUsers", "avatarSales", "avatarEth", "nicknameSales", "levelUpgrades", "nicknameEth", "refunds", "toUsers", "topup", "sweep", "payback", "txs"];
 const statsCache = new Map(); // period -> { at, data }
 
 function periodStart(ms, period) {
@@ -1634,16 +1634,17 @@ function buildSectionStats(period, range) {
             add(fid, ms, "sweep", eth);
         } else if (fr === "payment" && tr === "sender01") {
             add(fid, ms, "payback", eth);
-        } else if (fr === "user" && (tx.functionName === "buyNickname" || tx.functionName === "upgradeEdge") && eth > 0) {
+        } else if (fr === "user" && (tx.functionName === "buy" || tx.functionName === "upgradeLevel") && eth > 0) {
+            // an item sale (avatar or nickname) or a nickname level upgrade: paid to the consumption account
+            const entry = contractEntry(tx.to);
+            const avatar = Boolean(entry && entry.record && entry.record.kind === "Avatar collection");
+            add(fid, ms, tx.functionName === "upgradeLevel" ? "levelUpgrades" : (avatar ? "avatarSales" : "nicknameSales"), 1);
+            add(fid, ms, avatar ? "avatarEth" : "nicknameEth", eth);
             add(fid, ms, "income", eth);
-        } else if (fr === "user" && tx.functionName === "buy" && eth > 0) {
-            const firstSale = (tx.events || []).some((e) => e.name === "Transfer" && e.args[0] && String(e.args[0].value).toLowerCase() === center);
-            add(fid, ms, "avatarSales", 1);
-            add(fid, ms, "avatarEth", eth);
-            if (firstSale) {
-                add(fid, ms, "avatarFirstSales", 1);
-                add(fid, ms, "income", eth);
-            }
+        } else if (fr === "consumption" && (tx.functionName === "undo" || tx.functionName === "undoLevel") && eth > 0) {
+            // an undo: the consumption account pays the buyer back
+            add(fid, ms, "refunds", eth);
+            add(fid, ms, "income", -eth);
         }
     }
 
@@ -2051,69 +2052,6 @@ async function proxyAdmin(method, pathname, body) {
     return { status: response.status, data };
 }
 
-// ---- Avatar mint and sale from the contract page (admin pages' gate), forwarded to the proxy's
-// /admin/contract/send (mint, signed by the center) and /contract/send (buy, signed by the buyer)
-function avatarAdminEnabled() {
-    return (DEPLOY.enabled || SECTIONS.enabled) && Boolean(SECTIONS.proxy);
-}
-
-function avatarGuard(req, res, next) {
-    if (!avatarAdminEnabled()) {
-        return res.status(404).json({ error: "avatar mint and sale need the Deploy or Sections page on" });
-    }
-    if (!ipAllowed(req.socket.remoteAddress)) {
-        return res.status(403).json({ error: "only allowed from operator_ip and chainlens_deploy_ips" });
-    }
-    if (!tokenOk(req)) {
-        console.warn("avatar: wrong token from", req.socket.remoteAddress);
-        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
-    }
-    next();
-}
-
-app.get("/api/avataradmin/status", (req, res) => {
-    res.json({ enabled: avatarAdminEnabled() && ipAllowed(req.socket.remoteAddress) });
-});
-
-// A sale (version 3): the buyer calls buy(tokenId) through the proxy's /contract/send, which fills in
-// the payee (the buyer's section's consumption account) and the price. The answer keeps the old shape.
-// A mint: the center calls mint through the proxy's /admin/contract/send with friendly args (the proxy
-// builds the metadata, picks the token id and converts the price)
-async function avatarMint(body) {
-    const args = { name: body.name, image: body.image, price: body.amount || "0" };
-    ["description", "attributes"].forEach((k) => { if (body[k] !== undefined) { args[k] = body[k]; } });
-    const r = await proxyAdmin("POST", "/admin/contract/send", { contract: body.collection, function: "mint", args });
-    if (r.status !== 200 || !r.data.result) {
-        return r;
-    }
-    return { status: 200, data: Object.assign({}, r.data, { tokenId: r.data.result.tokenId, price: r.data.result.price }) };
-}
-
-async function avatarSell(body) {
-    const r = await proxyAdmin("POST", "/contract/send", { contract: body.collection, function: "buy", args: [String(body.tokenId)], from: body.to });
-    if (r.status !== 200) {
-        return r;
-    }
-    const result = r.data.result || {};
-    return { status: 200, data: Object.assign({}, r.data, {
-        sale: result.sale, tokenId: result.tokenId, to: result.buyer, price: result.price, paidTo: result.paidTo
-    }) };
-}
-
-app.post("/api/avataradmin/:action", express.json({ limit: "256kb" }), avatarGuard, async (req, res) => {
-    const action = req.params.action;
-    if (action !== "mint" && action !== "transfer") {
-        return res.status(404).json({ error: "unknown avatar action" });
-    }
-    try {
-        const r = action === "transfer" ? await avatarSell(req.body || {}) : await avatarMint(req.body || {});
-        console.log("avatar:", action, JSON.stringify({ collection: req.body.collection, tokenId: req.body.tokenId, to: req.body.to }), "from", req.socket.remoteAddress, "->", r.status);
-        res.status(r.status).json(r.data);
-    } catch (error) {
-        res.status(502).json({ error: "proxy: " + error.message });
-    }
-});
-
 app.get("/api/sections/status", (req, res) => {
     res.json({ enabled: SECTIONS.enabled && ipAllowed(req.socket.remoteAddress) });
 });
@@ -2165,24 +2103,11 @@ app.post("/api/sections/:id/:action", sectionsJson, sectionsGuard, async (req, r
     }
 });
 
-// ---- Nicknames page (docs/features/nicknames.md): the nickname collection's edge levels, prices and
-// reserved nicknames: read with the proxy's /contract/list, /contract/call and /contract/events, written
-// with /admin/contract/deploy (template) and /admin/contract/send. Same gate as the Sections page.
-async function nicknameForward(req, res, method, pathname, body) {
-    try {
-        const r = await proxyAdmin(method, pathname, body);
-        if (method !== "GET") {
-            console.log("nicknames:", method, pathname, JSON.stringify(body || {}).slice(0, 300), "from", req.socket.remoteAddress, "->", r.status);
-        }
-        res.status(r.status).json(r.data);
-    } catch (error) {
-        res.status(502).json({ error: "proxy: " + error.message });
-    }
-}
-
-// The page's summary, from the proxy's generic contract API: the collection in use (/contract/list),
-// its price, edge levels and supply (/contract/call), every nickname and its level (/contract/events,
-// read incrementally and kept here)
+// ---- Items (avatars and nicknames, docs/features/avatars.md and nicknames.md): minted by the contract
+// account center, bought once by a section's user account, undone within the hold period. Read with
+// the proxy's /contract/call (in batches), written with /admin/contract/send (the center: mint, prices,
+// levels) and /contract/send (a sale for a user account; undo, signed by the consumption account that
+// was paid). Same gate as the admin pages.
 function proxyOk(r) {
     if (r.status !== 200) {
         throw Object.assign(new Error(r.data.error || "the proxy answered HTTP " + r.status), { status: r.status });
@@ -2190,128 +2115,224 @@ function proxyOk(r) {
     return r.data;
 }
 
+// Many reads in batches of 50: one result (or null) per call
+async function proxyCalls(calls) {
+    const out = [];
+    for (let i = 0; i < calls.length; i += 50) {
+        const d = proxyOk(await proxyAdmin("POST", "/contract/call", { calls: calls.slice(i, i + 50) }));
+        out.push(...d.results.map((r) => (r.success ? r.result : null)));
+    }
+    return out;
+}
+
+const ITEM_SCAN = 300;  // the newest tokens listed by the admin pages
+
+// The newest tokens of a collection with their state: for sale, sold (with the undo windows)
+async function itemRows(contract, kind, query) {
+    const [supply] = await proxyCalls([{ contract, function: "totalSupply" }]);
+    const total = Number(supply || 0);
+    const ids = [];
+    for (let id = total; id >= 1 && ids.length < ITEM_SCAN; id--) {
+        ids.push(String(id));
+    }
+    const label = kind === "nickname" ? "nicknameOf" : "imageOf";
+    const base = await proxyCalls(ids.flatMap((tokenId) => [
+        { contract, function: "ownerOf", args: { tokenId } },
+        { contract, function: "priceOf", args: { tokenId } },
+        { contract, function: label, args: { tokenId } }
+    ].concat(kind === "nickname" ? [{ contract, function: "levelOf", args: { tokenId } }] : [])));
+    const per = kind === "nickname" ? 4 : 3;
+    let rows = ids.map((tokenId, i) => {
+        const [owner, price, text, level] = base.slice(i * per, i * per + per);
+        const row = { tokenId, price: price ? price.price : null, owner: owner ? owner.owner : null, sold: Boolean(owner && owner.sold) };
+        if (kind === "nickname") {
+            row.nickname = text ? text.nickname : "";
+            row.level = level ? level.level : 0;
+        } else {
+            row.image = text ? text.image : "";
+        }
+        return row;
+    });
+    const q = String(query || "").normalize("NFC").trim().toLowerCase();
+    if (q) {
+        rows = rows.filter((r) => (r.nickname || r.image || "").toLowerCase().includes(q) || String(r.owner || "").toLowerCase().includes(q) || r.tokenId === q);
+    }
+    const sold = rows.filter((r) => r.sold);
+    const pays = await proxyCalls(sold.map((r) => ({ contract, function: "paymentsOf", args: { tokenId: r.tokenId } })));
+    sold.forEach((r, i) => {
+        const current = (pays[i] || []).filter((p) => p.current && !p.undone);
+        const sale = current.find((p) => p.kind === "sale");
+        const levels = current.filter((p) => p.kind === "level");
+        const last = levels[levels.length - 1];
+        r.paid = sale ? sale.amount : null;
+        r.boughtAt = sale ? sale.paidAt : null;
+        r.undoUntil = sale ? sale.undoUntil : null;
+        r.canUndo = Boolean(sale && sale.undoable);
+        r.levelUndoUntil = last ? last.undoUntil : null;
+        r.canUndoLevel = Boolean(last && last.undoable);
+    });
+    return { total, scanned: ids.length, rows };
+}
+
+// Undo a sale or a nickname level: the proxy signs as the consumption account that was paid
+async function itemUndo(contract, fn, tokenId) {
+    return proxyAdmin("POST", "/contract/send", { contract, function: fn, args: { tokenId: String(tokenId) } });
+}
+
+// ---- Avatar admin card (on an avatar collection's contract page)
+function avatarAdminEnabled() {
+    return (DEPLOY.enabled || SECTIONS.enabled) && Boolean(SECTIONS.proxy);
+}
+
+function avatarGuard(req, res, next) {
+    if (!avatarAdminEnabled()) {
+        return res.status(404).json({ error: "avatar admin needs the Deploy or Sections page on" });
+    }
+    if (!ipAllowed(req.socket.remoteAddress)) {
+        return res.status(403).json({ error: "only allowed from operator_ip and chainlens_deploy_ips" });
+    }
+    if (!tokenOk(req)) {
+        console.warn("avatar: wrong token from", req.socket.remoteAddress);
+        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
+    }
+    next();
+}
+
+app.get("/api/avataradmin/status", (req, res) => {
+    res.json({ enabled: avatarAdminEnabled() && ipAllowed(req.socket.remoteAddress) });
+});
+
+app.get("/api/avataradmin/items", avatarGuard, async (req, res) => {
+    try {
+        if (!/^0x[0-9a-fA-F]{40}$/.test(String(req.query.collection || ""))) {
+            return res.status(400).json({ error: "collection: an address" });
+        }
+        res.json(await itemRows(req.query.collection, "avatar", String(req.query.q || "").slice(0, 300)));
+    } catch (error) {
+        res.status(error.status || 502).json({ error: "proxy: " + error.message });
+    }
+});
+
+// mint { collection, image, price, description?, attributes? } · price { collection, tokenId, price } ·
+// sell { collection, tokenId | imageUrl, to } · undo { collection, tokenId }
+app.post("/api/avataradmin/:action", express.json({ limit: "256kb" }), avatarGuard, async (req, res) => {
+    const b = req.body || {};
+    const action = req.params.action;
+    try {
+        let r;
+        if (action === "mint") {
+            const args = { image: b.image, price: b.price || "0" };
+            ["description", "attributes"].forEach((k) => { if (b[k] !== undefined && b[k] !== "") { args[k] = b[k]; } });
+            r = await proxyAdmin("POST", "/admin/contract/send", { contract: b.collection, function: "mint", args });
+        } else if (action === "price") {
+            r = await proxyAdmin("POST", "/admin/contract/send", { contract: b.collection, function: "setPrice", args: { tokenId: String(b.tokenId), price: String(b.price) } });
+        } else if (action === "sell") {
+            const args = b.imageUrl ? { imageUrl: b.imageUrl } : { tokenId: String(b.tokenId) };
+            r = await proxyAdmin("POST", "/contract/send", { contract: b.collection, function: "buy", args, from: b.to });
+        } else if (action === "undo") {
+            r = await itemUndo(b.collection, "undo", b.tokenId);
+        } else {
+            return res.status(404).json({ error: "unknown avatar action" });
+        }
+        console.log("avatar:", action, JSON.stringify({ collection: b.collection, tokenId: b.tokenId, to: b.to }), "from", req.socket.remoteAddress, "->", r.status);
+        res.status(r.status).json(r.status === 200 ? Object.assign({}, r.data, r.data.result || {}) : r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
+    }
+});
+
+// ---- Nicknames page: the nickname collection in use, its user levels and nicknames
 async function nicknameCollectionInfo() {
     const d = proxyOk(await proxyAdmin("GET", "/contract/list?type=nickname"));
     return (d.contracts || []).find((c) => c.current) || null;
 }
 
-// All events of one kind from fromBlock on, newest first, in pages of 1000 (a page never splits a block)
-async function contractEvents(contract, event, fromBlock) {
-    const events = [];
-    let toBlock;
-    let head = null;
-    for (;;) {
-        const body = { contract, event, fromBlock, limit: 1000 };
-        if (toBlock !== undefined) {
-            body.toBlock = toBlock;
-        }
-        const d = proxyOk(await proxyAdmin("POST", "/contract/events", body));
-        if (head === null) {
-            head = d.toBlock;
-        }
-        if (d.complete || !d.events.length) {
-            events.push(...d.events);
-            return { events, head };
-        }
-        const oldest = d.events[d.events.length - 1].blockNumber;
-        const newer = d.events.filter((e) => e.blockNumber > oldest);
-        events.push(...(newer.length ? newer : d.events));
-        toBlock = newer.length ? oldest : oldest - 1;
-        if (toBlock < fromBlock) {
-            return { events, head };
-        }
-    }
-}
-
-const nickBook = { address: null, scannedTo: -1, tokens: new Map() };
-
-async function nicknameSummary(query) {
-    const c = await nicknameCollectionInfo();
-    if (!c) {
-        return { success: true, collection: null };
-    }
-    if (nickBook.address !== c.address) {
-        Object.assign(nickBook, { address: c.address, scannedTo: c.registeredIn - 1, tokens: new Map() });
-    }
-    const from = nickBook.scannedTo + 1;
-    const [bought, upgraded, reads] = await Promise.all([
-        contractEvents(c.address, "NicknameBought", from),
-        contractEvents(c.address, "EdgeUpgraded", from),
-        proxyAdmin("POST", "/contract/call", { calls: ["nicknamePrice", "edgeCount", "totalSupply"].map((fn) => ({ contract: c.address, function: fn })) }).then(proxyOk)
-    ]);
-    // oldest first; applying an event twice (the next scan starts at the lower head) changes nothing
-    bought.events.slice().reverse().forEach((e) => {
-        const id = String(e.args.tokenId);
-        if (!nickBook.tokens.has(id)) {
-            nickBook.tokens.set(id, { tokenId: id, nickname: e.args.nickname, account: e.args.buyer, level: 0, block: e.blockNumber });
-        }
-    });
-    upgraded.events.slice().reverse().forEach((e) => {
-        const t = nickBook.tokens.get(String(e.args.tokenId));
-        if (t && Number(e.args.toLevel) > t.level) {
-            t.level = Number(e.args.toLevel);
-        }
-    });
-    nickBook.scannedTo = Math.min(bought.head, upgraded.head);
-    const [price, edgeCount, supply] = reads.results.map((r) => {
-        if (!r.success) {
-            throw new Error(r.error);
-        }
-        return r.result;
-    });
-    const list = [...nickBook.tokens.values()];
-    const edges = edgeCount.edges.map((e) => Object.assign({}, e, { holders: list.filter((t) => t.level === e.level).length }));
-    const q = String(query || "").normalize("NFC").trim().toLowerCase();
-    const found = list.filter((t) => !q || t.nickname.toLowerCase().includes(q) || t.account.toLowerCase().includes(q))
-        .sort((a, b) => b.block - a.block);
-    return {
-        success: true,
-        collection: { address: c.address, name: c.name, symbol: c.symbol, registeredIn: c.registeredIn },
-        nicknamePrice: price.price,
-        nicknames: Number(supply),
-        edges,
-        list: found.slice(0, 200).map(({ block, ...t }) => t),
-        listed: Math.min(found.length, 200),
-        matching: found.length
-    };
-}
-
 app.get("/api/nicknames", sectionsGuard, async (req, res) => {
     try {
-        res.json(await nicknameSummary(String(req.query.q || "").slice(0, 300)));
+        const c = await nicknameCollectionInfo();
+        if (!c) {
+            return res.json({ success: true, collection: null });
+        }
+        const [levels, hold] = await proxyCalls([{ contract: c.address, function: "levelCount" }, { contract: c.address, function: "holdSeconds" }]);
+        const items = await itemRows(c.address, "nickname", String(req.query.q || "").slice(0, 300));
+        const sold = items.rows.filter((r) => r.sold);
+        const list = (levels ? levels.levels : []).map((l) => Object.assign({}, l, { holders: sold.filter((r) => r.level === l.level).length }));
+        res.json({
+            success: true,
+            collection: { address: c.address, name: c.name, symbol: c.symbol, registeredIn: c.registeredIn, holdDays: Number(hold || 0) / 86400 },
+            minted: items.total, scanned: items.scanned, levels: list, list: items.rows
+        });
     } catch (error) {
         res.status(error.status || 502).json({ error: "proxy: " + error.message });
     }
 });
-// Writes: the deploy template, and the collection's admin functions signed by the center
-async function nicknameAdminSend(req, res, fn, args) {
+
+async function nicknameWrite(req, res, what, call) {
     try {
         const c = await nicknameCollectionInfo();
         if (!c) {
             return res.status(404).json({ error: "no nickname collection yet" });
         }
-        const r = await proxyAdmin("POST", "/admin/contract/send", { contract: c.address, function: fn, args });
-        console.log("nicknames:", fn, JSON.stringify(args).slice(0, 300), "from", req.socket.remoteAddress, "->", r.status);
+        const r = await call(c.address);
+        console.log("nicknames:", what, JSON.stringify(req.body || {}).slice(0, 300), "from", req.socket.remoteAddress, "->", r.status);
         res.status(r.status).json(r.status === 200 ? Object.assign({}, r.data, r.data.result || {}) : r.data);
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });
     }
 }
 
-app.post("/api/nicknames/deploy", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameForward(req, res, "POST", "/admin/contract/deploy", Object.assign({}, req.body || {}, { template: "nickname-collection" })));
-app.put("/api/nicknames/price", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameAdminSend(req, res, "setNicknamePrice", { price: (req.body || {}).price }));
-app.post("/api/nicknames/edges", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameAdminSend(req, res, "addEdge", req.body || {}));
-app.put("/api/nicknames/edges/:level", sectionsJson, sectionsGuard, (req, res) => {
-    if (!/^\d{1,2}$/.test(req.params.level)) {
-        return res.status(400).json({ error: "invalid edge level" });
+const center = (contract, fn, args) => proxyAdmin("POST", "/admin/contract/send", { contract, function: fn, args });
+
+app.post("/api/nicknames/deploy", sectionsJson, sectionsGuard, async (req, res) => {
+    try {
+        const b = req.body || {};
+        const body = { template: "nickname-collection", name: b.name, symbol: b.symbol, another: Boolean(b.another) };
+        if (b.holdDays !== undefined && b.holdDays !== "") {
+            body.holdDays = Number(b.holdDays);
+        }
+        const r = await proxyAdmin("POST", "/admin/contract/deploy", body);
+        console.log("nicknames: deploy", JSON.stringify(body), "from", req.socket.remoteAddress, "->", r.status);
+        res.status(r.status).json(r.data);
+    } catch (error) {
+        res.status(502).json({ error: "proxy: " + error.message });
     }
-    return nicknameAdminSend(req, res, "setEdge", Object.assign({}, req.body || {}, { level: Number(req.params.level) }));
 });
-app.post("/api/nicknames/reserve", sectionsJson, sectionsGuard, (req, res) =>
-    nicknameAdminSend(req, res, "reserve", { nicknames: (req.body || {}).nicknames, reserved: (req.body || {}).reserved !== false }));
+
+// { nicknames: ["Alice", …] (1-100), price }: one mint per name, in order; each answered on its own
+app.post("/api/nicknames/mint", sectionsJson, sectionsGuard, (req, res) => nicknameWrite(req, res, "mint", async (address) => {
+    const names = (req.body || {}).nicknames;
+    if (!Array.isArray(names) || names.length < 1 || names.length > 100) {
+        return { status: 400, data: { error: "nicknames: a list of 1 to 100 names" } };
+    }
+    const results = [];
+    for (const nickname of names) {
+        const r = await center(address, "mint", { nickname: String(nickname), price: String((req.body || {}).price || "0") });
+        results.push(r.status === 200 ? { nickname, tokenId: r.data.result.tokenId } : { nickname, error: r.data.error });
+    }
+    return { status: 200, data: { success: results.every((r) => !r.error), results } };
+}));
+app.put("/api/nicknames/price/:tokenId", sectionsJson, sectionsGuard, (req, res) => nicknameWrite(req, res, "price",
+    (address) => center(address, "setPrice", { tokenId: String(req.params.tokenId), price: String((req.body || {}).price) })));
+app.post("/api/nicknames/levels", sectionsJson, sectionsGuard, (req, res) => nicknameWrite(req, res, "addLevel",
+    (address) => center(address, "addLevel", { price: String((req.body || {}).price) })));
+app.put("/api/nicknames/levels/:level", sectionsJson, sectionsGuard, (req, res) => {
+    if (!/^\d{1,2}$/.test(req.params.level)) {
+        return res.status(400).json({ error: "invalid level" });
+    }
+    const b = req.body || {};
+    const args = { level: Number(req.params.level) };
+    if (b.price !== undefined) {
+        args.price = String(b.price);
+    }
+    if (b.forSale !== undefined) {
+        args.forSale = Boolean(b.forSale);
+    }
+    return nicknameWrite(req, res, "setLevel", (address) => center(address, "setLevel", args));
+});
+app.post("/api/nicknames/undo/:tokenId", sectionsJson, sectionsGuard, (req, res) => nicknameWrite(req, res, "undo",
+    (address) => itemUndo(address, "undo", req.params.tokenId)));
+app.post("/api/nicknames/undolevel/:tokenId", sectionsJson, sectionsGuard, (req, res) => nicknameWrite(req, res, "undoLevel",
+    (address) => itemUndo(address, "undoLevel", req.params.tokenId)));
 
 // The section's user accounts with their balances
 app.get("/api/sections/:id/accounts", sectionsGuard, async (req, res) => {
