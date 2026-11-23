@@ -843,6 +843,37 @@ function metadataFromMintMemo(contract, tokenId) {
     return null;
 }
 
+// Avatar and nickname collections (BoundItems): the price, for sale or not, nickname and level, from the contract
+const itemIface = new ethers.Interface([
+    "function priceOf(uint256) view returns (uint256)",
+    "function minter() view returns (address)",
+    "function nicknameOf(uint256) view returns (string)",
+    "function levelOf(uint256) view returns (uint8)"
+]);
+const itemMinters = new Map();
+
+async function itemCall(contract, fn, args) {
+    return itemIface.decodeFunctionResult(fn, await ethCall(contract, itemIface.encodeFunctionData(fn, args || [])))[0];
+}
+
+async function refreshItem(nft, platform) {
+    try {
+        const key = nft.contract.toLowerCase();
+        if (!itemMinters.has(key)) {
+            itemMinters.set(key, String(await itemCall(nft.contract, "minter")));
+        }
+        nft.platform = platform;
+        nft.amountWei = BigInt(await itemCall(nft.contract, "priceOf", [nft.tokenId]));
+        nft.forSale = String(nft.owner).toLowerCase() === itemMinters.get(key).toLowerCase();
+        if (platform === "nickname") {
+            nft.nickname = String(await itemCall(nft.contract, "nicknameOf", [nft.tokenId]));
+            nft.level = Number(await itemCall(nft.contract, "levelOf", [nft.tokenId]));
+        }
+    } catch (error) {
+        // an older collection: the generic values stay
+    }
+}
+
 async function refreshNfts() {
     for (const nft of db.nfts.values()) {
         try {
@@ -853,6 +884,11 @@ async function refreshNfts() {
             nft.owner = erc721Iface.decodeFunctionResult("ownerOf", rawOwner)[0];
         } catch (error) {
             continue;
+        }
+
+        const platform = contractPlatform(nft.contract);
+        if (platform === "avatar" || platform === "nickname") {
+            await refreshItem(nft, platform);
         }
 
         if (nft.metadata) {
@@ -1020,6 +1056,8 @@ async function refreshBalances() {
     }
 }
 
+const heavyRefresh = { indexed: -2, at: 0 };
+
 async function refreshNetwork() {
     try {
         db.node = await rpc("admin_nodeInfo", []);
@@ -1135,10 +1173,15 @@ async function syncOnce() {
         }
     }
 
-    await refreshContracts();
-    await refreshNfts();
-    await refreshBalances();
-    await refreshNetwork();
+    // the reads that cost one call per item / account: after a new block, or every 10 s
+    if (db.indexed !== heavyRefresh.indexed || Date.now() - heavyRefresh.at > 10000) {
+        heavyRefresh.indexed = db.indexed;
+        heavyRefresh.at = Date.now();
+        await refreshContracts();
+        await refreshNfts();
+        await refreshBalances();
+        await refreshNetwork();
+    }
     db.ready = true;
     db.error = null;
 }
@@ -1305,7 +1348,12 @@ function publicNft(nft) {
         amount: formatEth(nft.amountWei || 0n),
         amountWei: (nft.amountWei || 0n).toString(),
         type: "ERC721",
-        tokenURI: nft.tokenURI || ""
+        tokenURI: nft.tokenURI || "",
+        // avatar / nickname collections: the item's price, for sale (held by the center) or sold, nickname, level
+        platform: nft.platform || null,
+        forSale: nft.platform ? Boolean(nft.forSale) : null,
+        nickname: nft.nickname || null,
+        level: nft.level === undefined ? null : nft.level
     };
 }
 

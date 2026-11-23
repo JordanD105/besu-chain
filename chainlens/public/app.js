@@ -1669,6 +1669,21 @@ async function showNfts(page, status, kind) {
         const visible = list.slice((current - 1) * limit, current * limit);
         const cards = visible.map((nft) => {
             const media = nft.image ? el("img", { src: nft.image, alt: nft.name || "NFT" }) : el("div", { class: "ph" });
+            if (nft.platform) {
+                // avatar / nickname: what it is, its price, for sale or who holds it, the level
+                const title = nft.platform === "nickname" ? (nft.nickname || "#" + nft.tokenId) : (nft.name || t("items.avatarN").replace("{id}", nft.tokenId));
+                return el("a", { class: "nft-card", href: "#/nfts/" + nft.contract + "/" + nft.tokenId }, [
+                    nft.platform === "nickname" && !nft.image ? el("div", { class: "ph nick-ph" }, nft.nickname || "") : media,
+                    el("div", { class: "pad" }, [
+                        el("h3", {}, [title, " ", el("span", { class: "muted" }, "#" + nft.tokenId)]),
+                        el("div", { class: "muted" }, nft.collection),
+                        el("div", {}, [el("b", {}, (nft.amount || "0") + " ETH"), " ",
+                            el("span", { class: "badge " + (nft.forSale ? "type" : "create") }, nft.forSale ? t("item.forSale") : t("items.sold"))]),
+                        nft.platform === "nickname" && nft.level !== null ? el("div", { class: "muted" }, t("nick.level").replace("{n}", nft.level)) : null,
+                        nft.forSale ? null : el("div", {}, [t("items.owner") + " ", addr(nft.owner)])
+                    ])
+                ]);
+            }
             return el("a", { class: "nft-card", href: "#/nfts/" + nft.contract + "/" + nft.tokenId }, [
                 media,
                 el("div", { class: "pad" }, [

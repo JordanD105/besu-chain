@@ -683,3 +683,4 @@ body.light .stat-date { color-scheme: light; }
 .page-tabs a { padding: 8px 14px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; }
 .page-tabs a.active { color: var(--text); border-bottom-color: var(--orange); }
 #versions { margin-top: auto; }
+.nick-ph { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: var(--orange); word-break: break-word; padding: 12px; text-align: center; }
