@@ -1197,31 +1197,44 @@ function statsCard() {
         ]);
         sectionSelect.value = statState.section;
         sectionSelect.addEventListener("change", () => { statState.section = sectionSelect.value; load(); });
-        // duration: a date range (UTC days); empty = the last periods
+        // duration (UTC days): the last periods, a quick range, or From / To (To empty = today)
         const today = new Date().toISOString().slice(0, 10);
+        const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+        const setRange = (from, to) => { statState.from = from; statState.to = to; statState.index = null; load(); };
         const fromInput = el("input", { type: "date", class: "stat-date", max: today, value: statState.from, "aria-label": t("dash.start") });
         const toInput = el("input", { type: "date", class: "stat-date", max: today, value: statState.to, "aria-label": t("dash.end") });
-        const applyRange = () => {
+        const rangeMsg = el("span", { class: "bad-text small", role: "alert" });
+        const apply = el("button", { type: "button", class: "fn-run" }, t("stats.apply"));
+        apply.addEventListener("click", () => {
             const from = fromInput.value;
-            const to = toInput.value;
-            if ((from && to && from <= to) || (!from && !to)) {
-                statState.from = from;
-                statState.to = to;
-                statState.index = null;
-                load();
+            const to = toInput.value || today;
+            if (!from) {
+                rangeMsg.textContent = t("stats.needStart");
+            } else if (from > to) {
+                rangeMsg.textContent = t("stats.badRange");
+            } else {
+                setRange(from, to);
             }
-        };
-        fromInput.addEventListener("change", applyRange);
-        toInput.addEventListener("change", applyRange);
-        const clearRange = el("button", { type: "button", class: "fn-run stat-clear" }, t("stats.lastPeriods"));
-        clearRange.hidden = !statState.from;
-        clearRange.addEventListener("click", () => { statState.from = ""; statState.to = ""; statState.index = null; load(); });
+        });
+        const presetKey = !statState.from ? "last" : (statState.to === today && statState.from === daysAgo(29) ? "30d"
+            : (statState.to === today && statState.from === today.slice(0, 4) + "-01-01" ? "year" : "custom"));
+        const custom = el("div", { class: "stat-custom" }, [
+            el("label", {}, [t("dash.start"), fromInput]), el("label", {}, [t("dash.end"), toInput]), apply, rangeMsg]);
+        custom.hidden = presetKey !== "custom";
+        const presets = el("div", { class: "seg-tabs", role: "tablist" }, [
+            ["last", t("stats.lastPeriods"), () => setRange("", "")],
+            ["30d", t("stats.last30"), () => { statState.period = statState.period === "year" || statState.period === "quarter" ? "day" : statState.period; setRange(daysAgo(29), today); }],
+            ["year", t("stats.thisYear"), () => setRange(today.slice(0, 4) + "-01-01", today)],
+            ["custom", t("stats.custom"), () => { custom.hidden = false; presets.querySelectorAll(".seg-tab").forEach((b) => b.classList.toggle("on", b.dataset.k === "custom")); fromInput.focus(); }]
+        ].map(([k, label, action]) => {
+            const b = el("button", { type: "button", role: "tab", class: "seg-tab" + (k === presetKey ? " on" : ""), "data-k": k }, label);
+            b.addEventListener("click", action);
+            return b;
+        }));
         const rangeRow = el("div", { class: "stat-range" }, [
-            el("label", {}, [t("dash.start"), fromInput]),
-            el("label", {}, [t("dash.end"), toInput]),
-            clearRange,
+            el("span", { class: "muted" }, t("stats.rangeLabel")), presets, custom,
             el("span", { class: "muted" }, stats.range
-                ? t("stats.rangeShown").replace("{n}", String(stats.periods.length)) + (stats.truncated ? " " + t("stats.truncated") : "")
+                ? stats.range.from + " – " + stats.range.to + " · " + t("stats.rangeShown").replace("{n}", String(stats.periods.length)) + (stats.truncated ? " " + t("stats.truncated") : "")
                 : t("stats.lastShown").replace("{n}", String(stats.periods.length)))
         ]);
         const metricSelect = el("select", { "aria-label": t("stats.measure") }, ["balances", ...STAT_COLUMNS].map((m) => el("option", { value: m }, t("stats." + m))));
@@ -1240,7 +1253,7 @@ function statsCard() {
                     el("span", { class: "col-value" }, label),
                     el("span", { class: "col-track" }, [stacked ? balanceColumn(stats, i, max)
                         : el("i", { class: "col-bar", style: "height:" + (max > 0 ? Math.max(sums[i] > 0 ? 2 : 0, sums[i] / max * 100) : 0) + "%" })]),
-                    el("span", { class: "col-label" }, p.label)
+                    el("span", { class: "col-label" }, i === index || stats.periods.length <= 16 || i % Math.ceil(stats.periods.length / 12) === 0 ? p.label : "")
                 ]);
                 col.addEventListener("click", () => { statState.index = i; load(); });
                 col.addEventListener("mousemove", (event) => showVizTip(event, [
@@ -1269,17 +1282,32 @@ function statsCard() {
                 { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
                 ...STAT_COLUMNS.map((m) => ({ label: "stats." + m, sort: (r) => r[m], cell: (r) => statValue(r[m], m) }))
             ], rows, { key: "section-stats", compact: true });
+        // the change from the previous period: +12% / −3% / new
+        const delta = (m) => {
+            if (index < 1) {
+                return null;
+            }
+            const now = statSum(stats, m, index);
+            const before = statSum(stats, m, index - 1);
+            if (now === before) {
+                return el("span", { class: "stat-delta" }, "±0");
+            }
+            const text = before === 0 ? t("stats.new") : (now > before ? "+" : "−") + Math.abs(Math.round((now - before) / Math.abs(before) * 100)) + "%";
+            return el("span", { class: "stat-delta " + (now > before ? "up" : "down"), title: t("stats.vsPrev") }, text);
+        };
         const totals = stacked
             ? el("div", { class: "stat-totals" }, [
                 ...BALANCE_SLOTS.map(([role, slot]) => el("div", { class: "stat-total" }, [
-                    el("span", {}, [el("i", { class: "viz-swatch " + slot }), " " + balanceLabel(role) + " (ETH)"]), el("b", {}, ethText(statSum(stats, "bal:" + role, index)))])),
-                el("div", { class: "stat-total on" }, [el("span", {}, t("platform.total") + " (ETH)"), el("b", {}, ethText(sums[index]))])
+                    el("span", {}, [el("i", { class: "viz-swatch " + slot }), " " + balanceLabel(role) + " (ETH)"]),
+                    el("b", {}, ethText(statSum(stats, "bal:" + role, index))), delta("bal:" + role)])),
+                el("div", { class: "stat-total on" }, [el("span", {}, t("platform.total") + " (ETH)"), el("b", {}, ethText(sums[index])), delta("balances")])
             ])
             : el("div", { class: "stat-totals" }, STAT_COLUMNS.slice(0, 6).map((m) =>
-                el("div", { class: "stat-total" + (m === metric ? " on" : "") }, [el("span", {}, t("stats." + m)), el("b", {}, statValue(statSum(stats, m, index), m))])));
+                el("div", { class: "stat-total" + (m === metric ? " on" : "") }, [el("span", {}, t("stats." + m)), el("b", {}, statValue(statSum(stats, m, index), m)), delta(m)])));
 
         holder.replaceChildren(
-            el("div", { class: "card-head" }, [el("h2", {}, t("stats.title")), el("div", { class: "stat-controls" }, [tabs, sectionSelect, metricSelect])]),
+            el("div", { class: "card-head" }, [el("h2", {}, t("stats.title"))]),
+            el("div", { class: "stat-controls" }, [tabs, sectionSelect, metricSelect]),
             rangeRow,
             el("div", { class: "muted stat-note" }, t(stacked ? "stats.noteBalances" : "stats.note")),
             stacked ? vizLegend() : null,

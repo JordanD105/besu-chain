@@ -684,3 +684,10 @@ body.light .stat-date { color-scheme: light; }
 .page-tabs a.active { color: var(--text); border-bottom-color: var(--orange); }
 #versions { margin-top: auto; }
 .nick-ph { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: var(--orange); word-break: break-word; padding: 12px; text-align: center; }
+/* section statistics: range control, change from the previous period */
+.stats-card .stat-controls { margin: 2px 0 4px; }
+.stat-custom { display: inline-flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.stat-custom[hidden] { display: none; }
+.stat-total span.stat-delta { font-size: 12px; font-weight: 600; color: var(--muted); }
+.stat-total span.stat-delta.up { color: #2fb36d; }
+.stat-total span.stat-delta.down { color: #e5534b; }

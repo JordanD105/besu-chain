@@ -1738,8 +1738,8 @@ function buildSectionStats(period, range) {
     const first = starts[0];
     const lastEnd = nextStart(starts[starts.length - 1], period);
     const indexOf = (ms) => {
-        if (ms < first || ms >= lastEnd) {
-            return -1;
+        if (ms < first || ms >= lastEnd || (range && (ms < range.from || ms > range.to))) {
+            return -1;   // outside the periods, or outside the chosen dates
         }
         let i = starts.length - 1;
         while (i > 0 && ms < starts[i]) {
@@ -1809,6 +1809,30 @@ function buildSectionStats(period, range) {
                 move({ sectionId: fid, role: "consumption" }, ms, eth);
             }
         }
+        // undos (docs/features/transfer-undo.md, avatars.md, nicknames.md): the payer sends the amount to the
+        // contract, which passes it on in the same transaction (not a transaction of its own)
+        if (eth > 0 && (tx.memoType === "transfer.undoIn" || tx.memoType === "transfer.undoOut")) {
+            // back to whoever sent the original: the user (+x) or the upfront account (-x)
+            const original = tx.memoUndoOf ? db.txByHash.get(String(tx.memoUndoOf).toLowerCase()) : null;
+            if (original) {
+                move(sectionOf(original.from), ms, eth);
+            }
+            if (tx.memoType === "transfer.undoIn") {
+                add(fid, ms, "refunds", eth);
+                add(fid, ms, "income", -eth);
+            } else {
+                add(fid, ms, "toUsers", -eth);
+            }
+            continue;
+        }
+        if (eth > 0 && fr === "consumption" && (tx.functionName === "undo" || tx.functionName === "undoLevel")) {
+            // an item undo: the buyer gets the refund (the item's Transfer event names the buyer for a sale undo)
+            const back = (tx.events || []).find((e) => e.name === "Transfer" && e.args[0]);
+            const buyer = back ? String(back.args[0].value).toLowerCase() : null;
+            if (buyer) {
+                move(sectionOf(buyer), ms, eth);
+            }
+        }
         if (fr === "sender01" && tr === "upfront") {
             add(tid, ms, "topup", eth);
         } else if (fr === "upfront" && tr === "user" && fid === tid) {
@@ -1855,7 +1879,10 @@ function buildSectionStats(period, range) {
     // closing balances: today's, minus every change after the period's end
     const current = new Map(((overview.data && overview.data.sections) || []).map((x) => [x.id, x.balances || {}]));
     const ends = starts.map((start) => {
-        const end = nextStart(start, period);
+        let end = nextStart(start, period);
+        if (range && end > range.to + 1) {
+            end = range.to + 1;   // the last period closes at the chosen end date
+        }
         return end > Date.now() ? Infinity : end;
     });
     for (const [id] of sections) {
