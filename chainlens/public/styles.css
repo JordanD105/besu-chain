@@ -655,3 +655,6 @@ body.light .stat-date { color-scheme: light; }
 /* memo field of the admin forms (docs/features/memos.md) */
 .memo-box { display: flex; flex-direction: column; gap: 4px; max-width: 640px; }
 .memo-box .small { font-size: 12px; }
+.memo-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 14px; }
+.memo-filters label { display: flex; flex-direction: column; gap: 4px; }
+.memo-filters input, .memo-filters select { width: 100%; box-sizing: border-box; }

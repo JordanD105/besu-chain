@@ -3242,9 +3242,9 @@ async function showMemos(params) {
         el("section", { class: "card stack" }, [
             el("div", { class: "card-head" }, [el("h2", {}, t("memo.title")), el("span", { class: "muted" }, t("memo.count").replace("{n}", data.count))]),
             el("div", { class: "muted", style: "margin-bottom:10px" }, t("memo.note")),
-            el("div", { class: "deploy-form" }, [label("type", typeSelect), label("section", fields.section), label("q", fields.q),
-                label("from", fields.from), label("to", fields.to), label("request", fields.request),
-                el("div", { class: "deploy-buttons" }, [apply, csv, json])])
+            el("div", { class: "memo-filters" }, [label("type", typeSelect), label("section", fields.section), label("q", fields.q),
+                label("from", fields.from), label("to", fields.to), label("request", fields.request)]),
+            el("div", { class: "deploy-buttons", style: "margin-top:12px" }, [apply, csv, json])
         ]),
         el("section", { class: "card" }, data.rows.length ? table : el("div", { class: "empty" }, t("memo.none")))
     ]));
