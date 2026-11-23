@@ -261,6 +261,12 @@ one per round, until it has `spare_accounts` (100). Offline, `/createaccount` ha
 spare, queues its funding as a −x transfer and its pool class (`small` by default) as an
 `/account/pool` request.
 
+Spare accounts are registered on chain as the section's user accounts. Chainlens shows them apart
+(the gateway lists its unused spares at `GET /gateway/spares`, with the section key or the report
+token): the overview and the section's accounts count **real user accounts** and **spare accounts**
+separately (a switch shows the spares), the Accounts page gives them the role *spare*, and the
+statistics count a spare as a new user only when it is handed out.
+
 `GatewaySparesLow` fires when fewer than `spare_alert_below` (20) are left for 30 minutes. With none
 left, `/createaccount` offline answers 503.
 
