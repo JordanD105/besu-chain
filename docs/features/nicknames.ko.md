@@ -56,7 +56,7 @@
 쓰기는 [`POST /contract/send`](../reference/proxy-api.md#post-contractsend--write), 관리자의 쓰기(가격,
 레벨, 예약 이름)는 컨트랙트 계정 센터가 서명하는 `POST /admin/contract/send`를 사용합니다. `args`를
 객체로 주면 값이 친화적이고(ETH 가격, `#rrggbb` 색상, 패턴 이름) 응답에 친화적인 `result`가 있습니다.
-이전의 `/nickname/*`와 `/admin/nickname/*` 라우트는 `GET /admin/nickname`을 제외하고 410으로 응답합니다
+이전의 `/nickname/*`와 `/admin/nickname` 라우트는 410으로 응답합니다
 ([제거된 라우트](../reference/proxy-api.md#removed-routes)).
 
 - 컬렉션은 **컨트랙트 계정 센터**가 배포하고 SectionRegistry에 공통(common) 컨트랙트로 등록됩니다.
@@ -94,7 +94,7 @@
 P=http://192.168.68.151:30000; T=$(cat ansible/state/secrets/proxy_admin_token)
 curl -s -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -X POST \
   --data '{"template":"nickname-collection","name":"Nicknames","symbol":"NICK","price":"1","edge0":"Simple"}' \
-  $P/admin/contracts/deploy
+  $P/admin/contract/deploy
 # { "success": true, "name": "Nicknames", "kind": "common", "address": "0xNicknames", "codeCheck": "matches the artifact", … }
 ```
 
@@ -122,7 +122,8 @@ send '{"contract":"0xNicknames","function":"reserve","args":{"nicknames":["admin
 ```
 
 페이지도 같은 일을 합니다: 닉네임 가격을 바꾸고, 누구도 살 수 없는 이름(예: `admin`)을 **예약**합니다.
-`GET /admin/nickname`은 페이지의 요약(가격, 보유자 수가 있는 레벨, 닉네임)을 줍니다.
+페이지의 요약(가격, 보유자 수가 있는 레벨, 닉네임)은 `/contract/call`(`nicknamePrice`, `edgeCount`,
+`totalSupply`)과 `/contract/events`(`NicknameBought`, `EdgeUpgraded`)에서 옵니다.
 
 ## 3. 닉네임 구매 {#3-buy-a-nickname}
 
@@ -212,6 +213,6 @@ curl -s -X POST $P/contract/send -H 'Content-Type: application/json' -H "X-Secti
 | `proxy/contracts/NicknameCollection.sol` | 컨트랙트(ERC-721 + ERC-5192 + ERC-4906, 체인 위 SVG) |
 | `proxy/nickname-collection.json` | 컴파일된 아티팩트(`node scripts/compile-contract.js contracts/NicknameCollection.sol NicknameCollection nickname-collection.json`) |
 | `proxy/stress-latest.js` | 범용 컨트랙트 API: 친화적 인수와 결과(`friendlyArgs`, `friendlyCall`, `friendlySend`), `/contract/send`(`knownSend`: payee, 가격, 닉네임 확인), `/admin/contract/send`, `nickname-collection` 템플릿, `GET /admin/nickname` |
-| `chainlens/server.js` | Nicknames 페이지의 API: `/admin/nickname`을 읽고, `/admin/contract/send`와 `/admin/contracts/deploy`로 씀 |
+| `chainlens/server.js` | Nicknames 페이지의 API: `/contract/list`, `/contract/call`, `/contract/events`로 읽고, `/admin/contract/send`와 `/admin/contract/deploy`로 씀 |
 | `chainlens/public/app.js` | Nicknames 페이지(`showNicknames`, `edgeEditor`, `edgePreview`) |
 | `monitoring/grafana/tools/gen_sections_dashboard.py` | Sections 대시보드의 수입과 새 열 |

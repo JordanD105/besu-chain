@@ -22,7 +22,7 @@ it from two places:
 
 | | On-chain registry (SectionRegistry) | Record file (`contracts/deployments/`) |
 |---|---|---|
-| Written by | the chainlens Deploy page and `POST /admin/contracts/deploy` (also the `nft-collection` and `nickname-collection` templates), through the proxy ([contract deployment](contract-deployment.md)) | [`besu-production/operator/deploy-contract.js`](../../besu-production/operator/deploy-contract.js); earlier versions of the Deploy page |
+| Written by | the chainlens Deploy page and `POST /admin/contract/deploy` (also the `nft-collection` and `nickname-collection` templates), through the proxy ([contract deployment](contract-deployment.md)) | [`besu-production/operator/deploy-contract.js`](../../besu-production/operator/deploy-contract.js); earlier versions of the Deploy page |
 | Deployer | the contract account center | the MPC account given with `--from` |
 | Read by | chainlens **and** the proxy (`/contract/call`, `/contract/send`, `/contract/events`, `/contract/list`) | chainlens only |
 | To publish | nothing: it is on chain | commit the file and run Ansible ([below](#publish-a-record)) |

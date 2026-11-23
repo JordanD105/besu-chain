@@ -369,7 +369,7 @@ SectionRegistry에서 읽습니다(섹션은 10초 동안 캐시, 컨트랙트�
 
 | | |
 |---|---|
-| 배포 주체 | 컨트랙트 계정 센터: `{"template": "nft-collection", "name", "symbol"}`로 `POST /admin/contracts/deploy`, 또는 chainlens Deploy 페이지. 이름과 심볼은 NFT 컬렉션 사이에서 고유(409) |
+| 배포 주체 | 컨트랙트 계정 센터: `{"template": "nft-collection", "name", "symbol"}`로 `POST /admin/contract/deploy`, 또는 chainlens Deploy 페이지. 이름과 심볼은 NFT 컬렉션 사이에서 고유(409) |
 | SectionRegistry 등록 | 예 (종류 NFT). `GET /contract/list?type=nft`가 컬렉션을 나열 |
 | 민팅 주체 | 컨트랙트 계정 센터: `POST /admin/contract/send` `mint` (프록시가 메타데이터를 만들고, 다음 토큰 ID를 고르고, 가격을 변환) |
 | 판매 | 구매자가 `X-Section-Key`로 `POST /contract/send` `buy` `{ tokenId }`를 보내며, 구매자는 해당 섹션의 사용자 계정이어야 합니다. 관리 API 호출자(`ADMIN_ALLOWED_IPS`에서 온 관리 토큰, 예: chainlens Sell 양식)는 키 없이 보낼 수 있으며, 이때 섹션은 구매자의 섹션입니다 |
@@ -399,7 +399,7 @@ registry 0x… v2, N section(s), admin API on`).
 |---|---|---|
 | 섹션 호출 | `X-Section-Key`를 사용하는 `/createaccount`, `/transfer`(+x / −x), `/contract/send`(NFT 판매와 닉네임 포함) | [섹션](../features/sections.md#application-api-section-calls) |
 | 관리 API | `/admin/sections/*`: 생성, 이름 변경, 정보, 키 교체, 활성화 / 비활성화, 충전, 스윕, 반환, 계정 교체, 보관, 사용자 계정 | [섹션](../features/sections.md#admin-api) |
-| 컨트랙트 | `/admin/contracts/check`와 `/deploy`(컨트랙트 계정 센터가 서명하며 ABI와 함께 등록. 플랫폼 컨트랙트용 템플릿), `/contract/call`(읽기, 일괄 처리 가능), `/contract/events`, `/contract/list`, `/contract/send`(쓰기, 호출자 섹션의 사용자 계정이 서명)와 `/admin/contract/send`(센터가 서명) | [컨트랙트 배포](../features/contract-deployment.md) |
+| 컨트랙트 | `/admin/contract/check`와 `/deploy`(컨트랙트 계정 센터가 서명하며 ABI와 함께 등록. 플랫폼 컨트랙트용 템플릿), `/contract/call`(읽기, 일괄 처리 가능), `/contract/events`, `/contract/list`, `/contract/send`(쓰기, 호출자 섹션의 사용자 계정이 서명)와 `/admin/contract/send`(센터가 서명) | [컨트랙트 배포](../features/contract-deployment.md) |
 
 본문과 응답이 포함된 전체 목록은 [프록시 API 레퍼런스](../reference/proxy-api.md)에 있습니다.
 

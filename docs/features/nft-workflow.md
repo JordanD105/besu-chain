@@ -27,7 +27,7 @@ are in [sections](sections.md#nft-collections)).
 | Step | Where | Signed by |
 |---|---|---|
 | 1. Compile | Remix (`http://192.168.68.139:30200`) | nothing |
-| 2. Deploy | chainlens **Deploy** page (or `POST /admin/contracts/deploy` with the `nft-collection` template) | the contract account center |
+| 2. Deploy | chainlens **Deploy** page (or `POST /admin/contract/deploy` with the `nft-collection` template) | the contract account center |
 | 3. Mint | **Mint** on the collection's chainlens page, or `POST /admin/contract/send` (`mint`) | the contract account center |
 | 4. Buyer | `POST /createaccount` with a section's key, or **Create account** on the chainlens Sections page | — (funded by the section's upfront account) |
 | 5. Sell | **Sell** on the collection's chainlens page, or `POST /contract/send` (`buy`) with the section's key | the buyer (and, for a resale, first the seller's `approve`) |
@@ -97,7 +97,7 @@ Names and symbols must be unique among the NFT collections, in any letter case (
 
 ```bash
 P=http://192.168.68.151:30000; T=$(cat ansible/state/secrets/proxy_admin_token)
-curl -s -X POST $P/admin/contracts/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+curl -s -X POST $P/admin/contract/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
   -d '{"template":"nft-collection","name":"Dragons","symbol":"DRG"}'
 ```
 
@@ -106,7 +106,7 @@ curl -s -X POST $P/admin/contracts/deploy -H "Authorization: Bearer $T" -H 'Cont
   "codeCheck": "matches the artifact", "registryTxHash": "0x…", ... }
 ```
 
-`POST /admin/contracts/check` with the same body is a dry run (gas, the future address).
+`POST /admin/contract/check` with the same body is a dry run (gas, the future address).
 
 ## 3. Mint
 

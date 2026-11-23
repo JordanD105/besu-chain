@@ -248,10 +248,12 @@ with `success: false`.
     { "address": "0xCollection", "name": "Dragons", "type": "nft", "kind": "nft", "registeredIn": 14172,
       "symbol": "DRG", "minter": "<contract account center>" },
     { "address": "0xNicknames", "name": "Nicknames", "type": "nickname", "kind": "common", "registeredIn": 35444,
-      "symbol": "NICK", "minter": "<contract account center>", "current": true } ] }
+      "symbol": "NICK", "minter": "<contract account center>", "current": true } ],
+  "center": "<contract account center>" }
 ```
 
 Oldest first. `current: true` marks the nickname collection in use (the latest registered one).
+`center` is the contract account center's address (the deployer and minter).
 
 ### Friendly values of the platform contracts
 
@@ -341,7 +343,7 @@ signed by the buyer: the token and the ETH move together or not at all.
 | Task | Call |
 |---|---|
 | list the collections | `GET /contract/list?type=nft` |
-| deploy one | `POST /admin/contracts/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
+| deploy one | `POST /admin/contract/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
 | mint for sale | `POST /admin/contract/send` `mint` `{ name, image, description, attributes, price }` |
 | first sale | `POST /contract/send` `buy` `{ tokenId }`, `from` = the buyer: the price goes to the buyer's section's **consumption** account |
 | resale | the seller sends `approve` `{ tokenId }`, then the buyer sends `buy` `{ tokenId }`: the price goes to the **seller** |
@@ -356,7 +358,7 @@ sells them. They stay on the chain.
 ```bash
 P=http://192.168.68.151:30000; T=<admin token>; K=<section key>
 # deploy (names and symbols unique among the NFT collections, any case; else 409)
-curl -s -X POST $P/admin/contracts/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+curl -s -X POST $P/admin/contract/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
   -d '{"template":"nft-collection","name":"Dragons","symbol":"DRG"}'
 # → { "success": true, "name": "Dragons", "kind": "nft", "address": "0xCollection", "txHash": "0x…", "codeCheck": "matches the artifact", … }
 
@@ -466,11 +468,9 @@ Admin token, as above.
 
 | Endpoint | Body | Does |
 |---|---|---|
-| `GET /admin/contracts` | | the center's address and the registered contracts |
-| `POST /admin/contracts/check` | a template, or `{ "kind": "common" \| "nft", "name", "abi", "bytecode", "deployedBytecode", "immutableReferences", "args" }` | dry run: arguments, gas, the future address; nothing signed |
-| `POST /admin/contracts/deploy` | same | deploy as the contract account center, compare the code, register with the ABI |
+| `POST /admin/contract/check` | a template, or `{ "kind": "common" \| "nft", "name", "abi", "bytecode", "deployedBytecode", "immutableReferences", "args" }` | dry run: arguments, gas, the future address; nothing signed |
+| `POST /admin/contract/deploy` | same | deploy as the contract account center, compare the code, register with the ABI |
 | `POST /admin/contract/send` | `{ "contract", "function", "args", "value" }` | a write signed by the contract account center ([below](#post-admincontractsend--write-as-the-contract-account-center)) |
-| `GET /admin/nickname` | `?q=` (search) | the nickname collection, price, edge levels with holder counts, nicknames (up to 200): the chainlens **Nicknames** page |
 | `POST /admin/registry/migrate` | `{ "from": "0xOldRegistry" }` | copy sections from a version-1 registry (Ansible `08-check.yml` runs it) |
 
 ```json
@@ -524,7 +524,7 @@ These routes answer **410**; the message names the call that replaces each. `0xC
 
 | Removed | Use |
 |---|---|
-| `POST /nft/deploy` | `POST /admin/contracts/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
+| `POST /nft/deploy` | `POST /admin/contract/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
 | `POST /nft/mint` | `POST /admin/contract/send` `mint` `{ name, image, price, … }` |
 | `POST /nft/transfer` | `POST /contract/send` `buy` `{ tokenId }`, `from` = the buyer (a resale: the seller first sends `approve` `{ tokenId }`). Version-2 collections are retired |
 | `GET /nft/contract`, `GET /nft/collections` | `GET /contract/list?type=nft` |
@@ -537,18 +537,21 @@ These routes answer **410**; the message names the call that replaces each. `0xC
 | `GET /nickname/quote` | `POST /contract/call` `quote` `{ account, level }` |
 | `POST /nickname/buy` | `POST /contract/send` `buyNickname` `{ nickname }`, `from` |
 | `POST /nickname/edge` | `POST /contract/send` `upgradeEdge` `{ level }`, `from` |
-| `POST /admin/nickname/deploy` | `POST /admin/contracts/deploy` `{ "template": "nickname-collection", … }` |
+| `POST /admin/nickname/deploy` | `POST /admin/contract/deploy` `{ "template": "nickname-collection", … }` |
 | `PUT /admin/nickname/price` | `POST /admin/contract/send` `setNicknamePrice` `{ price }` |
 | `POST /admin/nickname/edges` | `POST /admin/contract/send` `addEdge` `{ name, price, color, … }` |
 | `PUT /admin/nickname/edges/:level` | `POST /admin/contract/send` `setEdge` `{ level, …changes }` |
 | `POST /admin/nickname/reserve` | `POST /admin/contract/send` `reserve` `{ nicknames, reserved }` |
+| `GET /admin/contracts` | `GET /contract/list` (`center`: the contract account center) |
+| `POST /admin/contracts/check` | `POST /admin/contract/check` (same body) |
+| `POST /admin/contracts/deploy` | `POST /admin/contract/deploy` (same body) |
+| `GET /admin/nickname` | `GET /contract/list?type=nickname` (the collection), `POST /contract/call` (`nicknamePrice`, `edgeCount`, `totalSupply`) and `POST /contract/events` (`NicknameBought`, `EdgeUpgraded`) |
 
 ```json
 GET /nft/collections
 → 410 { "error": "GET /nft/collections was removed: use GET /contract/list?type=nft" }
 ```
 
-`GET /admin/nickname` stays.
 
 ---
 

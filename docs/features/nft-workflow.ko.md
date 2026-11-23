@@ -27,7 +27,7 @@
 | 단계 | 위치 | 서명 주체 |
 |---|---|---|
 | 1. 컴파일 | Remix (`http://192.168.68.139:30200`) | 없음 |
-| 2. 배포 | chainlens **Deploy** 페이지 (또는 `nft-collection` 템플릿으로 `POST /admin/contracts/deploy`) | 컨트랙트 계정 센터 |
+| 2. 배포 | chainlens **Deploy** 페이지 (또는 `nft-collection` 템플릿으로 `POST /admin/contract/deploy`) | 컨트랙트 계정 센터 |
 | 3. 민팅 | 컬렉션의 chainlens 페이지에서 **Mint**, 또는 `POST /admin/contract/send` (`mint`) | 컨트랙트 계정 센터 |
 | 4. 구매자 | 섹션의 키로 `POST /createaccount`, 또는 chainlens Sections 페이지에서 **Create account** | — (섹션의 선지급 계정에서 자금 공급) |
 | 5. 판매 | 컬렉션의 chainlens 페이지에서 **Sell**, 또는 섹션의 키로 `POST /contract/send` (`buy`) | 구매자 (재판매의 경우 먼저 판매자의 `approve`) |
@@ -97,7 +97,7 @@ h139). 2, 3, 5단계는 운영자 머신 또는 `chainlens_deploy_ips`에 있는
 
 ```bash
 P=http://192.168.68.151:30000; T=$(cat ansible/state/secrets/proxy_admin_token)
-curl -s -X POST $P/admin/contracts/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+curl -s -X POST $P/admin/contract/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
   -d '{"template":"nft-collection","name":"Dragons","symbol":"DRG"}'
 ```
 
@@ -106,7 +106,7 @@ curl -s -X POST $P/admin/contracts/deploy -H "Authorization: Bearer $T" -H 'Cont
   "codeCheck": "matches the artifact", "registryTxHash": "0x…", ... }
 ```
 
-같은 본문의 `POST /admin/contracts/check`는 시험 실행입니다(가스, 배포될 주소).
+같은 본문의 `POST /admin/contract/check`는 시험 실행입니다(가스, 배포될 주소).
 
 ## 3. 민팅 {#3-mint}
 

@@ -58,7 +58,7 @@ ordered nonces); chainlens is the UI and calls the proxy's admin API.
         ▼                                                                        ▼
  ┌────────────────────────────────── proxy (active, VIP .151) ───────────────────────────────────┐
  │ Admin API: /admin/sections (create, rename, info, key, active, top-up, sweep, pay back,       │
- │            replace account, archive, user accounts), /admin/contracts, /admin/contract/send   │
+ │            replace account, archive, user accounts), /admin/contract/*                        │
  │ App API:   /createaccount, /transfer, /contract/call, /send, /events, /list                   │
  │ sender queues: SENDER01 · upfront_i · consumption_i · payment_i · contract_account_center ·   │
  │                registry admin · user accounts                                                 │
@@ -131,7 +131,7 @@ and the monitoring host (chainlens calls it from there). Bodies and answers:
 | `POST /admin/sections/:id/archive {confirm: "<name>"}` | all money of the 3 accounts back to SENDER01, then closed for good: key stops working, name freed, history stays |
 
 Every money move carries a memo (`section 1 top-up`, `section 1 sweep`, `section 1 pay back`, …),
-so the chain itself says what it was. Contract deployment (`/admin/contracts/*`) is under
+so the chain itself says what it was. Contract deployment (`/admin/contract/*`) is under
 [Contracts](#contracts).
 
 ## Chainlens Sections page
@@ -202,9 +202,8 @@ admin API:
 
 | Request | Does |
 |---|---|
-| `GET /admin/contracts` | the center's address and the registered contracts |
-| `POST /admin/contracts/check {kind, name, abi, bytecode, deployedBytecode, immutableReferences, args}` | dry run: arguments, gas, no revert; the address it will get. Nothing is signed |
-| `POST /admin/contracts/deploy {…same}` | deploys (signed by the center), checks the code on chain against `deployedBytecode`, registers it (signed by the registry admin) |
+| `POST /admin/contract/check {kind, name, abi, bytecode, deployedBytecode, immutableReferences, args}` | dry run: arguments, gas, no revert; the address it will get. Nothing is signed |
+| `POST /admin/contract/deploy {…same}` | deploys (signed by the center), checks the code on chain against `deployedBytecode`, registers it (signed by the registry admin) |
 | `check` / `deploy` with `{template: "nft-collection", name, symbol}` or `{template: "nickname-collection", …}` | the platform's own contracts, compiled into the proxy image (the registry's address filled in) |
 | `POST /admin/contract/send {contract, function, args}` | a write signed by the center: the minter and owner of the platform's contracts (`mint`, nickname price and edge levels, reserved names) |
 
@@ -242,7 +241,7 @@ and `registry_` (the SectionRegistry's address).
 
 | Request | What happens |
 |---|---|
-| `POST /admin/contracts/deploy {template: "nft-collection", name, symbol}` | the center deploys a version-3 collection (its minter, with the registry's address) and registers it |
+| `POST /admin/contract/deploy {template: "nft-collection", name, symbol}` | the center deploys a version-3 collection (its minter, with the registry's address) and registers it |
 | `POST /admin/contract/send {contract, function: "mint", args: {name, image, …, price}}` | the center mints the NFT to itself, for sale; `price` (ETH) is fixed for good. Not tied to a section. |
 | `POST /contract/send {contract, function: "buy", args: {tokenId}, from}` + `X-Section-Key` | a sale to `from`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price (payee and value filled in). **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user holds it): the seller's section first sends `approve` `{tokenId}` from the seller (it approves the collection), also with `/contract/send`; the price goes to the **seller**. Seller and buyer may be in different sections. |
 

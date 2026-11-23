@@ -57,7 +57,7 @@ contract ([proxy API, contracts](../reference/proxy-api.md#contracts)). Reads go
 and the admin's writes (price, levels, reserved names) through `POST /admin/contract/send`, signed by
 the contract account center. With `args` as an object, the values are friendly (prices in ETH,
 `#rrggbb` colors, pattern names) and the answer has a friendly `result`. The old `/nickname/*` and
-`/admin/nickname/*` routes answer 410, except `GET /admin/nickname` ([removed routes](../reference/proxy-api.md#removed-routes)).
+`/admin/nickname` routes answer 410 ([removed routes](../reference/proxy-api.md#removed-routes)).
 
 - The collection is deployed by the **contract account center** and registered in the SectionRegistry
   as a common contract. The one in use is the **latest** registered contract that has `buyNickname`:
@@ -94,7 +94,7 @@ the `nickname-collection` template:
 P=http://192.168.68.151:30000; T=$(cat ansible/state/secrets/proxy_admin_token)
 curl -s -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -X POST \
   --data '{"template":"nickname-collection","name":"Nicknames","symbol":"NICK","price":"1","edge0":"Simple"}' \
-  $P/admin/contracts/deploy
+  $P/admin/contract/deploy
 # { "success": true, "name": "Nicknames", "kind": "common", "address": "0xNicknames", "codeCheck": "matches the artifact", … }
 ```
 
@@ -122,8 +122,9 @@ send '{"contract":"0xNicknames","function":"reserve","args":{"nicknames":["admin
 ```
 
 The page does the same: it changes the nickname price and **reserves** names nobody can buy (for
-example `admin`). `GET /admin/nickname` gives the page's summary: price, levels with holder counts,
-the nicknames.
+example `admin`). Its summary (price, levels with holder counts, the nicknames) comes from
+`/contract/call` (`nicknamePrice`, `edgeCount`, `totalSupply`) and `/contract/events` (`NicknameBought`,
+`EdgeUpgraded`).
 
 ## 3. Buy a nickname
 
@@ -215,6 +216,6 @@ All from `POST /contract/send`, except the last rows (reads and admin writes).
 | `proxy/contracts/NicknameCollection.sol` | the contract (ERC-721 + ERC-5192 + ERC-4906, on-chain SVG) |
 | `proxy/nickname-collection.json` | its compiled artifact (`node scripts/compile-contract.js contracts/NicknameCollection.sol NicknameCollection nickname-collection.json`) |
 | `proxy/stress-latest.js` | the generic contract API: friendly args and results (`friendlyArgs`, `friendlyCall`, `friendlySend`), `/contract/send` (`knownSend`: payee, price and nickname checks), `/admin/contract/send`, the `nickname-collection` template, `GET /admin/nickname` |
-| `chainlens/server.js` | the Nicknames page's API: reads `/admin/nickname`, writes with `/admin/contract/send` and `/admin/contracts/deploy` |
+| `chainlens/server.js` | the Nicknames page's API: reads `/contract/list`, `/contract/call` and `/contract/events`, writes with `/admin/contract/send` and `/admin/contract/deploy` |
 | `chainlens/public/app.js` | the Nicknames page (`showNicknames`, `edgeEditor`, `edgePreview`) |
 | `monitoring/grafana/tools/gen_sections_dashboard.py` | the income and the new columns of the Sections dashboard |

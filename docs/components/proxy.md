@@ -371,7 +371,7 @@ compiled into the image as `nft-collection-v3.json`). It needs sections and `CON
 
 | | |
 |---|---|
-| Deployed by | the contract account center: `POST /admin/contracts/deploy` with `{"template": "nft-collection", "name", "symbol"}`, or the chainlens Deploy page. Names and symbols are unique among the NFT collections (409) |
+| Deployed by | the contract account center: `POST /admin/contract/deploy` with `{"template": "nft-collection", "name", "symbol"}`, or the chainlens Deploy page. Names and symbols are unique among the NFT collections (409) |
 | Registered in the SectionRegistry | yes (kind NFT); `GET /contract/list?type=nft` lists the collections |
 | Minted by | the contract account center: `POST /admin/contract/send` `mint` (the proxy builds the metadata, picks the next token id, converts the price) |
 | Sale | `POST /contract/send` `buy` `{ tokenId }` from the buyer, with `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. the chainlens Sell form) may send it without a key: the section is then the buyer's |
@@ -401,7 +401,7 @@ registry 0x… v2, N section(s), admin API on`).
 |---|---|---|
 | section calls | `/createaccount`, `/transfer` (+x / −x), `/contract/send` (also NFT sales and nicknames) with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
 | admin API | `/admin/sections/*`: create, rename, info, key rotation, enable / disable, top-up, sweep, pay back, replace an account, archive, user accounts | [sections](../features/sections.md#admin-api) |
-| contracts | `/admin/contracts/check` and `/deploy` (signed by the contract account center, registered with their ABI; templates for the platform's contracts); `/contract/call` (read, also in batches), `/contract/events`, `/contract/list`; `/contract/send` (write, signed by a user account of the caller's section) and `/admin/contract/send` (signed by the center) | [contract deployment](../features/contract-deployment.md) |
+| contracts | `/admin/contract/check` and `/deploy` (signed by the contract account center, registered with their ABI; templates for the platform's contracts); `/contract/call` (read, also in batches), `/contract/events`, `/contract/list`; `/contract/send` (write, signed by a user account of the caller's section) and `/admin/contract/send` (signed by the center) | [contract deployment](../features/contract-deployment.md) |
 
 The full list with bodies and answers is in the [proxy API reference](../reference/proxy-api.md).
 

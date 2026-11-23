@@ -247,7 +247,8 @@ payable 함수에만 사용합니다.
     { "address": "0xCollection", "name": "Dragons", "type": "nft", "kind": "nft", "registeredIn": 14172,
       "symbol": "DRG", "minter": "<contract account center>" },
     { "address": "0xNicknames", "name": "Nicknames", "type": "nickname", "kind": "common", "registeredIn": 35444,
-      "symbol": "NICK", "minter": "<contract account center>", "current": true } ] }
+      "symbol": "NICK", "minter": "<contract account center>", "current": true } ],
+  "center": "<contract account center>" }
 ```
 
 오래된 것부터 나열합니다. `current: true`는 사용 중인 닉네임 컬렉션(가장 최근에 등록된 것)입니다.
@@ -340,7 +341,7 @@ width 3, radius 12, `solid`.
 | 작업 | 호출 |
 |---|---|
 | 컬렉션 목록 | `GET /contract/list?type=nft` |
-| 배포 | `POST /admin/contracts/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
+| 배포 | `POST /admin/contract/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
 | 판매용 민팅 | `POST /admin/contract/send` `mint` `{ name, image, description, attributes, price }` |
 | 최초 판매 | `POST /contract/send` `buy` `{ tokenId }`, `from` = 구매자: 대금은 구매자 섹션의 **소비** 계정으로 |
 | 재판매 | 판매자가 `approve` `{ tokenId }`를 보낸 뒤 구매자가 `buy` `{ tokenId }`를 보냄: 대금은 **판매자**에게 |
@@ -355,7 +356,7 @@ width 3, radius 12, `solid`.
 ```bash
 P=http://192.168.68.151:30000; T=<admin token>; K=<section key>
 # 배포 (이름과 심볼은 NFT 컬렉션 사이에서 대소문자 무관하게 고유, 아니면 409)
-curl -s -X POST $P/admin/contracts/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+curl -s -X POST $P/admin/contract/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
   -d '{"template":"nft-collection","name":"Dragons","symbol":"DRG"}'
 # → { "success": true, "name": "Dragons", "kind": "nft", "address": "0xCollection", "txHash": "0x…", "codeCheck": "matches the artifact", … }
 
@@ -465,11 +466,9 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 
 | 엔드포인트 | 본문 | 동작 |
 |---|---|---|
-| `GET /admin/contracts` | | 센터의 주소와 등록된 컨트랙트 |
-| `POST /admin/contracts/check` | 템플릿, 또는 `{ "kind": "common" \| "nft", "name", "abi", "bytecode", "deployedBytecode", "immutableReferences", "args" }` | 시험 실행: 인수, 가스, 배포될 주소. 아무것도 서명하지 않습니다 |
-| `POST /admin/contracts/deploy` | 동일 | 컨트랙트 계정 센터로 배포하고, 코드를 비교하고, ABI와 함께 등록 |
+| `POST /admin/contract/check` | 템플릿, 또는 `{ "kind": "common" \| "nft", "name", "abi", "bytecode", "deployedBytecode", "immutableReferences", "args" }` | 시험 실행: 인수, 가스, 배포될 주소. 아무것도 서명하지 않습니다 |
+| `POST /admin/contract/deploy` | 동일 | 컨트랙트 계정 센터로 배포하고, 코드를 비교하고, ABI와 함께 등록 |
 | `POST /admin/contract/send` | `{ "contract", "function", "args", "value" }` | 컨트랙트 계정 센터가 서명하는 쓰기 ([아래](#post-admincontractsend--write-as-the-contract-account-center)) |
-| `GET /admin/nickname` | `?q=` (검색) | 닉네임 컬렉션, 가격, 보유자 수가 있는 테두리 레벨, 닉네임(최대 200개): chainlens **Nicknames** 페이지 |
 | `POST /admin/registry/migrate` | `{ "from": "0xOldRegistry" }` | 버전 1 레지스트리에서 섹션 복사 (Ansible `08-check.yml`이 실행) |
 
 ```json
@@ -523,7 +522,7 @@ revert는 400으로 응답합니다(서명 전 `the transaction would revert: �
 
 | 제거됨 | 대신 사용 |
 |---|---|
-| `POST /nft/deploy` | `POST /admin/contracts/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
+| `POST /nft/deploy` | `POST /admin/contract/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
 | `POST /nft/mint` | `POST /admin/contract/send` `mint` `{ name, image, price, … }` |
 | `POST /nft/transfer` | `POST /contract/send` `buy` `{ tokenId }`, `from` = 구매자 (재판매: 판매자가 먼저 `approve` `{ tokenId }`). 버전 2 컬렉션은 폐기됨 |
 | `GET /nft/contract`, `GET /nft/collections` | `GET /contract/list?type=nft` |
@@ -536,18 +535,21 @@ revert는 400으로 응답합니다(서명 전 `the transaction would revert: �
 | `GET /nickname/quote` | `POST /contract/call` `quote` `{ account, level }` |
 | `POST /nickname/buy` | `POST /contract/send` `buyNickname` `{ nickname }`, `from` |
 | `POST /nickname/edge` | `POST /contract/send` `upgradeEdge` `{ level }`, `from` |
-| `POST /admin/nickname/deploy` | `POST /admin/contracts/deploy` `{ "template": "nickname-collection", … }` |
+| `POST /admin/nickname/deploy` | `POST /admin/contract/deploy` `{ "template": "nickname-collection", … }` |
 | `PUT /admin/nickname/price` | `POST /admin/contract/send` `setNicknamePrice` `{ price }` |
 | `POST /admin/nickname/edges` | `POST /admin/contract/send` `addEdge` `{ name, price, color, … }` |
 | `PUT /admin/nickname/edges/:level` | `POST /admin/contract/send` `setEdge` `{ level, …changes }` |
 | `POST /admin/nickname/reserve` | `POST /admin/contract/send` `reserve` `{ nicknames, reserved }` |
+| `GET /admin/contracts` | `GET /contract/list` (`center`: 컨트랙트 계정 센터) |
+| `POST /admin/contracts/check` | `POST /admin/contract/check` (같은 본문) |
+| `POST /admin/contracts/deploy` | `POST /admin/contract/deploy` (같은 본문) |
+| `GET /admin/nickname` | `GET /contract/list?type=nickname` (컬렉션), `POST /contract/call` (`nicknamePrice`, `edgeCount`, `totalSupply`), `POST /contract/events` (`NicknameBought`, `EdgeUpgraded`) |
 
 ```json
 GET /nft/collections
 → 410 { "error": "GET /nft/collections was removed: use GET /contract/list?type=nft" }
 ```
 
-`GET /admin/nickname`은 남아 있습니다.
 
 ---
 

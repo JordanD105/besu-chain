@@ -24,7 +24,7 @@ The contract is then visible in chainlens and usable by applications (`/contract
 `/contract/send`) at once.
 
 ```
-browser ──token──► chainlens /api/deploy/* ──proxy admin token──► proxy /admin/contracts/check | deploy
+browser ──token──► chainlens /api/deploy/* ──proxy admin token──► proxy /admin/contract/check | deploy
                                                                      │ signed by the contract account center
                                                                      ▼
                                                      Besu ◄── registerContract (registry admin)
@@ -97,8 +97,8 @@ The code check reports `matches the artifact`, `matches the artifact (immutable 
 `not checked (no deployedBytecode)` when the artifact has no runtime
 bytecode. The contract is registered in every case: read the result before you announce it.
 
-Without the browser, the same two steps are `POST /admin/contracts/check` and
-`POST /admin/contracts/deploy` on the proxy, with the proxy admin token
+Without the browser, the same two steps are `POST /admin/contract/check` and
+`POST /admin/contract/deploy` on the proxy, with the proxy admin token
 ([proxy API](../reference/proxy-api.md#admin-api-contracts-and-registry)).
 
 Changing a file, an argument, the kind or the name after **Check** requires a new check. If the

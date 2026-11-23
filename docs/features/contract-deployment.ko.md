@@ -23,7 +23,7 @@ SectionRegistry에 체인상 등록합니다([섹션: 컨트랙트](sections.md#
 chainlens에 표시되고 애플리케이션(`/contract/call`, `/contract/send`)에서 사용할 수 있습니다.
 
 ```
-browser ──token──► chainlens /api/deploy/* ──proxy admin token──► proxy /admin/contracts/check | deploy
+browser ──token──► chainlens /api/deploy/* ──proxy admin token──► proxy /admin/contract/check | deploy
                                                                      │ signed by the contract account center
                                                                      ▼
                                                      Besu ◄── registerContract (registry admin)
@@ -96,8 +96,8 @@ cat state/secrets/chainlens_deploy_token
 바이트코드가 없을 때 `not checked (no deployedBytecode)` 중 하나입니다. 컨트랙트는 어느 경우에나
 등록됩니다. 공지하기 전에 결과를 확인하십시오.
 
-브라우저 없이 같은 두 단계를 수행하려면 프록시 관리자 토큰으로 프록시의 `POST /admin/contracts/check`와
-`POST /admin/contracts/deploy`를 호출합니다([프록시 API](../reference/proxy-api.md#admin-api-contracts-and-registry)).
+브라우저 없이 같은 두 단계를 수행하려면 프록시 관리자 토큰으로 프록시의 `POST /admin/contract/check`와
+`POST /admin/contract/deploy`를 호출합니다([프록시 API](../reference/proxy-api.md#admin-api-contracts-and-registry)).
 
 **Check** 후에 파일, 인수, 종류 또는 이름을 변경하면 다시 검사해야 합니다. 그 사이에 센터의 상태가
 변경되면(다른 배포), **Deploy**가 거부되고 새 검사를 요구합니다. chainlens당 한 번에 하나의 배포만
