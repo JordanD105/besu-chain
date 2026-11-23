@@ -2437,11 +2437,10 @@ async function deployAndRegister(input) {
 // One nickname per section user account, bound to it (never transferable), with an edge level that only
 // goes up. Bought and upgraded by the user account (its MPC key signs), paid to its section's
 // consumption account. The edge levels are set by the contract account center (the minter).
-// The collection: the latest registered contract that has buyNickname (POST /admin/contract/deploy, template nickname-collection).
+// The collection: the latest registered nickname collection, version 5 (POST /admin/contract/deploy, template nickname-collection).
 
 const nicknameArtifact = require("./nickname-collection.json");
 const nicknameIface = new ethers.Interface(nicknameArtifact.abi);
-const EDGE_PATTERNS = ["solid", "double", "dashed", "gradient", "glow"];
 const NICKNAME_FORBIDDEN = /[<>&"'\\\u0000-\u001f\u007f]/;
 
 function ethText(wei) {
@@ -2451,7 +2450,7 @@ function ethText(wei) {
 async function nicknameCollection(optional = false) {
     requireSections();
     const pick = (book) => [...book.values()]
-        .filter((e) => Array.isArray(e.abi) && e.abi.some((f) => f.type === "function" && f.name === "buyNickname"))
+        .filter((e) => platformKind(e) === "nickname")
         .sort((a, b) => b.registeredIn - a.registeredIn)[0];
     const entry = pick(await loadContracts()) || pick(await loadContracts(true));
 
@@ -2500,20 +2499,9 @@ function nicknameId(text) {
     return BigInt(ethers.keccak256(bytes));
 }
 
+// An edge level: its number, step price (ETH) and whether it is for sale. Nothing else is stored.
 function edgeOut(level, e) {
-    return {
-        level,
-        name: e.name,
-        price: ethText(e.stepPrice),
-        enabled: e.enabled,
-        style: {
-            color: "#" + e.color.slice(2),
-            color2: "#" + e.color2.slice(2),
-            width: Number(e.width),
-            radius: Number(e.radius),
-            pattern: EDGE_PATTERNS[Number(e.pattern)] || String(e.pattern)
-        }
-    };
+    return { level, price: ethText(e.stepPrice), forSale: e.forSale };
 }
 
 async function readEdges(address) {
@@ -2537,64 +2525,20 @@ async function nicknameInfo(address, tokenId) {
     const [owner] = await nickCall(address, "ownerOf", [tokenId]);
     const [nickname] = await nickCall(address, "nicknameById", [tokenId]);
     const [level] = await nickCall(address, "edgeOf", [tokenId]);
-    const [edge] = await nickCall(address, "edgeInfo", [level]);
-    const [uri] = await nickCall(address, "tokenURI", [tokenId]);
-    const meta = decodeDataUri(uri) || {};
-    return {
-        nickname,
-        tokenId: tokenId.toString(),
-        account: ethers.getAddress(owner),
-        level: Number(level),
-        edge: edge.name,
-        image: meta.image || null
-    };
+    return { nickname, tokenId: tokenId.toString(), account: ethers.getAddress(owner), level: Number(level) };
 }
 
 // ---- Applications
 
 // ---- Admin (chainlens Nicknames page): the collection, its edge levels, prices, reserved nicknames
 
-function edgeStyleInput(body, current) {
+// An edge level's price and sale state from friendly input; omitted fields keep the current values
+function edgeLevelInput(body, current) {
     const b = body || {};
-    const color = (v, fallback, what) => {
-        const value = v === undefined ? fallback : v;
-
-        if (!/^#?[0-9a-fA-F]{6}$/.test(String(value || ""))) {
-            throw httpError(400, `${what}: a color #RRGGBB`);
-        }
-
-        return "0x" + String(value).replace(/^#/, "").toLowerCase();
-    };
-    const int = (v, fallback, min, max, what) => {
-        const value = v === undefined ? fallback : Number(v);
-
-        if (!Number.isInteger(value) || value < min || value > max) {
-            throw httpError(400, `${what}: ${min} to ${max}`);
-        }
-
-        return value;
-    };
-    const pattern = b.pattern === undefined ? (current ? EDGE_PATTERNS.indexOf(current.style.pattern) : 0)
-        : (EDGE_PATTERNS.includes(b.pattern) ? EDGE_PATTERNS.indexOf(b.pattern) : Number(b.pattern));
-    const name = b.name === undefined && current ? current.name : String(b.name || "").trim();
-
-    if (!name || Buffer.byteLength(name) > 32 || NICKNAME_FORBIDDEN.test(name)) {
-        throw httpError(400, "name: 1-32 bytes of plain text");
-    }
-
-    if (!Number.isInteger(pattern) || pattern < 0 || pattern > 4) {
-        throw httpError(400, `pattern: ${EDGE_PATTERNS.join(", ")}`);
-    }
-
+    const forSale = b.forSale !== undefined ? b.forSale : b.enabled;
     return {
-        name,
         stepPrice: b.price === undefined && current ? ethToWei(current.price) : adminPrice(b.price),
-        enabled: b.enabled === undefined ? (current ? current.enabled : true) : Boolean(b.enabled),
-        color: color(b.color, current && current.style.color, "color"),
-        color2: color(b.color2, current ? current.style.color2 : (b.color || "#94a3b8"), "color2"),
-        width: int(b.width, current ? current.style.width : 3, 1, 20, "width"),
-        radius: int(b.radius, current ? current.style.radius : 12, 0, 40, "radius"),
-        pattern
+        forSale: forSale === undefined ? (current ? current.forSale : true) : Boolean(forSale)
     };
 }
 
@@ -2618,10 +2562,12 @@ function adminPrice(value) {
 // values: ETH prices, "#rrggbb" colors, pattern names, metadata for a mint. Their answers carry a
 // "result" with friendly values too (ETH, decoded metadata and pictures, nickname details).
 
-// "nickname" (NicknameCollection), "nft" (NftCollection v3) or null
+// "nickname" (NicknameCollection version 5: levels only), "nft" (NftCollection v3) or null. An older
+// nickname collection (version 4, with edge styles) is an ordinary contract: no friendly values.
 function platformKind(entry) {
     if (!entry.platformKind) {
-        entry.platformKind = hasFunction(entry, "buyNickname") && hasFunction(entry, "upgradeEdge") ? "nickname"
+        const setEdge = hasFunction(entry, "setEdge") ? entry.iface.getFunction("setEdge") : null;
+        entry.platformKind = hasFunction(entry, "buyNickname") && hasFunction(entry, "upgradeEdge") && setEdge && setEdge.inputs.length === 3 ? "nickname"
             : hasFunction(entry, "priceOf") && hasFunction(entry, "mint") && hasFunction(entry, "buy") && hasFunction(entry, "minter") ? "nft"
                 : "none";
     }
@@ -2734,10 +2680,7 @@ async function friendlyArgsOf(entry, fragment, raw, ctx) {
 
             return [names.map(nicknameInput), o.reserved !== false];
         }
-        case "addEdge": {
-            const e = edgeStyleInput(o, null);
-            return [e.name, e.stepPrice, e.color, e.color2, e.width, e.radius, e.pattern];
-        }
+        case "addEdge": return [edgeLevelInput(o, null).stepPrice];
         case "setEdge": {
             const level = Number(o.level);
             const edges = await readEdges(entry.address);
@@ -2746,8 +2689,8 @@ async function friendlyArgsOf(entry, fragment, raw, ctx) {
                 throw httpError(404, `level: no edge level ${o.level} (levels 0-${edges.length - 1})`);
             }
 
-            const e = edgeStyleInput(o, edges[level]);
-            return [level, e.name, e.stepPrice, e.enabled, e.color, e.color2, e.width, e.radius, e.pattern];
+            const e = edgeLevelInput(o, edges[level]);
+            return [level, e.stepPrice, e.forSale];
         }
         default: break;
         }
@@ -2801,14 +2744,8 @@ async function friendlyCall(entry, fragment, args, decoded) {
         }
         case "nicknameOf":
             return v[0] === 0n ? { account: ethers.getAddress(args[0]), nickname: null } : nicknameInfo(entry.address, v[0]);
-        case "edgeOf": {
-            const [edge] = await entryCall(entry, "edgeInfo", [v[0]]);
-            return { tokenId: String(args[0]), level: Number(v[0]), edge: edge.name };
-        }
-        case "tokenURI": {
-            const meta = decodeDataUri(v[0]) || {};
-            return { tokenId: String(args[0]), metadata: meta, image: meta.image || null };
-        }
+        case "edgeOf": return { tokenId: String(args[0]), level: Number(v[0]) };
+        case "tokenURI": return { tokenId: String(args[0]), metadata: decodeDataUri(v[0]) || {} };
         case "ownerOf": return { tokenId: String(args[0]), owner: ethers.getAddress(v[0]) };
         default: break;
         }
@@ -3378,8 +3315,8 @@ app.post("/contract/send", async (req, res) => {
 // { contract, function, args, value }. Friendly object args for the platform's contracts, e.g.
 //   mint        { "name", "image", "description", "attributes", "price": "0.5" }   (to, tokenId and uri filled in)
 //   setNicknamePrice { "price": "1" }
-//   addEdge     { "name", "price", "color": "#f59e0b", "color2", "width", "radius", "pattern": "gradient" }
-//   setEdge     { "level": 2, ...only the fields to change }
+//   addEdge     { "price": "1" }                      (the next edge level, for sale)
+//   setEdge     { "level": 2, "price", "forSale" }    (omitted fields keep their value)
 //   reserve     { "nicknames": ["admin"], "reserved": true }
 app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
     requireSections();
@@ -3448,7 +3385,7 @@ app.post("/admin/contract/send", adminGuard, adminRoute(async (req) => {
 // ---- Deploy templates: the platform's own contracts, compiled into the proxy image
 // POST /admin/contract/check and /admin/contract/deploy with
 //   { "template": "nft-collection", "name": "Dragons", "symbol": "DRG" }
-//   { "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "edge0": "Simple", "another": false }
+//   { "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "another": false }
 async function templateInput(body) {
     const b = body || {};
 
@@ -3488,10 +3425,9 @@ async function templateInput(body) {
 
         const name = String(b.name || "Nicknames").trim().slice(0, 64);
         const symbol = String(b.symbol || "NICK").trim().slice(0, 16);
-        const edge0 = String(b.edge0 || "Simple").trim();
         return deployInputOf({ kind: "common", name, abi: nicknameArtifact.abi, bytecode: nicknameArtifact.bytecode,
             deployedBytecode: nicknameArtifact.deployedBytecode, immutableReferences: nicknameArtifact.immutableReferences,
-            args: [name, symbol, CONFIG.REGISTRY_CONTRACT, adminPrice(b.price === undefined ? "0" : b.price).toString(), edge0] });
+            args: [name, symbol, CONFIG.REGISTRY_CONTRACT, adminPrice(b.price === undefined ? "0" : b.price).toString()] });
     }
 
     throw httpError(400, "template: nft-collection or nickname-collection (or no template: abi and bytecode)");
@@ -3513,10 +3449,10 @@ const MOVED = [
     ["get", "/nickname/quote", "POST /contract/call { \"contract\", \"function\": \"quote\", \"args\": { \"account\", \"level\" } }"],
     ["post", "/nickname/buy", "POST /contract/send { \"contract\", \"function\": \"buyNickname\", \"args\": { \"nickname\" }, \"from\" }"],
     ["post", "/nickname/edge", "POST /contract/send { \"contract\", \"function\": \"upgradeEdge\", \"args\": { \"level\" }, \"from\" }"],
-    ["post", "/admin/nickname/deploy", "POST /admin/contract/deploy { \"template\": \"nickname-collection\", \"name\", \"symbol\", \"price\", \"edge0\" }"],
+    ["post", "/admin/nickname/deploy", "POST /admin/contract/deploy { \"template\": \"nickname-collection\", \"name\", \"symbol\", \"price\" }"],
     ["put", "/admin/nickname/price", "POST /admin/contract/send { \"contract\", \"function\": \"setNicknamePrice\", \"args\": { \"price\" } }"],
-    ["post", "/admin/nickname/edges", "POST /admin/contract/send { \"contract\", \"function\": \"addEdge\", \"args\": { \"name\", \"price\", \"color\", ... } }"],
-    ["put", "/admin/nickname/edges/:level", "POST /admin/contract/send { \"contract\", \"function\": \"setEdge\", \"args\": { \"level\", ...changes } }"],
+    ["post", "/admin/nickname/edges", "POST /admin/contract/send { \"contract\", \"function\": \"addEdge\", \"args\": { \"price\" } }"],
+    ["put", "/admin/nickname/edges/:level", "POST /admin/contract/send { \"contract\", \"function\": \"setEdge\", \"args\": { \"level\", \"price\", \"forSale\" } }"],
     ["get", "/admin/contracts", "GET /contract/list (\"center\": the contract account center)"],
     ["post", "/admin/contracts/check", "POST /admin/contract/check (same body)"],
     ["post", "/admin/contracts/deploy", "POST /admin/contract/deploy (same body)"],

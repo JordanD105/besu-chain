@@ -7,17 +7,18 @@ interface INicknameRegistry {
     function accountKind(address account) external view returns (uint8);
 }
 
-/// @notice Nickname tokens (version 4, docs/features/nicknames.md): one ERC-721 token per nickname,
-/// bound to its buyer (ERC-5192, never transferable), one per account, with an EDGE: the border drawn
-/// around the nickname, upgraded by paying more and never lowered.
+/// @notice Nickname tokens (version 5, docs/features/nicknames.md): one ERC-721 token per nickname,
+/// bound to its buyer (ERC-5192, never transferable), one per account, with an EDGE LEVEL (a number),
+/// raised by paying more and never lowered. The token holds only its nickname and level: how a level
+/// looks is up to the applications.
 ///   - `buyNickname`: a user account of a section buys a free nickname at `nicknamePrice`, edge 0;
 ///   - `upgradeEdge`: its owner pays the step prices up to a higher edge level.
 /// In both, the ETH goes in the same transaction to the buyer's section's consumption account.
-/// The edge levels (name, step price, style, for sale or not) are set by the minter, the contract
-/// account center; `tokenURI` draws the nickname in its edge on chain (SVG), from the CURRENT style.
+/// The edge levels (step price, for sale or not) are set by the minter, the contract account center.
+/// `tokenURI` is JSON: the nickname and its edge level (no picture).
 /// Nicknames compare without case for A-Z ("Alice" = "alice"); the proxy trims and NFC-normalizes.
 contract NicknameCollection {
-    uint256 public constant version = 4;
+    uint256 public constant version = 5;
     string public constant collectionType = "nickname";
     uint256 public constant MAX_NAME_BYTES = 1024;  // 256 characters of up to 4 bytes (the proxy counts characters)
     uint256 public constant MAX_EDGES = 32;
@@ -29,16 +30,10 @@ contract NicknameCollection {
     bytes4 private constant IID_ERC4906 = 0x49064906;
     bytes4 private constant IID_ERC5192 = 0xb45a3c0e;
 
-    /// @notice How an edge level looks and costs. pattern: 0 solid, 1 double, 2 dashed, 3 gradient, 4 glow.
+    /// @notice What an edge level costs. Nothing else is stored about a level.
     struct Edge {
-        string name;
-        uint256 stepPrice;  // wei, to reach this level from the one below (level 0: unused)
-        bool enabled;       // can be bought; a disabled level still draws for the tokens that have it
-        bytes3 color;
-        bytes3 color2;      // second color (gradient, glow, double)
-        uint8 width;        // 1-20
-        uint8 radius;       // 0-40
-        uint8 pattern;      // 0-4
+        uint256 stepPrice;  // wei, to reach this level from the one below (level 0: 0)
+        bool forSale;       // can be bought; tokens already at the level keep it
     }
 
     string public name;
@@ -61,10 +56,9 @@ contract NicknameCollection {
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event Locked(uint256 tokenId);                   // ERC-5192
     event MetadataUpdate(uint256 tokenId);           // ERC-4906
-    event BatchMetadataUpdate(uint256 fromTokenId, uint256 toTokenId);
     event NicknameBought(uint256 indexed tokenId, address indexed buyer, string nickname, uint256 price, address paidTo);
     event EdgeUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromLevel, uint8 toLevel, uint256 price, address paidTo);
-    event EdgeSet(uint8 indexed level, string name, uint256 stepPrice, bool enabled);
+    event EdgeSet(uint8 indexed level, uint256 stepPrice, bool forSale);
     event NicknamePriceSet(uint256 price);
     event Reserved(uint256 indexed tokenId, string nickname, bool reserved);
 
@@ -73,17 +67,15 @@ contract NicknameCollection {
         _;
     }
 
-    /// @param edge0 name of the default edge (level 0), e.g. "Simple"
-    constructor(string memory name_, string memory symbol_, address registry_, uint256 nicknamePrice_, string memory edge0) {
+    constructor(string memory name_, string memory symbol_, address registry_, uint256 nicknamePrice_) {
         require(registry_ != address(0), "no registry");
         name = name_;
         symbol = symbol_;
         minter = msg.sender;
         registry = INicknameRegistry(registry_);
         nicknamePrice = nicknamePrice_;
-        _checkLabel(edge0);
-        edges.push(Edge(edge0, 0, true, 0x94a3b8, 0x94a3b8, 2, 12, 0));
-        emit EdgeSet(0, edge0, 0, true);
+        edges.push(Edge(0, true));
+        emit EdgeSet(0, 0, true);
         emit NicknamePriceSet(nicknamePrice_);
     }
 
@@ -165,24 +157,21 @@ contract NicknameCollection {
         emit NicknamePriceSet(price);
     }
 
-    function addEdge(string calldata name_, uint256 stepPrice, bytes3 color, bytes3 color2, uint8 width, uint8 radius, uint8 pattern)
-        external onlyMinter returns (uint8 level)
-    {
+    /// @notice Add the next edge level, for sale at `stepPrice`.
+    function addEdge(uint256 stepPrice) external onlyMinter returns (uint8 level) {
         require(edges.length < MAX_EDGES, "too many edge levels");
         level = uint8(edges.length);
-        edges.push();
-        _setEdge(level, name_, stepPrice, true, color, color2, width, radius, pattern);
+        edges.push(Edge(stepPrice, true));
+        emit EdgeSet(level, stepPrice, true);
     }
 
-    /// @notice Change a level's name, step price, sale state or style. Levels are never removed;
-    /// a style change redraws every nickname at that level. Level 0 stays for sale and costs nothing.
-    function setEdge(uint8 level, string calldata name_, uint256 stepPrice, bool enabled, bytes3 color, bytes3 color2,
-        uint8 width, uint8 radius, uint8 pattern) external onlyMinter
-    {
+    /// @notice Change a level's step price or sale state. Levels are never removed. Level 0 stays for
+    /// sale and costs nothing.
+    function setEdge(uint8 level, uint256 stepPrice, bool forSale) external onlyMinter {
         require(level < edges.length, "no such edge level");
-        require(level > 0 || (stepPrice == 0 && enabled), "level 0: price 0, always enabled");
-        _setEdge(level, name_, stepPrice, enabled, color, color2, width, radius, pattern);
-        emit BatchMetadataUpdate(0, type(uint256).max);
+        require(level > 0 || (stepPrice == 0 && forSale), "level 0: price 0, always for sale");
+        edges[level] = Edge(stepPrice, forSale);
+        emit EdgeSet(level, stepPrice, forSale);
     }
 
     /// @notice Reserve (or release) nicknames nobody may buy; a nickname already bought is not affected.
@@ -198,7 +187,7 @@ contract NicknameCollection {
 
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
         return interfaceId == IID_ERC165 || interfaceId == IID_ERC721 || interfaceId == IID_METADATA
-            || interfaceId == IID_ERC4906 || interfaceId == IID_ERC5192;
+            || interfaceId == IID_ERC4906 || interfaceId == IID_ERC5192;  // ERC-4906: MetadataUpdate on an upgrade
     }
 
     function balanceOf(address owner) external view returns (uint256) {
@@ -247,17 +236,12 @@ contract NicknameCollection {
         revert("nickname is bound to its buyer");
     }
 
-    /// @notice data:application/json (base64): name, description, the edge as attributes, and the
-    /// picture: the nickname drawn in its edge (SVG, base64), from the level's current style.
+    /// @notice data:application/json (base64): the nickname and its edge level. No picture.
     function tokenURI(uint256 tokenId) external view returns (string memory) {
         ownerOf(tokenId);
-        uint8 level = edgeOf[tokenId];
-        Edge storage e = edges[level];
-        string memory nick = displayNames[tokenId];
         bytes memory json = abi.encodePacked(
-            '{"name":"', nick, '","description":"Nickname, edge ', e.name,
-            '","attributes":[{"trait_type":"edge","value":"', e.name, '"},{"trait_type":"edge level","display_type":"number","value":',
-            _str(level), '}],"image":"data:image/svg+xml;base64,', _base64(_svg(nick, e)), '"}'
+            '{"name":"', displayNames[tokenId], '","description":"Nickname","attributes":[{"trait_type":"edge level","display_type":"number","value":',
+            _str(edgeOf[tokenId]), '}]}'
         );
         return string(abi.encodePacked("data:application/json;base64,", _base64(json)));
     }
@@ -274,7 +258,7 @@ contract NicknameCollection {
         require(toLevel > fromLevel, "edge can only go up");
         require(toLevel < edges.length, "no such edge level");
         for (uint256 l = uint256(fromLevel) + 1; l <= toLevel; l++) {
-            require(edges[l].enabled, "edge level not for sale");
+            require(edges[l].forSale, "edge level not for sale");
             total += edges[l].stepPrice;
         }
     }
@@ -286,22 +270,7 @@ contract NicknameCollection {
         }
     }
 
-    function _setEdge(uint8 level, string calldata name_, uint256 stepPrice, bool enabled, bytes3 color, bytes3 color2,
-        uint8 width, uint8 radius, uint8 pattern) private
-    {
-        _checkLabel(name_);
-        require(width >= 1 && width <= 20, "width: 1-20");
-        require(radius <= 40, "radius: 0-40");
-        require(pattern <= 4, "pattern: 0 solid, 1 double, 2 dashed, 3 gradient, 4 glow");
-        edges[level] = Edge(name_, stepPrice, enabled, color, color2, width, radius, pattern);
-        emit EdgeSet(level, name_, stepPrice, enabled);
-    }
-
-    function _checkLabel(string memory label) private pure {
-        require(bytes(label).length >= 1 && bytes(label).length <= 32 && _valid(bytes(label)), "edge name: 1-32 bytes, plain text");
-    }
-
-    /// 1-1024 bytes, no control characters and none of < > & " ' \ (the picture and JSON stay safe)
+    /// 1-1024 bytes, no control characters and none of < > & " ' \ (the JSON stays safe)
     function _valid(bytes memory b) private pure returns (bool) {
         if (b.length == 0 || b.length > MAX_NAME_BYTES) {
             return false;
@@ -320,122 +289,6 @@ contract NicknameCollection {
         for (uint256 i = 0; i < b.length; i++) {
             bytes1 c = b[i];
             out[i] = (c >= "A" && c <= "Z") ? bytes1(uint8(c) + 32) : c;
-        }
-    }
-
-    // ---- the picture: the nickname inside its edge. Widths are counted in half-units: a 1- or 2-byte
-    // UTF-8 character (Latin, Cyrillic, …) is 1, a 3- or 4-byte one (Korean, Chinese, Japanese, emoji) 2.
-    // A line holds 520 px: about 16 half-units at 56 px, 26 at 36 px, 33 at 28 px.
-
-    function _svg(string memory nick, Edge storage e) private view returns (bytes memory) {
-        (bytes memory text, uint256 height) = _textBlock(bytes(nick));
-        return abi.encodePacked(_head(e, height), _frame(e, height, 16 + uint256(e.width)), text, "</svg>");
-    }
-
-    function _head(Edge storage e, uint256 height) private view returns (bytes memory) {
-        return abi.encodePacked(
-            "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='", _str(height), "' viewBox='0 0 600 ", _str(height), "'>",
-            "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='", _hex(e.color),
-            "'/><stop offset='1' stop-color='", _hex(e.color2), "'/></linearGradient></defs>",
-            "<rect width='600' height='", _str(height), "' fill='#0f172a'/>"
-        );
-    }
-
-    /// the <text> with its lines, and the picture's height
-    function _textBlock(bytes memory b) private pure returns (bytes memory text, uint256 height) {
-        uint256 units = 0;
-        for (uint256 i = 0; i < b.length; i++) {
-            units += _unitsAt(b, i);
-        }
-        (uint256 size, uint256 perLine) = units <= 16 ? (uint256(56), uint256(16)) : (units <= 26 ? (uint256(36), uint256(26)) : (uint256(28), uint256(33)));
-        uint256 lineHeight = size * 5 / 4;
-        (bytes memory tspans, uint256 lines) = _lines(b, perLine, lineHeight);
-        height = 120 + lines * lineHeight;
-        text = abi.encodePacked(
-            "<text x='300' y='", _str(60 + size + (lineHeight - size) / 2), "' font-family='sans-serif' font-size='", _str(size),
-            "' font-weight='600' fill='#f8fafc' text-anchor='middle'>", tspans, "</text>"
-        );
-    }
-
-    function _frame(Edge storage e, uint256 height, uint256 pad) private view returns (bytes memory) {
-        uint256 w = e.width;
-        bytes memory box = abi.encodePacked(
-            "x='", _str(pad), "' y='", _str(pad), "' width='", _str(600 - 2 * pad), "' height='", _str(height - 2 * pad),
-            "' rx='", _str(e.radius), "' fill='none' stroke-width='", _str(w), "'"
-        );
-        if (e.pattern == 1) {  // double
-            uint256 inner = pad + 2 * w + 2;
-            return abi.encodePacked("<rect ", box, " stroke='", _hex(e.color), "'/><rect x='", _str(inner), "' y='", _str(inner),
-                "' width='", _str(600 - 2 * inner), "' height='", _str(height - 2 * inner), "' rx='", _str(e.radius),
-                "' fill='none' stroke-width='", _str(w), "' stroke='", _hex(e.color2), "'/>");
-        }
-        if (e.pattern == 2) {  // dashed
-            return abi.encodePacked("<rect ", box, " stroke='", _hex(e.color), "' stroke-dasharray='", _str(w * 4), " ", _str(w * 2), "'/>");
-        }
-        if (e.pattern == 3) {  // gradient
-            return abi.encodePacked("<rect ", box, " stroke='url(#g)'/>");
-        }
-        if (e.pattern == 4) {  // glow: a wide soft border in the second color under the main one
-            return abi.encodePacked("<rect x='", _str(pad), "' y='", _str(pad), "' width='", _str(600 - 2 * pad), "' height='",
-                _str(height - 2 * pad), "' rx='", _str(e.radius), "' fill='none' stroke-width='", _str(w * 3), "' stroke='",
-                _hex(e.color2), "' stroke-opacity='0.35'/><rect ", box, " stroke='", _hex(e.color), "'/>");
-        }
-        return abi.encodePacked("<rect ", box, " stroke='", _hex(e.color), "'/>");  // solid
-    }
-
-    /// width in half-units of the character starting at b[i] (0 for a continuation byte)
-    function _unitsAt(bytes memory b, uint256 i) private pure returns (uint256) {
-        uint8 c = uint8(b[i]);
-        if (c & 0xc0 == 0x80) {
-            return 0;
-        }
-        return c >= 0xe0 ? 2 : 1;
-    }
-
-    /// one <tspan> per line of at most `perLine` half-units, broken after the last space of the line
-    /// when there is one (otherwise inside the word), always on a UTF-8 character boundary
-    function _lines(bytes memory b, uint256 perLine, uint256 lineHeight) private pure returns (bytes memory out, uint256 count) {
-        uint256 start = 0;
-        uint256 width = 0;
-        uint256 space = 0;       // index of the last space in the current line (0: none)
-        uint256 afterSpace = 0;  // width of the line up to and including that space
-        for (uint256 i = 0; i <= b.length; i++) {
-            uint256 u = i < b.length ? _unitsAt(b, i) : 0;
-            if (i == b.length || (u > 0 && width + u > perLine)) {
-                uint256 end = (i < b.length && space > start) ? space : i;
-                out = abi.encodePacked(out, "<tspan x='300' dy='", count == 0 ? bytes("0") : _str(lineHeight), "'>", _slice(b, start, end), "</tspan>");
-                count++;
-                if (end != i) {
-                    start = end + 1;            // the rest of the word moves to the next line
-                    width = width - afterSpace;
-                } else {
-                    start = i;
-                    width = 0;
-                }
-                space = 0;
-            }
-            if (i < b.length && b[i] == 0x20 && i > start) {
-                space = i;
-                afterSpace = width + 1;
-            }
-            width += u;
-        }
-    }
-
-    function _slice(bytes memory b, uint256 from, uint256 to) private pure returns (bytes memory part) {
-        part = new bytes(to - from);
-        for (uint256 j = from; j < to; j++) {
-            part[j - from] = b[j];
-        }
-    }
-
-    function _hex(bytes3 c) private pure returns (bytes memory out) {
-        bytes16 digits = "0123456789abcdef";
-        out = new bytes(7);
-        out[0] = "#";
-        for (uint256 i = 0; i < 3; i++) {
-            out[1 + 2 * i] = digits[uint8(c[i]) >> 4];
-            out[2 + 2 * i] = digits[uint8(c[i]) & 0x0f];
         }
     }
 

@@ -2509,7 +2509,6 @@ async function showSection(id) {
 // of a nickname, the edge levels (name, step price, for sale, style) with a live preview, reserved
 // nicknames and the list of nicknames. Same gate and token as the Sections page; every change is
 // signed by the contract account center through the proxy.
-const EDGE_PATTERNS = ["solid", "double", "dashed", "gradient", "glow"];
 
 async function nicknamePut(path, body) {
     const response = await fetch(path, {
@@ -2524,61 +2523,17 @@ async function nicknamePut(path, body) {
     return data;
 }
 
-// The same drawing as the contract's tokenURI (simplified), for the live preview
-function edgePreview(style, text) {
-    const w = Number(style.width) || 1;
-    const pad = 16 + w;
-    const height = 140;
-    const r = Number(style.radius) || 0;
-    const box = (p, sw, stroke, extra) => "<rect x='" + p + "' y='" + p + "' width='" + (600 - 2 * p) + "' height='" + (height - 2 * p) +
-        "' rx='" + r + "' fill='none' stroke-width='" + sw + "' stroke='" + stroke + "'" + (extra || "") + "/>";
-    let frame;
-    if (style.pattern === "double") {
-        frame = box(pad, w, style.color) + box(pad + 2 * w + 2, w, style.color2);
-    } else if (style.pattern === "dashed") {
-        frame = box(pad, w, style.color, " stroke-dasharray='" + w * 4 + " " + w * 2 + "'");
-    } else if (style.pattern === "gradient") {
-        frame = box(pad, w, "url(#g)");
-    } else if (style.pattern === "glow") {
-        frame = box(pad, w * 3, style.color2, " stroke-opacity='0.35'") + box(pad, w, style.color);
-    } else {
-        frame = box(pad, w, style.color);
-    }
-    const safe = String(text).replace(/[<>&"']/g, "");
-    const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='" + height + "' viewBox='0 0 600 " + height + "'>" +
-        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='" + style.color + "'/><stop offset='1' stop-color='" +
-        style.color2 + "'/></linearGradient></defs><rect width='600' height='" + height + "' fill='#0f172a'/>" + frame +
-        "<text x='300' y='86' font-family='sans-serif' font-size='40' font-weight='600' fill='#f8fafc' text-anchor='middle'>" + safe + "</text></svg>";
-    return el("img", { class: "edge-preview", alt: safe, src: "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg))) });
-}
-
+// An edge level: its step price and whether it is for sale (a token stores only its level)
 function edgeEditor(edge, onSave, saveLabel) {
     const isZero = edge && edge.level === 0;
-    const style = edge ? edge.style : { color: "#f59e0b", color2: "#fde68a", width: 4, radius: 16, pattern: "solid" };
-    const inputs = {
-        name: el("input", { class: "table-search", value: edge ? edge.name : "", placeholder: t("nick.edgeName"), "aria-label": t("nick.edgeName") }),
-        price: el("input", { class: "table-search", value: edge ? edge.price : "", placeholder: "0.5", "aria-label": t("nick.stepPrice") }),
-        enabled: el("input", { type: "checkbox", "aria-label": t("nick.forSale") }),
-        color: el("input", { type: "color", value: style.color, "aria-label": t("nick.color") }),
-        color2: el("input", { type: "color", value: style.color2, "aria-label": t("nick.color2") }),
-        width: el("input", { class: "table-search", type: "number", min: "1", max: "20", value: String(style.width), "aria-label": t("nick.width") }),
-        radius: el("input", { class: "table-search", type: "number", min: "0", max: "40", value: String(style.radius), "aria-label": t("nick.radius") }),
-        pattern: el("select", { "aria-label": t("nick.pattern") }, EDGE_PATTERNS.map((p) => el("option", { value: p }, t("nick.pattern." + p))))
-    };
-    inputs.enabled.checked = edge ? edge.enabled : true;
-    inputs.pattern.value = style.pattern;
+    const price = el("input", { class: "table-search", value: edge ? edge.price : "", placeholder: "0.5", "aria-label": t("nick.stepPrice") });
+    const forSale = el("input", { type: "checkbox", "aria-label": t("nick.forSale") });
+    forSale.checked = edge ? edge.forSale : true;
     if (isZero) {
-        inputs.price.value = "0";
-        inputs.price.disabled = true;
-        inputs.enabled.disabled = true;
+        price.value = "0";
+        price.disabled = true;
+        forSale.disabled = true;
     }
-    const value = () => ({
-        name: inputs.name.value.trim(), price: inputs.price.value.trim(), enabled: inputs.enabled.checked,
-        color: inputs.color.value, color2: inputs.color2.value, width: Number(inputs.width.value), radius: Number(inputs.radius.value),
-        pattern: inputs.pattern.value
-    });
-    const preview = el("div", { class: "edge-preview-box" }, edgePreview(style, t("nick.sample")));
-    Object.values(inputs).forEach((input) => input.addEventListener("input", () => preview.replaceChildren(edgePreview(value(), t("nick.sample")))));
     const save = el("button", { type: "button", class: "fn-run" }, saveLabel);
     const result = el("span", { class: "muted" });
     save.addEventListener("click", async () => {
@@ -2586,7 +2541,7 @@ function edgeEditor(edge, onSave, saveLabel) {
         result.className = "muted";
         result.textContent = t("nick.signing");
         try {
-            await onSave(value());
+            await onSave({ price: price.value.trim(), forSale: forSale.checked });
             render();
         } catch (error) {
             result.className = "bad-text";
@@ -2600,13 +2555,9 @@ function edgeEditor(edge, onSave, saveLabel) {
             el("b", {}, edge ? t("nick.level").replace("{n}", edge.level) : t("nick.newLevel")),
             edge ? el("span", { class: "muted" }, t("nick.holders").replace("{n}", edge.holders || 0)) : null
         ]),
-        preview,
-        el("div", { class: "edge-fields" }, [
-            field(t("nick.edgeName"), inputs.name), field(t("nick.stepPrice"), inputs.price), field(t("nick.forSale"), inputs.enabled),
-            field(t("nick.pattern"), inputs.pattern), field(t("nick.color"), inputs.color), field(t("nick.color2"), inputs.color2),
-            field(t("nick.width"), inputs.width), field(t("nick.radius"), inputs.radius)
-        ]),
-        el("div", { class: "deploy-buttons" }, [save, result])
+        el("div", { class: "edge-fields" }, isZero ? [el("span", { class: "muted" }, t("nick.level0"))]
+            : [field(t("nick.stepPrice"), price)].concat(edge ? [field(t("nick.forSale"), forSale)] : [])),
+        isZero ? null : el("div", { class: "deploy-buttons" }, [save, result])
     ]);
 }
 
@@ -2641,8 +2592,7 @@ async function showNicknames(q) {
         const f = {
             name: el("input", { class: "table-search", value: "Nicknames", "aria-label": t("nick.collectionName") }),
             symbol: el("input", { class: "table-search", value: "NICK", "aria-label": t("nick.symbol") }),
-            price: el("input", { class: "table-search", value: "1", "aria-label": t("nick.price") }),
-            edge0: el("input", { class: "table-search", value: "Simple", "aria-label": t("nick.edge0") })
+            price: el("input", { class: "table-search", value: "1", "aria-label": t("nick.price") })
         };
         const go = el("button", { type: "button", class: "fn-run deploy-go" }, t("nick.deploy"));
         const result = el("div");
@@ -2653,7 +2603,7 @@ async function showNicknames(q) {
             go.disabled = true;
             result.replaceChildren(el("span", { class: "muted" }, t("nick.signing")));
             try {
-                await deployPost("/api/nicknames/deploy", { name: f.name.value.trim(), symbol: f.symbol.value.trim(), price: f.price.value.trim(), edge0: f.edge0.value.trim() });
+                await deployPost("/api/nicknames/deploy", { name: f.name.value.trim(), symbol: f.symbol.value.trim(), price: f.price.value.trim() });
                 render();
             } catch (error) {
                 result.replaceChildren(el("span", { class: "bad-text" }, error.message));
@@ -2665,7 +2615,7 @@ async function showNicknames(q) {
             el("h2", {}, t("nick.title")),
             el("div", { class: "muted", style: "margin-bottom:12px" }, t("nick.noCollection")),
             el("div", { class: "deploy-form" }, [field(t("nick.collectionName"), f.name), field(t("nick.symbol"), f.symbol),
-                field(t("nick.price"), f.price), field(t("nick.edge0"), f.edge0), el("div", { class: "deploy-buttons" }, [go])]),
+                field(t("nick.price"), f.price), el("div", { class: "deploy-buttons" }, [go])]),
             result, message
         ]));
     }
@@ -2720,10 +2670,9 @@ async function showNicknames(q) {
             location.hash = "#/nicknames" + (search.value.trim() ? "?q=" + encodeURIComponent(search.value.trim()) : "");
         }
     });
-    const edgeName = (level) => (data.edges[level] ? data.edges[level].name : String(level));
     const list = dataTable([
         { label: "nick.nickname", sort: (row) => row.nickname.toLowerCase(), search: (row) => row.nickname, cell: (row) => row.nickname },
-        { label: "nick.edge", sort: (row) => row.level, cell: (row) => el("span", { class: "badge type" }, row.level + " · " + edgeName(row.level)) },
+        { label: "nick.edge", sort: (row) => row.level, cell: (row) => el("span", { class: "badge type" }, String(row.level)) },
         { label: "nick.account", sort: (row) => row.account, search: (row) => row.account, cell: (row) => el("a", { href: "#/accounts/" + row.account }, short(row.account)) }
     ], data.list, { sort: 1, dir: "desc", key: "nicknames" });
 
