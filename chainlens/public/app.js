@@ -1086,16 +1086,18 @@ function balanceChart(sections) {
 }
 
 function usersChart(sections) {
+    // real user accounts; the gateway's spare accounts (not handed out yet) are shown apart
     const max = Math.max(0, ...sections.map((s) => s.users));
     return el("div", { class: "viz" }, sections.map((s) => {
         const row = el("div", { class: "viz-row" + (s.active ? "" : " off") }, [
             el("a", { class: "viz-name", href: "#/accounts?section=" + encodeURIComponent("s:" + s.name) }, s.name),
             el("div", { class: "viz-track" }, [
                 el("div", { class: "viz-bar" }, s.users > 0 ? [el("i", { class: "viz-seg s1", style: "width:" + (s.users / max * 100) + "%" })] : []),
-                el("span", { class: "viz-end" }, formatCount(s.users))
+                el("span", { class: "viz-end" }, [formatCount(s.users), s.spares ? el("span", { class: "muted small", title: t("spare.hint") }, " +" + formatCount(s.spares) + " " + t("spare.short")) : ""])
             ])
         ]);
-        row.addEventListener("mousemove", (event) => showVizTip(event, [[s.name], [t("platform.userAccounts"), formatCount(s.users), "s1"]]));
+        row.addEventListener("mousemove", (event) => showVizTip(event, [[s.name], [t("platform.userAccounts"), formatCount(s.users), "s1"],
+            ...(s.spares ? [[t("spare.accounts"), formatCount(s.spares)]] : [])]));
         row.addEventListener("mouseleave", hideVizTip);
         return row;
     }));
@@ -1112,7 +1114,8 @@ function balancesTable(sections) {
         { label: "role.consumption", sort: (row) => row.balances.consumption || 0, cell: (row) => ethText(row.balances.consumption) },
         { label: "role.payment", sort: (row) => row.balances.payment || 0, cell: (row) => ethText(row.balances.payment) },
         { label: "platform.usersSeg", sort: (row) => row.balances.users || 0, cell: (row) => ethText(row.balances.users) },
-        { label: "platform.userAccounts", sort: (row) => row.users, cell: (row) => formatCount(row.users) }
+        { label: "platform.userAccounts", sort: (row) => row.users, cell: (row) => formatCount(row.users) },
+        { label: "spare.accounts", sort: (row) => row.spares || 0, cell: (row) => (row.spares ? el("span", { class: "muted" }, formatCount(row.spares)) : "—") }
     ], sections, { key: "platform-balances" });
 }
 
@@ -1341,7 +1344,8 @@ function platformSection(o) {
                 o.registry.admin ? el("span", {}, [t("role.registry admin") + " ", addr(o.registry.admin)]) : null]) : null,
         idCard(t("sections.title"), formatCount(c.active), t("sections.active"),
             [t("platform.sectionStates").replace("{disabled}", formatCount(c.disabled)).replace("{archived}", formatCount(c.archived)),
-                t("platform.usersLine").replace("{users}", formatCount(c.users)).replace("{inSections}", formatCount(o.accounts.inSections)).replace("{indexed}", formatCount(o.accounts.indexed))])
+                t("platform.usersLine").replace("{users}", formatCount(c.users)).replace("{inSections}", formatCount(o.accounts.inSections)).replace("{indexed}", formatCount(o.accounts.indexed))
+                    + (c.spares ? " · " + t("spare.accounts") + ": " + formatCount(c.spares) : "")])
     ]);
     const body = el("div");
     const toggle = el("button", { type: "button", class: "fn-run viz-toggle" });
@@ -2540,12 +2544,23 @@ async function showSection(id, tab) {
     const loadAccounts = async () => {
         try {
             const r = await sectionGet("/api/sections/" + id + "/accounts");
-            transferAccount.replaceChildren(...r.accounts.map((a) => el("option", { value: a.address }, short(a.address) + " (" + a.balance + " ETH)")));
-            accountsBox.replaceChildren(r.accounts.length ? dataTable([
-                { label: "col.address", sort: (row) => row.address, search: (row) => row.address, cell: (row) => addr(row.address) },
+            const real = r.accounts.filter((a) => !a.spare);
+            const spare = r.accounts.filter((a) => a.spare);
+            transferAccount.replaceChildren(...real.map((a) => el("option", { value: a.address }, short(a.address) + " (" + a.balance + " ETH)")));
+            // real user accounts by default; the gateway's spare accounts behind a switch
+            const showSpare = el("input", { type: "checkbox", "aria-label": t("spare.show") });
+            const tableBox = el("div");
+            const draw = () => tableBox.replaceChildren((showSpare.checked ? spare : real).length ? dataTable([
+                { label: "col.address", sort: (row) => row.address, search: (row) => row.address, cell: (row) => [addr(row.address), row.spare ? el("span", { class: "badge create", style: "margin-left:6px" }, t("spare.short")) : ""] },
                 { label: "account.balance", sort: (row) => Number(row.balance), cell: (row) => row.balance + " ETH" },
                 { label: "sections.addedIn", sort: (row) => row.addedIn, cell: (row) => el("a", { href: "#/activity/blocks/" + row.addedIn }, "#" + row.addedIn) }
-            ], r.accounts, { sort: 2, dir: "desc", key: "section-accounts" }) : el("div", { class: "empty" }, t("sections.noAccounts")));
+            ], showSpare.checked ? spare : real, { sort: 2, dir: "desc", key: showSpare.checked ? "section-spares" : "section-accounts" }) : el("div", { class: "empty" }, t("sections.noAccounts")));
+            showSpare.addEventListener("change", draw);
+            draw();
+            accountsBox.replaceChildren(
+                el("div", { class: "muted", style: "margin-bottom:8px" }, t("spare.counts").replace("{real}", formatCount(real.length)).replace("{spare}", formatCount(spare.length))),
+                spare.length ? el("label", { class: "muted" }, [showSpare, " " + t("spare.show").replace("{n}", formatCount(spare.length))]) : null,
+                tableBox);
         } catch (error) {
             accountsBox.replaceChildren(el("span", { class: "bad-text" }, error.message));
         }

@@ -1397,6 +1397,16 @@ async function handle(req, res) {
     }
 
     // reports: the section key, or the read-and-acknowledge report token (chainlens)
+    // the spare accounts not handed out yet (chainlens shows them apart from the real user accounts)
+    if (req.method === "GET" && path === "/gateway/spares") {
+        if (!keyOk(req) && !reportTokenOk(req)) {
+            wrongKey(ip);
+            return send(res, 401, { error: "the section key or the report token is required" });
+        }
+        return send(res, 200, { success: true, section: section(), spares: q("SELECT display FROM spares WHERE used IS NULL ORDER BY created").all().map((r) => r.display),
+            used: q("SELECT COUNT(*) AS n FROM spares WHERE used IS NOT NULL").get().n });
+    }
+
     if (path === "/gateway/report" || /^\/gateway\/report\/\d+\/ack$/.test(path)) {
         if (!keyOk(req) && !reportTokenOk(req)) {
             wrongKey(ip);

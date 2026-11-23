@@ -1284,7 +1284,44 @@ function txCountFor(address) {
     }).length;
 }
 
+// Spare accounts: made in advance by a section's gateway for /createaccount during a cut, not handed out
+// yet. Registered as the section's user accounts on chain; chainlens shows them apart (docs/components/gateway.md).
+const spareAccounts = new Map();   // address (lower case) -> section id
+async function refreshSpares() {
+    if (!SECTIONS.gatewayToken) {
+        return;
+    }
+    const next = new Map();
+    for (const g of SECTIONS.gateways) {
+        try {
+            const r = await fetch(g.url + "/gateway/spares", { headers: { authorization: "Bearer " + SECTIONS.gatewayToken }, signal: AbortSignal.timeout(5000) });
+            if (!r.ok) {
+                throw new Error("HTTP " + r.status);
+            }
+            for (const a of (await r.json()).spares || []) {
+                next.set(String(a).toLowerCase(), g.section);
+            }
+        } catch (error) {
+            // that gateway's spares stay as they were
+            for (const [a, id] of spareAccounts) {
+                if (id === g.section) {
+                    next.set(a, id);
+                }
+            }
+        }
+    }
+    spareAccounts.clear();
+    next.forEach((id, a) => spareAccounts.set(a, id));
+}
+setTimeout(refreshSpares, 3000).unref();
+setInterval(refreshSpares, 30000).unref();
+const isSpare = (address) => spareAccounts.has(String(address || "").toLowerCase());
+
 function publicAccount(row) {
+    const owner = sectionOf(row.address) || {};
+    if (owner.role === "user" && isSpare(row.address)) {
+        owner.role = "spare";
+    }
     return {
         address: row.address,
         balance: formatEth(row.balanceWei),
@@ -1292,7 +1329,7 @@ function publicAccount(row) {
         tokens: row.erc20.size,
         nfts: nftsOf(row.address).length,
         transactions: txCountFor(row.address),
-        ...(sectionOf(row.address) || {})
+        ...owner
     };
 }
 
@@ -1584,10 +1621,13 @@ async function buildOverview() {
     const center = ethers.isAddress(CONTRACT_CENTER) ? ethers.getAddress(CONTRACT_CENTER) : null;
     const registered = [...chainRegistry.byAddress.values()].map((e) => e.record);
     const byRole = new Map(); // "id|role" -> address
-    const users = new Map(); // id -> count
+    const users = new Map(); // id -> count (real user accounts)
+    const spares = new Map(); // id -> count (the gateway's spare accounts not handed out yet)
     const usersWei = new Map(); // id -> the user accounts' balances (indexed, refreshed with every block scan)
     for (const [address, entry] of sectionBook.accounts) {
-        if (entry.role === "user") {
+        if (entry.role === "user" && isSpare(address)) {
+            spares.set(entry.id, (spares.get(entry.id) || 0) + 1);
+        } else if (entry.role === "user") {
             users.set(entry.id, (users.get(entry.id) || 0) + 1);
             const account = db.accounts.get(address);
             usersWei.set(entry.id, (usersWei.get(entry.id) || 0n) + (account && account.balanceWei ? BigInt(account.balanceWei) : 0n));
@@ -1597,7 +1637,7 @@ async function buildOverview() {
     }
     const sections = [];
     for (const [id, s] of [...sectionBook.sections.entries()].sort((a, b) => a[0] - b[0])) {
-        const row = { id, name: s.name, active: s.active, archived: s.archived, users: users.get(id) || 0, balances: {} };
+        const row = { id, name: s.name, active: s.active, archived: s.archived, users: users.get(id) || 0, spares: spares.get(id) || 0, balances: {} };
         if (!s.archived) {
             for (const role of ["upfront", "consumption", "payment"]) {
                 const address = byRole.get(id + "|" + role);
@@ -1625,7 +1665,8 @@ async function buildOverview() {
             active: live.filter((s) => s.active).length,
             disabled: live.filter((s) => !s.active).length,
             archived: sections.length - live.length,
-            users: [...users.values()].reduce((a, b) => a + b, 0)
+            users: [...users.values()].reduce((a, b) => a + b, 0),
+            spares: [...spares.values()].reduce((a, b) => a + b, 0)
         },
         sections: live,
         accounts: {
@@ -1865,8 +1906,8 @@ function buildSectionStats(period, range) {
     // a new user: the earlier of its registration (AccountAdded) and its first funding
     const seen = new Set();
     for (const a of sectionBook.added) {
-        if (seen.has(a.account)) {
-            continue;
+        if (seen.has(a.account) || isSpare(a.account)) {
+            continue;   // a spare account becomes a new user when the gateway hands it out
         }
         seen.add(a.account);
         const registered = db.txByHash.get(a.txHash);
@@ -2724,6 +2765,10 @@ app.get("/api/sections/:id/accounts", sectionsGuard, async (req, res) => {
     }
     try {
         const r = await proxyAdmin("GET", "/admin/sections/" + req.params.id + "/accounts");
+        if (r.status === 200 && Array.isArray(r.data.accounts)) {
+            r.data.accounts.forEach((a) => { a.spare = isSpare(a.address); });
+            r.data.spares = r.data.accounts.filter((a) => a.spare).length;
+        }
         res.status(r.status).json(r.data);
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });
