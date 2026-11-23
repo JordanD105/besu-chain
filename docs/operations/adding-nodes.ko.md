@@ -242,7 +242,7 @@ chainlens의 데이터 소스입니다([고가용성](../deployment/high-availab
 | 더 좋은 호스트나 다른 호스트의 노드 | [옮기기](#move-an-mpc-node-to-another-host): 같은 노드 ID, 같은 키 조각 |
 | 더 높은 서명 처리량 | 더 큰 코디네이터 호스트와 사전 서명 풀([MPC 벤치마크](../development/mpc-benchmarks.md)) |
 | 영구적으로 잃은 노드, 이중화 복구 | 새 클러스터: [운영 환경의 MPC 서명기, 14단계](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good) |
-| 다른 노드 수나 임계값(예: 3-of-5) | 이 역시 새 키를 가진 새 클러스터입니다: 모든 주소가 바뀌고, 자금을 옮기고, NFT 컬렉션을 다시 배포해야 하며, 세 노드를 넘으려면 `make-cluster.sh`와 Ansible 구성을 확장해야 합니다 |
+| 다른 노드 수나 임계값(예: 3-of-5) | 이 역시 새 키를 가진 새 클러스터입니다: 모든 주소가 바뀌고, 자금을 옮기고, 아바타와 닉네임 컬렉션을 다시 배포해야 하며, 세 노드를 넘으려면 `make-cluster.sh`와 Ansible 구성을 확장해야 합니다 |
 
 **코디네이터**는 키 자료를 보유하지 않습니다: HA 쌍에서 VIP `.150:9100` 뒤에서 실행됩니다(coord1 활성,
 coord2 웜 대기, 둘 다 `haproxy.cfg`에 있음). 코디네이터를 늘려도 안전성은 높아지지 않으며, 구성에는

@@ -330,7 +330,7 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 | **Upfront** / **Consumption** / **Payment** | 현재 잔액(ETH) |
 | **Days left** | 최근 7일의 지출 기준으로 선지급 계정이 버티는 기간. 지급한 것이 없으면 *no spending*. 3 미만 빨간색, 7 미만 주황색 |
 | **Spend / day** | 최근 7일 동안 선지급 계정에서 하루에 지급된 ETH(−x 송금과 새 계정 자금 제공) |
-| **New accounts**, **+x in**, **−x out**, **NFT sales**, **Top-ups**, **Swept**, **Paid back** (All sections에만 있음) | 지난 Period의 값 |
+| **New accounts**, **+x in**, **−x out**, **Avatar sales**, **Top-ups**, **Swept**, **Paid back** (All sections에만 있음) | 지난 Period의 값 |
 
 ### 잔액 (ETH) (Balances (ETH)) {#balances-eth}
 
@@ -349,10 +349,10 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 
 | 패널 | 표시 내용 |
 |---|---|
-| **New accounts / +x from users / NFT first sales / Top-ups, last period** (지난 기간 새 계정 / 사용자로부터의 +x / NFT 최초 판매 / 충전) | 선택한 모든 섹션 |
+| **New accounts / +x from users / Avatar sales / Top-ups, last period** (지난 기간 새 계정 / 사용자로부터의 +x / 아바타 판매 / 충전) | 선택한 모든 섹션 |
 | **Most income / Most new accounts / Most spent, last period: 10 sections** (지난 기간 수입 / 새 계정 / 지출 최다: 10개 섹션) | 지난 기간의 상위 10개 섹션 |
-| **Operations per period** / **ETH moved per period** (기간별 작업 / 기간별 이동한 ETH) | 기간과 작업 종류별 막대(선택한 모든 섹션): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `nft_first_sale`, `nft_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`. 각 막대는 해당 날짜에 **시작하는** 기간을 셉니다(오늘의 막대 = 오늘 현재까지) |
-| **Income per period: top 10 sections** (기간별 수입: 상위 10개 섹션) | +x와 NFT 최초 판매, 각 기간에 수입이 가장 많은 섹션 10개 |
+| **Operations per period** / **ETH moved per period** (기간별 작업 / 기간별 이동한 ETH) | 기간과 작업 종류별 막대(선택한 모든 섹션): `create_account`, `transfer_in` (+x), `transfer_out` (−x), `avatar_sale`, `avatar_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`(아바타로 이름을 바꾸기 전: `nft_first_sale`, `nft_resale`. 그 이력도 계속 표시되며, 아바타 판매와 수입 패널은 두 이름을 모두 셉니다). 각 막대는 해당 날짜에 **시작하는** 기간을 셉니다(오늘의 막대 = 오늘 현재까지) |
+| **Income per period: top 10 sections** (기간별 수입: 상위 10개 섹션) | +x와 아바타 최초 판매, 각 기간에 수입이 가장 많은 섹션 10개 |
 | **ETH moved in the selected time range** (선택한 시간 범위에서 이동한 ETH) | 대시보드 전체 시간 범위 동안의 섹션(행, 페이지 단위)과 작업별 값 |
 
 여러 기간을 포함하는 시간 범위를 선택하십시오(Day: 최근 14–30일, Year: 수년).

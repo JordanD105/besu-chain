@@ -4,7 +4,7 @@
 >
 > **For:** contract developers, operators.
 >
-> **Related:** [contract deployment](../features/contract-deployment.md) · [NFT workflow](../features/nft-workflow.md) · [access control](../deployment/access-control.md)
+> **Related:** [contract deployment](../features/contract-deployment.md) · [avatars](../features/avatars.md) · [access control](../deployment/access-control.md)
 
 ---
 
@@ -58,8 +58,8 @@ cd remix && SOLC_VERSIONS="0.8.28" docker compose build && docker compose up -d
 4. **Deploy to production** on the chainlens **Deploy** page
    ([Contract deployment (chainlens Deploy page)](../features/contract-deployment.md)): signed by the
    contract account center and registered on chain, so chainlens and applications (`/contract/call`,
-   `/contract/send`) can use it at once. For an NFT collection, the whole path to a sale is in
-   [NFT workflow](../features/nft-workflow.md). The other way is
+   `/contract/send`) can use it at once. For an avatar collection, the whole path to a sale is in
+   [Avatars](../features/avatars.md). The other way is
    `besu-production/operator/deploy-contract.js` on the operator
    ([Besu production packages (manual setup)](../deployment/besu-manual.md#deploying-a-contract)),
    signed by an MPC account; it writes a record in `contracts/deployments/`

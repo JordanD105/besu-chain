@@ -5,7 +5,7 @@
 > **For:** application developers and operators.
 >
 > **Related:** [proxy component](../components/proxy.md) · [sections](../features/sections.md) ·
-> [NFT workflow](../features/nft-workflow.md) · [nicknames](../features/nicknames.md) · [glossary](../glossary.md)
+> [avatars](../features/avatars.md) · [nicknames](../features/nicknames.md) · [glossary](../glossary.md)
 
 **Contents**
 
@@ -13,7 +13,7 @@
 - [Accounts and transfers](#accounts-and-transfers)
 - [Section calls (`X-Section-Key`)](#section-calls-x-section-key)
 - [Contracts](#contracts)
-- [NFT collections](#nft-collections)
+- [Avatar collections](#avatar-collections)
 - [Nicknames](#nicknames)
 - [Admin API: sections](#admin-api-sections)
 - [Admin API: contracts and registry](#admin-api-contracts-and-registry)
@@ -41,7 +41,7 @@ Three kinds of callers:
 | Caller | Header | Can use |
 |---|---|---|
 | Application **without** a section | none | `/createaccount` and `/transfer` with SENDER01, and the contract reads (`/contract/call`, `/contract/events`, `/contract/list`); all refused (401) when `sections_required: true` |
-| Application **of a section** | `X-Section-Key: sk_…` | section calls: its own accounts, +x / −x transfers, contract reads and writes (NFT purchases, nicknames) |
+| Application **of a section** | `X-Section-Key: sk_…` | section calls: its own accounts, +x / −x transfers, contract reads and writes (avatar purchases, nicknames) |
 | **Operator / chainlens** | `Authorization: Bearer <ADMIN_TOKEN>`, from `ADMIN_ALLOWED_IPS` | the `/admin/*` API, and `/contract/send` without a key |
 
 ```bash
@@ -112,7 +112,7 @@ unless `sections_required: true` (then 401). See [sections](../features/sections
 |---|---|
 | `POST /createaccount` | account of the section, funded from its upfront account |
 | `POST /transfer` | +x / −x (above) |
-| `POST /contract/send` | a contract transaction signed by a user account of the section: also every NFT purchase and nickname write ([below](#contracts)) |
+| `POST /contract/send` | a contract transaction signed by a user account of the section: also every avatar purchase and nickname write ([below](#contracts)) |
 | `POST /contract/call`, `/contract/events`, `GET /contract/list` | reads; the key is needed only when `sections_required: true` |
 
 ---
@@ -120,8 +120,8 @@ unless `sections_required: true` (then 401). See [sections](../features/sections
 ## Contracts
 
 One API for every contract registered in the SectionRegistry (deployed by the contract account
-center), and only for the functions and events of its ABI. The platform's own contracts (the NFT
-collection version 3 and the nickname collection) use the same calls, with friendly values.
+center), and only for the functions and events of its ABI. The platform's own contracts (the avatar
+collection and the nickname collection) use the same calls, with friendly values.
 
 | Endpoint | Does | Caller |
 |---|---|---|
@@ -200,15 +200,15 @@ with `success: false`.
 - **Price:** for the platform functions below, a left-out `value` is filled in with the price.
   Another value → 400.
 - **Metrics:** the section's operations are counted from the events: `NicknameBought` → `nickname_sale`,
-  `EdgeUpgraded` → `edge_upgrade`, `Sold` → `nft_first_sale` (seller = the contract account center)
-  or `nft_resale`.
+  `EdgeUpgraded` → `edge_upgrade`, `Sold` → `avatar_sale` (seller = the contract account center)
+  or `avatar_resale`.
 
 | Contract | Function, `args` | `value` filled in | Checks before sending | Event |
 |---|---|---|---|---|
 | nickname collection | `buyNickname`, `{ nickname }` | `nicknamePrice` | trimmed + NFC, 1–256 characters, no control characters or `< > & " ' \` (400); one per account, taken, reserved (409) | `NicknameBought {tokenId, buyer, nickname, price, paidTo}` |
 | nickname collection | `upgradeEdge`, `{ level }` | `quote(from, level)` (sum of the step prices) | level 1 or more (400); has a nickname (404); level exists, open, above the current one (400 `level N: …`) | `EdgeUpgraded {tokenId, owner, fromLevel, toLevel, price, paidTo}` |
-| NFT collection | `buy`, `{ tokenId }` | `priceOf(tokenId)` | token exists (404); `from` doesn't own it already (400) | `Sold {tokenId, seller, buyer, price, paidTo}` |
-| NFT collection | `approve`, `{ tokenId }` from the seller | — | — | `Approval` |
+| avatar collection | `buy`, `{ tokenId }` | `priceOf(tokenId)` | token exists (404); `from` doesn't own it already (400) | `Sold {tokenId, seller, buyer, price, paidTo}` |
+| avatar collection | `approve`, `{ tokenId }` from the seller | — | — | `Approval` |
 
 `mint` can't be sent this way (only the center mints, `not minter`): use
 [`POST /admin/contract/send`](#post-admincontractsend--write-as-the-contract-account-center).
@@ -238,15 +238,15 @@ with `success: false`.
 
 | Query | Keeps |
 |---|---|
-| `?type=nft` / `nickname` / `contract` | NFT collections, nickname collections, other contracts |
-| `?kind=common` / `nft` | the registry kind |
+| `?type=avatar` / `nickname` / `contract` | avatar collections, nickname collections, other contracts |
+| `?kind=common` / `avatar` | the registry kind |
 | `?has=buyNickname` | contracts with this function |
 | `?q=drag` | name contains (any case) |
 | `?functions=1` | adds each contract's `functions` (signature, mutability) and `events` |
 
 ```json
 → { "success": true, "contracts": [
-    { "address": "0xCollection", "name": "Dragons", "type": "nft", "kind": "nft", "registeredIn": 14172,
+    { "address": "0xCollection", "name": "Dragons", "type": "avatar", "kind": "avatar", "registeredIn": 14172,
       "symbol": "DRG", "minter": "<contract account center>" },
     { "address": "0xNicknames", "name": "Nicknames", "type": "nickname", "kind": "common", "registeredIn": 35444,
       "symbol": "NICK", "minter": "<contract account center>", "current": true } ],
@@ -264,11 +264,11 @@ ordinary contract (`type: "contract"`, no friendly values).
 
 | Contract | Function | `args` |
 |---|---|---|
-| NFT | `buy` | `{ tokenId }` (payee and price filled in) |
-| NFT | `approve` | `{ tokenId }`: puts the token up for sale (approves the collection itself; `to` to approve another address) |
-| NFT | `priceOf`, `ownerOf`, `tokenURI`, `getApproved` | `{ tokenId }` |
-| NFT | `balanceOf` | `{ owner }` |
-| NFT | `mint` (center) | `{ name, image, description, attributes, properties, price }`: `name` and `image` required, `price` in ETH (default 0). The owner (the center), the next token id and the on-chain metadata URI are filled in |
+| avatar | `buy` | `{ tokenId }` (payee and price filled in) |
+| avatar | `approve` | `{ tokenId }`: puts the token up for sale (approves the collection itself; `to` to approve another address) |
+| avatar | `priceOf`, `ownerOf`, `tokenURI`, `getApproved` | `{ tokenId }` |
+| avatar | `balanceOf` | `{ owner }` |
+| avatar | `mint` (center) | `{ name, image, description, attributes, properties, price }`: `name` and `image` required, `price` in ETH (default 0). The owner (the center), the next token id and the on-chain metadata URI are filled in |
 | nickname | `buyNickname` | `{ nickname }` |
 | nickname | `upgradeEdge` | `{ level }` |
 | nickname | `quote` | `{ account, level }` |
@@ -288,13 +288,13 @@ always for sale.
 
 | Contract | Function | `result` |
 |---|---|---|
-| NFT | `priceOf` | `{ tokenId, price }` |
-| NFT | `ownerOf` | `{ tokenId, owner }` |
-| NFT | `tokenURI` | `{ tokenId, metadata, image }` |
-| NFT | `balanceOf` | `{ owner, tokens }` |
-| NFT | `buy` | `{ sale: "first sale" \| "resale", tokenId, seller, buyer, price, paidTo }` |
-| NFT | `mint` | `{ minted, tokenId, owner, price, metadata }` |
-| NFT | `approve` | `{ tokenId, approved, forSale }` (`forSale`: approved to the collection) |
+| avatar | `priceOf` | `{ tokenId, price }` |
+| avatar | `ownerOf` | `{ tokenId, owner }` |
+| avatar | `tokenURI` | `{ tokenId, metadata, image }` |
+| avatar | `balanceOf` | `{ owner, tokens }` |
+| avatar | `buy` | `{ sale: "first sale" \| "resale", tokenId, seller, buyer, price, paidTo }` |
+| avatar | `mint` | `{ minted, tokenId, owner, price, metadata }` |
+| avatar | `approve` | `{ tokenId, approved, forSale }` (`forSale`: approved to the collection) |
 | nickname | `nicknamePrice` | `{ price }` |
 | nickname | `edgeCount` | `{ count, edges: [ { level, price, forSale } ] }` |
 | nickname | `edgeInfo` | one edge `{ level, price, forSale }` |
@@ -335,17 +335,18 @@ Prices are in ETH.
 
 ---
 
-## NFT collections
+## Avatar collections
 
-The platform's collection is **NftCollection version 3** ([`NftCollection.sol`](../../proxy/contracts/NftCollection.sol)):
-deployed and minted by the **contract account center**, registered in the SectionRegistry (kind NFT),
+An **avatar** is the platform's image token. Avatar collections
+([`AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol); version-3 collections are the
+same code) are deployed and minted by the **contract account center**, registered in the SectionRegistry (kind avatar),
 shared by all sections. The price is set at mint and fixed for every sale. A sale is one `buy`
 signed by the buyer: the token and the ETH move together or not at all.
 
 | Task | Call |
 |---|---|
-| list the collections | `GET /contract/list?type=nft` |
-| deploy one | `POST /admin/contract/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
+| list the collections | `GET /contract/list?type=avatar` |
+| deploy one | `POST /admin/contract/deploy` `{ "template": "avatar-collection", "name", "symbol" }` |
 | mint for sale | `POST /admin/contract/send` `mint` `{ name, image, description, attributes, price }` |
 | first sale | `POST /contract/send` `buy` `{ tokenId }`, `from` = the buyer: the price goes to the buyer's section's **consumption** account |
 | resale | the seller sends `approve` `{ tokenId }`, then the buyer sends `buy` `{ tokenId }`: the price goes to the **seller** |
@@ -359,10 +360,10 @@ sells them. They stay on the chain.
 
 ```bash
 P=http://192.168.68.151:30000; T=<admin token>; K=<section key>
-# deploy (names and symbols unique among the NFT collections, any case; else 409)
+# deploy (names and symbols unique among the avatar collections, any case; else 409)
 curl -s -X POST $P/admin/contract/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
-  -d '{"template":"nft-collection","name":"Dragons","symbol":"DRG"}'
-# → { "success": true, "name": "Dragons", "kind": "nft", "address": "0xCollection", "txHash": "0x…", "codeCheck": "matches the artifact", … }
+  -d '{"template":"avatar-collection","name":"Dragons","symbol":"DRG"}'
+# → { "success": true, "name": "Dragons", "kind": "avatar", "address": "0xCollection", "txHash": "0x…", "codeCheck": "matches the artifact", … }
 
 # mint (the center mints to itself, for sale)
 curl -s -X POST $P/admin/contract/send -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
@@ -397,7 +398,20 @@ curl -s -X POST $P/contract/events -H "X-Section-Key: $K" -H 'Content-Type: appl
 
 Token ids start at 1 in each collection. The metadata is stored on chain in the token URI (JSON; one
 that doesn't fit in a block: 400 `metadata is too large for the chain`). Seller and buyer may be in different sections: each section signs only for its own
-accounts. Step by step from Remix to a sale: [NFT workflow](../features/nft-workflow.md).
+accounts. Step by step from Remix to a sale: [avatars](../features/avatars.md).
+
+### Old names
+
+The proxy still accepts the names used before the rename to *avatar*:
+
+| Old name | Now |
+|---|---|
+| `?type=nft`, `?kind=nft` | `?type=avatar`, `?kind=avatar` |
+| `"kind": "nft"` (deploy, check) | `"kind": "avatar"` (on chain the kind is still number 2) |
+| template `nft-collection` | template `avatar-collection` |
+
+Answers always use the new names. The metrics `op` values changed without alias: `nft_first_sale` →
+`avatar_sale`, `nft_resale` → `avatar_resale`.
 
 ---
 
@@ -470,13 +484,13 @@ Admin token, as above.
 
 | Endpoint | Body | Does |
 |---|---|---|
-| `POST /admin/contract/check` | a template, or `{ "kind": "common" \| "nft", "name", "abi", "bytecode", "deployedBytecode", "immutableReferences", "args" }` | dry run: arguments, gas, the future address; nothing signed |
+| `POST /admin/contract/check` | a template, or `{ "kind": "common" \| "avatar", "name", "abi", "bytecode", "deployedBytecode", "immutableReferences", "args" }` | dry run: arguments, gas, the future address; nothing signed |
 | `POST /admin/contract/deploy` | same | deploy as the contract account center, compare the code, register with the ABI |
 | `POST /admin/contract/send` | `{ "contract", "function", "args", "value" }` | a write signed by the contract account center ([below](#post-admincontractsend--write-as-the-contract-account-center)) |
 | `POST /admin/registry/migrate` | `{ "from": "0xOldRegistry" }` | copy sections from a version-1 registry (Ansible `08-check.yml` runs it) |
 
 ```json
-→ { "success": true, "name": "Dragons", "kind": "nft", "address": "0x…", "deployer": "<center>", "txHash": "0x…",
+→ { "success": true, "name": "Dragons", "kind": "avatar", "address": "0x…", "deployer": "<center>", "txHash": "0x…",
     "blockNumber": 37570, "gasUsed": 1408380, "codeCheck": "matches the artifact", "registryTxHash": "0x…" }
 ```
 
@@ -487,12 +501,12 @@ template instead of `abi` and `bytecode`; the registry's address is filled in.
 
 | Template | Body | Registered as |
 |---|---|---|
-| `nft-collection` | `{ "template": "nft-collection", "name": "Dragons", "symbol": "DRG" }` (both required). Names and symbols are unique among the NFT collections, any case: else 409 | kind NFT |
+| `avatar-collection` | `{ "template": "avatar-collection", "name": "Dragons", "symbol": "DRG" }` (both required). Names and symbols are unique among the avatar collections, any case: else 409 | kind avatar |
 | `nickname-collection` | `{ "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "another": false }` (these values are the defaults, except `price`: default 0) | common |
 
 A second nickname collection is refused (409 `a nickname collection exists at 0x… (send "another": true …)`)
 unless `"another": true`: the new one is used from then on. An unknown template: 400
-`template: nft-collection or nickname-collection (or no template: abi and bytecode)`.
+`template: avatar-collection or nickname-collection (or no template: abi and bytecode)`.
 
 ### `POST /admin/contract/send` — write as the contract account center
 
@@ -502,7 +516,7 @@ owner of the platform's contracts). Any registered contract; friendly `args` and
 
 | Function | `args` |
 |---|---|
-| `mint` (NFT) | `{ "name", "image", "description", "attributes", "properties", "price": "0.5" }` |
+| `mint` (avatar) | `{ "name", "image", "description", "attributes", "properties", "price": "0.5" }` |
 | `setNicknamePrice` | `{ "price": "1" }` (new buyers) |
 | `addEdge` | `{ "price": "1" }`: the next level's step price |
 | `setEdge` | `{ "level": 3, "price": "2", "forSale": false }`: omitted fields keep their values. Level 0 keeps price 0 and stays for sale |
@@ -526,10 +540,10 @@ These routes answer **410**; the message names the call that replaces each. `0xC
 
 | Removed | Use |
 |---|---|
-| `POST /nft/deploy` | `POST /admin/contract/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
+| `POST /nft/deploy` | `POST /admin/contract/deploy` `{ "template": "avatar-collection", "name", "symbol" }` |
 | `POST /nft/mint` | `POST /admin/contract/send` `mint` `{ name, image, price, … }` |
 | `POST /nft/transfer` | `POST /contract/send` `buy` `{ tokenId }`, `from` = the buyer (a resale: the seller first sends `approve` `{ tokenId }`). Version-2 collections are retired |
-| `GET /nft/contract`, `GET /nft/collections` | `GET /contract/list?type=nft` |
+| `GET /nft/contract`, `GET /nft/collections` | `GET /contract/list?type=avatar` |
 | `GET /nft/owner/:address` | `POST /contract/events` `Transfer`, `where: { to: address }`, `current: true` |
 | `GET /nft/:tokenId/metadata` | `POST /contract/call` `tokenURI` `{ tokenId }` (`result.metadata`) |
 | `GET /nft/:tokenId` | `POST /contract/call` batch `ownerOf`, `priceOf`, `tokenURI`; the mint: `POST /contract/events` `Transfer` from `0x0` |
@@ -551,7 +565,7 @@ These routes answer **410**; the message names the call that replaces each. `0xC
 
 ```json
 GET /nft/collections
-→ 410 { "error": "GET /nft/collections was removed: use GET /contract/list?type=nft" }
+→ 410 { "error": "GET /nft/collections was removed: use GET /contract/list?type=avatar" }
 ```
 
 

@@ -32,7 +32,7 @@
   <rect x="352" y="256" width="376" height="98" rx="10" fill="#ffffff" stroke="#93c5fd"/>
   <text x="366" y="279" font-size="13.5" font-weight="700" fill="#1e3a8a">Redis :36379</text>
   <text x="366" y="299" font-size="12.5" fill="#334155">nonce counter per sender (INCR) · pending value</text>
-  <text x="366" y="317" font-size="12.5" fill="#334155">NFT token id counter</text>
+  <text x="366" y="317" font-size="12.5" fill="#334155">avatar token id counter</text>
   <text x="366" y="341" font-size="12" fill="#64748b">per-sender ordering: in-process lock (withSenderLock)</text>
 
   <line x1="270" y1="195" x2="326" y2="195" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>

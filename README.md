@@ -31,7 +31,7 @@ served as a website with search ([documentation website](docs/components/docs-si
 | `ansible/` | the production deployment (playbooks, settings, templates) | [Ansible](docs/deployment/ansible.md) |
 | `besu-production/` | production Besu packages and operator scripts | [Besu chain](docs/components/besu.md) · [manual setup](docs/deployment/besu-manual.md) |
 | `mpc-signer/` | the 2-of-3 MPC signer (Rust), quick start, production packages, benchmark | [MPC signer](docs/components/mpc-signer.md) |
-| `proxy/` | the application API (Node.js), NFT and SectionRegistry contracts | [Proxy](docs/components/proxy.md) |
+| `proxy/` | the application API (Node.js), avatar, nickname and SectionRegistry contracts | [Proxy](docs/components/proxy.md) |
 | `chainlens/` | the block explorer | [Chainlens](docs/components/chainlens.md) |
 | `remix/` | the self-hosted Remix IDE | [Remix](docs/components/remix.md) |
 | `ha/` | HAProxy, keepalived, RPC health check, firewall | [High availability](docs/deployment/high-availability.md) |

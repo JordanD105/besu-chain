@@ -21,7 +21,7 @@ Chainlens는 컨트랙트의 ABI를 알 때 컨트랙트에 이름과 함수 목
 
 | | 온체인 레지스트리(SectionRegistry) | 레코드 파일(`contracts/deployments/`) |
 |---|---|---|
-| 작성 주체 | 프록시를 통한 chainlens Deploy 페이지와 `POST /admin/contract/deploy`(`nft-collection`, `nickname-collection` 템플릿 포함)([컨트랙트 배포](contract-deployment.md)) | [`besu-production/operator/deploy-contract.js`](../../besu-production/operator/deploy-contract.js); 이전 버전의 Deploy 페이지 |
+| 작성 주체 | 프록시를 통한 chainlens Deploy 페이지와 `POST /admin/contract/deploy`(`avatar-collection`, `nickname-collection` 템플릿 포함)([컨트랙트 배포](contract-deployment.md)) | [`besu-production/operator/deploy-contract.js`](../../besu-production/operator/deploy-contract.js); 이전 버전의 Deploy 페이지 |
 | 배포자 | 컨트랙트 계정 센터 | `--from`으로 지정한 MPC 계정 |
 | 읽는 주체 | chainlens **및** 프록시(`/contract/call`, `/contract/send`) | chainlens만 |
 | 게시 방법 | 필요 없음: 체인에 있습니다 | 파일을 커밋하고 Ansible을 실행합니다([아래](#publish-a-record)) |

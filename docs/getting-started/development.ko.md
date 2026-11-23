@@ -64,7 +64,7 @@ curl -s http://localhost:30000/status/senders
 ```
 
 모든 엔드포인트: [프록시 API](../reference/proxy-api.md). 사용 안내와 문제 해결(정책 한도,
-논스 공백, 체인 초기화 후 NFT 컨트랙트): [프록시](../components/proxy.md).
+논스 공백, 체인 초기화 후 아바타 컬렉션): [프록시](../components/proxy.md).
 
 ## MPC 서명기 벤치마크 {#benchmark-the-mpc-signer}
 

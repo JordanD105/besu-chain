@@ -4,7 +4,7 @@
 >
 > **For:** operators, contract developers.
 >
-> **Related:** [Remix](../components/remix.md) · [NFT workflow](nft-workflow.md) · [contract records](contract-records.md)
+> **Related:** [Remix](../components/remix.md) · [avatars](avatars.md) · [contract records](contract-records.md)
 
 **Contents**
 
@@ -84,7 +84,7 @@ cat state/secrets/chainlens_deploy_token
 4. **Compiler artifact:** choose the file. With several contracts in it, choose the **Contract**.
 5. **Constructor arguments:** one box per argument. Numbers as whole numbers (`1000000`),
    addresses `0x…`, `true`/`false`, arrays and tuples as JSON (`["0xabc…","0xdef…"]`).
-6. **Kind:** *Common contract* or *NFT collection*.
+6. **Kind:** *Common contract* or *Avatar collection*.
 7. **Name in the registry:** optional, the contract's name in chainlens.
 8. **Check:** the proxy runs every check (arguments, gas, the creation doesn't revert, it fits in a
    block) and the page shows the address the contract will get. Nothing is signed.
@@ -105,8 +105,9 @@ Changing a file, an argument, the kind or the name after **Check** requires a ne
 center's state changed in between (another deployment), **Deploy** refuses and asks for a new check.
 One deployment runs at a time per chainlens.
 
-For an NFT collection, the whole path from the artifact to a sale is in the
-[NFT workflow](nft-workflow.md); choose the kind *NFT collection*, so the proxy lists it.
+For an avatar collection, the whole path from the artifact to a sale is in
+[Avatars](avatars.md); choose the kind *Avatar collection* (registry kind `avatar`), so the proxy
+lists it.
 
 The contract's deployer (`msg.sender` in its constructor) is the center. A contract with an owner
 or roles should take them as constructor arguments when someone else must hold them.

@@ -4,7 +4,7 @@
 >
 > **대상:** 애플리케이션 개발자, 비즈니스 관리자.
 >
-> **관련 문서:** [섹션](sections.md) · [NFT 워크플로](nft-workflow.md) · [프록시 API](../reference/proxy-api.md#nicknames) · [chainlens](../components/chainlens.md)
+> **관련 문서:** [섹션](sections.md) · [아바타](avatars.md) · [프록시 API](../reference/proxy-api.md#nicknames) · [chainlens](../components/chainlens.md)
 
 **목차**
 
@@ -21,8 +21,8 @@
 
 ---
 
-토큰은 두 종류입니다. **이미지 토큰**은 [NFT 워크플로](nft-workflow.md)의 NFT 컬렉션(버전 3)으로,
-센터가 민팅한 그림을 판매하고 재판매합니다. **닉네임 토큰**은 이 문서의 대상으로, 사용자가 자신을
+토큰은 두 종류입니다. **아바타**([아바타](avatars.md))는
+센터가 민팅한 그림으로, 판매하고 재판매합니다. **닉네임 토큰**은 이 문서의 대상으로, 사용자가 자신을
 위해 구매하는 이름이며 다시 판매할 수 없습니다. 그림은 없습니다: 닉네임과 테두리 레벨만 저장하고,
 레벨을 어떻게 보여 줄지(프레임, 색상, 배지 등)는 각 애플리케이션이 정합니다.
 

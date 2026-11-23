@@ -64,7 +64,7 @@ curl -s http://localhost:30000/status/senders
 ```
 
 Every endpoint: [proxy API](../reference/proxy-api.md). Walkthrough and troubleshooting (policy
-limit, nonce gaps, NFT contract after a chain reset): [proxy](../components/proxy.md).
+limit, nonce gaps, avatar collection after a chain reset): [proxy](../components/proxy.md).
 
 ## Benchmark the MPC signer
 

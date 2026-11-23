@@ -242,7 +242,7 @@ What to do instead:
 | a node on a better or different host | [move it](#move-an-mpc-node-to-another-host): same node id, same share |
 | more signing throughput | bigger coordinator hosts and presignature pools ([MPC benchmarks](../development/mpc-benchmarks.md)) |
 | a node lost for good, redundancy back | a new cluster: [MPC signer in production, step 14](../deployment/mpc-signer-production.md#14-if-a-share-is-lost-for-good) |
-| another node count or threshold (e.g. 3-of-5) | also a new cluster with new keys: every address changes, funds move, NFT collections are deployed again, and `make-cluster.sh` and the Ansible layout must be extended for more than three nodes |
+| another node count or threshold (e.g. 3-of-5) | also a new cluster with new keys: every address changes, funds move, avatar and nickname collections are deployed again, and `make-cluster.sh` and the Ansible layout must be extended for more than three nodes |
 
 **Coordinators** hold no key material: they run on the HA pair behind the VIP `.150:9100` (coord1
 active, coord2 warm standby, both in `haproxy.cfg`). More coordinators add no safety, and the

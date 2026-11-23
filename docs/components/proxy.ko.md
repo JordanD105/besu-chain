@@ -1,6 +1,6 @@
 # 프록시 (애플리케이션 API)
 
-> **내용:** MPC 서명기 위에서 프록시(애플리케이션 API)를 운영하는 방법입니다. 설치, 설정, 서명 주체 결정, Redis가 필수가 아닌 논스 설계, NFT 컬렉션, 섹션, 메트릭, 문제 해결을 다룹니다.
+> **내용:** MPC 서명기 위에서 프록시(애플리케이션 API)를 운영하는 방법입니다. 설치, 설정, 서명 주체 결정, Redis가 필수가 아닌 논스 설계, 아바타 컬렉션, 섹션, 메트릭, 문제 해결을 다룹니다.
 >
 > **대상:** 개발자 및 운영자.
 >
@@ -17,7 +17,7 @@
 - [프록시가 서명 주체를 결정하는 방식](#how-the-proxy-decides-who-signs)
 - [논스와 잔액 검사: 빠른 경로 + 주기적인 체인 검사](#nonces-and-balance-checks-fast-path--periodic-chain-check)
 - [Redis는 선택 사항 (복제본 불필요)](#redis-is-optional-no-replica-needed)
-- [NFT 컬렉션](#nft-collections)
+- [아바타 컬렉션](#avatar-collections)
 - [섹션과 등록된 컨트랙트](#sections-and-registered-contracts)
 - [메트릭과 모니터링](#metrics-and-monitoring)
 - [운영](#operating-it)
@@ -45,7 +45,7 @@ client → proxy :30000 ──eth_sendTransaction──► mpc-coordinator :9100
 엔드포인트와 요청 본문, 응답은 [프록시 API 레퍼런스](../reference/proxy-api.md)에 있습니다.
 
 1~5단계는 섹션이 없는 **개발용** 프록시를 설정합니다. 호출은 `SENDER01`을 사용하며, 컨트랙트와
-NFT 컬렉션은 없습니다(섹션이 필요합니다). 프로덕션에서는 SectionRegistry, 컨트랙트 계정 센터, 관리 API가
+아바타 컬렉션은 없습니다(섹션이 필요합니다). 프로덕션에서는 SectionRegistry, 컨트랙트 계정 센터, 관리 API가
 추가됩니다([섹션과 등록된 컨트랙트](#sections-and-registered-contracts)). Ansible이 이 모두를
 설정합니다.
 
@@ -219,10 +219,10 @@ curl -s localhost:30000/transfer -H 'content-type: application/json' \
   --data '{"from":"0x1293…717d","to":"0x3a55…111d","amount":"1.5","memo":"hello"}'
 ```
 
-NFT 컬렉션, 닉네임, 그 밖의 컨트랙트에는 섹션(SectionRegistry와 컨트랙트 계정 센터)이 필요합니다.
+아바타 컬렉션, 닉네임, 그 밖의 컨트랙트에는 섹션(SectionRegistry와 컨트랙트 계정 센터)이 필요합니다.
 섹션이 없으면 `/contract/*`는 503 `sections are not configured`로 응답합니다. 섹션이 있으면 컬렉션은
 템플릿으로 배포하고, 센터가 민팅하며, `POST /contract/send`의 `buy`로 판매합니다.
-[NFT 컬렉션](#nft-collections)과 [NFT 워크플로](../features/nft-workflow.md)를 참조하십시오.
+[아바타 컬렉션](#avatar-collections)과 [아바타](../features/avatars.md)를 참조하십시오.
 
 서명기 측:
 
@@ -251,7 +251,7 @@ curl -s http://192.168.68.130:9100/admin/pool                              # hot
 | `REDIS_IMAGE`, `REDIS_EXPORTER_IMAGE`, `REDIS_EXPORTER_PORT` | `redis:8.10.3`, `oliver006/redis_exporter:v1.67.0`, 9121 | `docker-compose.yml`에서만 사용 |
 | `REGISTRY_CONTRACT`, `REGISTRY_ADMIN` | – | SectionRegistry와 여기에 쓰기를 하는 MPC 키 (Ansible: `state/registry.json`). 둘 다 설정하면 섹션이 켜집니다 |
 | `REGISTRY_FROM_BLOCK` | 0 | 레지스트리가 배포된 블록. 레지스트리 이벤트를 이 블록부터 읽습니다 |
-| `CONTRACT_CENTER` | – | 컨트랙트 계정 센터 (Ansible: `state/contract-center`): 컨트랙트와 NFT 컬렉션을 배포하고, 그 NFT를 민팅하며, `/admin/contract/send`에 서명합니다 |
+| `CONTRACT_CENTER` | – | 컨트랙트 계정 센터 (Ansible: `state/contract-center`): 컨트랙트와 아바타 컬렉션을 배포하고, 아바타를 민팅하며, `/admin/contract/send`에 서명합니다 |
 | `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | – | 관리 API(`/admin/*`): 토큰(16자 이상)과 허용된 출발지 주소 또는 네트워크. Ansible: `state/secrets/proxy_admin_token`, `operator_ip`, 모니터링 호스트. 둘 다 없으면 관리 API는 404를 응답합니다 |
 | `SECTION_KEY_REQUIRED` | `false` | `true`: `X-Section-Key`가 없는 호출을 거부합니다 (Ansible: `sections_required`) |
 | `UPFRONT_LOW_BALANCE_ETH`, `SENDER01_LOW_BALANCE_ETH` | 0 (꺼짐) | `/metrics`에 게시되는 알림 임계값 (Ansible: `upfront_low_balance_eth`, `sender01_low_balance_eth`) |
@@ -276,8 +276,8 @@ curl -s http://192.168.68.130:9100/admin/pool                              # hot
 | 키 없는 `/createaccount` | `SENDER01` |
 | 키 없는 `/transfer {from, to, amount}` | `from` (음수 `amount`는 `to`에서 `from`으로 송금). 섹션의 계정, 레지스트리 관리자, 컨트랙트 센터는 거부됩니다(403) |
 | `X-Section-Key`가 있는 `/createaccount`, `/transfer` | 섹션의 선지급 계정, 또는 `+x`의 경우 사용자 계정 ([섹션](../features/sections.md#application-api-section-calls)) |
-| `/contract/send` | `from`, 호출자 섹션의 사용자 계정 (NFT의 `buy` / `approve`와 닉네임 `buyNickname` / `upgradeEdge`도 포함) |
-| `/admin/contract/send` | 컨트랙트 계정 센터 (NFT `mint`, 닉네임 가격, 테두리 레벨, 예약 이름) |
+| `/contract/send` | `from`, 호출자 섹션의 사용자 계정 (아바타의 `buy` / `approve`와 닉네임 `buyNickname` / `upgradeEdge`도 포함) |
+| `/admin/contract/send` | 컨트랙트 계정 센터 (아바타 `mint`, 닉네임 가격, 테두리 레벨, 예약 이름) |
 | `/admin/*` 쓰기 | 레지스트리 관리자(레지스트리), `SENDER01` / 섹션 계정(자금), 컨트랙트 계정 센터(배포) |
 
 ## 논스와 잔액 검사: 빠른 경로 + 주기적인 체인 검사 {#nonces-and-balance-checks-fast-path--periodic-chain-check}
@@ -351,28 +351,29 @@ curl -s http://<proxy>:30000/status/senders
 |---|---|
 | `nonce:<sender>` | 논스는 메모리에서 계산합니다. 프록시가 시작할 때(또는 오류 후) max(Redis, `eth_getTransactionCount(pending)`)를 취하므로 오래되었거나 없는 값은 문제가 되지 않습니다 |
 | `pending-value:<sender>` | 메모리에 유지합니다. 해당 논스가 채굴되면 항목이 제거됩니다 |
-| `nft:nextId:<contract>` | 컬렉션별 `mint`의 다음 토큰 ID: max(메모리/Redis, 체인에서 민팅된 가장 큰 토큰 ID) + 1 |
+| `avatar:nextId:<contract>` | 컬렉션별 `mint`의 다음 토큰 ID: max(메모리/Redis, 체인에서 민팅된 가장 큰 토큰 ID) + 1 |
 
 섹션, 섹션의 계정, 등록된 컨트랙트는 Redis에 저장되지 않습니다. 프록시는 이를 체인의
 SectionRegistry에서 읽습니다(섹션은 10초 동안 캐시, 컨트랙트는 10초마다 다시 읽음).
 
 테스트 항목: 부하 중 Redis 중단, Redis를 빈 인스턴스로 교체하고 프록시 재시작, 논스가 롤백된
-오래된 스냅샷. 세 경우 모두 이체, 계정 생성, NFT 민팅과 메타데이터가 계속 동작했으며,
+오래된 스냅샷. 세 경우 모두 이체, 계정 생성, 아바타 민팅과 메타데이터가 계속 동작했으며,
 모든 트랜잭션이 논스 공백 없이 채굴되었습니다.
 
 프록시 복제본은 여전히 하나입니다. 송신자별 잠금이 프로세스 메모리에 있기 때문입니다.
 
-## NFT 컬렉션 {#nft-collections}
+## 아바타 컬렉션 {#avatar-collections}
 
-프록시는 컬렉션 컨트랙트 하나를 지원합니다: **버전 3**([`NftCollection.sol`](../../proxy/contracts/NftCollection.sol),
-이미지에 `nft-collection-v3.json`으로 컴파일되어 있음). 섹션과 `CONTRACT_CENTER`가 필요합니다.
+**아바타**는 플랫폼의 이미지 토큰입니다. 프록시는 아바타 컬렉션 컨트랙트 하나를 지원합니다
+([`AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol), 이미지에
+`avatar-collection.json`으로 컴파일되어 있음. 버전 3 컬렉션도 같은 코드). 섹션과 `CONTRACT_CENTER`가 필요합니다.
 
 | | |
 |---|---|
-| 배포 주체 | 컨트랙트 계정 센터: `{"template": "nft-collection", "name", "symbol"}`로 `POST /admin/contract/deploy`, 또는 chainlens Deploy 페이지. 이름과 심볼은 NFT 컬렉션 사이에서 고유(409) |
-| SectionRegistry 등록 | 예 (종류 NFT). `GET /contract/list?type=nft`가 컬렉션을 나열 |
+| 배포 주체 | 컨트랙트 계정 센터: `{"template": "avatar-collection", "name", "symbol"}`로 `POST /admin/contract/deploy`, 또는 chainlens Deploy 페이지. 이름과 심볼은 아바타 컬렉션 사이에서 고유(409) |
+| SectionRegistry 등록 | 예 (종류 avatar). `GET /contract/list?type=avatar`가 컬렉션을 나열 |
 | 민팅 주체 | 컨트랙트 계정 센터: `POST /admin/contract/send` `mint` (프록시가 메타데이터를 만들고, 다음 토큰 ID를 고르고, 가격을 변환) |
-| 판매 | 구매자가 `X-Section-Key`로 `POST /contract/send` `buy` `{ tokenId }`를 보내며, 구매자는 해당 섹션의 사용자 계정이어야 합니다. 관리 API 호출자(`ADMIN_ALLOWED_IPS`에서 온 관리 토큰, 예: chainlens Sell 양식)는 키 없이 보낼 수 있으며, 이때 섹션은 구매자의 섹션입니다 |
+| 판매 | 구매자가 `X-Section-Key`로 `POST /contract/send` `buy` `{ tokenId }`를 보내며, 구매자는 해당 섹션의 사용자 계정이어야 합니다. 관리 API 호출자(`ADMIN_ALLOWED_IPS`에서 온 관리 토큰, 예: chainlens Sell an avatar 양식)는 키 없이 보낼 수 있으며, 이때 섹션은 구매자의 섹션입니다 |
 | 최초 판매 대금 수령 | 섹션의 소비 계정 (`isConsumptionAccount`로 온체인 확인) |
 | 재판매 대금 수령 | 판매자. 먼저 판매자의 섹션이 `/contract/send`로 `approve` `{ tokenId }`(컬렉션을 승인)를 보내고, 그다음 구매자의 섹션이 `buy`를 보냅니다(섹션이 달라도 됨) |
 | 조회 | `/contract/call`(소유자, 가격, 메타데이터. 일괄 처리 가능)과 `/contract/events`(보유 토큰, 민팅 트랜잭션, 판매 내역) |
@@ -381,10 +382,10 @@ SectionRegistry에서 읽습니다(섹션은 10초 동안 캐시, 컨트랙트�
 트랜잭션이며, 토큰과 ETH는 함께 이동하거나 전혀 이동하지 않습니다. 토큰 ID는 각 컬렉션에서 1부터
 시작합니다.
 
-**버전 2 컬렉션**([`NftCollectionV2.sol`](../../proxy/contracts/NftCollectionV2.sol), `SENDER01`이 민팅)은
+**버전 2 컬렉션**(`SENDER01`이 민팅)은
 폐기되었습니다: 프록시는 더 이상 이를 읽거나, 민팅하거나, 판매하지 않습니다. 이전의 `/nft/*` 라우트는
 대체 호출을 알려 주는 410으로 응답합니다. 예시는
-[프록시 API 레퍼런스](../reference/proxy-api.md#nft-collections)에 있습니다.
+[프록시 API 레퍼런스](../reference/proxy-api.md#avatar-collections)에 있습니다.
 
 ## 섹션과 등록된 컨트랙트 {#sections-and-registered-contracts}
 
@@ -397,7 +398,7 @@ registry 0x… v2, N section(s), admin API on`).
 
 | 기능 | 엔드포인트 | 가이드 |
 |---|---|---|
-| 섹션 호출 | `X-Section-Key`를 사용하는 `/createaccount`, `/transfer`(+x / −x), `/contract/send`(NFT 판매와 닉네임 포함) | [섹션](../features/sections.md#application-api-section-calls) |
+| 섹션 호출 | `X-Section-Key`를 사용하는 `/createaccount`, `/transfer`(+x / −x), `/contract/send`(아바타 판매와 닉네임 포함) | [섹션](../features/sections.md#application-api-section-calls) |
 | 관리 API | `/admin/sections/*`: 생성, 이름 변경, 정보, 키 교체, 활성화 / 비활성화, 충전, 스윕, 반환, 계정 교체, 보관, 사용자 계정 | [섹션](../features/sections.md#admin-api) |
 | 컨트랙트 | `/admin/contract/check`와 `/deploy`(컨트랙트 계정 센터가 서명하며 ABI와 함께 등록. 플랫폼 컨트랙트용 템플릿), `/contract/call`(읽기, 일괄 처리 가능), `/contract/events`, `/contract/list`, `/contract/send`(쓰기, 호출자 섹션의 사용자 계정이 서명)와 `/admin/contract/send`(센터가 서명) | [컨트랙트 배포](../features/contract-deployment.md) |
 

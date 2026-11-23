@@ -7,10 +7,11 @@
 | **Admin API** | The proxy's `/admin/*` endpoints (sections, contracts). Needs the admin token and an address in `ADMIN_ALLOWED_IPS`. Used by chainlens's admin pages and by Ansible |
 | **Admin token** | Secret for the admin API and chainlens admin pages; on the operator in `ansible/state/secrets/` (`proxy_admin_token`, `chainlens_deploy_token`) |
 | **Ansible phases** | The numbered playbooks `00`–`10` in `ansible/` (hosts, images, MPC, coordinators, Besu, proxy, HA, check, monitoring, backups). Phase `01` copies the code to the hosts and must run first after a `git pull` |
+| **Avatar** | The platform's image token (ERC-721) in an **avatar collection** (`AvatarCollection.sol`): a picture with a fixed price, minted by the contract account center, sold to section user accounts. See [avatars](features/avatars.md) |
 | **Big / small / none pool** | Presignature pool class of an MPC key: how many presignatures are kept ready. `big` for busy accounts (SENDER01, upfront), `small` for ordinary accounts, `none` for rarely used ones (signs on the slow path) |
 | **Cold path** | Signing without a ready presignature: the MPC nodes compute one on demand (about 0.6 s instead of milliseconds) |
-| **Consumption account** | A section's account that **receives** money: +x transfers from users and first NFT sales. Swept to the payment account |
-| **Contract account center** (`CONTRACT_CENTER`) | The MPC account that deploys every contract through the proxy (and mints version-3 NFTs). Contracts it deploys are registered on chain with their ABI |
+| **Consumption account** | A section's account that **receives** money: +x transfers from users and first avatar sales. Swept to the payment account |
+| **Contract account center** (`CONTRACT_CENTER`) | The MPC account that deploys every contract through the proxy (and mints the avatars). Contracts it deploys are registered on chain with their ABI |
 | **Coordinator** (coord1, coord2) | Combines the MPC nodes' partial signatures; holds **no** key material. Ethereum signer JSON-RPC (`eth_accounts`, `eth_sendTransaction`) on port 9100 |
 | **Floating IP / VIP** | An address that keepalived moves between h135 and h136: `.150` (Besu RPC, MPC signer) and `.151` (the proxy) |
 | **HA pair** | h135 and h136: everything on the application path runs on both; one is active |
@@ -35,5 +36,5 @@
 | **Upfront account** | A section's account that **pays out**: funds new user accounts and −x transfers; topped up from SENDER01 |
 | **User account** | An account created by a section (`/createaccount` with its key); belongs to that section |
 | **Validator** (val1–4) | Besu node that takes part in QBFT consensus; one per host .135–.138 |
-| **Version 2 / 3 collection** | NFT contract versions: v3 minted by the contract center, first sale pays the buyer's section; v2 (minted by SENDER01) is retired: the proxy no longer reads, mints or sells it |
+| **Version-2 collection** | The image collection from before sections (minted by SENDER01): retired, the proxy no longer reads, mints or sells it. Version-3 collections are avatar collections |
 | **+x / −x** | Section transfers: +x = user → consumption, −x = upfront → user |

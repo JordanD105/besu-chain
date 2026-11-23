@@ -1,6 +1,6 @@
 # 문서
 
-**besu-chain**에 관한 모든 내용입니다. besu-chain은 MPC 서명(키가 어디에도 존재하지 않음), 섹션과 NFT를 지원하는
+**besu-chain**에 관한 모든 내용입니다. besu-chain은 MPC 서명(키가 어디에도 존재하지 않음), 섹션, 아바타, 닉네임을 지원하는
 애플리케이션 API, 고가용성, 모니터링, Ansible 배포를 갖춘 프라이빗 Hyperledger Besu(QBFT) 체인입니다.
 
 **처음이십니까?** [소개](overview/introduction.md) → [아키텍처](overview/architecture.md)
@@ -13,10 +13,10 @@
 | 역할 | 읽는 순서 |
 |---|---|
 | **프로젝트를 처음 접하는 분** | [소개](overview/introduction.md) · [아키텍처](overview/architecture.md) · [용어집](glossary.md) |
-| **애플리케이션 개발자** (API 호출) | [프록시 API](reference/proxy-api.md) · [섹션](features/sections.md) · [NFT 워크플로](features/nft-workflow.md) · [개발 환경](getting-started/development.md) |
+| **애플리케이션 개발자** (API 호출) | [프록시 API](reference/proxy-api.md) · [섹션](features/sections.md) · [아바타](features/avatars.md) · [개발 환경](getting-started/development.md) |
 | **운영자** (배포, 프로덕션 운영) | [운영자 가이드](deployment/operator-guide.md) · [Ansible](deployment/ansible.md) · [접근 제어](deployment/access-control.md) · [알림](operations/alerts.md) · [대시보드](operations/dashboards.md) · [문제 해결](operations/troubleshooting.md) |
 | **MPC 노드 팀** (세 팀 중 하나) | [MPC 서명기](components/mpc-signer.md) · [운영 환경의 MPC 서명기](deployment/mpc-signer-production.md) · [MPC 업그레이드](operations/mpc-signer-upgrade.md) |
-| **비즈니스 관리자** (섹션, 자금, NFT) | [섹션](features/sections.md) · [chainlens](components/chainlens.md) · [NFT 워크플로](features/nft-workflow.md) |
+| **비즈니스 관리자** (섹션, 자금, 아바타) | [섹션](features/sections.md) · [chainlens](components/chainlens.md) · [아바타](features/avatars.md) |
 | **컨트랙트 개발자** | [Remix](components/remix.md) · [컨트랙트 배포](features/contract-deployment.md) · [컨트랙트 기록](features/contract-records.md) |
 | **당직 중, 문제가 발생한 경우** | [문제 해결](operations/troubleshooting.md) · [알림](operations/alerts.md) · [재해 복구](operations/disaster-recovery.md) |
 
@@ -29,7 +29,7 @@
 | PC나 네트워크가 서비스에 접근하도록 허용 | [접근 제어](deployment/access-control.md) |
 | 섹션 생성, 충전, 스윕, 반환 | [섹션](features/sections.md) |
 | 브라우저에서 컨트랙트 배포 | [컨트랙트 배포](features/contract-deployment.md) |
-| Solidity 작성부터 NFT 판매까지 | [NFT 워크플로](features/nft-workflow.md) |
+| Solidity 작성부터 아바타 판매까지 | [아바타](features/avatars.md) |
 | 알림 이해 | [알림](operations/alerts.md) |
 | 알림 해결 | [알림 런북](operations/alert-runbook.md) |
 | Grafana 대시보드 읽기 | [Grafana 대시보드](operations/dashboards.md) |
@@ -82,10 +82,10 @@
 ### 기능 {#features}
 | 문서 | 내용 |
 |---|---|
-| [섹션](features/sections.md) | 자체 계정, 키, 자금 흐름을 가진 비즈니스 단위; SectionRegistry; 컨트랙트; NFT v3; 모니터링 |
+| [섹션](features/sections.md) | 자체 계정, 키, 자금 흐름을 가진 비즈니스 단위; SectionRegistry; 컨트랙트; 아바타 컬렉션; 모니터링 |
 | [컨트랙트 배포](features/contract-deployment.md) | chainlens의 Deploy 페이지 |
 | [컨트랙트 기록](features/contract-records.md) | `contracts/deployments/`: 컨트랙트마다 하나의 기록 |
-| [NFT 워크플로](features/nft-workflow.md) | Remix → 배포 → 민팅 → 판매, 단계별 안내 |
+| [아바타](features/avatars.md) | 플랫폼의 이미지 토큰: Remix → 배포 → 민팅 → 판매, 단계별 안내 |
 | [닉네임](features/nicknames.md) | 소울바운드 닉네임 토큰: 구매하고 테두리 올리기; 규칙, API, chainlens 페이지 |
 
 ### 운영 {#operations}

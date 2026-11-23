@@ -531,7 +531,7 @@ curl -s -X POST http://192.168.68.151:30000/createaccount -H 'content-type: appl
 ```
 
 The last call creates an MPC account and funds it from `SENDER01`. Then send a transfer with
-`POST /transfer` (`from`, `to`, `amount`) and the NFT calls you use
+`POST /transfer` (`from`, `to`, `amount`) and the contract calls you use
 ([Proxy API reference](../reference/proxy-api.md), [Proxy (application API)](../components/proxy.md)).
 
 ### 4.12 Monitoring, chainlens, Remix and documentation (.139)

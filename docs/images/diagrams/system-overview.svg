@@ -18,7 +18,7 @@
 <!-- applications -->
 <rect x="440" y="98" width="520" height="62" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
 <text x="700" y="124" font-size="16" font-weight="700" fill="#1e3a8a" text-anchor="middle">Applications (one API key per section)</text>
-<text x="700" y="146" font-size="13" fill="#1e3a8a" text-anchor="middle">accounts · transfers · NFTs · contracts — they never hold keys</text>
+<text x="700" y="146" font-size="13" fill="#1e3a8a" text-anchor="middle">accounts · transfers · avatars · contracts — they never hold keys</text>
 
 <!-- operator -->
 <rect x="1080" y="98" width="280" height="62" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" filter="url(#sh)"/>

@@ -15,7 +15,7 @@
 A **private Hyperledger Besu blockchain (QBFT consensus)** with everything an organization needs
 to run payments and NFTs on it:
 
-- **Applications** call one HTTP API (the **proxy**) to create accounts, move ETH, sell NFTs and call
+- **Applications** call one HTTP API (the **proxy**) to create accounts, move ETH, sell avatars and nicknames and call
   contracts. They never hold keys.
 - **Keys never exist anywhere**: every account is a **2-of-3 MPC key** split between three MPC nodes
   run by three teams. Two of them must agree to sign; no single machine, team, disk or backup can.
@@ -30,7 +30,7 @@ to run payments and NFTs on it:
 |---|---|---|---|
 | **Besu (QBFT)** | `besu-production/` | 4 validators + 2 RPC nodes, 1 s blocks, free gas, node allowlist | [Besu chain](../components/besu.md) · [manual setup](../deployment/besu-manual.md) |
 | **MPC signer** | `mpc-signer/` | 2-of-3 threshold ECDSA (CGGMP24): 3 MPC nodes + 2 coordinators; Ethereum signer JSON-RPC API | [MPC signer](../components/mpc-signer.md) |
-| **Proxy** | `proxy/` | the application API: accounts, transfers, NFTs, contracts, sections, admin API; Redis as an optional cache | [proxy](../components/proxy.md) · [API](../reference/proxy-api.md) |
+| **Proxy** | `proxy/` | the application API: accounts, transfers, avatars, nicknames, contracts, sections, admin API; Redis as an optional cache | [proxy](../components/proxy.md) · [API](../reference/proxy-api.md) |
 | **SectionRegistry** | `proxy/contracts/` | on-chain record of sections, their accounts and registered contracts | [sections](../features/sections.md) |
 | **Chainlens** | `chainlens/` | block explorer with platform overview, statistics and admin pages | [chainlens](../components/chainlens.md) |
 | **Remix** | `remix/` | self-hosted Remix IDE with a local compiler mirror | [Remix](../components/remix.md) |

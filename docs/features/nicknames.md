@@ -4,7 +4,7 @@
 >
 > **For:** application developers, business admins.
 >
-> **Related:** [sections](sections.md) · [NFT workflow](nft-workflow.md) · [proxy API](../reference/proxy-api.md#nicknames) · [chainlens](../components/chainlens.md)
+> **Related:** [sections](sections.md) · [avatars](avatars.md) · [proxy API](../reference/proxy-api.md#nicknames) · [chainlens](../components/chainlens.md)
 
 **Contents**
 
@@ -21,8 +21,8 @@
 
 ---
 
-There are two kinds of token. The **image token** is the NFT collection of the
-[NFT workflow](nft-workflow.md) (version 3): a picture, minted by the center, sold and resold.
+There are two kinds of token. The **avatar** ([avatars](avatars.md)) is a picture, minted by the
+center, sold and resold.
 The **nickname token** is this page: a name a user buys for themself, which can never be sold on.
 It has no picture: it stores the nickname and its edge level, and each application decides how to
 show a level (a frame, a color, a badge…).

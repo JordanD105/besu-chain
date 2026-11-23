@@ -4,7 +4,7 @@
 >
 > **대상:** 컨트랙트 개발자, 운영자.
 >
-> **관련 문서:** [컨트랙트 배포](../features/contract-deployment.md) · [NFT 워크플로](../features/nft-workflow.md) · [접근 제어](../deployment/access-control.md)
+> **관련 문서:** [컨트랙트 배포](../features/contract-deployment.md) · [아바타](../features/avatars.md) · [접근 제어](../deployment/access-control.md)
 
 ---
 
@@ -61,7 +61,7 @@ cd remix && SOLC_VERSIONS="0.8.28" docker compose build && docker compose up -d
 4. chainlens **Deploy** 페이지에서 **운영 환경에 배포**합니다
    ([컨트랙트 배포(chainlens Deploy 페이지)](../features/contract-deployment.md)). 컨트랙트 계정 센터가
    서명하고 체인에 등록되므로, chainlens와 애플리케이션(`/contract/call`, `/contract/send`)이 즉시
-   사용할 수 있습니다. NFT 컬렉션의 경우 판매까지의 전체 과정은 [NFT 워크플로](../features/nft-workflow.md)에
+   사용할 수 있습니다. 아바타 컬렉션의 경우 판매까지의 전체 과정은 [아바타](../features/avatars.md)에
    있습니다. 다른 방법은 운영자 머신에서 `besu-production/operator/deploy-contract.js`를 사용하는 것입니다
    ([Besu 운영 패키지(수동 설정)](../deployment/besu-manual.md#deploying-a-contract)). 이 방법은 MPC 계정으로
    서명하며, `contracts/deployments/`에 레코드를 작성합니다([컨트랙트 레코드](../features/contract-records.md)).

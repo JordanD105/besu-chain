@@ -1,10 +1,10 @@
 # Sections
 
-> **What:** Sections: business units with their own API key, accounts and money flow, recorded in the on-chain SectionRegistry; plus registered contracts, NFT collections v3 and section monitoring.
+> **What:** Sections: business units with their own API key, accounts and money flow, recorded in the on-chain SectionRegistry; plus registered contracts, avatar collections and section monitoring.
 >
 > **For:** architects, developers, business admins.
 >
-> **Related:** [proxy API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md) · [NFT workflow](nft-workflow.md)
+> **Related:** [proxy API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md) · [avatars](avatars.md)
 
 **Contents**
 
@@ -15,7 +15,7 @@
 - [Chainlens Sections page](#chainlens-sections-page)
 - [Application API: section calls](#application-api-section-calls)
 - [Contracts](#contracts)
-- [NFT collections](#nft-collections)
+- [Avatar collections](#avatar-collections)
 - [Sections in the chainlens Accounts page](#sections-in-the-chainlens-accounts-page)
 - [Platform overview on the chainlens Dashboard](#platform-overview-on-the-chainlens-dashboard)
 - [Flows](#flows)
@@ -30,7 +30,7 @@ API key. Money for a section's users comes from the section's own accounts inste
 What exists: the SectionRegistry (version 2), the proxy admin API, section-scoped `/createaccount`
 and `/transfer`, the chainlens **Sections** page (with the sections' user accounts), contracts
 deployed by the contract account center and used through one generic API (`/contract/call`,
-`/contract/send`, `/contract/events`, `/contract/list`), NFT collections version 3 (minted by the
+`/contract/send`, `/contract/events`, `/contract/list`), avatar collections (minted by the
 center, first sales paid to the section), nicknames, and monitoring
 (alerts and the Grafana **Sections** dashboard).
 
@@ -40,11 +40,11 @@ center, first sales paid to the section), nicknames, and monitoring
 |---|---|---|---|---|
 | SENDER01 | 1 | Funds the upfront accounts (manual top-up); receives money back from payment accounts | – | big |
 | `upfront_account_i` | 1 per section | **Pays out:** funds new accounts, `/transfer -x` | 2 upfront | big |
-| `consumption_account_i` | 1 per section | **Receives:** `/transfer +x`, first NFT sales; swept to `payment_account_i` | 3 consumption | none |
+| `consumption_account_i` | 1 per section | **Receives:** `/transfer +x`, first avatar sales; swept to `payment_account_i` | 3 consumption | none |
 | `payment_account_i` | 1 per section | **Collects** the swept money; can pay it back to SENDER01 | 4 payment | none |
 | user accounts | many | Created by `/createaccount` with the section's key; belong to one section | 1 user | as requested (default `small`) |
 | retired accounts | after a replacement | A replaced upfront / consumption / payment account: still the section's, no role | 5 retired | unchanged |
-| `contract_account_center` | 1 | Deploys all contracts (common and NFT), mints the NFTs of version-3 collections | – | big |
+| `contract_account_center` | 1 | Deploys all contracts (common and avatar), mints the avatars of the avatar collections | – | big |
 | registry admin | 1 | The only writer of the SectionRegistry | – | small |
 
 Every account is an MPC key. **Only the proxy sends transactions** from them (one queue per account,
@@ -76,7 +76,7 @@ ordered nonces); chainlens is the UI and calls the proxy's admin API.
 [`proxy/section-registry.json`](../../proxy/section-registry.json) (solc 0.8.28, EVM cancun;
 `proxy/scripts/compile-contract.js`). Both proxies and chainlens read it; nothing else stores
 sections, so there is no database to replicate or back up (the chain is), every change is a signed
-transaction, and contracts can check it (NftCollection v3).
+transaction, and contracts can check it (AvatarCollection).
 
 | Holds | Changed by |
 |---|---|
@@ -86,8 +86,8 @@ transaction, and contracts can check it (NftCollection v3).
 | active / archived | `setActive`, `archive` |
 | info fields: a key (1–32 characters: letters, digits, `_ . -`) → a value (up to 512 bytes), up to 32 per section | `setInfo` (an empty value removes the field) |
 | user accounts of each section, every account's kind (1 user … 5 retired) | `addAccount`, `addAccounts` (`AccountAdded` events) |
-| registered contracts (kind 1 common, 2 NFT collection) and their ABI (in the `ContractRegistered` event) | `registerContract` |
-| `isConsumptionAccount(address)`: true only for the consumption account of an active, not archived section; the payee check of NftCollection v3 | (view) |
+| registered contracts (kind 1 common, 2 avatar collection) and their ABI (in the `ContractRegistered` event) | `registerContract` |
+| `isConsumptionAccount(address)`: true only for the consumption account of an active, not archived section; the payee check of AvatarCollection | (view) |
 
 Only the **registry admin** (an MPC key) writes, through the proxy, one write at a time. New kinds of
 section information go into **info fields** (description, contact, limits, …) without a new
@@ -166,7 +166,7 @@ archived). Who may reach the proxy at all is the firewall's `proxy_client_ips`
 | `POST /createaccount {amount, pool}` | new MPC account, **registered under section_i** on chain, funded **from `upfront_account_i`** |
 | `POST /transfer {account, amount: "x", memo}` | `account` → `consumption_account_i` |
 | `POST /transfer {account, amount: "-x", memo}` | `upfront_account_i` → `account` |
-| `POST /contract/send {contract, function, args, from, value}` | a transaction signed by `from`, a user account of section_i ([Contracts](#contracts)); also the version-3 NFT sale (`buy`, [NFT collections](#nft-collections)) and the nickname writes (`buyNickname`, `upgradeEdge`, [nicknames](nicknames.md)), with the payee and price filled in |
+| `POST /contract/send {contract, function, args, from, value}` | a transaction signed by `from`, a user account of section_i ([Contracts](#contracts)); also the avatar sale (`buy`, [avatar collections](#avatar-collections)) and the nickname writes (`buyNickname`, `upgradeEdge`, [nicknames](nicknames.md)), with the payee and price filled in |
 
 `account` must be a user account of section_i (created with that section's key). `from` / `to`
 are not accepted on a section `/transfer`. The answer names the section, the direction, `from`, `to`
@@ -193,7 +193,7 @@ account center as sender is refused. With `sections_required: true` they are ref
 
 Every contract is deployed by **`contract_account_center`** (an MPC key, big pool, created once by
 `ansible/06-proxy.yml`: `state/contract-center`), through the proxy, then **registered in the
-SectionRegistry** with its kind (common / NFT collection), its name and its ABI. Chainlens and the
+SectionRegistry** with its kind (common / avatar collection), its name and its ABI. Chainlens and the
 proxy read the registered contracts from the chain (`ContractRegistered` events), so a deployed
 contract is usable and visible at once, on every host, with nothing to copy.
 
@@ -204,7 +204,7 @@ admin API:
 |---|---|
 | `POST /admin/contract/check {kind, name, abi, bytecode, deployedBytecode, immutableReferences, args}` | dry run: arguments, gas, no revert; the address it will get. Nothing is signed |
 | `POST /admin/contract/deploy {…same}` | deploys (signed by the center), checks the code on chain against `deployedBytecode`, registers it (signed by the registry admin) |
-| `check` / `deploy` with `{template: "nft-collection", name, symbol}` or `{template: "nickname-collection", …}` | the platform's own contracts, compiled into the proxy image (the registry's address filled in) |
+| `check` / `deploy` with `{template: "avatar-collection", name, symbol}` or `{template: "nickname-collection", …}` | the platform's own contracts, compiled into the proxy image (the registry's address filled in) |
 | `POST /admin/contract/send {contract, function, args}` | a write signed by the center: the minter and owner of the platform's contracts (`mint`, nickname price and edge levels, reserved names) |
 
 The contract's `msg.sender` at construction is the center: a contract with an owner or roles should
@@ -217,45 +217,46 @@ take them as constructor arguments when the center must not hold them.
 | `POST /contract/call {contract, function, args}` | runs a **view/pure** function (`eth_call`), returns a friendly `result` and the decoded `outputs`; `{calls: [ … ]}` runs up to 50 at once. No key needed while `sections_required: false`. |
 | `POST /contract/send {contract, function, args, from, value}` + `X-Section-Key` | sends a **state-changing** function, signed by `from`, a **user account of the caller's section**; waits for the block; returns the status, `blockNumber`, `gasUsed` and the contract's decoded events. `value` (ETH) only for payable functions. A transaction mined but reverted answers 400 with `success: false`. |
 | `POST /contract/events {contract, event, where, fromBlock, toBlock, limit}` | the contract's events, newest first (`current: true` with `Transfer` and `where.to`: the tokens that address owns now) |
-| `GET /contract/list` | the registered contracts (`?type=nft\|nickname\|contract`, `?has=<function>`, `?functions=1`) |
+| `GET /contract/list` | the registered contracts (`?type=avatar\|nickname\|contract`, `?has=<function>`, `?functions=1`) |
 
 Only **registered** contracts, only functions of **their ABI**. `function` is a name, or the
 signature (`transfer(address,uint256)`) when the name is overloaded. `args` is a list (the raw ABI
 values) or an object (by input name; friendly values on the platform's contracts: ETH,
 metadata). Numbers as strings or numbers, addresses `0x…`, booleans `true`/`false`, arrays and
 tuples as JSON (or JSON text). A transaction that would revert is refused before it is signed, with
-the reason (`the transaction would revert: …`). `NftCollection.mint` can't be used this way: only
+the reason (`the transaction would revert: …`). `AvatarCollection.mint` can't be used this way: only
 the center mints, so it reverts with `not minter`; use `POST /admin/contract/send`.
 
 For the platform's own contracts `/contract/send` fills in what the section fixes: a `payee` left out
 is the sender's section's consumption account, and a `value` left out is the price (nickname
-`buyNickname`, `upgradeEdge`; NFT version-3 `buy`). The admin API caller (chainlens) may call it
+`buyNickname`, `upgradeEdge`; avatar `buy`). The admin API caller (chainlens) may call it
 without a key: the section is then that of `from`. Details: [proxy API](../reference/proxy-api.md#post-contractsend--write).
 
-## NFT collections
+## Avatar collections
 
-New collections are **NftCollection version 3** ([`proxy/contracts/NftCollection.sol`](../../proxy/contracts/NftCollection.sol),
-`proxy/nft-collection-v3.json`): deployed and minted by the **contract account center**, registered
-in the SectionRegistry (kind NFT), shared by all sections. The constructor takes `name_`, `symbol_`
+An **avatar** is the platform's image token. Avatar collections ([`proxy/contracts/AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol),
+`proxy/avatar-collection.json`; version-3 collections are the same code) are deployed and minted by
+the **contract account center**, registered in the SectionRegistry (kind avatar), shared by all
+sections. The constructor takes `name_`, `symbol_`
 and `registry_` (the SectionRegistry's address).
 
 | Request | What happens |
 |---|---|
-| `POST /admin/contract/deploy {template: "nft-collection", name, symbol}` | the center deploys a version-3 collection (its minter, with the registry's address) and registers it |
-| `POST /admin/contract/send {contract, function: "mint", args: {name, image, …, price}}` | the center mints the NFT to itself, for sale; `price` (ETH) is fixed for good. Not tied to a section. |
+| `POST /admin/contract/deploy {template: "avatar-collection", name, symbol}` | the center deploys an avatar collection (its minter, with the registry's address) and registers it |
+| `POST /admin/contract/send {contract, function: "mint", args: {name, image, …, price}}` | the center mints the avatar to itself, for sale; `price` (ETH) is fixed for good. Not tied to a section. |
 | `POST /contract/send {contract, function: "buy", args: {tokenId}, from}` + `X-Section-Key` | a sale to `from`, a **user account of the caller's section**, who signs `buy(tokenId, payee)` paying the mint price (payee and value filled in). **First sale** (the center holds it): the price goes to the section's **consumption account**. **Resale** (a user holds it): the seller's section first sends `approve` `{tokenId}` from the seller (it approves the collection), also with `/contract/send`; the price goes to the **seller**. Seller and buyer may be in different sections. |
 
 The contract itself enforces where a first sale's money goes: `buy` checks
 `SectionRegistry.isConsumptionAccount(payee)` (the consumption account of an active section), so
 even a transaction sent around the proxy can't redirect it.
 
-A version-3 sale needs the section key. The one exception is the admin API caller (the admin token
-from an address in `ADMIN_ALLOWED_IPS`): the chainlens **Mint and sell** card on a collection's
+An avatar sale needs the section key. The one exception is the admin API caller (the admin token
+from an address in `ADMIN_ALLOWED_IPS`): the chainlens **Mint and sell avatars** card on a collection's
 contract page (admin token and IP, as the Deploy page) calls the proxy that way, and the section is
-then the buyer's. Step by step from Remix to a sale: [NFT workflow](nft-workflow.md).
+then the buyer's. Step by step from Remix to a sale: [avatars](avatars.md).
 
 Owners, prices, metadata and sales are read with `/contract/call` and `/contract/events`
-([proxy API, NFT collections](../reference/proxy-api.md#nft-collections)). The old `/nft/*` routes
+([proxy API, avatar collections](../reference/proxy-api.md#avatar-collections)). The old `/nft/*` routes
 answer 410.
 
 **Version-2 collections** (minted by SENDER01, made before sections) are **retired**: the proxy no
@@ -273,7 +274,7 @@ accounts, renames, replaced accounts, archives) every 15 s.
 ## Platform overview on the chainlens Dashboard
 
 Visible to everyone, under the Dashboard's totals: four cards (**SENDER01** with its balance, the
-**contract center** with the contracts it deployed, common and NFT, the **section registry** with its
+**contract center** with the contracts it deployed, common and avatar, the **section registry** with its
 contract and admin, and the **sections**: active, disabled, archived, user accounts), then a
 **Sections** card with each section's balances (upfront / consumption / payment, and in gray the
 total held by its **user accounts**, stacked, labelled `upfront / consumption / payment / users`, e.g.
@@ -295,8 +296,8 @@ sender and receiver:
 | Balances (end of period), the default | each period's closing balances (upfront / consumption / payment / users), stacked like the Sections bars: today's balances minus every later change (gas is free on this chain) |
 | New users | the registry's `AccountAdded` (or the account's first funding, if earlier) |
 | +x from users | user account → the section's consumption account |
-| NFT sales / NFT sales (ETH) | `buy` calls by the section's user accounts (first sales: the center was the seller) |
-| Income | +x from users + first NFT sales (what reaches the consumption account) |
+| Avatar sales / Avatar sales (ETH) | `buy` calls by the section's user accounts (first sales: the center was the seller) |
+| Income | +x from users + first avatar sales (what reaches the consumption account) |
 | To users | upfront → user (new accounts' funding and −x) |
 | Top-ups, Swept, Paid back | SENDER01 → upfront, consumption → payment, payment → SENDER01 |
 | Transactions | every transaction from or to one of the section's accounts |
@@ -306,7 +307,7 @@ start is not included.
 
 ## Flows
 
-![The money cycle of one section: SENDER01 top-up to the upfront account, −x and new-account funding to user accounts, +x and first NFT sales to the consumption account, sweep to the payment account, pay back to SENDER01](../images/diagrams/section-money-flow.svg)
+![The money cycle of one section: SENDER01 top-up to the upfront account, −x and new-account funding to user accounts, +x and first avatar sales to the consumption account, sweep to the payment account, pay back to SENDER01](../images/diagrams/section-money-flow.svg)
 
 | Action | Who | Signed by / what happens |
 |---|---|---|
@@ -321,12 +322,12 @@ start is not included.
 | `/transfer +x` (section_i) | proxy | user account → `consumption_account_i` |
 | `/transfer -x` (section_i) | proxy | `upfront_account_i` → user account |
 | **Deploy contract** (UI) | proxy admin API → registry | `contract_account_center`, then registry admin; not tied to a section |
-| **Deploy NFT collection** (UI or the `nft-collection` template) | proxy → registry | `contract_account_center` (the minter), then registry admin; shared by all sections |
+| **Deploy avatar collection** (UI or the `avatar-collection` template) | proxy → registry | `contract_account_center` (the minter), then registry admin; shared by all sections |
 | `/contract/call` | proxy | none (read); any registered contract |
 | `/contract/send` (section_i) | proxy | a user account of section_i; only registered contracts and their ABI functions |
 | `/admin/contract/send` `mint` | proxy (center's queue) | `contract_account_center`: `mint(center, tokenId, uri, price)`; price fixed for good |
-| `/contract/send` `buy`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; NFT → buyer, price → `consumption_account_i` |
-| `/contract/send` `approve`, then `buy`, resale | proxy | the seller `approve(collection, tokenId)` (seller's section); the buyer `buy(tokenId, …)` at the same mint price (buyer's section); NFT → buyer, price → seller |
+| `/contract/send` `buy`, first sale (section_i) | proxy (buyer's queue) | the buyer: `buy(tokenId, payee = consumption_account_i)`; avatar → buyer, price → `consumption_account_i` |
+| `/contract/send` `approve`, then `buy`, resale | proxy | the seller `approve(collection, tokenId)` (seller's section); the buyer `buy(tokenId, …)` at the same mint price (buyer's section); avatar → buyer, price → seller |
 
 ## Monitoring
 
@@ -337,7 +338,7 @@ The proxy's `/metrics` (scraped by Prometheus through the proxy VIP) has these s
 |---|---|
 | `proxy_section_balance_eth{section_id, section, role, active}` | each account's balance (role upfront / consumption / payment), refreshed every 15 s; archived sections are not listed |
 | `proxy_section_active{section_id, section}` | 1 = enabled |
-| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | operations and ETH moved since the proxy started (op: `create_account`, `transfer_in`, `transfer_out`, `nft_first_sale`, `nft_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`); they restart at 0 with the proxy (dashboards use `increase()`) |
+| `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | operations and ETH moved since the proxy started (op: `create_account`, `transfer_in`, `transfer_out`, `avatar_sale`, `avatar_resale`, `nickname_sale`, `edge_upgrade`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`); they restart at 0 with the proxy (dashboards use `increase()`) |
 | `proxy_sender01_balance_eth` | SENDER01's balance |
 | `proxy_section_low_balance_eth`, `proxy_sender01_low_balance_eth` | the alert thresholds |
 | `proxy_sections_metrics_error`, `proxy_sections_metrics_age_seconds` | 1 = the last refresh of the balances failed; seconds since the last refresh |

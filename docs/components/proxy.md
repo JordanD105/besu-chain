@@ -1,6 +1,6 @@
 # Proxy (application API)
 
-> **What:** Running the proxy (the application API) on the MPC signer: setup, settings, who signs, the Redis-optional nonce design, NFT collections, sections, metrics and troubleshooting.
+> **What:** Running the proxy (the application API) on the MPC signer: setup, settings, who signs, the Redis-optional nonce design, avatar collections, sections, metrics and troubleshooting.
 >
 > **For:** developers and operators.
 >
@@ -17,7 +17,7 @@
 - [How the proxy decides who signs](#how-the-proxy-decides-who-signs)
 - [Nonces and balance checks: fast path + periodic chain check](#nonces-and-balance-checks-fast-path--periodic-chain-check)
 - [Redis is optional (no replica needed)](#redis-is-optional-no-replica-needed)
-- [NFT collections](#nft-collections)
+- [Avatar collections](#avatar-collections)
 - [Sections and registered contracts](#sections-and-registered-contracts)
 - [Metrics and monitoring](#metrics-and-monitoring)
 - [Operating it](#operating-it)
@@ -45,7 +45,7 @@ The proxy code is one file, [`proxy/stress-latest.js`](../../proxy/stress-latest
 endpoint, with request bodies and answers, is in the [proxy API reference](../reference/proxy-api.md).
 
 Steps 1 to 5 set up a **development** proxy without sections: calls use `SENDER01`, and there are
-no contracts or NFT collections (they need sections). Production adds the SectionRegistry, the contract account center and
+no contracts or avatar collections (they need sections). Production adds the SectionRegistry, the contract account center and
 the admin API ([Sections and registered contracts](#sections-and-registered-contracts)); Ansible
 sets all of it up.
 
@@ -219,11 +219,11 @@ curl -s localhost:30000/transfer -H 'content-type: application/json' \
   --data '{"from":"0x1293…717d","to":"0x3a55…111d","amount":"1.5","memo":"hello"}'
 ```
 
-NFT collections, nicknames and other contracts need sections (the SectionRegistry and the contract
+Avatar collections, nicknames and other contracts need sections (the SectionRegistry and the contract
 account center): without them `/contract/*` answers 503 `sections are not configured`. With
 sections, a collection is deployed from a template, minted by the center and sold with `buy`
-through `POST /contract/send`. See [NFT collections](#nft-collections) and the
-[NFT workflow](../features/nft-workflow.md).
+through `POST /contract/send`. See [Avatar collections](#avatar-collections) and
+[avatars](../features/avatars.md).
 
 Signer side:
 
@@ -252,7 +252,7 @@ Read at start-up. In production Ansible writes the file
 | `REDIS_IMAGE`, `REDIS_EXPORTER_IMAGE`, `REDIS_EXPORTER_PORT` | `redis:8.10.3`, `oliver006/redis_exporter:v1.67.0`, 9121 | used by `docker-compose.yml` only |
 | `REGISTRY_CONTRACT`, `REGISTRY_ADMIN` | – | the SectionRegistry and the MPC key that writes it (Ansible: `state/registry.json`). Both set = sections on |
 | `REGISTRY_FROM_BLOCK` | 0 | the block the registry was deployed in; its events are read from there |
-| `CONTRACT_CENTER` | – | the contract account center (Ansible: `state/contract-center`): deploys contracts and NFT collections, mints their NFTs, signs `/admin/contract/send` |
+| `CONTRACT_CENTER` | – | the contract account center (Ansible: `state/contract-center`): deploys contracts and avatar collections, mints the avatars, signs `/admin/contract/send` |
 | `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | – | the admin API (`/admin/*`): token (16+ characters) and allowed source addresses or networks. Ansible: `state/secrets/proxy_admin_token`, `operator_ip` and the monitoring host. Without both the admin API answers 404 |
 | `SECTION_KEY_REQUIRED` | `false` | `true`: calls without `X-Section-Key` are refused (Ansible: `sections_required`) |
 | `UPFRONT_LOW_BALANCE_ETH`, `SENDER01_LOW_BALANCE_ETH` | 0 (off) | alert thresholds published on `/metrics` (Ansible: `upfront_low_balance_eth`, `sender01_low_balance_eth`) |
@@ -277,8 +277,8 @@ Which account a request may send from is decided before that:
 | keyless `/createaccount` | `SENDER01` |
 | keyless `/transfer {from, to, amount}` | `from` (a negative `amount` sends from `to` to `from`); a section's account, the registry admin or the contract center is refused (403) |
 | `/createaccount`, `/transfer` with `X-Section-Key` | the section's upfront account, or the user account for `+x` ([sections](../features/sections.md#application-api-section-calls)) |
-| `/contract/send` | `from`, a user account of the caller's section (also the NFT `buy` / `approve` and the nickname `buyNickname` / `upgradeEdge`) |
-| `/admin/contract/send` | the contract account center (NFT `mint`, nickname price, edge levels, reserved names) |
+| `/contract/send` | `from`, a user account of the caller's section (also the avatar `buy` / `approve` and the nickname `buyNickname` / `upgradeEdge`) |
+| `/admin/contract/send` | the contract account center (avatar `mint`, nickname price, edge levels, reserved names) |
 | `/admin/*` writes | the registry admin (registry), `SENDER01` / section accounts (money), the contract account center (deployments) |
 
 ## Nonces and balance checks: fast path + periodic chain check
@@ -353,28 +353,29 @@ while the connection is down (alert `ProxyRedisDisconnected`).
 |---|---|
 | `nonce:<sender>` | the nonce is counted in memory; when the proxy starts (or after an error) it takes max(Redis, `eth_getTransactionCount(pending)`), so a stale or missing value is harmless |
 | `pending-value:<sender>` | kept in memory; entries are dropped once their nonce is mined |
-| `nft:nextId:<contract>` | the next token id of a `mint` per collection: max(memory/Redis, highest token id minted on chain) + 1 |
+| `avatar:nextId:<contract>` | the next token id of a `mint` per collection: max(memory/Redis, highest token id minted on chain) + 1 |
 
 Sections, their accounts and the registered contracts are never in Redis: the proxy reads them from
 the SectionRegistry on chain (sections cached for 10 s, contracts re-read every 10 s).
 
 Tested: Redis stopped during load; Redis replaced by an empty instance plus a proxy restart; and a
-stale snapshot with a nonce rolled back. In all three, transfers, account creation and NFT mint
+stale snapshot with a nonce rolled back. In all three, transfers, account creation and avatar mint
 and metadata kept working, and every transaction was mined with no nonce gaps.
 
 Still one proxy replica: the per-sender lock is in process memory.
 
-## NFT collections
+## Avatar collections
 
-The proxy serves one collection contract: **version 3** ([`NftCollection.sol`](../../proxy/contracts/NftCollection.sol),
-compiled into the image as `nft-collection-v3.json`). It needs sections and `CONTRACT_CENTER`.
+An **avatar** is the platform's image token. The proxy serves one avatar collection contract
+([`AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol), compiled into the image as
+`avatar-collection.json`; version-3 collections are the same code). It needs sections and `CONTRACT_CENTER`.
 
 | | |
 |---|---|
-| Deployed by | the contract account center: `POST /admin/contract/deploy` with `{"template": "nft-collection", "name", "symbol"}`, or the chainlens Deploy page. Names and symbols are unique among the NFT collections (409) |
-| Registered in the SectionRegistry | yes (kind NFT); `GET /contract/list?type=nft` lists the collections |
+| Deployed by | the contract account center: `POST /admin/contract/deploy` with `{"template": "avatar-collection", "name", "symbol"}`, or the chainlens Deploy page. Names and symbols are unique among the avatar collections (409) |
+| Registered in the SectionRegistry | yes (kind avatar); `GET /contract/list?type=avatar` lists the collections |
 | Minted by | the contract account center: `POST /admin/contract/send` `mint` (the proxy builds the metadata, picks the next token id, converts the price) |
-| Sale | `POST /contract/send` `buy` `{ tokenId }` from the buyer, with `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. the chainlens Sell form) may send it without a key: the section is then the buyer's |
+| Sale | `POST /contract/send` `buy` `{ tokenId }` from the buyer, with `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. the chainlens Sell an avatar form) may send it without a key: the section is then the buyer's |
 | First sale pays | the section's consumption account (checked on chain by `isConsumptionAccount`) |
 | Resale pays | the seller; the seller's section first sends `approve` `{ tokenId }` with `/contract/send` (it approves the collection), then the buyer's section sends `buy` (the sections may differ) |
 | Reading | `/contract/call` (owner, price, metadata; in batches) and `/contract/events` (tokens owned, mint transaction, sales) |
@@ -383,10 +384,9 @@ The price is set at mint and fixed for every later sale, and a sale is one `buy`
 signed by the buyer: the token and the ETH move together or not at all. Token ids start at 1 in
 each collection.
 
-**Version-2 collections** ([`NftCollectionV2.sol`](../../proxy/contracts/NftCollectionV2.sol), minted
-by `SENDER01`) are retired: the proxy no longer reads, mints or sells them. The old `/nft/*` routes
-answer 410 with the call that replaces each. Examples are in the
-[proxy API reference](../reference/proxy-api.md#nft-collections).
+**Version-2 collections** (minted by `SENDER01`) are retired: the proxy no longer reads, mints or
+sells them. The old `/nft/*` routes answer 410 with the call that replaces each. Examples are in the
+[proxy API reference](../reference/proxy-api.md#avatar-collections).
 
 ## Sections and registered contracts
 
@@ -399,7 +399,7 @@ registry 0x… v2, N section(s), admin API on`).
 
 | Feature | Endpoints | Guide |
 |---|---|---|
-| section calls | `/createaccount`, `/transfer` (+x / −x), `/contract/send` (also NFT sales and nicknames) with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
+| section calls | `/createaccount`, `/transfer` (+x / −x), `/contract/send` (also avatar sales and nicknames) with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
 | admin API | `/admin/sections/*`: create, rename, info, key rotation, enable / disable, top-up, sweep, pay back, replace an account, archive, user accounts | [sections](../features/sections.md#admin-api) |
 | contracts | `/admin/contract/check` and `/deploy` (signed by the contract account center, registered with their ABI; templates for the platform's contracts); `/contract/call` (read, also in batches), `/contract/events`, `/contract/list`; `/contract/send` (write, signed by a user account of the caller's section) and `/admin/contract/send` (signed by the center) | [contract deployment](../features/contract-deployment.md) |
 

@@ -13,7 +13,7 @@
 - [RPC and the RPC VIP](#rpc-and-the-rpc-vip)
 - [Signing and accounts](#signing-and-accounts)
 - [Proxy and transactions](#proxy-and-transactions)
-- [Sections and NFTs](#sections-and-nfts)
+- [Sections and avatars](#sections-and-avatars)
 - [Hosts](#hosts)
 - [Deployment (Ansible)](#deployment-ansible)
 - [Collecting information](#collecting-information)
@@ -65,7 +65,7 @@
 | A sender's transactions wait (`ProxyNonceGap`) | a missing nonce | `GET /status/senders`; proxy log | the proxy repairs it within ~30 s; otherwise read the log |
 | `redis unavailable` in the proxy log | Redis not ready at start, or down | `ProxyRedisDisconnected` | harmless for correctness; restart Redis |
 
-## Sections and NFTs
+## Sections and avatars
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
@@ -73,8 +73,8 @@
 | `403 … is not an account of section "…"` | the account belongs to another section (or none) | use an account created with that section's key |
 | `403 section "…" is disabled` | the section was disabled | enable it on the chainlens Sections page |
 | Section can't create accounts (`SectionUpfrontEmpty` / `Low`) | upfront account empty | top up on the Sections page |
-| NFT sale: `wrong price` / insufficient funds | the buyer has less than price + gas | send the buyer ETH (−x) |
-| `not minter` | `mint` sent through `/contract/send`, or the collection was not deployed by the contract account center | mint with `POST /admin/contract/send`; deploy collections through chainlens or the `nft-collection` template |
+| Avatar sale: `wrong price` / insufficient funds | the buyer has less than price + gas | send the buyer ETH (−x) |
+| `not minter` | `mint` sent through `/contract/send`, or the collection was not deployed by the contract account center | mint with `POST /admin/contract/send`; deploy collections through chainlens or the `avatar-collection` template |
 | `410 … was removed: use …` | an old `/nft/*`, `/nickname/*` or `/admin/nickname/*` route | use the call the message names ([removed routes](../reference/proxy-api.md#removed-routes)) |
 
 ## Hosts

@@ -1,7 +1,7 @@
 # Documentation
 
 Everything about **besu-chain**: a private Hyperledger Besu (QBFT) chain with MPC signing (keys never
-exist), an application API with sections and NFTs, high availability, monitoring and Ansible deployment.
+exist), an application API with sections, avatars and nicknames, high availability, monitoring and Ansible deployment.
 
 **New here?** Read [introduction](overview/introduction.md) → [architecture](overview/architecture.md)
 → [glossary](glossary.md).
@@ -13,10 +13,10 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | You are… | Read in this order |
 |---|---|
 | **New to the project** | [introduction](overview/introduction.md) · [architecture](overview/architecture.md) · [glossary](glossary.md) |
-| **Application developer** (calling the API) | [proxy API](reference/proxy-api.md) · [sections](features/sections.md) · [NFT workflow](features/nft-workflow.md) · [development environment](getting-started/development.md) |
+| **Application developer** (calling the API) | [proxy API](reference/proxy-api.md) · [sections](features/sections.md) · [avatars](features/avatars.md) · [development environment](getting-started/development.md) |
 | **Operator** (deploying, running production) | [operator guide](deployment/operator-guide.md) · [Ansible](deployment/ansible.md) · [access control](deployment/access-control.md) · [alerts](operations/alerts.md) · [dashboards](operations/dashboards.md) · [troubleshooting](operations/troubleshooting.md) |
 | **MPC node team** (one of the three) | [MPC signer](components/mpc-signer.md) · [MPC production](deployment/mpc-signer-production.md) · [MPC upgrade](operations/mpc-signer-upgrade.md) |
-| **Business admin** (sections, money, NFTs) | [sections](features/sections.md) · [chainlens](components/chainlens.md) · [NFT workflow](features/nft-workflow.md) |
+| **Business admin** (sections, money, avatars) | [sections](features/sections.md) · [chainlens](components/chainlens.md) · [avatars](features/avatars.md) |
 | **Contract developer** | [Remix](components/remix.md) · [contract deployment](features/contract-deployment.md) · [contract records](features/contract-records.md) |
 | **On call, something is wrong** | [troubleshooting](operations/troubleshooting.md) · [alerts](operations/alerts.md) · [disaster recovery](operations/disaster-recovery.md) |
 
@@ -29,7 +29,7 @@ exist), an application API with sections and NFTs, high availability, monitoring
 | allow a PC or network to reach a service | [access control](deployment/access-control.md) |
 | create a section, top it up, sweep, pay back | [sections](features/sections.md) |
 | deploy a contract from the browser | [contract deployment](features/contract-deployment.md) |
-| go from Solidity to an NFT sale | [NFT workflow](features/nft-workflow.md) |
+| go from Solidity to an avatar sale | [avatars](features/avatars.md) |
 | understand an alert | [alerts](operations/alerts.md) |
 | fix an alert | [alert runbook](operations/alert-runbook.md) |
 | read a Grafana dashboard | [Grafana dashboards](operations/dashboards.md) |
@@ -82,10 +82,10 @@ exist), an application API with sections and NFTs, high availability, monitoring
 ### Features
 | Document | Contents |
 |---|---|
-| [Sections](features/sections.md) | business units with their own accounts, key and money flow; the SectionRegistry; contracts; NFT v3; monitoring |
+| [Sections](features/sections.md) | business units with their own accounts, key and money flow; the SectionRegistry; contracts; avatar collections; monitoring |
 | [Contract deployment](features/contract-deployment.md) | the chainlens Deploy page |
 | [Contract records](features/contract-records.md) | `contracts/deployments/`: one record per contract |
-| [NFT workflow](features/nft-workflow.md) | Remix → deploy → mint → sell, step by step |
+| [Avatars](features/avatars.md) | the platform's image tokens: Remix → deploy → mint → sell, step by step |
 | [Nicknames](features/nicknames.md) | soulbound nickname tokens: buy one, raise its edge; rules, API, chainlens page |
 
 ### Operations

@@ -14,7 +14,7 @@
 
 조직이 결제와 NFT를 운영하는 데 필요한 모든 것을 갖춘 **프라이빗 Hyperledger Besu 블록체인(QBFT 합의)**입니다.
 
-- **애플리케이션**은 하나의 HTTP API(**프록시**)를 호출하여 계정을 생성하고, ETH를 이동하고, NFT를 판매하고,
+- **애플리케이션**은 하나의 HTTP API(**프록시**)를 호출하여 계정을 생성하고, ETH를 이동하고, 아바타와 닉네임을 판매하고,
   컨트랙트를 호출합니다. 애플리케이션은 키를 보유하지 않습니다.
 - **키는 어디에도 존재하지 않습니다**. 모든 계정은 세 팀이 운영하는 세 MPC 노드에 나뉜 **2-of-3 MPC 키**입니다.
   서명하려면 그중 두 노드가 동의해야 하며, 단일 머신, 팀, 디스크, 백업만으로는 서명할 수 없습니다.
@@ -29,7 +29,7 @@
 |---|---|---|---|
 | **Besu (QBFT)** | `besu-production/` | 검증자 4개 + RPC 노드 2개, 1초 블록, 무료 가스, 노드 허용 목록 | [Besu 체인](../components/besu.md) · [수동 설정](../deployment/besu-manual.md) |
 | **MPC 서명기** | `mpc-signer/` | 2-of-3 임계값 ECDSA(CGGMP24): MPC 노드 3개 + 코디네이터 2개; 이더리움 서명기 JSON-RPC API | [MPC 서명기](../components/mpc-signer.md) |
-| **프록시** | `proxy/` | 애플리케이션 API: 계정, 이체, NFT, 컨트랙트, 섹션, Admin API; 선택적 캐시로 Redis 사용 | [프록시](../components/proxy.md) · [API](../reference/proxy-api.md) |
+| **프록시** | `proxy/` | 애플리케이션 API: 계정, 이체, 아바타, 닉네임, 컨트랙트, 섹션, Admin API; 선택적 캐시로 Redis 사용 | [프록시](../components/proxy.md) · [API](../reference/proxy-api.md) |
 | **SectionRegistry** | `proxy/contracts/` | 섹션, 섹션의 계정, 등록된 컨트랙트의 온체인 기록 | [섹션](../features/sections.md) |
 | **Chainlens** | `chainlens/` | 플랫폼 개요, 통계, 관리자 페이지를 갖춘 블록 탐색기 | [chainlens](../components/chainlens.md) |
 | **Remix** | `remix/` | 로컬 컴파일러 미러를 갖춘 자체 호스팅 Remix IDE | [Remix](../components/remix.md) |

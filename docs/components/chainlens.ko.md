@@ -1,12 +1,12 @@
 # Chainlens (블록 탐색기)
 
 > **내용:** 체인의 웹 탐색기(`chainlens/`)입니다. 블록, 트랜잭션, 계정, 컨트랙트, NFT, 플랫폼 개요와
-> 섹션 통계를 보여 주며, 컨트랙트 배포, 섹션 관리, NFT 민팅 및 판매를 위한 관리자 페이지도 제공합니다.
+> 섹션 통계를 보여 주며, 컨트랙트 배포, 섹션 관리, 아바타 민팅 및 판매를 위한 관리자 페이지도 제공합니다.
 >
 > **대상:** 체인을 조회하는 모든 사용자. 관리자 페이지는 운영자용입니다.
 >
 > **관련 문서:** [섹션](../features/sections.md) · [컨트랙트 배포](../features/contract-deployment.md) ·
-> [NFT 워크플로](../features/nft-workflow.md) · [접근 제어](../deployment/access-control.md)
+> [아바타](../features/avatars.md) · [접근 제어](../deployment/access-control.md)
 
 **목차**
 
@@ -35,10 +35,10 @@
 
 | 페이지 | URL | 표시 내용 |
 |---|---|---|
-| **Dashboard** | `#/` | 합계(트랜잭션, 토큰, 컨트랙트, 피어); **Platform overview**: SENDER01, 컨트랙트 계정 센터, 섹션 레지스트리, 섹션 수, 각 섹션의 잔액(선지급 / 소비 / 결제 / 사용자, 누적 표시)과 사용자 계정; 일, 주, 월, 분기, 연 단위 또는 날짜 범위별 **Section statistics**(누적 기말 잔액, 신규 사용자, 수입, NFT 판매, 충전, 스윕 등); 트랜잭션 차트; 가장 활발한 컨트랙트; 토큰 유형 |
+| **Dashboard** | `#/` | 합계(트랜잭션, 토큰, 컨트랙트, 피어); **Platform overview**: SENDER01, 컨트랙트 계정 센터, 섹션 레지스트리, 섹션 수, 각 섹션의 잔액(선지급 / 소비 / 결제 / 사용자, 누적 표시)과 사용자 계정; 일, 주, 월, 분기, 연 단위 또는 날짜 범위별 **Section statistics**(누적 기말 잔액, 신규 사용자, 수입, 아바타 판매, 충전, 스윕 등); 트랜잭션 차트; 가장 활발한 컨트랙트; 토큰 유형 |
 | **Accounts** | `#/accounts` | 모든 계정의 잔액과 트랜잭션 수; **Section** 열(섹션 및 역할: user, upfront, consumption, payment, retired; 시스템 계정 SENDER01, 컨트랙트 센터, 레지스트리 관리자)과 섹션 필터. 계정 페이지에는 해당 계정의 섹션, 트랜잭션, 토큰이 표시됩니다 |
-| **NFTs** | `#/nfts` | 모든 컬렉션의 NFT와 이미지, 소유자, 가격; NFT 페이지에는 메타데이터와 이력이 표시됩니다 |
-| **Contracts** | `#/contracts` | 체인에서 확인된 컨트랙트; 등록된 컨트랙트(프록시를 통해 배포되었거나 `contracts/deployments/`에 기록된 컨트랙트)에는 함수 목록이 있는 페이지가 있으며, **view / pure 함수는 페이지에서 실행됩니다**(읽기 전용). NFT 컬렉션에는 **Mint and sell** 카드(관리자용)가 표시됩니다 |
+| **NFTs** | `#/nfts` | 모든 컬렉션(아바타와 닉네임)의 NFT(ERC-721 토큰)와 이미지, 소유자, 가격; NFT 페이지에는 메타데이터와 이력이 표시됩니다 |
+| **Contracts** | `#/contracts` | 체인에서 확인된 컨트랙트; 등록된 컨트랙트(프록시를 통해 배포되었거나 `contracts/deployments/`에 기록된 컨트랙트)에는 함수 목록이 있는 페이지가 있으며, **view / pure 함수는 페이지에서 실행됩니다**(읽기 전용). 아바타 컬렉션에는 **Mint and sell avatars** 카드(관리자용)가 표시됩니다 |
 | **Transactions** / **Blocks** | `#/transactions`, `#/blocks` | 목록 및 상세 페이지(디코딩된 함수 호출, 이벤트, 메모) |
 | **Network** | `#/network` | chainlens가 읽는 노드: 피어, 버전 |
 | **API** | `#/api` | chainlens 자체 JSON API(`/api/...`) |
@@ -57,8 +57,8 @@
 활성화하기 전까지는 숨겨져 있으며, `operator_ip`와 `chainlens_deploy_ips`에서만 관리자 토큰
 (`cat ansible/state/secrets/chainlens_deploy_token`; 해당 브라우저 탭에만 보관됨)으로 사용할 수 있습니다.
 요청은 프록시의 관리자 API로 전달되므로, 서명은 항상 프록시가 하며 chainlens는 서명하지 않습니다.
-**Deploy**와 닉네임 컬렉션 배포는 `/admin/contract/deploy`, **Mint**와 닉네임 설정은
-`/admin/contract/send`(컨트랙트 계정 센터가 서명), **Sell**은 `/contract/send`(구매자가 서명)를
+**Deploy**와 닉네임 컬렉션 배포는 `/admin/contract/deploy`, **Mint an avatar**와 닉네임 설정은
+`/admin/contract/send`(컨트랙트 계정 센터가 서명), **Sell an avatar**는 `/contract/send`(구매자가 서명)를
 호출하며, Nicknames 페이지는 `/contract/list`, `/contract/call`, `/contract/events`로 읽습니다.
 
 | 페이지 / 카드 | 활성화 설정 | 기능 | 안내 문서 |
@@ -66,7 +66,7 @@
 | **Deploy** (`#/deploy`) | `chainlens_deploy_enabled: true` | 컴파일된 컨트랙트(Remix / Hardhat / Foundry 아티팩트)를 컨트랙트 계정 센터로 배포하고, 먼저 검사한 뒤 등록합니다 | [컨트랙트 배포](../features/contract-deployment.md) |
 | **Sections** (`#/sections`) | `chainlens_sections_enabled: true` | 섹션 생성, 충전, 스윕, 반환, 이름 변경, 정보 필드, 키, 계정 교체, 보관; 섹션의 사용자 계정 | [섹션](../features/sections.md) |
 | **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | 닉네임 컬렉션 배포, 가격, 테두리 레벨(단계 가격, 판매 여부, 보유자 수; 레벨 추가), 예약된 이름; 닉네임 목록(닉네임, 테두리 레벨, 계정) | [닉네임](../features/nicknames.md) |
-| **Mint and sell** (NFT 컬렉션 페이지) | 위 둘 중 하나 | NFT 민팅(가격은 민팅 시 확정); 섹션의 사용자 계정에 판매 | [NFT 워크플로](../features/nft-workflow.md) |
+| **Mint and sell avatars** (아바타 컬렉션 페이지) | 위 둘 중 하나 | 아바타 민팅(가격은 민팅 시 확정); 섹션의 사용자 계정에 판매 | [아바타](../features/avatars.md) |
 
 ![chainlens Sections 페이지: 섹션 목록과 New section 양식](../images/screenshots/chainlens-sections.png)
 

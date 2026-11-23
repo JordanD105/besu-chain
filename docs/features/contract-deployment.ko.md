@@ -4,7 +4,7 @@
 >
 > **대상:** 운영자, 컨트랙트 개발자.
 >
-> **관련 문서:** [Remix](../components/remix.md) · [NFT 워크플로](nft-workflow.md) · [컨트랙트 레코드](contract-records.md)
+> **관련 문서:** [Remix](../components/remix.md) · [아바타](avatars.md) · [컨트랙트 레코드](contract-records.md)
 
 **목차**
 
@@ -81,7 +81,7 @@ cat state/secrets/chainlens_deploy_token
 4. **Compiler artifact:** 파일을 선택합니다. 파일에 여러 컨트랙트가 있으면 **Contract**를 선택합니다.
 5. **Constructor arguments:** 인수마다 입력란이 하나씩 있습니다. 숫자는 정수(`1000000`), 주소는 `0x…`,
    `true`/`false`, 배열과 튜플은 JSON(`["0xabc…","0xdef…"]`)으로 입력합니다.
-6. **Kind:** *Common contract* 또는 *NFT collection*.
+6. **Kind:** *Common contract* 또는 *Avatar collection*.
 7. **Name in the registry:** 선택 사항이며, chainlens에 표시되는 컨트랙트 이름입니다.
 8. **Check:** 프록시가 모든 검사(인수, 가스, 생성이 revert되지 않는지, 한 블록에 들어가는지)를 실행하고,
    페이지에 컨트랙트가 받게 될 주소가 표시됩니다. 아무것도 서명하지 않습니다.
@@ -103,8 +103,8 @@ cat state/secrets/chainlens_deploy_token
 변경되면(다른 배포), **Deploy**가 거부되고 새 검사를 요구합니다. chainlens당 한 번에 하나의 배포만
 실행됩니다.
 
-NFT 컬렉션의 경우 아티팩트부터 판매까지의 전체 과정은 [NFT 워크플로](nft-workflow.md)에 있습니다. 프록시가
-목록에 포함하도록 종류를 *NFT collection*으로 선택하십시오.
+아바타 컬렉션의 경우 아티팩트부터 판매까지의 전체 과정은 [아바타](avatars.md)에 있습니다. 프록시가
+목록에 포함하도록 종류를 *Avatar collection*(레지스트리 종류 `avatar`)으로 선택하십시오.
 
 컨트랙트의 배포자(생성자의 `msg.sender`)는 센터입니다. 소유자나 역할이 있는 컨트랙트에서 다른 주체가
 이를 보유해야 한다면, 생성자 인수로 받도록 하십시오.

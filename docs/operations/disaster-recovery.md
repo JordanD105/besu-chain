@@ -310,7 +310,7 @@ previous one.
 4. **MPC nodes:** each team restores its node (6.4 steps 1–2). Then the coordinator(s) (6.6).
 5. **Proxy, chainlens, monitoring** (6.6).
 6. **Reconcile:** the chain is back at the snapshot's block. Everything after it is **gone**:
-   transfers, NFT mints and sales, account fundings. Compare with your business records and redo
+   transfers, avatar mints and sales, nickname purchases, account fundings. Compare with your business records and redo
    what must be redone. The proxy takes its nonces from the chain by itself. MPC accounts created
    after the snapshot still have their keys (if the MPC backups are newer), but their on-chain
    funding is gone.

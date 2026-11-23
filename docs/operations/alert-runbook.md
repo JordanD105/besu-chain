@@ -412,7 +412,7 @@ without them: the validators don't have them.
 `/admin`).
 
 1. **Confirm:** Proxy & Redis → *95th percentile by route*: which routes.
-2. **Fix:** transfers and NFT sales slow: signing on the cold path ([MpcPoolEmpty](#mpcpoolempty)) or
+2. **Fix:** transfers and avatar sales slow: signing on the cold path ([MpcPoolEmpty](#mpcpoolempty)) or
    a slow RPC node (Besu → *JSON-RPC latency*); everything slow: the proxy itself
    ([ProxyEventLoopBlocked](#proxyeventloopblocked)) or the host ([HostMemoryHigh](#hostmemoryhigh)).
 3. **Check:** *Latency p95* back under 1–2 s.

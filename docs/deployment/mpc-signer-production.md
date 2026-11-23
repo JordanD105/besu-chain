@@ -306,9 +306,9 @@ coordinators see it):
 
   The same `.env` on both proxy hosts (`proxy/.env.example`). See
   [Proxy (application API)](../components/proxy.md).
-- **Collections:** NFT collections need sections (the SectionRegistry and the contract account center,
-  set up by Ansible). Deploy them with the `nft-collection` template of `/admin/contract/deploy` or the
-  chainlens Deploy page; their minter is the contract account center ([NFT workflow](../features/nft-workflow.md)).
+- **Collections:** avatar collections need sections (the SectionRegistry and the contract account center,
+  set up by Ansible). Deploy them with the `avatar-collection` template of `/admin/contract/deploy` or the
+  chainlens Deploy page; their minter is the contract account center ([avatars](../features/avatars.md)).
 
 ## 10. Verify before going live
 
@@ -385,7 +385,8 @@ To recover redundancy:
 
 1. Build a **new** cluster (steps 4–8) with new keys.
 2. Move funds from the old `SENDER01` and user accounts to the new keys.
-3. Deploy new NFT collections. A collection's minter is fixed to the `SENDER01` that deployed it.
+3. Deploy new avatar and nickname collections. A collection's minter is fixed to the contract account
+   center that deployed it.
 
 ## 15. Security checklist
 

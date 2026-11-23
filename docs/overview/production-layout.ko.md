@@ -530,7 +530,7 @@ curl -s -X POST http://192.168.68.151:30000/createaccount -H 'content-type: appl
 ```
 
 마지막 호출은 MPC 계정을 생성하고 `SENDER01`에서 자금을 보냅니다. 그런 다음
-`POST /transfer`(`from`, `to`, `amount`)로 이체를 보내고 사용하는 NFT 호출을 실행하십시오
+`POST /transfer`(`from`, `to`, `amount`)로 이체를 보내고 사용하는 컨트랙트 호출을 실행하십시오
 ([프록시 API 참조](../reference/proxy-api.md), [프록시 (애플리케이션 API)](../components/proxy.md)).
 
 ### 4.12 모니터링, chainlens, Remix, 문서 (.139) {#412-monitoring-chainlens-remix-and-documentation-139}

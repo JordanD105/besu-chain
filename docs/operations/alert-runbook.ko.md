@@ -412,7 +412,7 @@ docker logs --since 30m <container> 2>&1 | grep -iE "error|fail|exception|warn" 
 `/admin` 제외).
 
 1. **확인:** Proxy & Redis → *95th percentile by route*: 어떤 경로인지 확인합니다.
-2. **조치:** 이체와 NFT 판매가 느린 경우: 콜드 경로로 서명([MpcPoolEmpty](#mpcpoolempty)) 또는
+2. **조치:** 이체와 아바타 판매가 느린 경우: 콜드 경로로 서명([MpcPoolEmpty](#mpcpoolempty)) 또는
    느린 RPC 노드(Besu → *JSON-RPC latency*). 모든 것이 느린 경우: 프록시 자체
    ([ProxyEventLoopBlocked](#proxyeventloopblocked)) 또는 호스트([HostMemoryHigh](#hostmemoryhigh)).
 3. **해제 확인:** *Latency p95*가 다시 1–2 s 미만입니다.

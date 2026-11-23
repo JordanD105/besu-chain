@@ -296,9 +296,9 @@ COORD=http://192.168.68.135:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/deploy
 
   두 프록시 호스트에 같은 `.env`를 사용합니다(`proxy/.env.example`).
   [프록시 (애플리케이션 API)](../components/proxy.md)를 참조하십시오.
-- **컬렉션:** NFT 컬렉션에는 섹션(Ansible이 설정하는 SectionRegistry와 컨트랙트 계정 센터)이 필요합니다.
-  `/admin/contract/deploy`의 `nft-collection` 템플릿이나 chainlens Deploy 페이지로 배포하며, 민터는 컨트랙트
-  계정 센터입니다([NFT 워크플로](../features/nft-workflow.md)).
+- **컬렉션:** 아바타 컬렉션에는 섹션(Ansible이 설정하는 SectionRegistry와 컨트랙트 계정 센터)이 필요합니다.
+  `/admin/contract/deploy`의 `avatar-collection` 템플릿이나 chainlens Deploy 페이지로 배포하며, 민터는 컨트랙트
+  계정 센터입니다([아바타](../features/avatars.md)).
 
 ## 10. 운영 시작 전 확인 {#10-verify-before-going-live}
 
@@ -372,7 +372,8 @@ docker compose up -d
 
 1. 새 키로 **새** 클러스터를 구축합니다(4–8단계).
 2. 이전 `SENDER01`과 사용자 계정의 자금을 새 키로 옮깁니다.
-3. 새 NFT 컬렉션을 배포합니다. 컬렉션의 민터는 해당 컬렉션을 배포한 `SENDER01`로 고정되어 있습니다.
+3. 새 아바타 컬렉션과 닉네임 컬렉션을 배포합니다. 컬렉션의 민터는 해당 컬렉션을 배포한 컨트랙트 계정
+   센터로 고정되어 있습니다.
 
 ## 15. 보안 체크리스트 {#15-security-checklist}
 

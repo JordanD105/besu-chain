@@ -7,10 +7,11 @@
 | **Admin API** | 프록시의 `/admin/*` 엔드포인트(섹션, 컨트랙트)입니다. 관리자 토큰과 `ADMIN_ALLOWED_IPS`에 포함된 주소가 필요합니다. chainlens의 관리자 페이지와 Ansible이 사용합니다 |
 | **Admin token** (관리자 토큰) | Admin API와 chainlens 관리자 페이지용 비밀 값입니다. 운영자 머신의 `ansible/state/secrets/`(`proxy_admin_token`, `chainlens_deploy_token`)에 있습니다 |
 | **Ansible phases** (Ansible 단계) | `ansible/`에 있는 번호가 매겨진 플레이북 `00`–`10`입니다(호스트, 이미지, MPC, 코디네이터, Besu, 프록시, HA, 점검, 모니터링, 백업). 단계 `01`은 코드를 호스트에 복사하며, `git pull` 후 가장 먼저 실행해야 합니다 |
+| **Avatar** (아바타) | **아바타 컬렉션**(`AvatarCollection.sol`)에 있는 플랫폼의 이미지 토큰(ERC-721)입니다. 고정 가격이 있는 그림으로, 컨트랙트 계정 센터가 민팅하고 섹션 사용자 계정에 판매합니다. [아바타](features/avatars.md) 참조 |
 | **Big / small / none pool** | MPC 키의 사전 서명 풀 등급으로, 미리 준비해 두는 사전 서명의 수입니다. `big`은 사용량이 많은 계정(SENDER01, 선지급 계정), `small`은 일반 계정, `none`은 거의 사용하지 않는 계정(느린 경로로 서명)에 사용합니다 |
 | **Cold path** (콜드 경로) | 준비된 사전 서명 없이 서명하는 방식입니다. MPC 노드가 필요할 때 사전 서명을 계산합니다(밀리초 대신 약 0.6초) |
-| **Consumption account** (소비 계정) | 자금을 **받는** 섹션의 계정입니다. 사용자의 +x 이체와 NFT 최초 판매 대금을 받습니다. 결제 계정으로 스윕됩니다 |
-| **Contract account center** (컨트랙트 계정 센터, `CONTRACT_CENTER`) | 프록시를 통해 모든 컨트랙트를 배포하는(그리고 버전 3 NFT를 민팅하는) MPC 계정입니다. 이 계정이 배포한 컨트랙트는 ABI와 함께 체인에 등록됩니다 |
+| **Consumption account** (소비 계정) | 자금을 **받는** 섹션의 계정입니다. 사용자의 +x 이체와 아바타 최초 판매 대금을 받습니다. 결제 계정으로 스윕됩니다 |
+| **Contract account center** (컨트랙트 계정 센터, `CONTRACT_CENTER`) | 프록시를 통해 모든 컨트랙트를 배포하는(그리고 아바타를 민팅하는) MPC 계정입니다. 이 계정이 배포한 컨트랙트는 ABI와 함께 체인에 등록됩니다 |
 | **Coordinator** (코디네이터, coord1, coord2) | MPC 노드의 부분 서명을 결합합니다. 키 자료는 **전혀** 보유하지 않습니다. 포트 9100에서 이더리움 서명기 JSON-RPC(`eth_accounts`, `eth_sendTransaction`)를 제공합니다 |
 | **Floating IP / VIP** (플로팅 IP(VIP)) | keepalived가 h135와 h136 사이에서 옮기는 주소입니다. `.150`(Besu RPC, MPC 서명기)과 `.151`(프록시)이 있습니다 |
 | **HA pair** (HA 쌍) | h135와 h136입니다. 애플리케이션 경로의 모든 것이 두 호스트 모두에서 실행되며, 그중 하나가 활성입니다 |
@@ -35,5 +36,5 @@
 | **Upfront account** (선지급 계정) | 자금을 **지급하는** 섹션의 계정입니다. 새 사용자 계정과 −x 이체에 자금을 제공하며, SENDER01에서 충전됩니다 |
 | **User account** (사용자 계정) | 섹션이 생성한 계정(해당 키로 `/createaccount` 호출)이며, 해당 섹션에 속합니다 |
 | **Validator** (검증자, val1–4) | QBFT 합의에 참여하는 Besu 노드입니다. 호스트 .135–.138에 하나씩 있습니다 |
-| **Version 2 / 3 collection** (버전 2 / 3 컬렉션) | NFT 컨트랙트 버전입니다. v3는 컨트랙트 계정 센터가 민팅하며, 최초 판매 대금은 구매자의 섹션으로 갑니다. v2(SENDER01이 민팅)는 폐기되었습니다: 프록시는 더 이상 이를 읽거나, 민팅하거나, 판매하지 않습니다 |
+| **Version-2 collection** (버전 2 컬렉션) | 섹션 도입 이전의 이미지 컬렉션(SENDER01이 민팅)입니다. 폐기되었습니다: 프록시는 더 이상 이를 읽거나, 민팅하거나, 판매하지 않습니다. 버전 3 컬렉션은 아바타 컬렉션입니다 |
 | **+x / −x** | 섹션 이체입니다. +x = 사용자 → 소비 계정, −x = 선지급 계정 → 사용자 |

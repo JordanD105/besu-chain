@@ -5,7 +5,7 @@
 > **대상:** 애플리케이션 개발자 및 운영자.
 >
 > **관련 문서:** [프록시 구성 요소](../components/proxy.md) · [섹션](../features/sections.md) ·
-> [NFT 워크플로](../features/nft-workflow.md) · [닉네임](../features/nicknames.md) · [용어집](../glossary.md)
+> [아바타](../features/avatars.md) · [닉네임](../features/nicknames.md) · [용어집](../glossary.md)
 
 **목차**
 
@@ -13,7 +13,7 @@
 - [계정과 이체](#accounts-and-transfers)
 - [섹션 호출 (`X-Section-Key`)](#section-calls-x-section-key)
 - [컨트랙트](#contracts)
-- [NFT 컬렉션](#nft-collections)
+- [아바타 컬렉션](#avatar-collections)
 - [닉네임](#nicknames)
 - [관리 API: 섹션](#admin-api-sections)
 - [관리 API: 컨트랙트와 레지스트리](#admin-api-contracts-and-registry)
@@ -41,7 +41,7 @@
 | 호출자 | 헤더 | 사용 가능 범위 |
 |---|---|---|
 | 섹션이 **없는** 애플리케이션 | 없음 | SENDER01을 쓰는 `/createaccount`와 `/transfer`, 컨트랙트 읽기(`/contract/call`, `/contract/events`, `/contract/list`). `sections_required: true`이면 모두 거부(401) |
-| **섹션에 속한** 애플리케이션 | `X-Section-Key: sk_…` | 섹션 호출: 자체 계정, +x / −x 이체, 컨트랙트 읽기와 쓰기(NFT 구매, 닉네임) |
+| **섹션에 속한** 애플리케이션 | `X-Section-Key: sk_…` | 섹션 호출: 자체 계정, +x / −x 이체, 컨트랙트 읽기와 쓰기(아바타 구매, 닉네임) |
 | **운영자 / chainlens** | `Authorization: Bearer <ADMIN_TOKEN>`, `ADMIN_ALLOWED_IPS`에서 호출 | `/admin/*` API, 키 없는 `/contract/send` |
 
 ```bash
@@ -112,7 +112,7 @@ MPC 노드 3개가 분산 키 생성을 실행합니다. 개인 키는 어디에
 |---|---|
 | `POST /createaccount` | 섹션의 계정, 섹션의 선지급 계정에서 자금 공급 |
 | `POST /transfer` | +x / −x (위 참조) |
-| `POST /contract/send` | 섹션의 사용자 계정이 서명하는 컨트랙트 트랜잭션. 모든 NFT 구매와 닉네임 쓰기도 포함 ([아래](#contracts)) |
+| `POST /contract/send` | 섹션의 사용자 계정이 서명하는 컨트랙트 트랜잭션. 모든 아바타 구매와 닉네임 쓰기도 포함 ([아래](#contracts)) |
 | `POST /contract/call`, `/contract/events`, `GET /contract/list` | 읽기. 키는 `sections_required: true`일 때만 필요 |
 
 ---
@@ -120,7 +120,7 @@ MPC 노드 3개가 분산 키 생성을 실행합니다. 개인 키는 어디에
 ## 컨트랙트 {#contracts}
 
 SectionRegistry에 등록된 모든 컨트랙트(컨트랙트 계정 센터가 배포한 것)에 하나의 API를 씁니다.
-해당 ABI의 함수와 이벤트만 사용할 수 있습니다. 플랫폼 자체 컨트랙트(NFT 컬렉션 버전 3과 닉네임
+해당 ABI의 함수와 이벤트만 사용할 수 있습니다. 플랫폼 자체 컨트랙트(아바타 컬렉션과 닉네임
 컬렉션)도 같은 호출을 쓰며, 친화적인 값을 사용합니다.
 
 | 엔드포인트 | 동작 | 호출자 |
@@ -198,15 +198,15 @@ payable 함수에만 사용합니다.
   채워집니다. 다른 주소이면 400.
 - **가격:** 아래 플랫폼 함수는 `value`를 생략하면 가격으로 채워집니다. 다른 값이면 400.
 - **메트릭:** 섹션 작업은 이벤트로 집계됩니다: `NicknameBought` → `nickname_sale`,
-  `EdgeUpgraded` → `edge_upgrade`, `Sold` → `nft_first_sale`(판매자 = 컨트랙트 계정 센터)
-  또는 `nft_resale`.
+  `EdgeUpgraded` → `edge_upgrade`, `Sold` → `avatar_sale`(판매자 = 컨트랙트 계정 센터)
+  또는 `avatar_resale`.
 
 | 컨트랙트 | 함수, `args` | 채워지는 `value` | 전송 전 확인 | 이벤트 |
 |---|---|---|---|---|
 | 닉네임 컬렉션 | `buyNickname`, `{ nickname }` | `nicknamePrice` | 공백 제거 + NFC, 1~256자, 제어 문자와 `< > & " ' \` 불가 (400). 계정당 하나, 사용 중, 예약됨 (409) | `NicknameBought {tokenId, buyer, nickname, price, paidTo}` |
 | 닉네임 컬렉션 | `upgradeEdge`, `{ level }` | `quote(from, level)` (단계 가격 합계) | 레벨 1 이상 (400). 닉네임 보유 (404). 레벨이 있고, 판매 중이며, 현재보다 높음 (400 `level N: …`) | `EdgeUpgraded {tokenId, owner, fromLevel, toLevel, price, paidTo}` |
-| NFT 컬렉션 | `buy`, `{ tokenId }` | `priceOf(tokenId)` | 토큰 존재 (404). `from`이 이미 보유하지 않음 (400) | `Sold {tokenId, seller, buyer, price, paidTo}` |
-| NFT 컬렉션 | 판매자가 `approve`, `{ tokenId }` | — | — | `Approval` |
+| 아바타 컬렉션 | `buy`, `{ tokenId }` | `priceOf(tokenId)` | 토큰 존재 (404). `from`이 이미 보유하지 않음 (400) | `Sold {tokenId, seller, buyer, price, paidTo}` |
+| 아바타 컬렉션 | 판매자가 `approve`, `{ tokenId }` | — | — | `Approval` |
 
 `mint`는 이 방식으로 보낼 수 없습니다(센터만 민팅, `not minter`).
 [`POST /admin/contract/send`](#post-admincontractsend--write-as-the-contract-account-center)를 사용하십시오.
@@ -236,15 +236,15 @@ payable 함수에만 사용합니다.
 
 | 쿼리 | 남기는 것 |
 |---|---|
-| `?type=nft` / `nickname` / `contract` | NFT 컬렉션, 닉네임 컬렉션, 그 밖의 컨트랙트 |
-| `?kind=common` / `nft` | 레지스트리 종류 |
+| `?type=avatar` / `nickname` / `contract` | 아바타 컬렉션, 닉네임 컬렉션, 그 밖의 컨트랙트 |
+| `?kind=common` / `avatar` | 레지스트리 종류 |
 | `?has=buyNickname` | 이 함수가 있는 컨트랙트 |
 | `?q=drag` | 이름에 포함 (대소문자 무관) |
 | `?functions=1` | 각 컨트랙트의 `functions`(시그니처, mutability)와 `events` 추가 |
 
 ```json
 → { "success": true, "contracts": [
-    { "address": "0xCollection", "name": "Dragons", "type": "nft", "kind": "nft", "registeredIn": 14172,
+    { "address": "0xCollection", "name": "Dragons", "type": "avatar", "kind": "avatar", "registeredIn": 14172,
       "symbol": "DRG", "minter": "<contract account center>" },
     { "address": "0xNicknames", "name": "Nicknames", "type": "nickname", "kind": "common", "registeredIn": 35444,
       "symbol": "NICK", "minter": "<contract account center>", "current": true } ],
@@ -261,11 +261,11 @@ payable 함수에만 사용합니다.
 
 | 컨트랙트 | 함수 | `args` |
 |---|---|---|
-| NFT | `buy` | `{ tokenId }` (payee와 가격은 채워짐) |
-| NFT | `approve` | `{ tokenId }`: 토큰을 판매에 내놓음(컬렉션 자신을 승인. 다른 주소를 승인하려면 `to`) |
-| NFT | `priceOf`, `ownerOf`, `tokenURI`, `getApproved` | `{ tokenId }` |
-| NFT | `balanceOf` | `{ owner }` |
-| NFT | `mint` (센터) | `{ name, image, description, attributes, properties, price }`: `name`과 `image` 필수, `price`는 ETH(기본값 0). 소유자(센터), 다음 토큰 ID, 온체인 메타데이터 URI는 채워짐 |
+| 아바타 | `buy` | `{ tokenId }` (payee와 가격은 채워짐) |
+| 아바타 | `approve` | `{ tokenId }`: 토큰을 판매에 내놓음(컬렉션 자신을 승인. 다른 주소를 승인하려면 `to`) |
+| 아바타 | `priceOf`, `ownerOf`, `tokenURI`, `getApproved` | `{ tokenId }` |
+| 아바타 | `balanceOf` | `{ owner }` |
+| 아바타 | `mint` (센터) | `{ name, image, description, attributes, properties, price }`: `name`과 `image` 필수, `price`는 ETH(기본값 0). 소유자(센터), 다음 토큰 ID, 온체인 메타데이터 URI는 채워짐 |
 | 닉네임 | `buyNickname` | `{ nickname }` |
 | 닉네임 | `upgradeEdge` | `{ level }` |
 | 닉네임 | `quote` | `{ account, level }` |
@@ -284,13 +284,13 @@ payable 함수에만 사용합니다.
 
 | 컨트랙트 | 함수 | `result` |
 |---|---|---|
-| NFT | `priceOf` | `{ tokenId, price }` |
-| NFT | `ownerOf` | `{ tokenId, owner }` |
-| NFT | `tokenURI` | `{ tokenId, metadata, image }` |
-| NFT | `balanceOf` | `{ owner, tokens }` |
-| NFT | `buy` | `{ sale: "first sale" \| "resale", tokenId, seller, buyer, price, paidTo }` |
-| NFT | `mint` | `{ minted, tokenId, owner, price, metadata }` |
-| NFT | `approve` | `{ tokenId, approved, forSale }` (`forSale`: 컬렉션에 승인됨) |
+| 아바타 | `priceOf` | `{ tokenId, price }` |
+| 아바타 | `ownerOf` | `{ tokenId, owner }` |
+| 아바타 | `tokenURI` | `{ tokenId, metadata, image }` |
+| 아바타 | `balanceOf` | `{ owner, tokens }` |
+| 아바타 | `buy` | `{ sale: "first sale" \| "resale", tokenId, seller, buyer, price, paidTo }` |
+| 아바타 | `mint` | `{ minted, tokenId, owner, price, metadata }` |
+| 아바타 | `approve` | `{ tokenId, approved, forSale }` (`forSale`: 컬렉션에 승인됨) |
 | 닉네임 | `nicknamePrice` | `{ price }` |
 | 닉네임 | `edgeCount` | `{ count, edges: [ { level, price, forSale } ] }` |
 | 닉네임 | `edgeInfo` | 테두리 하나 `{ level, price, forSale }` |
@@ -331,17 +331,18 @@ payable 함수에만 사용합니다.
 
 ---
 
-## NFT 컬렉션 {#nft-collections}
+## 아바타 컬렉션 {#avatar-collections}
 
-플랫폼의 컬렉션은 **NftCollection 버전 3**([`NftCollection.sol`](../../proxy/contracts/NftCollection.sol))입니다.
-**컨트랙트 계정 센터**가 배포하고 민팅하며, SectionRegistry에 등록되고(종류 NFT), 모든 섹션이
+**아바타**는 플랫폼의 이미지 토큰입니다. 아바타 컬렉션
+([`AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol). 버전 3 컬렉션도 같은 코드)은
+**컨트랙트 계정 센터**가 배포하고 민팅하며, SectionRegistry에 등록되고(종류 avatar), 모든 섹션이
 공유합니다. 가격은 민팅 시 정해지며 모든 판매에서 고정됩니다. 판매는 구매자가 서명하는 `buy`
 하나이며, 토큰과 ETH는 함께 이동하거나 전혀 이동하지 않습니다.
 
 | 작업 | 호출 |
 |---|---|
-| 컬렉션 목록 | `GET /contract/list?type=nft` |
-| 배포 | `POST /admin/contract/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
+| 컬렉션 목록 | `GET /contract/list?type=avatar` |
+| 배포 | `POST /admin/contract/deploy` `{ "template": "avatar-collection", "name", "symbol" }` |
 | 판매용 민팅 | `POST /admin/contract/send` `mint` `{ name, image, description, attributes, price }` |
 | 최초 판매 | `POST /contract/send` `buy` `{ tokenId }`, `from` = 구매자: 대금은 구매자 섹션의 **소비** 계정으로 |
 | 재판매 | 판매자가 `approve` `{ tokenId }`를 보낸 뒤 구매자가 `buy` `{ tokenId }`를 보냄: 대금은 **판매자**에게 |
@@ -355,10 +356,10 @@ payable 함수에만 사용합니다.
 
 ```bash
 P=http://192.168.68.151:30000; T=<admin token>; K=<section key>
-# 배포 (이름과 심볼은 NFT 컬렉션 사이에서 대소문자 무관하게 고유, 아니면 409)
+# 배포 (이름과 심볼은 아바타 컬렉션 사이에서 대소문자 무관하게 고유, 아니면 409)
 curl -s -X POST $P/admin/contract/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
-  -d '{"template":"nft-collection","name":"Dragons","symbol":"DRG"}'
-# → { "success": true, "name": "Dragons", "kind": "nft", "address": "0xCollection", "txHash": "0x…", "codeCheck": "matches the artifact", … }
+  -d '{"template":"avatar-collection","name":"Dragons","symbol":"DRG"}'
+# → { "success": true, "name": "Dragons", "kind": "avatar", "address": "0xCollection", "txHash": "0x…", "codeCheck": "matches the artifact", … }
 
 # 민팅 (센터가 판매용으로 자신에게 민팅)
 curl -s -X POST $P/admin/contract/send -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
@@ -394,7 +395,20 @@ curl -s -X POST $P/contract/events -H "X-Section-Key: $K" -H 'Content-Type: appl
 토큰 ID는 각 컬렉션에서 1부터 시작합니다. 메타데이터는 토큰 URI에 온체인으로 저장됩니다(JSON.
 블록에 들어가지 않으면 400 `metadata is too large for the chain`). 판매자와 구매자는 다른 섹션에
 있어도 됩니다: 각 섹션은 자기 계정으로만 서명합니다. Remix에서 판매까지의 단계별 안내:
-[NFT 워크플로](../features/nft-workflow.md).
+[아바타](../features/avatars.md).
+
+### 이전 이름 {#old-names}
+
+프록시는 *avatar*로 이름을 바꾸기 전의 이름도 계속 받습니다.
+
+| 이전 이름 | 현재 |
+|---|---|
+| `?type=nft`, `?kind=nft` | `?type=avatar`, `?kind=avatar` |
+| `"kind": "nft"` (deploy, check) | `"kind": "avatar"` (온체인 종류 번호는 여전히 2) |
+| 템플릿 `nft-collection` | 템플릿 `avatar-collection` |
+
+응답은 항상 새 이름을 씁니다. 메트릭의 `op` 값은 별칭 없이 바뀌었습니다: `nft_first_sale` →
+`avatar_sale`, `nft_resale` → `avatar_resale`.
 
 ---
 
@@ -466,13 +480,13 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 
 | 엔드포인트 | 본문 | 동작 |
 |---|---|---|
-| `POST /admin/contract/check` | 템플릿, 또는 `{ "kind": "common" \| "nft", "name", "abi", "bytecode", "deployedBytecode", "immutableReferences", "args" }` | 시험 실행: 인수, 가스, 배포될 주소. 아무것도 서명하지 않습니다 |
+| `POST /admin/contract/check` | 템플릿, 또는 `{ "kind": "common" \| "avatar", "name", "abi", "bytecode", "deployedBytecode", "immutableReferences", "args" }` | 시험 실행: 인수, 가스, 배포될 주소. 아무것도 서명하지 않습니다 |
 | `POST /admin/contract/deploy` | 동일 | 컨트랙트 계정 센터로 배포하고, 코드를 비교하고, ABI와 함께 등록 |
 | `POST /admin/contract/send` | `{ "contract", "function", "args", "value" }` | 컨트랙트 계정 센터가 서명하는 쓰기 ([아래](#post-admincontractsend--write-as-the-contract-account-center)) |
 | `POST /admin/registry/migrate` | `{ "from": "0xOldRegistry" }` | 버전 1 레지스트리에서 섹션 복사 (Ansible `08-check.yml`이 실행) |
 
 ```json
-→ { "success": true, "name": "Dragons", "kind": "nft", "address": "0x…", "deployer": "<center>", "txHash": "0x…",
+→ { "success": true, "name": "Dragons", "kind": "avatar", "address": "0x…", "deployer": "<center>", "txHash": "0x…",
     "blockNumber": 37570, "gasUsed": 1408380, "codeCheck": "matches the artifact", "registryTxHash": "0x…" }
 ```
 
@@ -483,12 +497,12 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 
 | 템플릿 | 본문 | 등록 종류 |
 |---|---|---|
-| `nft-collection` | `{ "template": "nft-collection", "name": "Dragons", "symbol": "DRG" }` (둘 다 필수). 이름과 심볼은 NFT 컬렉션 사이에서 대소문자 무관하게 고유: 아니면 409 | NFT |
+| `avatar-collection` | `{ "template": "avatar-collection", "name": "Dragons", "symbol": "DRG" }` (둘 다 필수). 이름과 심볼은 아바타 컬렉션 사이에서 대소문자 무관하게 고유: 아니면 409 | 종류 avatar |
 | `nickname-collection` | `{ "template": "nickname-collection", "name": "Nicknames", "symbol": "NICK", "price": "1", "another": false }` (`price`를 제외하면 이 값들이 기본값입니다. `price`의 기본값은 0) | common |
 
 두 번째 닉네임 컬렉션은 `"another": true`가 아니면 거부됩니다(409 `a nickname collection exists at 0x… (send "another": true …)`).
 `another: true`이면 그때부터 새 컬렉션이 사용됩니다. 알 수 없는 템플릿: 400
-`template: nft-collection or nickname-collection (or no template: abi and bytecode)`.
+`template: avatar-collection or nickname-collection (or no template: abi and bytecode)`.
 
 ### `POST /admin/contract/send` — 컨트랙트 계정 센터로 쓰기 {#post-admincontractsend--write-as-the-contract-account-center}
 
@@ -498,7 +512,7 @@ curl -s -X POST $P/contract/send -H "X-Section-Key: $K" -H 'Content-Type: applic
 
 | 함수 | `args` |
 |---|---|
-| `mint` (NFT) | `{ "name", "image", "description", "attributes", "properties", "price": "0.5" }` |
+| `mint` (아바타) | `{ "name", "image", "description", "attributes", "properties", "price": "0.5" }` |
 | `setNicknamePrice` | `{ "price": "1" }` (새 구매자) |
 | `addEdge` | `{ "price": "1" }`: 다음 레벨의 단계 가격 |
 | `setEdge` | `{ "level": 3, "price": "2", "forSale": false }`: 생략한 필드는 그대로. 레벨 0은 가격 0과 판매 중 상태 유지 |
@@ -522,10 +536,10 @@ revert는 400으로 응답합니다(서명 전 `the transaction would revert: �
 
 | 제거됨 | 대신 사용 |
 |---|---|
-| `POST /nft/deploy` | `POST /admin/contract/deploy` `{ "template": "nft-collection", "name", "symbol" }` |
+| `POST /nft/deploy` | `POST /admin/contract/deploy` `{ "template": "avatar-collection", "name", "symbol" }` |
 | `POST /nft/mint` | `POST /admin/contract/send` `mint` `{ name, image, price, … }` |
 | `POST /nft/transfer` | `POST /contract/send` `buy` `{ tokenId }`, `from` = 구매자 (재판매: 판매자가 먼저 `approve` `{ tokenId }`). 버전 2 컬렉션은 폐기됨 |
-| `GET /nft/contract`, `GET /nft/collections` | `GET /contract/list?type=nft` |
+| `GET /nft/contract`, `GET /nft/collections` | `GET /contract/list?type=avatar` |
 | `GET /nft/owner/:address` | `POST /contract/events` `Transfer`, `where: { to: address }`, `current: true` |
 | `GET /nft/:tokenId/metadata` | `POST /contract/call` `tokenURI` `{ tokenId }` (`result.metadata`) |
 | `GET /nft/:tokenId` | `POST /contract/call` 일괄 `ownerOf`, `priceOf`, `tokenURI`. 민팅: `POST /contract/events` `0x0`에서의 `Transfer` |
@@ -547,7 +561,7 @@ revert는 400으로 응답합니다(서명 전 `the transaction would revert: �
 
 ```json
 GET /nft/collections
-→ 410 { "error": "GET /nft/collections was removed: use GET /contract/list?type=nft" }
+→ 410 { "error": "GET /nft/collections was removed: use GET /contract/list?type=avatar" }
 ```
 
 

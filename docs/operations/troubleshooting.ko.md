@@ -13,7 +13,7 @@
 - [RPC와 RPC VIP](#rpc-and-the-rpc-vip)
 - [서명과 계정](#signing-and-accounts)
 - [프록시와 트랜잭션](#proxy-and-transactions)
-- [섹션과 NFT](#sections-and-nfts)
+- [섹션과 아바타](#sections-and-avatars)
 - [호스트](#hosts)
 - [배포 (Ansible)](#deployment-ansible)
 - [정보 수집](#collecting-information)
@@ -65,7 +65,7 @@
 | 발신자의 트랜잭션이 대기함 (`ProxyNonceGap`) | 누락된 논스 | `GET /status/senders`, 프록시 로그 | 프록시가 약 30 s 안에 복구합니다. 그렇지 않으면 로그를 확인합니다 |
 | 프록시 로그에 `redis unavailable` | 시작 시 Redis가 준비되지 않았거나 다운됨 | `ProxyRedisDisconnected` | 정확성에는 영향이 없습니다. Redis를 재시작합니다 |
 
-## 섹션과 NFT {#sections-and-nfts}
+## 섹션과 아바타 {#sections-and-avatars}
 
 | 증상 | 가능한 원인 | 해결 |
 |---|---|---|
@@ -73,8 +73,8 @@
 | `403 … is not an account of section "…"` | 계정이 다른 섹션에 속함(또는 어느 섹션에도 속하지 않음) | 해당 섹션의 키로 생성한 계정을 사용합니다 |
 | `403 section "…" is disabled` | 섹션이 비활성화됨 | chainlens Sections 페이지에서 활성화합니다 |
 | 섹션이 계정을 생성할 수 없음 (`SectionUpfrontEmpty` / `Low`) | 선지급 계정이 비어 있음 | Sections 페이지에서 충전합니다 |
-| NFT 판매: `wrong price` / 잔액 부족 | 구매자의 잔액이 가격 + 가스보다 적음 | 구매자에게 ETH를 보냅니다(−x) |
-| `not minter` | `/contract/send`로 `mint`를 보냈거나, 컬렉션이 컨트랙트 계정 센터에서 배포되지 않음 | `POST /admin/contract/send`로 민팅합니다. 컬렉션은 chainlens 또는 `nft-collection` 템플릿으로 배포합니다 |
+| 아바타 판매: `wrong price` / 잔액 부족 | 구매자의 잔액이 가격 + 가스보다 적음 | 구매자에게 ETH를 보냅니다(−x) |
+| `not minter` | `/contract/send`로 `mint`를 보냈거나, 컬렉션이 컨트랙트 계정 센터에서 배포되지 않음 | `POST /admin/contract/send`로 민팅합니다. 컬렉션은 chainlens 또는 `avatar-collection` 템플릿으로 배포합니다 |
 | `410 … was removed: use …` | 이전 `/nft/*`, `/nickname/*` 또는 `/admin/nickname/*` 라우트 | 메시지가 알려 주는 호출을 사용합니다([제거된 라우트](../reference/proxy-api.md#removed-routes)) |
 
 ## 호스트 {#hosts}

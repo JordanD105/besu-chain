@@ -80,12 +80,12 @@ the ports Docker publishes (nftables table `inet besu_docker`).
 never exists. The account is registered under the section on chain and funded from the section's
 upfront account.
 
-**NFT sale (`POST /contract/send`, function `buy`):** the buyer signs **one** `buy` transaction with
+**Avatar sale (`POST /contract/send`, function `buy`):** the buyer signs **one** `buy` transaction with
 exactly the price (the proxy fills in the price and the payee). On a first sale the collection itself
 checks that the money goes to a live section's consumption account; on a resale (after the seller's
-`approve`) it goes to the seller. NFT and money move together or not at all.
+`approve`) it goes to the seller. Avatar and money move together or not at all.
 
-**Contracts:** applications read and write every registered contract (NFT collections, nicknames,
+**Contracts:** applications read and write every registered contract (avatar collections, nicknames,
 others) through one generic API: `/contract/call`, `/contract/send`, `/contract/events` and
 `/contract/list`; the admin's writes as the contract account center (mint, nickname settings) go
 through `/admin/contract/send` ([proxy API](../reference/proxy-api.md#contracts)).
