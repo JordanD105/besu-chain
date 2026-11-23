@@ -2620,7 +2620,33 @@ function ethInput(value, what) {
 
 // Friendly object arguments of the platform's contracts -> the ABI's raw values.
 // ctx: { center: true } for /admin/contract/send
+// The names a friendly object may use, per function of the platform's contracts
+const FRIENDLY_KEYS = {
+    nickname: {
+        buyNickname: ["nickname", "payee"], upgradeEdge: ["level", "toLevel", "payee"], quote: ["account", "level", "toLevel"],
+        isAvailable: ["nickname"], idOf: ["nickname"], nicknameOf: ["account", "owner"], balanceOf: ["account", "owner"],
+        edgeInfo: ["level"], edgeOf: ["tokenId", "id"], nicknameById: ["tokenId", "id"], tokenURI: ["tokenId", "id"],
+        ownerOf: ["tokenId", "id"], locked: ["tokenId", "id"], reserved: ["tokenId", "id"], setNicknamePrice: ["price"],
+        reserve: ["nicknames", "names", "reserved"], addEdge: ["price"], setEdge: ["level", "price", "forSale", "enabled"]
+    },
+    nft: {
+        buy: ["tokenId", "id", "payee"], approve: ["to", "tokenId", "id"], priceOf: ["tokenId", "id"], ownerOf: ["tokenId", "id"],
+        tokenURI: ["tokenId", "id"], getApproved: ["tokenId", "id"], balanceOf: ["owner", "account"],
+        mint: ["to", "tokenId", "uri", "price", "amount", "name", "image", "description", "attributes", "properties"]
+    }
+};
+
 async function friendlyArgs(entry, fragment, raw, ctx) {
+    const keys = (FRIENDLY_KEYS[platformKind(entry)] || {})[fragment.name];
+
+    if (keys && raw && typeof raw === "object" && !Array.isArray(raw)) {
+        const unknown = Object.keys(raw).filter((k) => !keys.includes(k));
+
+        if (unknown.length) {
+            throw httpError(400, `args: unknown name(s) ${unknown.join(", ")}; ${fragment.name} takes ${keys.join(", ")}`);
+        }
+    }
+
     const args = await friendlyArgsOf(entry, fragment, raw, ctx);
 
     // an object that left out a value (or misnamed it): say which one, except payee (filled in later)
