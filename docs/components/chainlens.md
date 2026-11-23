@@ -47,7 +47,7 @@ addresses) and **Help**. Older links (`#/transactions`, `#/memos`, `#/blocks`, `
 | | **Avatars** / **Nicknames** | `#/items/avatars`, `#/items/nicknames` | the items of every avatar / nickname collection, with image or name, owner and price; an item's page shows its metadata and history |
 | | **Contracts** | `#/contracts` | contracts with their **type from the registry**: Avatar collection, Nickname collection, Section registry, Transfer undo, Contract (registered), ERC721, Contract; a type filter. Registered contracts have a page with their functions (view / pure functions run in the page) |
 | | **Network** | `#/network` | the chain (client, chain id, latest block, block time) and **every Besu node** (role, up/down, block, peers, started), read from each node's own metrics endpoint (`NETWORK_NODES`): RPC nodes keep the ADMIN API off in production, so node details no longer depend on it. Peers of the RPC node only where its ADMIN API is on (development) |
-| Help | **API**, **Docs ↗**, **Grafana ↗** | `#/api`, `DOCS_URL`, `GRAFANA_URL` | chainlens's own JSON API; the documentation site; Grafana |
+| Help | **Docs ↗**, **Grafana ↗** | `DOCS_URL`, `GRAFANA_URL` | the documentation site; Grafana |
 
 The sidebar shows the **versions** (commits) of chainlens and the proxy; in red when they differ (an
 update in progress: for example the proxy already updated by `site.yml`, chainlens not yet).

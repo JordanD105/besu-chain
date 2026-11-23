@@ -833,10 +833,6 @@ async function render(options) {
             return showNetwork();
         }
 
-        if (path === "#/api") {
-            return showApi();
-        }
-
         // admin (hidden unless this address may use it; the server checks the token)
         if (path === "#/admin/sections") {
             return showSections();
@@ -891,7 +887,8 @@ const ROUTE_ALIASES = [
     [/^#\/nfts(?=$|\?)/, "#/items/avatars"],
     [/^#\/sections(?=$|[/?])/, "#/admin/sections"],
     [/^#\/nicknames(?=$|[/?])/, "#/admin/nicknames"],
-    [/^#\/deploy(?=$|[/?])/, "#/admin/deploy"]
+    [/^#\/deploy(?=$|[/?])/, "#/admin/deploy"],
+    [/^#\/api$/, "#/"]
 ];
 
 function markNav(path) {
@@ -3289,27 +3286,6 @@ async function showNetwork() {
     ]));
 }
 
-function showApi() {
-    const rows = [
-        ["GET", "/api/status", t("api.status")],
-        ["GET", "/api/dashboard", t("api.dashboard")],
-        ["GET", "/api/accounts", t("api.accounts")],
-        ["GET", "/api/accounts/:address", t("api.account")],
-        ["GET", "/api/contracts/:address", t("api.contract")],
-        ["POST", "/api/contracts/:address/call", t("api.contractCall")],
-        ["POST", "/api/deploy/inspect, /check, /send", t("api.deploy")],
-        ["GET", "/api/nfts", t("api.nfts")],
-        ["GET", "/api/transactions", t("api.transactions")],
-        ["GET", "/api/blocks", t("api.blocks")],
-        ["GET", "/api/network", t("api.network")]
-    ];
-    const table = dataTable([
-        { label: "col.method", sort: (row) => row[0], cell: (row) => row[0] },
-        { label: "col.path", sort: (row) => row[1], cell: (row) => row[1] },
-        { label: "col.description", sort: (row) => row[2], cell: (row) => row[2] }
-    ], rows, { key: "api" });
-    show(el("section", { class: "card" }, [el("h2", {}, t("api.title")), table]));
-}
 
 window.addEventListener("hashchange", render);
 api("/api/status").then(paintChrome).catch(() => {});
