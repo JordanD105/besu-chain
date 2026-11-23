@@ -38,7 +38,7 @@
 | 4. 구매자 | 섹션의 키로 `POST /createaccount`, 또는 chainlens Sections 페이지에서 **Create account** | — (섹션의 선지급 계정에서 자금 공급) |
 | 5. 아바타 판매 | 컬렉션의 chainlens 페이지에서 **Sell an avatar**, 또는 섹션의 키로 `POST /contract/send` (`buy`) | 구매자 (재판매의 경우 먼저 판매자의 `approve`) |
 
-![아바타: Remix에서 컴파일, chainlens에서 배포, 고정 가격으로 아바타 민팅, 섹션 사용자 계정이 구매](../images/diagrams/nft-lifecycle.svg)
+![아바타: Remix에서 컴파일, chainlens에서 배포, 고정 가격으로 아바타 민팅, 섹션 사용자 계정이 구매](../images/diagrams/avatar-lifecycle.svg)
 
 아래 주소는 프로덕션 주소입니다(프록시 VIP `192.168.68.151:30000`, chainlens와 Remix는
 h139). 2, 3, 5단계는 운영자 머신 또는 `chainlens_deploy_ips`에 있는 PC의 브라우저에서 실행하십시오

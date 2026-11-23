@@ -39,7 +39,7 @@ both.
 | 4. Buyer | `POST /createaccount` with a section's key, or **Create account** on the chainlens Sections page | — (funded by the section's upfront account) |
 | 5. Sell an avatar | **Sell an avatar** on the collection's chainlens page, or `POST /contract/send` (`buy`) with the section's key | the buyer (and, for a resale, first the seller's `approve`) |
 
-![Avatars: 1 compile in Remix, 2 deploy in chainlens (contract account center), 3 mint an avatar at a fixed price, 4 a section user account as buyer, 5 sell the avatar with X-Section-Key: first sale pays the section's consumption account, resale pays the seller](../images/diagrams/nft-lifecycle.svg)
+![Avatars: 1 compile in Remix, 2 deploy in chainlens (contract account center), 3 mint an avatar at a fixed price, 4 a section user account as buyer, 5 sell the avatar with X-Section-Key: first sale pays the section's consumption account, resale pays the seller](../images/diagrams/avatar-lifecycle.svg)
 
 The addresses below are the production ones (proxy VIP `192.168.68.151:30000`, chainlens and Remix
 on h139). Run steps 2, 3 and 5 in the browser from the operator machine or a PC in
