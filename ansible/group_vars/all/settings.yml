@@ -115,6 +115,9 @@ memo_default_lang: en
 # contracts that must not get the memo at the end of their transaction data (a contract that reads its
 # whole msg.data); their memo is kept in the proxy's memo log instead, e.g. ["0xAbc…"]
 memo_skip_contracts: []
+# Transfer undo (docs/features/transfer-undo.md): a section's +x / -x can be undone (the full amount,
+# once) for this many days (POST /transfer/undo, chainlens section history)
+transfer_undo_days: 7
 # RPC VIP health (ha/rpc-health.py): an RPC node leaves the VIP when its newest block is older than
 # rpc_max_block_age seconds while another node has newer blocks, or it is more than
 # rpc_max_blocks_behind blocks behind. A node that stays stalled rpc_auto_restart_minutes while the
@@ -198,7 +201,7 @@ gateway_defaults:
   offline_max_hours: 24            # after this long offline: no more optimistic answers (503); keep far below the 7-day undo period
   # what the gateway answers while offline: transfer, createaccount, account_pool, "<type>:<function>" for avatar and
   # nickname items ("*:undo" = any type), and "0xContract:function" for other contracts
-  offline_operations: [transfer, createaccount, account_pool, "avatar:buy", "nickname:buy", "nickname:upgradeLevel", "*:undo", "nickname:undoLevel"]
+  offline_operations: [transfer, transfer_undo, createaccount, account_pool, "avatar:buy", "nickname:buy", "nickname:upgradeLevel", "*:undo", "nickname:undoLevel"]
   spare_accounts: 100              # accounts created in advance, for /createaccount while offline
   spare_alert_below: 20            # alert (GatewaySparesLow) below this
   answer_gateway_field: false      # true: answers carry a "gateway" field (mode, queued); false: exactly the proxy's answers

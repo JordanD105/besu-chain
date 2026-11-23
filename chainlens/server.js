@@ -52,6 +52,7 @@ const db = {
     blocks: [],
     txs: [],
     txByHash: new Map(),
+    undoneBy: new Map(),  // transfer undo (memo undoOf): original hash -> the undo's hash
     accounts: new Map(),
     contracts: new Map(),
     nfts: new Map(),
@@ -366,7 +367,7 @@ function decodeLogs(logs) {
 function memoFields(tx) {
     const rec = MEMO.fromTransaction(tx);
     if (!rec) {
-        return { memo: "", memos: null, memoDefaults: null, memoType: null, memoUser: null, memoRequest: null, memoSection: null };
+        return { memo: "", memos: null, memoDefaults: null, memoType: null, memoUser: null, memoRequest: null, memoSection: null, memoUndoOf: null };
     }
     const memos = {};
     const memoDefaults = {};
@@ -382,7 +383,8 @@ function memoFields(tx) {
         memoType: rec.t,
         memoUser: rec.u || null,
         memoRequest: rec.r || null,
-        memoSection: rec.s && rec.s[0] ? Number(rec.s[0]) : null
+        memoSection: rec.s && rec.s[0] ? Number(rec.s[0]) : null,
+        memoUndoOf: rec.p && rec.p.undoOf ? String(rec.p.undoOf) : null
     };
 }
 
@@ -680,6 +682,7 @@ function ingest(tx, receipt, block) {
         memoUser: kind.memoUser,
         memoRequest: kind.memoRequest,
         memoSection: kind.memoSection,
+        memoUndoOf: kind.memoUndoOf,
         decoded: kind.decoded || decodeInput(MEMO.stripMemo(tx.input || tx.data || "0x")),
         status: receipt && receipt.status && BigInt(receipt.status) === 0n ? "failed" : "success",
         contractAddress: receipt && receipt.contractAddress ? checksum(receipt.contractAddress) : null,
@@ -708,6 +711,9 @@ function ingest(tx, receipt, block) {
 
     db.txs.push(row);
     db.txByHash.set(row.hash.toLowerCase(), row);
+    if (row.memoUndoOf && row.status === "success") {
+        db.undoneBy.set(String(row.memoUndoOf).toLowerCase(), row.hash);
+    }
 }
 
 async function ethCall(to, data) {
@@ -1044,6 +1050,7 @@ function resetIndex(reason) {
         blocks: [],
         txs: [],
         txByHash: new Map(),
+    undoneBy: new Map(),  // transfer undo (memo undoOf): original hash -> the undo's hash
         accounts: new Map(),
         contracts: new Map(),
         nfts: new Map()
@@ -1205,6 +1212,8 @@ function publicTx(tx) {
         memoUser: tx.memoUser || null,
         memoRequest: tx.memoRequest || null,
         memoSection: tx.memoSection || null,
+        undoOf: tx.memoUndoOf || null,
+        undoneBy: db.undoneBy.get(String(tx.hash).toLowerCase()) || null,
         status: tx.status,
         contractAddress: tx.contractAddress,
         decoded: tx.decoded,
@@ -2188,7 +2197,7 @@ app.get("/api/sections/status", (req, res) => {
 });
 
 const sectionsJson = express.json({ limit: "64kb" });
-const SECTION_ACTIONS = ["name", "info", "key", "active", "topup", "sweep", "payback", "account", "archive", "accounts", "transfer"];
+const SECTION_ACTIONS = ["name", "info", "key", "active", "topup", "sweep", "payback", "account", "archive", "accounts", "transfer", "undo"];
 
 app.get("/api/sections", sectionsGuard, async (req, res) => {
     try {
@@ -2505,12 +2514,13 @@ app.get("/api/sections/:id/history", sectionsGuard, async (req, res) => {
         const rows = db.txs.filter((tx) => {
             const from = tx.from.toLowerCase();
             const to = tx.to ? tx.to.toLowerCase() : "";
-            return [up, co, pa].includes(from) || [up, co, pa].includes(to);
+            return [up, co, pa].includes(from) || [up, co, pa].includes(to) || tx.memoSection === Number(req.params.id);
         }).slice(-500).reverse().map((tx) => ({
             ...publicTx(tx),
             kind: kind(tx.from.toLowerCase(), tx.to ? tx.to.toLowerCase() : "")
         }));
-        res.json({ section: r.data.section, history: rows, indexed: db.indexed, head: db.head });
+        res.json({ section: r.data.section, history: rows, indexed: db.indexed, head: db.head,
+            undoDays: Number(process.env.TRANSFER_UNDO_DAYS || 7) });
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });
     }

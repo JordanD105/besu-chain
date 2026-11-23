@@ -2481,7 +2481,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(10, (sum by (section) (increase(proxy_section_amount_eth_total{op=~\"transfer_in|avatar_sale|nft_first_sale|nickname_sale|level_upgrade|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period])) - sum by (section) (increase(proxy_section_amount_eth_total{op=~\"avatar_undo|nickname_undo|level_undo\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period]))) > 0)",
+          "expr": "topk(10, (sum by (section) (increase(proxy_section_amount_eth_total{op=~\"transfer_in|avatar_sale|nft_first_sale|nickname_sale|level_upgrade|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period])) - sum by (section) (increase(proxy_section_amount_eth_total{op=~\"avatar_undo|nickname_undo|level_undo|transfer_in_undo\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period]))) > 0)",
           "legendFormat": "{{section}}",
           "datasource": {
             "type": "prometheus",
@@ -2680,7 +2680,7 @@
       "type": "timeseries",
       "title": "Operations per $period",
       "id": 31,
-      "description": "All selected sections, per kind of operation: create_account, transfer_in (+x), transfer_out (-x), avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback (older names kept for history: nft_first_sale, nft_resale, avatar_resale, edge_upgrade). One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
+      "description": "All selected sections, per kind of operation: create_account, transfer_in (+x), transfer_out (-x), transfer_in_undo, transfer_out_undo, avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback (older names kept for history: nft_first_sale, nft_resale, avatar_resale, edge_upgrade). One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2812,7 +2812,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(10, (sum by (section) (increase(proxy_section_amount_eth_total{op=~\"transfer_in|avatar_sale|nft_first_sale|nickname_sale|level_upgrade|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period] offset -$period)) - sum by (section) (increase(proxy_section_amount_eth_total{op=~\"avatar_undo|nickname_undo|level_undo\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period] offset -$period))))",
+          "expr": "topk(10, (sum by (section) (increase(proxy_section_amount_eth_total{op=~\"transfer_in|avatar_sale|nft_first_sale|nickname_sale|level_upgrade|edge_upgrade\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period] offset -$period)) - sum by (section) (increase(proxy_section_amount_eth_total{op=~\"avatar_undo|nickname_undo|level_undo|transfer_in_undo\",section=~\"$section\",section=~\"(?i).*$search.*\"}[$period] offset -$period))))",
           "legendFormat": "{{section}}",
           "datasource": {
             "type": "prometheus",

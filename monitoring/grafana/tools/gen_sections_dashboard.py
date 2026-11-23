@@ -228,7 +228,7 @@ stat("Top-ups, last $period (ETH)", f'sum(increase(proxy_section_amount_eth_tota
 y += 5
 # income: +x and every item payment, minus the undone (refunded) ones; older op names keep their history
 IN_OPS = "transfer_in|avatar_sale|nft_first_sale|nickname_sale|level_upgrade|edge_upgrade"
-UNDO_OPS = "avatar_undo|nickname_undo|level_undo"
+UNDO_OPS = "avatar_undo|nickname_undo|level_undo|transfer_in_undo"
 # (every op counter exists from the start at 0 for each section, so the subtraction always matches)
 def income(offset=""):
     return (f'(sum by (section) (increase(proxy_section_amount_eth_total{{op=~"{IN_OPS}",{SEL}}}[$period]{offset}))'
@@ -248,7 +248,7 @@ y += 10
 # each bar counts the period that STARTS at its time (offset -$period), so today's bar shows today so far
 timeseries("Operations per $period", [target(f'sum by (op) (increase(proxy_section_operations_total{{{SEL}}}[$period] offset -$period))', "{{op}}")],
            0, y, bars=True, desc="All selected sections, per kind of operation: create_account, transfer_in (+x), transfer_out (-x), "
-                                 "avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback "
+                                 "transfer_in_undo, transfer_out_undo, avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback "
                                  "(older names kept for history: nft_first_sale, nft_resale, avatar_resale, edge_upgrade)." + NOTE)
 timeseries("ETH moved per $period", [target(f'sum by (op) (increase(proxy_section_amount_eth_total{{{SEL}}}[$period] offset -$period))', "{{op}}")],
            12, y, bars=True, desc="ETH moved by each kind of operation (all selected sections)." + NOTE)

@@ -2491,6 +2491,23 @@ async function showSection(id) {
     });
 
     const accountRow = (role, label) => [el("span", { class: "muted" }, label), el("span", {}, [addr(s.accounts[role]), "  ", el("b", {}, s.balances[role] + " ETH")])];
+    // undo of a +x / -x (docs/features/transfer-undo.md): the full amount, once, within undoDays
+    const transferUndoCell = (row) => {
+        if (row.undoneBy) {
+            return el("a", { href: "#/transactions/" + row.undoneBy, class: "muted" }, t("sections.undone"));
+        }
+        if (row.undoOf) {
+            return el("a", { href: "#/transactions/" + row.undoOf, class: "muted" }, t("sections.undoOfLink"));
+        }
+        const fresh = row.timestamp && Date.now() / 1000 - row.timestamp < (data.undoDays || 7) * 86400;
+        if (!(row.memoType === "transfer.in" || row.memoType === "transfer.out") || row.status !== "success" || !fresh) {
+            return "";
+        }
+        const b = el("button", { type: "button", class: "fn-run" }, t("sections.undo"));
+        b.addEventListener("click", () => act(b, "undo", { txHash: row.hash },
+            t("sections.undoConfirm").replace("{amount}", row.value).replace("{memo}", memoOf(row)), (r) => done(r, t("sections.undoDone").replace("{amount}", r.amount))));
+        return b;
+    };
     const gatewayBox = el("div");
     const history = dataTable([
         { label: "col.time", sort: (row) => row.timestamp || 0, cell: (row) => stamp(row.timestamp) },
@@ -2499,7 +2516,8 @@ async function showSection(id) {
         { label: "col.from", sort: (row) => row.from, cell: (row) => addr(row.from) },
         { label: "col.to", sort: (row) => row.to || "", cell: (row) => (row.to ? addr(row.to) : el("span", {}, "—")) },
         { label: "sections.memo", sort: (row) => memoOf(row), search: (row) => memoOf(row), cell: (row) => memoOf(row) },
-        { label: "col.hash", sort: (row) => row.hash, cell: (row) => ident(row.hash, "#/transactions/" + row.hash) }
+        { label: "col.hash", sort: (row) => row.hash, cell: (row) => ident(row.hash, "#/transactions/" + row.hash) },
+        { label: "sections.undoCol", sort: (row) => (row.undoneBy ? 2 : 0), cell: (row) => transferUndoCell(row) }
     ], data.history, { sort: 0, dir: "desc", key: "section-history" });
 
     show(el("div", {}, [
@@ -3061,6 +3079,8 @@ async function showTx(hash) {
                 el("div", { style: "margin-top:8px" }, [t("tx.from") + " ", addr(tx.from), "  " + t("tx.to") + " ", to]),
                 el("div", { style: "margin-top:8px" }, t("tx.status") + " " + (tx.status === "success" ? t("tx.ok") : t("tx.fail"))),
                 el("div", { class: "memo", style: "margin-top:8px" }, [t("tx.memo") + " ", ...(memoOf(tx) ? memoNodes(memoOf(tx)) : ["—"])]),
+                tx.undoneBy ? el("div", { style: "margin-top:4px" }, [t("tx.undoneBy") + " ", ident(tx.undoneBy, "#/transactions/" + tx.undoneBy)]) : null,
+                tx.undoOf ? el("div", { style: "margin-top:4px" }, [t("tx.undoOf") + " ", ident(tx.undoOf, "#/transactions/" + tx.undoOf)]) : null,
                 tx.memoType ? el("div", { class: "muted", style: "margin-top:4px" }, [
                     t("memo.type") + " ", el("a", { href: "#/memos?type=" + encodeURIComponent(tx.memoType) }, tx.memoType),
                     tx.memoUser && tx.memoDefaults ? "  · " + t("memo.default") + " " + (tx.memoDefaults[getLocale()] || tx.memoDefaults.en) : "",

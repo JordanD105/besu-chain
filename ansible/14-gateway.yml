@@ -108,7 +108,7 @@
             'registry': { 'address': registry.address | default(''), 'fromBlock': registry_from_block | int },
             'rpc': 'http://' ~ vip_rpc ~ ':8545',
             'listen': 30010,
-            'limits': section_limits | combine({'memo_default_lang': memo_default_lang})
+            'limits': section_limits | combine({'memo_default_lang': memo_default_lang, 'transfer_undo_days': transfer_undo_days})
           } | to_nice_json }}
       register: gw_config
 

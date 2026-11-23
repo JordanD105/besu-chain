@@ -133,6 +133,8 @@ const CONFIG = {
     SENDER01_LOW_BALANCE_ETH: Number(process.env.SENDER01_LOW_BALANCE_ETH || 0) || 0,
     // memos (docs/features/memos.md): off only for a test; contracts that must not get a memo trailer
     // (their memo is kept in the proxy's memo log instead)
+    // a section's +x / -x can be undone (the full amount, once) for this many days
+    TRANSFER_UNDO_DAYS: Number(process.env.TRANSFER_UNDO_DAYS || 7),
     MEMO_ENABLED: String(process.env.MEMO_ENABLED || "true").toLowerCase() !== "false",
     MEMO_SKIP_CONTRACTS: (process.env.MEMO_SKIP_CONTRACTS || "").split(/[\s,]+/).filter(Boolean).map((a) => a.toLowerCase()),
     REDIS: {
@@ -1022,6 +1024,25 @@ app.post("/account/pool", async (req, res) => {
 // Transfer
 // =======================
 
+// Undo of a section's +x / -x: { txHash, memo } with X-Section-Key
+app.post("/transfer/undo", async (req, res) => {
+    try {
+        const section = await sectionFromRequest(req);
+
+        if (!section) {
+            return res.status(401).json({ error: "X-Section-Key: only a section's transfers can be undone" });
+        }
+
+        res.json(await sectionTransferUndo(section, req.body));
+    } catch (error) {
+        if (!error.statusCode) {
+            console.error(error);
+        }
+
+        res.status(error.statusCode || 500).json({ error: error.message });
+    }
+});
+
 app.post("/transfer", async (req, res) => {
     try {
         const section = await sectionFromRequest(req);
@@ -1208,13 +1229,15 @@ app.get("/transfer/:txHash", async (req, res) => {
         }
 
         const rec = MEMO.fromTransaction(tx) || await loggedMemo(txHash);
+        const undoable = rec && (rec.t === "transfer.in" || rec.t === "transfer.out");
 
         res.json({
             success: true,
             txHash: tx.hash || txHash,
             from: tx.from,
             to: tx.to || null,
-            ...memoAnswer(rec)
+            ...memoAnswer(rec),
+            ...(undoable ? { undoneBy: await transferUndoneBy(txHash.toLowerCase()).catch(() => null) } : {})
         });
     } catch (error) {
         console.error(error);
@@ -1974,6 +1997,137 @@ app.post("/admin/sections/:id/transfer", adminGuard, adminRoute(async (req) => {
     return sectionTransfer(section, { account: req.body.account, amount: req.body.amount, memo: req.body.memo });
 }));
 
+// The undo of a +x / -x (docs/features/transfer-undo.md), as the section's key would: { txHash, memo }
+app.post("/admin/sections/:id/undo", adminGuard, adminRoute(async (req) => {
+    const section = await getSection(req.params.id, true);
+    return sectionTransferUndo(section, req.body);
+}));
+
+// ---- Transfer undo: the money of a +x / -x goes back, the full amount, once, within TRANSFER_UNDO_DAYS.
+// It is sent through the TransferUndo contract, which refuses a second undo of the same transfer.
+
+async function transferUndoContract(optional = false) {
+    requireSections();
+    const pick = (book) => [...book.values()]
+        .filter((e) => hasFunction(e, "undoneAt") && hasFunction(e, "undo") && !platformKind(e))
+        .sort((a, b) => b.registeredIn - a.registeredIn)[0];
+    const entry = pick(await loadContracts()) || pick(await loadContracts(true));
+
+    if (!entry && !optional) {
+        throw httpError(503, "no transfer-undo contract yet: POST /admin/contract/deploy { \"template\": \"transfer-undo\" } (ansible 06-proxy.yml does it)");
+    }
+
+    return entry || null;
+}
+
+// The undo of a transfer, if any: { block, txHash }
+async function transferUndoneBy(txHash) {
+    const entry = await transferUndoContract(true);
+
+    if (!entry) {
+        return null;
+    }
+
+    const [block] = await entryCall(entry, "undoneAt", [txHash]);
+
+    if (!block) {
+        return null;
+    }
+
+    const topic = entry.iface.getEvent("TransferUndone").topicHash;
+    const logs = await rpc(CONFIG.BESU_RPC, "eth_getLogs", [{ address: entry.address, topics: [topic, txHash],
+        fromBlock: ethers.toQuantity(block), toBlock: ethers.toQuantity(block) }]);
+    return { block: Number(block), txHash: logs[0] ? logs[0].transactionHash : null };
+}
+
+async function sectionTransferUndo(section, body) {
+    const original = String((body || {}).txHash || "").toLowerCase();
+
+    if (!/^0x[0-9a-f]{64}$/.test(original)) {
+        throw httpError(400, "txHash: the +x / -x transaction to undo");
+    }
+
+    const entry = await transferUndoContract();
+    const tx = await rpc(CONFIG.BESU_RPC, "eth_getTransactionByHash", [original]);
+    const receipt = tx ? await rpc(CONFIG.BESU_RPC, "eth_getTransactionReceipt", [original]) : null;
+
+    if (!tx || !receipt) {
+        throw httpError(404, "transaction not found (or not mined yet)");
+    }
+
+    if (BigInt(receipt.status) !== 1n) {
+        throw httpError(409, "that transaction failed: nothing to undo");
+    }
+
+    const rec = MEMO.fromTransaction(tx);
+    const kind = rec && { "transfer.in": "in", "transfer.out": "out" }[rec.t];
+
+    if (!kind || !rec.s || Number(rec.s[0]) !== section.id) {
+        throw httpError(409, `only a +x / -x of section "${section.name}" can be undone (this is ${rec ? rec.t : "not a section transfer"})`);
+    }
+
+    const block = await rpc(CONFIG.BESU_RPC, "eth_getBlockByNumber", [tx.blockNumber, false]);
+    const ageDays = (Date.now() / 1000 - Number(BigInt(block.timestamp))) / 86400;
+
+    if (ageDays > CONFIG.TRANSFER_UNDO_DAYS) {
+        throw httpError(409, `too late: a transfer can be undone for ${CONFIG.TRANSFER_UNDO_DAYS} days (this one is ${ageDays.toFixed(1)} days old)`);
+    }
+
+    const done = await transferUndoneBy(original);
+
+    if (done) {
+        throw httpError(409, `already undone in block ${done.block}${done.txHash ? ` (transaction ${done.txHash})` : ""}`);
+    }
+
+    // +x: the consumption account pays the user back; -x: the user pays the upfront account back
+    const user = ethers.getAddress(kind === "in" ? tx.from : tx.to);
+    const payer = kind === "in" ? section.accounts.consumption : user;
+    const recipient = kind === "in" ? user : section.accounts.upfront;
+    const amountWei = BigInt(tx.value);
+    const amount = ethers.formatEther(amountWei).replace(/\.0$/, "");
+    const balance = await getBalanceWei(payer);
+
+    if (balance < amountWei) {
+        throw httpError(409, `the undo needs ${amount} ETH but ${payer} (${kind === "in" ? "the consumption account" : "the user account"}) has ${ethText(balance)} ETH`);
+    }
+
+    const data = entry.iface.encodeFunctionData("undo", [original, recipient]);
+    let sent;
+
+    try {
+        sent = await withSenderLock(payer, () => sendData(payer, entry.address, data, amountWei,
+            { t: kind === "in" ? "transfer.undoIn" : "transfer.undoOut", s: section, p: { amount, undoOf: original } }));
+    } catch (error) {
+        if (error.statusCode) {
+            throw error;
+        }
+
+        throw httpError(409, `the undo would revert: ${revertReason(error)}`);
+    }
+
+    const mined = await receiptOf(sent.txHash);
+
+    if (BigInt(mined.status) !== 1n) {
+        throw httpError(409, `the undo reverted (transaction ${sent.txHash}): maybe undone meanwhile`);
+    }
+
+    countSectionOp(section, kind === "in" ? "transfer_in_undo" : "transfer_out_undo", amount);
+    console.log(`section ${section.id}: undo of ${original} (${kind === "in" ? "+x" : "-x"} ${amount} ETH): ${payer} -> ${recipient} (${sent.txHash})`);
+
+    return {
+        success: true,
+        section: { id: section.id, name: section.name },
+        undoOf: original,
+        direction: kind === "in" ? "consumption -> account" : "account -> upfront",
+        from: payer,
+        to: recipient,
+        amount,
+        txHash: sent.txHash,
+        nonce: sent.nonce,
+        ...memoAnswer(sent.memo)
+    };
+}
+
 // ---- Migration from an earlier registry (v1): sections (name, accounts, key hash, active) and their
 // user accounts are written into this registry. Run once by Ansible after deploying v2.
 // Body { from: <old registry>, fromBlock: <block it was deployed in> }.
@@ -2387,6 +2541,7 @@ async function deployAndRegister(input) {
 // The collection: the latest registered nickname collection, version 5 (POST /admin/contract/deploy, template nickname-collection).
 
 const nicknameArtifact = require("./nickname-collection.json");
+const transferUndoArtifact = require("./transfer-undo.json");
 const NICKNAME_FORBIDDEN = /[<>&"'\\\u0000-\u001f\u007f]/;
 
 function ethText(wei) {
@@ -3529,7 +3684,19 @@ async function templateInput(body) {
             args: [name, symbol, CONFIG.REGISTRY_CONTRACT, holdSeconds] });
     }
 
-    throw httpError(400, "template: avatar-collection or nickname-collection (or no template: abi and bytecode)");
+    if (b.template === "transfer-undo") {
+        const existing = await transferUndoContract(true);
+
+        if (existing && !b.another) {
+            throw httpError(409, `the transfer-undo contract exists at ${existing.address} (send "another": true to replace it)`);
+        }
+
+        return deployInputOf({ kind: "common", name: String(b.name || "TransferUndo").trim().slice(0, 64), abi: transferUndoArtifact.abi,
+            bytecode: transferUndoArtifact.bytecode, deployedBytecode: transferUndoArtifact.deployedBytecode,
+            immutableReferences: transferUndoArtifact.immutableReferences, args: [CONFIG.REGISTRY_CONTRACT] });
+    }
+
+    throw httpError(400, "template: avatar-collection, nickname-collection or transfer-undo (or no template: abi and bytecode)");
 }
 
 // ---- Removed routes: 410 with the call that replaces each
@@ -3566,7 +3733,7 @@ for (const [method, path, use] of MOVED) {
 // ---- Section metrics (step 6): balances refreshed every 15 s (the scrape stays fast), operation
 // counters in memory (they restart at 0 with the proxy; dashboards use increase()).
 const sectionOps = new Map(); // "id|op" -> { id, name, op, count, wei }
-const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "avatar_sale", "avatar_undo", "nickname_sale", "nickname_undo", "level_upgrade", "level_undo", "topup", "sweep", "payback", "account_replaced", "archive_return"];
+const SECTION_OPS = ["create_account", "transfer_in", "transfer_out", "transfer_in_undo", "transfer_out_undo", "avatar_sale", "avatar_undo", "nickname_sale", "nickname_undo", "level_upgrade", "level_undo", "topup", "sweep", "payback", "account_replaced", "archive_return"];
 const sectionMetrics = { rows: [], sender01: null, error: 0, at: 0 };
 // Names of the platform and section accounts, whether they send now or not (proxy_account_info): the
 // MPC signer dashboard names each key's presignature pool with it. address (lowercase) -> info
@@ -3692,7 +3859,7 @@ function sectionMetricLines() {
         sectionMetrics.rows.map((r) => [`${sec(r.id, r.name)},role="${r.role}",active="${r.active ? 1 : 0}"`, r.eth]));
     metric("proxy_section_active", "gauge", "1 = the section is enabled (archived sections are not listed).",
         [...new Map(sectionMetrics.rows.map((r) => [r.id, r])).values()].map((r) => [sec(r.id, r.name), r.active ? 1 : 0]));
-    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback, account_replaced, archive_return).",
+    metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, transfer_in_undo, transfer_out_undo, avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback, account_replaced, archive_return).",
         [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, e.count]));
     metric("proxy_section_amount_eth_total", "counter", "ETH moved by section operations since the proxy started.",
         [...sectionOps.values()].map((e) => [`${sec(e.id, e.name)},op="${e.op}"`, Number(ethers.formatEther(e.wei))]));

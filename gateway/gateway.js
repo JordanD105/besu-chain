@@ -28,8 +28,8 @@ const L = Object.assign({
     offline_max_hours: 24,
     // what is answered while offline: transfer, createaccount, account_pool, "<avatar|nickname|*>:<function>" for the
     // platform's items, "<0xContract>:<function>" for another contract (queued, answered without a result)
-    offline_operations: ["transfer", "createaccount", "account_pool", "avatar:buy", "nickname:buy", "nickname:upgradeLevel", "*:undo", "nickname:undoLevel"],
-    spare_accounts: 100, spare_alert_below: 20, answer_gateway_field: false, memo_default_lang: "en", correction_webhook: "", report_keep_days: 365,
+    offline_operations: ["transfer", "transfer_undo", "createaccount", "account_pool", "avatar:buy", "nickname:buy", "nickname:upgradeLevel", "*:undo", "nickname:undoLevel"],
+    spare_accounts: 100, spare_alert_below: 20, answer_gateway_field: false, memo_default_lang: "en", transfer_undo_days: 7, correction_webhook: "", report_keep_days: 365,
     sync_seconds: 30, backup_keep_days: 7
 }, cfg.limits || {});
 const REPORT_TOKEN = (() => {
@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEX
 CREATE INDEX IF NOT EXISTS outbox_status ON outbox (status, id);
 CREATE TABLE IF NOT EXISTS spares (address TEXT PRIMARY KEY, display TEXT, created INTEGER, used INTEGER);
 CREATE TABLE IF NOT EXISTS cache (k TEXT PRIMARY KEY, body TEXT, at INTEGER);
+CREATE TABLE IF NOT EXISTS undone (hash TEXT PRIMARY KEY, uid TEXT, at INTEGER);
 CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, uid TEXT, kind TEXT, detail TEXT, delivered INTEGER DEFAULT 0);
 `);
 // added later: correction kind, ETH refunded, acknowledgement (chainlens)
@@ -765,6 +766,53 @@ function offlineTransfer(body, uid) {
     return Object.assign(answer, { gateway: gw(uid) });
 }
 
+// Undo of a +x / -x made through this gateway (docs/features/transfer-undo.md). Still queued: the
+// transfer is cancelled (nothing goes on chain). Already sent: the undo is queued (the proxy sends it
+// through the TransferUndo contract, which refuses a second undo).
+function offlineTransferUndo(body, uid) {
+    offlineAllowed("transfer_undo");
+    const hash = lower(body && body.txHash);
+    const row = /^0x[0-9a-f]{64}$/.test(hash) ? q("SELECT * FROM outbox WHERE (temp_hash = ? OR real_hash = ?) AND kind = 'transfer'").get(hash, hash) : null;
+    if (!row) {
+        throw httpError(503, "only transfers made through this gateway can be undone while the proxy cannot be reached");
+    }
+    if (q("SELECT 1 FROM undone WHERE hash IN (?, ?)").get(row.temp_hash, row.real_hash || "")) {
+        throw httpError(409, "already undone");
+    }
+    if (now() - row.created > L.transfer_undo_days * 86400000) {
+        throw httpError(409, `too late: a transfer can be undone for ${L.transfer_undo_days} days`);
+    }
+    if (row.status === "failed" || row.status === "cancelled") {
+        throw httpError(409, "that transfer did not happen: nothing to undo");
+    }
+    if (row.status === "sending" || row.status === "uncertain") {
+        throw httpError(409, "that transfer is being sent: try again in a moment");
+    }
+    const deltas = JSON.parse(row.deltas);               // [[from, -x], [to, x]]
+    const x = -BigInt(deltas[0][1]);
+    const plus = JSON.parse(row.body).amount && !String(JSON.parse(row.body).amount).trim().startsWith("-");
+    const payer = deltas[1][0];
+    const recipient = deltas[0][0];
+    const answer = { success: true, section: section(), undoOf: body.txHash, direction: plus ? "consumption -> account" : "account -> upfront",
+        from: payer, to: recipient, amount: weiToEth(x), txHash: tempHash(uid),
+        ...offlineMemo(plus ? "transfer.undoIn" : "transfer.undoOut", { amount: weiToEth(x), undoOf: lower(body.txHash) }, body, uid) };
+    if (row.status === "queued") {
+        applyDeltas(deltas, -1n);
+        q("UPDATE outbox SET status = 'cancelled', error = ? WHERE id = ?").run("undone before it was sent (request " + uid + ")", row.id);
+        q(`INSERT INTO outbox (uid, cut, created, kind, path, body, status, temp_hash, answer) VALUES (?, ?, ?, 'transfer_undo', '/transfer/undo', ?, 'void', ?, ?)`)
+            .run(uid, Number(getMeta("cut", 0)), now(), JSON.stringify(body), tempHash(uid), JSON.stringify({ result: answer }));
+    } else {
+        needFunds(payer, x);
+        enqueue({ uid, kind: "transfer_undo", signer: payer, path: "/transfer/undo", body: Object.assign({}, body, { txHash: row.real_hash }),
+            deltas: [[payer, -x], [recipient, x]], spendAccount: payer, spendWei: x, answer: { result: answer } });
+    }
+    q("INSERT INTO undone (hash, uid, at) VALUES (?, ?, ?)").run(row.temp_hash, uid, now());
+    if (row.real_hash) {
+        q("INSERT OR IGNORE INTO undone (hash, uid, at) VALUES (?, ?, ?)").run(row.real_hash, uid, now());
+    }
+    return Object.assign(answer, { gateway: gw(uid) });
+}
+
 function offlineCreateAccount(body, uid) {
     const amount = ethToWei(body.amount === undefined ? "0" : body.amount);
     offlineAllowed("createaccount");
@@ -1050,6 +1098,11 @@ function offlineCall(body) {
 
 // the account that signs a write (for the nonce check of a send whose answer is lost)
 function signerOf(path, body) {
+    if (path === "/transfer/undo") {
+        // +x undo: the consumption account pays back; -x undo: the user
+        const row = q("SELECT deltas FROM outbox WHERE (temp_hash = ? OR real_hash = ?) AND kind = 'transfer'").get(lower(body.txHash), lower(body.txHash));
+        return row ? JSON.parse(row.deltas)[1][0] : null;
+    }
     if (path === "/transfer") {
         return String(body.amount || "").trim().startsWith("-") ? SECTION.upfront : body.account;
     }
@@ -1136,6 +1189,9 @@ function offlineWrite(path, body, uid) {
     }
     if (path === "/createaccount") {
         return offlineCreateAccount(body, uid);
+    }
+    if (path === "/transfer/undo") {
+        return offlineTransferUndo(body, uid);
     }
     if (path === "/account/pool") {
         offlineAllowed("account_pool");
@@ -1258,7 +1314,7 @@ function metrics() {
     ].join("\n");
 }
 
-const WRITES = new Set(["/transfer", "/createaccount", "/account/pool", "/contract/send"]);
+const WRITES = new Set(["/transfer", "/transfer/undo", "/createaccount", "/account/pool", "/contract/send"]);
 
 // wrong keys: answered at once (401); 10 wrong keys from one address within 60 s -> 429 for 60 s
 const brake = new Map();
@@ -1381,6 +1437,13 @@ async function handle(req, res) {
     }
 
     if (req.method === "POST" && WRITES.has(path)) {
+        if (path === "/transfer/undo" && body && typeof body.txHash === "string") {
+            // the application may know a transfer by the gateway's temporary hash
+            const sent = q("SELECT real_hash FROM outbox WHERE temp_hash = ? AND real_hash IS NOT NULL").get(lower(body.txHash));
+            if (sent) {
+                body.txHash = sent.real_hash;
+            }
+        }
         if (state.mode === "online" && !queued()) {
             const r = await passWrite(path, body, uid, langHeader);
             return send(res, r.status, plain(r.data));
@@ -1400,7 +1463,8 @@ async function handle(req, res) {
                     memoFields[k] = promised[k];
                 }
             }
-            return send(res, 200, plain({ success: true, txHash: hash, status: row.status === "failed" || row.status === "cancelled" ? "failed" : "pending",
+            const st = row.status === "void" ? "success" : (row.status === "failed" || row.status === "cancelled" ? "failed" : "pending");
+            return send(res, 200, plain({ success: true, txHash: hash, status: st,
                 error: row.error || undefined, ...memoFields, gateway: { mode: state.mode, request: row.uid, status: row.status } }));
         }
         if (state.mode === "online") {
