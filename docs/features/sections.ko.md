@@ -28,9 +28,10 @@
 섹션 사용자를 위한 자금은 SENDER01이 아니라 섹션 자체의 계정에서 나옵니다.
 
 현재 제공되는 기능: SectionRegistry(버전 2), 프록시 관리 API, 섹션 범위의 `/createaccount`와
-`/transfer`, chainlens **Sections** 페이지(섹션의 사용자 계정 포함), `/contract/call` 및 `/contract/send`와 함께
-컨트랙트 계정 센터가 배포하는 컨트랙트, NFT 컬렉션 버전 3(센터가 민팅하며 최초 판매 대금은 섹션에 지급),
-모니터링(알림과 Grafana **Sections** 대시보드).
+`/transfer`, chainlens **Sections** 페이지(섹션의 사용자 계정 포함), 컨트랙트 계정 센터가 배포하고 하나의
+범용 API(`/contract/call`, `/contract/send`, `/contract/events`, `/contract/list`)로 사용하는 컨트랙트,
+NFT 컬렉션 버전 3(센터가 민팅하며 최초 판매 대금은 섹션에 지급), 닉네임, 모니터링(알림과 Grafana
+**Sections** 대시보드).
 
 ## 계정 {#accounts}
 
@@ -56,8 +57,8 @@
         ▼                                                                        ▼
  ┌────────────────────────────────── proxy (active, VIP .151) ───────────────────────────────────┐
  │ Admin API: /admin/sections (create, rename, info, key, active, top-up, sweep, pay back,       │
- │            replace account, archive, user accounts), /admin/contracts                         │
- │ App API:   /createaccount, /transfer, /contract/call, /contract/send, /nft/*                  │
+ │            replace account, archive, user accounts), /admin/contracts, /admin/contract/send   │
+ │ App API:   /createaccount, /transfer, /contract/call, /send, /events, /list                   │
  │ sender queues: SENDER01 · upfront_i · consumption_i · payment_i · contract_account_center ·   │
  │                registry admin · user accounts                                                 │
  └────────────────┬────────────────────────────────────────────────────────────┬─────────────────┘
@@ -202,6 +203,8 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 | `GET /admin/contracts` | 센터의 주소와 등록된 컨트랙트 |
 | `POST /admin/contracts/check {kind, name, abi, bytecode, deployedBytecode, immutableReferences, args}` | 시험 실행: 인수, 가스, revert 없음 확인, 배포될 주소. 아무것도 서명하지 않습니다 |
 | `POST /admin/contracts/deploy {…same}` | 배포하고(센터가 서명), 온체인 코드를 `deployedBytecode`와 비교하고, 등록합니다(레지스트리 관리자가 서명) |
+| `{template: "nft-collection", name, symbol}` 또는 `{template: "nickname-collection", …}`로 `check` / `deploy` | 프록시 이미지에 컴파일된 플랫폼 자체 컨트랙트(레지스트리 주소는 채워짐) |
+| `POST /admin/contract/send {contract, function, args}` | 센터가 서명하는 쓰기: 플랫폼 컨트랙트의 민터이자 소유자(`mint`, 닉네임 가격과 테두리 레벨, 예약 이름) |
 
 생성 시 컨트랙트의 `msg.sender`는 센터입니다. 소유자나 역할이 있는 컨트랙트에서 센터가 이를 보유하면
 안 되는 경우, 생성자 인수로 받도록 하십시오.
@@ -210,15 +213,18 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 
 | 요청 | 동작 |
 |---|---|
-| `POST /contract/call {contract, function, args}` | **view/pure** 함수를 실행하고(`eth_call`) 디코딩된 출력을 반환합니다. `sections_required: false`인 동안에는 키가 필요 없습니다. |
+| `POST /contract/call {contract, function, args}` | **view/pure** 함수를 실행하고(`eth_call`) 친화적인 `result`와 디코딩된 `outputs`를 반환합니다. `{calls: [ … ]}`로 한 번에 최대 50개를 실행합니다. `sections_required: false`인 동안에는 키가 필요 없습니다. |
 | `POST /contract/send {contract, function, args, from, value}` + `X-Section-Key` | **상태를 변경하는** 함수를 보냅니다. **호출자 섹션의 사용자 계정**인 `from`이 서명하며, 블록을 기다린 후 상태, `blockNumber`, `gasUsed`, 컨트랙트의 디코딩된 이벤트를 반환합니다. `value`(ETH)는 payable 함수에만 사용합니다. 채굴되었지만 revert된 트랜잭션은 `success: false`와 함께 400으로 응답합니다. |
+| `POST /contract/events {contract, event, where, fromBlock, toBlock, limit}` | 컨트랙트의 이벤트, 최신순(`Transfer`와 `where.to`에 `current: true`: 그 주소가 지금 보유한 토큰) |
+| `GET /contract/list` | 등록된 컨트랙트(`?type=nft\|nickname\|contract`, `?has=<function>`, `?functions=1`) |
 
 **등록된** 컨트랙트만, **해당 ABI**의 함수만 사용할 수 있습니다. `function`은 이름이며, 이름이 오버로드된 경우
-시그니처(`transfer(address,uint256)`)입니다. 인수: 숫자는 문자열
-또는 숫자, 주소는 `0x…`, 불리언은 `true`/`false`, 배열과 튜플은 JSON(또는 JSON 텍스트)입니다.
-revert될 트랜잭션은 서명 전에 이유와 함께 거부됩니다(`the transaction
-would revert: …`). `NftCollection.mint`는 이 방식으로 사용할 수 없습니다. 센터만 민팅하므로
-`not minter`로 revert됩니다. `/nft/mint`를 사용하십시오.
+시그니처(`transfer(address,uint256)`)입니다. `args`는 목록(원시 ABI 값) 또는 객체(입력 이름으로 지정.
+플랫폼 컨트랙트에서는 ETH, 색상, 메타데이터 같은 친화적인 값)입니다. 숫자는 문자열 또는 숫자, 주소는
+`0x…`, 불리언은 `true`/`false`, 배열과 튜플은 JSON(또는 JSON 텍스트)입니다. revert될 트랜잭션은 서명
+전에 이유와 함께 거부됩니다(`the transaction would revert: …`). `NftCollection.mint`는 이 방식으로
+사용할 수 없습니다. 센터만 민팅하므로 `not minter`로 revert됩니다. `POST /admin/contract/send`를
+사용하십시오.
 
 플랫폼 자체 컨트랙트에 대해서는 `/contract/send`가 섹션이 정하는 값을 채웁니다. 생략한 `payee`는 보내는
 계정 섹션의 소비 계정이 되고, 생략한 `value`는 가격이 됩니다(닉네임 `buyNickname`, `upgradeEdge`, NFT
@@ -234,9 +240,9 @@ SectionRegistry에 등록되고(종류 NFT), 모든 섹션이 공유합니다. �
 
 | 요청 | 동작 |
 |---|---|
-| `POST /nft/deploy {name, symbol}` | 센터가 버전 3 컬렉션을 배포하고(센터가 민터, 레지스트리 주소 포함) 등록합니다 |
-| `POST /nft/mint {collection, name, image, …, amount}` | 센터가 판매용으로 NFT를 자신에게 민팅합니다. `amount`는 **가격**이며 영구 고정됩니다. 섹션과 연결되지 않습니다. |
-| `POST /contract/send {contract, function: "buy", args: [tokenId], from}` + `X-Section-Key` | **호출자 섹션의 사용자 계정**인 `from`에게 판매합니다. `from`은 민팅 가격을 지불하며 `buy(tokenId, payee)`에 서명합니다(payee와 value는 채워짐). **최초 판매**(센터가 보유): 대금은 섹션의 **소비 계정**으로 갑니다. **재판매**(사용자가 보유): 먼저 판매자의 섹션이 판매자로 `approve(collection, tokenId)`를 역시 `/contract/send`로 보내고, 대금은 **판매자**에게 갑니다. 판매자와 구매자가 다른 섹션에 있어도 됩니다. |
+| `POST /admin/contracts/deploy {template: "nft-collection", name, symbol}` | 센터가 버전 3 컬렉션을 배포하고(센터가 민터, 레지스트리 주소 포함) 등록합니다 |
+| `POST /admin/contract/send {contract, function: "mint", args: {name, image, …, price}}` | 센터가 판매용으로 NFT를 자신에게 민팅합니다. `price`(ETH)는 영구 고정됩니다. 섹션과 연결되지 않습니다. |
+| `POST /contract/send {contract, function: "buy", args: {tokenId}, from}` + `X-Section-Key` | **호출자 섹션의 사용자 계정**인 `from`에게 판매합니다. `from`은 민팅 가격을 지불하며 `buy(tokenId, payee)`에 서명합니다(payee와 value는 채워짐). **최초 판매**(센터가 보유): 대금은 섹션의 **소비 계정**으로 갑니다. **재판매**(사용자가 보유): 먼저 판매자의 섹션이 판매자로 `approve` `{tokenId}`(컬렉션을 승인)를 역시 `/contract/send`로 보내고, 대금은 **판매자**에게 갑니다. 판매자와 구매자가 다른 섹션에 있어도 됩니다. |
 
 최초 판매 대금이 어디로 갈지는 컨트랙트 자체가 강제합니다. `buy`는
 `SectionRegistry.isConsumptionAccount(payee)`(활성 섹션의 소비 계정)를 확인하므로,
@@ -247,10 +253,12 @@ SectionRegistry에 등록되고(종류 NFT), 모든 섹션이 공유합니다. �
 관리 토큰과 IP)가 이 방식으로 프록시를 호출하며, 이때 섹션은 구매자의 섹션입니다.
 Remix에서 판매까지의 단계별 안내: [NFT 워크플로](nft-workflow.md).
 
-버전 3 컬렉션의 `POST /nft/transfer`는 제거되었습니다(410).
+소유자, 가격, 메타데이터, 판매 내역은 `/contract/call`과 `/contract/events`로 읽습니다
+([프록시 API, NFT 컬렉션](../reference/proxy-api.md#nft-collections)). 이전의 `/nft/*` 라우트는 410으로
+응답합니다.
 
-**버전 2 컬렉션**(SENDER01이 민팅, 예: 섹션 도입 이전에 만든 것)은 이전처럼 `POST /nft/transfer`로 키 없이
-계속 동작합니다. 판매 대금은 SENDER01(최초 판매) 또는 판매자에게 지급됩니다.
+**버전 2 컬렉션**(SENDER01이 민팅, 섹션 도입 이전에 만든 것)은 **폐기되었습니다**: 프록시는 더 이상
+이를 읽거나, 민팅하거나, 판매하지 않습니다.
 
 ## chainlens Accounts 페이지의 섹션 {#sections-in-the-chainlens-accounts-page}
 
@@ -312,10 +320,10 @@ periods**는 기본값으로 돌아갑니다. chainlens가 인덱싱한 트랜�
 | `/transfer +x` (section_i) | 프록시 | 사용자 계정 → `consumption_account_i` |
 | `/transfer -x` (section_i) | 프록시 | `upfront_account_i` → 사용자 계정 |
 | **컨트랙트 배포** (UI) | 프록시 관리 API → 레지스트리 | `contract_account_center`, 이후 레지스트리 관리자. 섹션과 연결되지 않음 |
-| **NFT 컬렉션 배포** (UI 또는 `/nft/deploy`) | 프록시 → 레지스트리 | `contract_account_center`(민터), 이후 레지스트리 관리자. 모든 섹션이 공유 |
+| **NFT 컬렉션 배포** (UI 또는 `nft-collection` 템플릿) | 프록시 → 레지스트리 | `contract_account_center`(민터), 이후 레지스트리 관리자. 모든 섹션이 공유 |
 | `/contract/call` | 프록시 | 없음(읽기). 등록된 모든 컨트랙트 |
 | `/contract/send` (section_i) | 프록시 | section_i의 사용자 계정. 등록된 컨트랙트와 그 ABI 함수만 |
-| `/nft/mint` | 프록시 (센터의 대기열) | `contract_account_center`: `mint(center, tokenId, uri, price)`. 가격은 영구 고정 |
+| `/admin/contract/send` `mint` | 프록시 (센터의 대기열) | `contract_account_center`: `mint(center, tokenId, uri, price)`. 가격은 영구 고정 |
 | `/contract/send` `buy`, 최초 판매 (section_i) | 프록시 (구매자의 대기열) | 구매자: `buy(tokenId, payee = consumption_account_i)`. NFT → 구매자, 대금 → `consumption_account_i` |
 | `/contract/send` `approve` 후 `buy`, 재판매 | 프록시 | 판매자가 `approve(collection, tokenId)`(판매자의 섹션), 구매자가 같은 민팅 가격으로 `buy(tokenId, …)`(구매자의 섹션). NFT → 구매자, 대금 → 판매자 |
 

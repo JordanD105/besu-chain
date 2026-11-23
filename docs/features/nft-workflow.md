@@ -15,7 +15,7 @@
 - [4. A buyer: a section's user account](#4-a-buyer-a-sections-user-account)
 - [5. Sell](#5-sell)
 - [6. Check](#6-check)
-- [Version-2 collections](#version-2-collections)
+- [Version-2 collections: retired](#version-2-collections-retired)
 - [Errors](#errors)
 
 ---
@@ -27,8 +27,8 @@ are in [sections](sections.md#nft-collections)).
 | Step | Where | Signed by |
 |---|---|---|
 | 1. Compile | Remix (`http://192.168.68.139:30200`) | nothing |
-| 2. Deploy | chainlens **Deploy** page (or `POST /nft/deploy`) | the contract account center |
-| 3. Mint | **Mint** on the collection's chainlens page, or `POST /nft/mint` | the contract account center |
+| 2. Deploy | chainlens **Deploy** page (or `POST /admin/contracts/deploy` with the `nft-collection` template) | the contract account center |
+| 3. Mint | **Mint** on the collection's chainlens page, or `POST /admin/contract/send` (`mint`) | the contract account center |
 | 4. Buyer | `POST /createaccount` with a section's key, or **Create account** on the chainlens Sections page | — (funded by the section's upfront account) |
 | 5. Sell | **Sell** on the collection's chainlens page, or `POST /contract/send` (`buy`) with the section's key | the buyer (and, for a resale, first the seller's `approve`) |
 
@@ -53,6 +53,9 @@ on h139). Run steps 2, 3 and 5 in the browser from the operator machine or a PC 
   ```bash
   cat ansible/state/secrets/chainlens_deploy_token
   ```
+
+  The curl examples of steps 2 and 3 call the proxy's admin API instead, with the **proxy admin
+  token** (`ansible/state/secrets/proxy_admin_token`), from an address in `ADMIN_ALLOWED_IPS`.
 
 ## 1. Compile in Remix
 
@@ -84,18 +87,26 @@ Open `http://192.168.68.139:30100/#/deploy`:
 5. **Check**, then **Deploy**. The page links to the new contract: `#/contracts/0x…`.
 
 The contract account center is the deployer, so it is the collection's **minter**. The collection is
-registered on chain (kind NFT): the proxy finds it by address, name or symbol, and it is shared by all
-sections. `GET /nft/collections` lists it. Choose kind *NFT collection*: a collection registered as
-*Common contract* is not listed by the proxy and can only be chosen by its address.
+registered on chain (kind NFT) and shared by all sections. Applications use its **address**:
+`GET /contract/list?type=nft` lists the collections with their name, symbol and minter. Choose kind
+*NFT collection*, so that the registry records it as one (`kind: "nft"`).
 
-**Or with curl:** `POST /nft/deploy` deploys the same contract (`proxy/nft-collection-v3.json`) with
-the registry's address filled in, and registers it. Names and symbols must be unique (409
-otherwise):
+**Or with curl:** the `nft-collection` template deploys the same contract (compiled into the proxy
+image, as `proxy/nft-collection-v3.json`) with the registry's address filled in, and registers it.
+Names and symbols must be unique among the NFT collections, in any letter case (409 otherwise):
 
 ```bash
-curl -s -X POST http://192.168.68.151:30000/nft/deploy -H 'Content-Type: application/json' \
-  -d '{"name":"Dragons","symbol":"DRG"}'
+P=http://192.168.68.151:30000; T=$(cat ansible/state/secrets/proxy_admin_token)
+curl -s -X POST $P/admin/contracts/deploy -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+  -d '{"template":"nft-collection","name":"Dragons","symbol":"DRG"}'
 ```
+
+```
+{ "success": true, "name": "Dragons", "kind": "nft", "address": "0xCollection", "deployer": "<center>", "txHash": "0x…",
+  "codeCheck": "matches the artifact", "registryTxHash": "0x…", ... }
+```
+
+`POST /admin/contracts/check` with the same body is a dry run (gas, the future address).
 
 ## 3. Mint
 
@@ -105,20 +116,25 @@ Click **Mint**. The result shows the new token id and links to the NFT.
 
 ![The Mint and sell card on an NFT collection's page](../images/screenshots/chainlens-mint-sell.png)
 
-**Or with curl** (`collection` = the address, the name or the symbol):
+**Or with curl:** `mint` through `POST /admin/contract/send` (signed by the contract account
+center), with friendly `args`. The proxy builds the metadata, picks the next token id and stores
+the metadata on chain in the token URI:
 
 ```bash
-curl -s -X POST http://192.168.68.151:30000/nft/mint -H 'Content-Type: application/json' \
-  -d '{"collection":"DRG","name":"Red dragon","image":"https://example.com/red.png","description":"Level 1","attributes":[{"trait_type":"level","value":"1"}],"amount":"3"}'
+curl -s -X POST $P/admin/contract/send -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+  -d '{"contract":"0xCollection","function":"mint","args":{"name":"Red dragon","image":"https://example.com/red.png","description":"Level 1","attributes":[{"trait_type":"level","value":"1"}],"price":"3"}}'
 ```
 
 ```
-{ "success": true, "tokenId": "1", "contract": "0x…", "version": 3, "owner": "<center>", "price": "3", "tokenURI": "data:application/json;base64,…", "txHash": "0x…", ... }
+{ "success": true, "contract": "0xCollection", "function": "mint(address,uint256,string,uint256)", "from": "<center>", "txHash": "0x…",
+  "result": { "minted": true, "tokenId": "1", "owner": "<center>", "price": "3",
+              "metadata": { "name": "Red dragon", "description": "Level 1", "image": "https://example.com/red.png", "attributes": [ … ] } }, ... }
 ```
 
-The center mints the NFT to itself, for sale. `amount` is the **price** (ETH). It is fixed for good,
-and every sale (first sale and resales) is at this price. Minting is not tied to a section and
-pays nothing. The metadata is stored on chain in the token URI (at most 48 KB of JSON).
+The center mints the NFT to itself, for sale. `price` is in ETH. It is fixed for good, and every
+sale (first sale and resales) is at this price. Minting is not tied to a section and pays nothing.
+`name` and `image` are required. Metadata too large for a block is refused (`metadata is too large
+for the chain`). A section can't mint: `mint` through `/contract/send` reverts with `not minter`.
 
 ## 4. A buyer: a section's user account
 
@@ -145,18 +161,19 @@ buyer field suggests the section user accounts, with their section and balance. 
 
 **Or with curl**, with the key of the buyer's section, through the generic
 [`POST /contract/send`](../reference/proxy-api.md#post-contractsend--write). `contract` is the
-collection's address (`GET /nft/collections`), `from` the buyer. Leave out the payee and `value`:
-the proxy fills in the buyer's section's consumption account and the token's price.
+collection's address (`GET /contract/list?type=nft`), `from` the buyer. Leave out the payee and
+`value`: the proxy fills in the buyer's section's consumption account and the token's price.
 
 ```bash
-curl -s -X POST http://192.168.68.151:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
-  --data '{"contract":"0xCollection","function":"buy","args":["7"],"from":"0xBuyer"}'
+curl -s -X POST $P/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xCollection","function":"buy","args":{"tokenId":"1"},"from":"0xBuyer"}'
 ```
 
 ```
 { "success": true, "section": {"id": 1, "name": "Shop A"}, "function": "buy(uint256,address)", "value": "3.0", "txHash": "0x…",
-  "events": [ { "name": "Sold", "args": { "tokenId": "7", "seller": "<center>", "buyer": "0xBuyer", "price": "…",
-  "paidTo": "<Shop A's consumption account>" } }, ... ] }
+  "result": { "sale": "first sale", "tokenId": "1", "seller": "<center>", "buyer": "0xBuyer", "price": "3",
+              "paidTo": "<Shop A's consumption account>" },
+  "events": [ { "name": "Sold", "args": { … } }, ... ] }
 ```
 
 The buyer signs one atomic `buy(tokenId, payee)` transaction. It pays exactly the price and receives
@@ -165,9 +182,10 @@ the token; if any check fails, nothing moves.
 - **First sale** (the center holds the token): the price goes to the buyer's section's
   **consumption account**. The contract itself checks that `payee` is the consumption account of an
   active section (`SectionRegistry.isConsumptionAccount`).
-- **Resale** (a user holds it): two calls. The seller's section first sends `approve` from the seller
-  (`"function":"approve","args":["0xCollection","7"],"from":"0xSeller"`); then the buyer's section
-  sends `buy` as above. The price goes to the **seller** (the contract ignores the payee). Each
+- **Resale** (a user holds it): two calls. The seller's section first puts the token up for sale
+  with `approve` from the seller (`"function":"approve","args":{"tokenId":"1"},"from":"0xSeller"`:
+  the proxy approves the collection itself; `result.forSale` is `true`); then the buyer's section
+  sends `buy` as above (`result.sale` is `"resale"`). The price goes to the **seller** (the contract ignores the payee). Each
   section signs only for its own accounts, so the buyer may be in **another section** than the seller.
 
 Without the key, the proxy answers 401 `X-Section-Key is required`. The one exception is the admin
@@ -175,8 +193,7 @@ API caller: the chainlens Sell form needs no section key, because chainlens call
 admin token from an address in the proxy's `ADMIN_ALLOWED_IPS`; the section is then the buyer's. For
 a resale the seller must have approved first.
 
-`POST /nft/transfer` on a version-3 collection was removed: it answers 410 with a pointer to
-`/contract/send`.
+The old `POST /nft/transfer` was removed: it answers 410 with a pointer to `/contract/send`.
 
 ## 6. Check
 
@@ -185,26 +202,37 @@ a resale the seller must have approved first.
   - the buyer's account page shows its section and the NFT;
   - the **Sections** page shows the consumption account's balance;
   - the dashboard's **Section statistics** count the sale (*NFT sales*, *Income*).
-- **Proxy:** `GET /nft/1?collection=DRG` returns the token, its owner, token URI and metadata, and
-  `GET /nft/owner/0xBuyer…` lists the tokens the buyer owns.
+- **Proxy:** one batch `POST /contract/call` reads the token's owner, price and metadata, and
+  `POST /contract/events` lists the tokens the buyer owns (`current: true`), the token's mint
+  transaction (a `Transfer` from `0x0…0`) and the sales (`Sold`, prices in ETH):
+
+  ```bash
+  curl -s -X POST $P/contract/call -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+    --data '{"calls":[{"contract":"0xCollection","function":"ownerOf","args":{"tokenId":"1"}},{"contract":"0xCollection","function":"priceOf","args":{"tokenId":"1"}},{"contract":"0xCollection","function":"tokenURI","args":{"tokenId":"1"}}]}'
+  # results: { "tokenId": "1", "owner": "0xBuyer" }, { "tokenId": "1", "price": "3" }, { "tokenId": "1", "metadata": {…}, "image": "https://example.com/red.png" }
+  curl -s -X POST $P/contract/events -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+    --data '{"contract":"0xCollection","event":"Transfer","where":{"to":"0xBuyer"},"current":true}'
+  curl -s -X POST $P/contract/events -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+    --data '{"contract":"0xCollection","event":"Transfer","where":{"from":"0x0000000000000000000000000000000000000000","tokenId":"1"}}'
+  ```
 - **Grafana → Sections:** the `nft_first_sale` / `nft_resale` operations and the ETH they moved.
 - **Money:** sweep the consumption account to the payment account, and pay it back to SENDER01, on
   the chainlens **Sections** page.
 
-## Version-2 collections
+## Version-2 collections: retired
 
 Collections deployed before sections ([`NftCollectionV2.sol`](../../proxy/contracts/NftCollectionV2.sol),
-minted by SENDER01) keep working without a key: `/nft/mint` mints to SENDER01, and `/nft/transfer`
-(version 2 only) sells with `buy(tokenId)`, paying SENDER01 on a first sale and the seller on a resale. A proxy
-without sections (development) deploys version-2 collections with `/nft/deploy`
-([proxy](../components/proxy.md#nft-collections)).
+minted by SENDER01) are **retired**: the proxy no longer reads, mints or sells them, and their
+routes (`/nft/mint`, `/nft/transfer`, `/nft/deploy`…) answer 410. The tokens stay on the chain.
+New collections are version 3, which needs sections: a proxy without sections (development) has no
+NFT collections.
 
 ## Errors
 
 | Message | Cause |
 |---|---|
 | `X-Section-Key is required: …` | no `X-Section-Key` header on `/contract/send` (and not the admin API caller) |
-| 410 `version-3 collections are sold with POST /contract/send …` | `/nft/transfer` on a version-3 collection |
+| 410 `POST /nft/transfer was removed: use POST /contract/send …` | an old `/nft/*` route ([removed routes](../reference/proxy-api.md#removed-routes)) |
 | `unknown section key` | the key was rotated, or the section archived |
 | `… is not a user account of a section` | the buyer (`from`) was not created with `/createaccount` and a section key |
 | `section "…" is disabled` | the buyer's section is disabled (Sections page) |
@@ -213,6 +241,7 @@ without sections (development) deploys version-2 collections with `/nft/deploy`
 | `value: the price is N ETH …` / `payee: …` | a wrong `value` or payee was given: leave them out |
 | `the transaction would revert: …` | the contract refused the sale, e.g. a resale without the seller's `approve` |
 | `token not found` / `… already owns token N` | wrong token id, or the buyer already owns it |
-| `no NFT collection named "…"` | wrong name or symbol: use the address, or `GET /nft/collections` |
-| `"…" matches several collections` | use the address |
-| `the collection's minter 0x… is not the contract account center` | the collection was not deployed by the contract account center (deployed elsewhere) |
+| `0x… is not a registered contract` | wrong address: `GET /contract/list?type=nft` lists the collections |
+| `args: no value for "tokenId" (…)` | `args` misnamed (e.g. `{"id": …}` is accepted, `{"token": …}` is not) |
+| `the transaction would revert: not minter` | `mint` through `/contract/send`: only the center mints, use `/admin/contract/send` |
+| 409 `a collection named "…" (…) exists at 0x…` | the name or symbol is used by another NFT collection |

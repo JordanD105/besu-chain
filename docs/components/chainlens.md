@@ -57,7 +57,10 @@ public on chain anyway.
 
 Hidden until enabled, and usable only from `operator_ip` and `chainlens_deploy_ips`, with the
 admin token (`cat ansible/state/secrets/chainlens_deploy_token`; kept for the browser tab only).
-They forward to the proxy's admin API, so the proxy signs, never chainlens.
+They forward to the proxy's admin API, so the proxy signs, never chainlens: **Deploy** and the
+nickname collection's deploy call `/admin/contracts/deploy`; **Mint** and the nickname settings call
+`/admin/contract/send` (signed by the contract account center); **Sell** calls `/contract/send`
+(signed by the buyer); the Nicknames page reads `/admin/nickname`.
 
 | Page / card | Enabled by | Does | Guide |
 |---|---|---|---|

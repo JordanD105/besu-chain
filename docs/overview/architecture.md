@@ -85,6 +85,11 @@ exactly the price (the proxy fills in the price and the payee). On a first sale 
 checks that the money goes to a live section's consumption account; on a resale (after the seller's
 `approve`) it goes to the seller. NFT and money move together or not at all.
 
+**Contracts:** applications read and write every registered contract (NFT collections, nicknames,
+others) through one generic API: `/contract/call`, `/contract/send`, `/contract/events` and
+`/contract/list`; the admin's writes as the contract account center (mint, nickname settings) go
+through `/admin/contract/send` ([proxy API](../reference/proxy-api.md#contracts)).
+
 The money flow of a section: [sections](../features/sections.md).
 
 ## What keeps running when something fails

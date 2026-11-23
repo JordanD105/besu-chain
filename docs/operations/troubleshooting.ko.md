@@ -74,7 +74,8 @@
 | `403 section "…" is disabled` | 섹션이 비활성화됨 | chainlens Sections 페이지에서 활성화합니다 |
 | 섹션이 계정을 생성할 수 없음 (`SectionUpfrontEmpty` / `Low`) | 선지급 계정이 비어 있음 | Sections 페이지에서 충전합니다 |
 | NFT 판매: `wrong price` / 잔액 부족 | 구매자의 잔액이 가격 + 가스보다 적음 | 구매자에게 ETH를 보냅니다(−x) |
-| `not minter` | 컬렉션이 컨트랙트 계정 센터에서 배포되지 않음 | chainlens 또는 `/nft/deploy`를 통해 컬렉션을 배포합니다 |
+| `not minter` | `/contract/send`로 `mint`를 보냈거나, 컬렉션이 컨트랙트 계정 센터에서 배포되지 않음 | `POST /admin/contract/send`로 민팅합니다. 컬렉션은 chainlens 또는 `nft-collection` 템플릿으로 배포합니다 |
+| `410 … was removed: use …` | 이전 `/nft/*`, `/nickname/*` 또는 `/admin/nickname/*` 라우트 | 메시지가 알려 주는 호출을 사용합니다([제거된 라우트](../reference/proxy-api.md#removed-routes)) |
 
 ## 호스트 {#hosts}
 

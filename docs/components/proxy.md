@@ -44,8 +44,8 @@ client → proxy :30000 ──eth_sendTransaction──► mpc-coordinator :9100
 The proxy code is one file, [`proxy/stress-latest.js`](../../proxy/stress-latest.js). Every
 endpoint, with request bodies and answers, is in the [proxy API reference](../reference/proxy-api.md).
 
-Steps 1 to 5 set up a **development** proxy without sections: calls use `SENDER01`, and NFT
-collections are version 2. Production adds the SectionRegistry, the contract account center and
+Steps 1 to 5 set up a **development** proxy without sections: calls use `SENDER01`, and there are
+no contracts or NFT collections (they need sections). Production adds the SectionRegistry, the contract account center and
 the admin API ([Sections and registered contracts](#sections-and-registered-contracts)); Ansible
 sets all of it up.
 
@@ -53,8 +53,6 @@ Everything in steps 1 to 5 was tested end to end:
 
 - `/createaccount` created an MPC key in about 0.7 s.
 - `/transfer` from a user account took about 1.5 s on the cold path.
-- `/nft/deploy` set the MPC sender as minter.
-- `/nft/mint`, paid from a user account, took about 1.8 s.
 
 The examples assume one Docker host, `192.168.68.130` (development). Replace it with your host's IP.
 
@@ -94,8 +92,8 @@ If `init` says **already initialised**, a cluster from an earlier run exists. Ei
 {"key_id":"0x3a55…111d","address":"0x3a554bc204821a020b6a12749aaf95b23b82111d", ...}
 ```
 
-**This address is `SENDER01`**, the account that funds new accounts and, without sections, mints
-NFTs (version-2 collections). Write it down. Besu does not need to be running yet: key generation
+**This address is `SENDER01`**, the account that funds new accounts (and, with sections, the
+sections' top-ups). Write it down. Besu does not need to be running yet: key generation
 only involves the 3 MPC nodes.
 
 Check the signing policy in `quickstart/cluster.json`. Every node enforces it:
@@ -188,7 +186,6 @@ SENDER01=0x3a554bc204821a020b6a12749aaf95b23b82111d
 MPC_ADMIN_URL=http://192.168.68.130:9100
 MPC_ADMIN_TOKEN=<value of MPC_ADMIN_TOKEN in mpc-signer/quickstart/.env>
 
-# leave NFT_CONTRACT unset: deploy a new collection in step 5
 ```
 
 `proxy/docker-compose.yml` sets `REDIS_IP=redis`, `REDIS_PORT=6379` and `LISTEN_HOST=0.0.0.0` for
@@ -222,33 +219,11 @@ curl -s localhost:30000/transfer -H 'content-type: application/json' \
   --data '{"from":"0x1293…717d","to":"0x3a55…111d","amount":"1.5","memo":"hello"}'
 ```
 
-Deploy an NFT collection. Without sections, the proxy deploys a **version-2** collection and
-`SENDER01` is its minter:
-
-```bash
-curl -s localhost:30000/nft/deploy -H 'content-type: application/json' --data '{"name":"MPC NFT","symbol":"MNFT"}'
-```
-
-Mint. Every NFT is minted to `SENDER01` and nothing is paid. `amount` is the NFT's **price**,
-stored on chain in the collection:
-
-```bash
-curl -s localhost:30000/nft/mint -H 'content-type: application/json' \
-  --data '{"name":"Badge 1","image":"https://example/badge.png","amount":"0.5"}'
-```
-
-Sell it to the user (a version-2 collection, as in development). This is **one** `buy` transaction
-signed by the buyer, carrying exactly the price. The NFT moves and the ETH goes to `SENDER01`
-atomically; if anything fails, nothing moves:
-
-```bash
-curl -s localhost:30000/nft/transfer -H 'content-type: application/json' \
-  --data '{"to":"0x1293…717d","tokenId":"1"}'
-```
-
-With sections configured (production), collections are version 3: a sale is `buy` through
-`POST /contract/send` with a section key, and `/nft/transfer` answers 410. See
-[NFT collections](#nft-collections) and the [NFT workflow](../features/nft-workflow.md).
+NFT collections, nicknames and other contracts need sections (the SectionRegistry and the contract
+account center): without them `/contract/*` answers 503 `sections are not configured`. With
+sections, a collection is deployed from a template, minted by the center and sold with `buy`
+through `POST /contract/send`. See [NFT collections](#nft-collections) and the
+[NFT workflow](../features/nft-workflow.md).
 
 Signer side:
 
@@ -272,14 +247,12 @@ Read at start-up. In production Ansible writes the file
 | `SIGNER_IP`, `SIGNER_PORT` | – | the MPC coordinator's signer JSON-RPC (port 9100; production: the VIP `.150`) |
 | `MPC_ADMIN_URL`, `MPC_ADMIN_TOKEN` | – | coordinator admin API: key generation for `/createaccount` and section accounts, pool classes |
 | `MPC_NEW_ACCOUNT_POOL` | `small` | pool class of a new account when the request names none: `big`, `small`, `none` |
-| `SENDER01` | – | the hot MPC key: funds keyless `/createaccount`, section top-ups; minter of version-2 collections |
+| `SENDER01` | – | the hot MPC key: funds keyless `/createaccount`, section top-ups |
 | `REDIS_IP`, `REDIS_PORT` | –, 36379 | Redis (set by `docker-compose.yml` to the `redis` container) |
 | `REDIS_IMAGE`, `REDIS_EXPORTER_IMAGE`, `REDIS_EXPORTER_PORT` | `redis:8.10.3`, `oliver006/redis_exporter:v1.67.0`, 9121 | used by `docker-compose.yml` only |
-| `NFT_CONTRACT` | – | optional: the default NFT collection (otherwise the first one deployed or found) |
-| `NFT_BASE_URL` | – | optional: public base URL for NFT metadata links |
 | `REGISTRY_CONTRACT`, `REGISTRY_ADMIN` | – | the SectionRegistry and the MPC key that writes it (Ansible: `state/registry.json`). Both set = sections on |
 | `REGISTRY_FROM_BLOCK` | 0 | the block the registry was deployed in; its events are read from there |
-| `CONTRACT_CENTER` | – | the contract account center (Ansible: `state/contract-center`): deploys contracts and version-3 collections, mints their NFTs |
+| `CONTRACT_CENTER` | – | the contract account center (Ansible: `state/contract-center`): deploys contracts and NFT collections, mints their NFTs, signs `/admin/contract/send` |
 | `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | – | the admin API (`/admin/*`): token (16+ characters) and allowed source addresses or networks. Ansible: `state/secrets/proxy_admin_token`, `operator_ip` and the monitoring host. Without both the admin API answers 404 |
 | `SECTION_KEY_REQUIRED` | `false` | `true`: calls without `X-Section-Key` are refused (Ansible: `sections_required`) |
 | `UPFRONT_LOW_BALANCE_ETH`, `SENDER01_LOW_BALANCE_ETH` | 0 (off) | alert thresholds published on `/metrics` (Ansible: `upfront_low_balance_eth`, `sender01_low_balance_eth`) |
@@ -304,9 +277,8 @@ Which account a request may send from is decided before that:
 | keyless `/createaccount` | `SENDER01` |
 | keyless `/transfer {from, to, amount}` | `from` (a negative `amount` sends from `to` to `from`); a section's account, the registry admin or the contract center is refused (403) |
 | `/createaccount`, `/transfer` with `X-Section-Key` | the section's upfront account, or the user account for `+x` ([sections](../features/sections.md#application-api-section-calls)) |
-| `/nft/mint` | the collection's minter: `SENDER01` (v2) or the contract account center (v3) |
-| `/nft/transfer` (version 2) | the buyer (`buy`), plus the seller's `approve` for a resale |
-| `/contract/send` | `from`, a user account of the caller's section (also the version-3 NFT `buy` / `approve` and the nickname `buyNickname` / `upgradeEdge`) |
+| `/contract/send` | `from`, a user account of the caller's section (also the NFT `buy` / `approve` and the nickname `buyNickname` / `upgradeEdge`) |
+| `/admin/contract/send` | the contract account center (NFT `mint`, nickname price, edge levels, reserved names) |
 | `/admin/*` writes | the registry admin (registry), `SENDER01` / section accounts (money), the contract account center (deployments) |
 
 ## Nonces and balance checks: fast path + periodic chain check
@@ -381,10 +353,7 @@ while the connection is down (alert `ProxyRedisDisconnected`).
 |---|---|
 | `nonce:<sender>` | the nonce is counted in memory; when the proxy starts (or after an error) it takes max(Redis, `eth_getTransactionCount(pending)`), so a stale or missing value is harmless |
 | `pending-value:<sender>` | kept in memory; entries are dropped once their nonce is mined |
-| `nft:contract` (default collection) | `NFT_CONTRACT` env → memory → Redis → **found on chain** (SENDER01's deployment addresses whose `minter()` is SENDER01) |
-| `nft:collections` (all collections) | memory → Redis → found on chain the same way; version-3 collections are always added from the SectionRegistry (`ContractRegistered`, kind NFT) |
-| `nft:nextId:<contract>` | per collection: max(memory/Redis, highest token id minted on chain) + 1 |
-| `nft:meta:<contract>:<tokenId>` | metadata decoded from the token's on-chain `tokenURI` (`data:application/json;base64,…`) |
+| `nft:nextId:<contract>` | the next token id of a `mint` per collection: max(memory/Redis, highest token id minted on chain) + 1 |
 
 Sections, their accounts and the registered contracts are never in Redis: the proxy reads them from
 the SectionRegistry on chain (sections cached for 10 s, contracts re-read every 10 s).
@@ -397,31 +366,26 @@ Still one proxy replica: the per-sender lock is in process memory.
 
 ## NFT collections
 
-Two versions of the collection contract are supported. Older collections on the chain are ignored
-in listings and refused when selected.
+The proxy serves one collection contract: **version 3** ([`NftCollection.sol`](../../proxy/contracts/NftCollection.sol),
+compiled into the image as `nft-collection-v3.json`). It needs sections and `CONTRACT_CENTER`.
 
-| | Version 3 ([`NftCollection.sol`](../../proxy/contracts/NftCollection.sol)) | Version 2 ([`NftCollectionV2.sol`](../../proxy/contracts/NftCollectionV2.sol)) |
-|---|---|---|
-| Deployed by `/nft/deploy` when | sections are configured and `CONTRACT_CENTER` is set | otherwise (development) |
-| Deployed and minted by | the contract account center | `SENDER01` |
-| Registered in the SectionRegistry | yes (kind NFT) | no |
-| Sale | `POST /contract/send` `buy` from the buyer, with `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. the chainlens Sell form) may send it without a key: the section is then the buyer's. `/nft/transfer` answers 410 | `/nft/transfer`, no key |
-| First sale pays | the section's consumption account (checked on chain by `isConsumptionAccount`) | `SENDER01` |
-| Resale pays | the seller; the seller's section first sends `approve(collection, tokenId)` with `/contract/send`, then the buyer's section sends `buy` (the sections may differ) | the seller |
+| | |
+|---|---|
+| Deployed by | the contract account center: `POST /admin/contracts/deploy` with `{"template": "nft-collection", "name", "symbol"}`, or the chainlens Deploy page. Names and symbols are unique among the NFT collections (409) |
+| Registered in the SectionRegistry | yes (kind NFT); `GET /contract/list?type=nft` lists the collections |
+| Minted by | the contract account center: `POST /admin/contract/send` `mint` (the proxy builds the metadata, picks the next token id, converts the price) |
+| Sale | `POST /contract/send` `buy` `{ tokenId }` from the buyer, with `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. the chainlens Sell form) may send it without a key: the section is then the buyer's |
+| First sale pays | the section's consumption account (checked on chain by `isConsumptionAccount`) |
+| Resale pays | the seller; the seller's section first sends `approve` `{ tokenId }` with `/contract/send` (it approves the collection), then the buyer's section sends `buy` (the sections may differ) |
+| Reading | `/contract/call` (owner, price, metadata; in batches) and `/contract/events` (tokens owned, mint transaction, sales) |
 
-In both, the price is set at mint (`amount`) and fixed for every later sale, and a sale is one
-`buy` transaction signed by the buyer: the token and the ETH move together or not at all.
+The price is set at mint and fixed for every later sale, and a sale is one `buy` transaction
+signed by the buyer: the token and the ETH move together or not at all. Token ids start at 1 in
+each collection.
 
-`POST /nft/deploy` deploys a **new** collection every time (default name `Proxy NFT`, symbol
-`PNFT`). The first one is the default, and `GET /nft/collections` lists them all. Names and
-symbols must be unique across collections; a duplicate is rejected with 409. Version-3 collections
-can also be deployed from the chainlens Deploy page ([NFT workflow](../features/nft-workflow.md)).
-
-Choose a collection with `"collection"` in the `/nft/mint` and (version 2) `/nft/transfer` body, or with
-`?collection=` on `GET /nft/:id`, `/nft/:id/metadata` and `/nft/owner/:address`. The value can be
-the collection's **name**, its **symbol** (both case-insensitive) or its **address**. Without it,
-the default collection is used, so single-collection requests still work. `contract` is accepted
-as an alias. Token ids start at 1 in each collection. Examples are in the
+**Version-2 collections** ([`NftCollectionV2.sol`](../../proxy/contracts/NftCollectionV2.sol), minted
+by `SENDER01`) are retired: the proxy no longer reads, mints or sells them. The old `/nft/*` routes
+answer 410 with the call that replaces each. Examples are in the
 [proxy API reference](../reference/proxy-api.md#nft-collections).
 
 ## Sections and registered contracts
@@ -435,9 +399,9 @@ registry 0x… v2, N section(s), admin API on`).
 
 | Feature | Endpoints | Guide |
 |---|---|---|
-| section calls | `/createaccount`, `/transfer` (+x / −x), `/contract/send` (also NFT v3 sales and nicknames) with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
+| section calls | `/createaccount`, `/transfer` (+x / −x), `/contract/send` (also NFT sales and nicknames) with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
 | admin API | `/admin/sections/*`: create, rename, info, key rotation, enable / disable, top-up, sweep, pay back, replace an account, archive, user accounts | [sections](../features/sections.md#admin-api) |
-| contracts | `/admin/contracts/check` and `/deploy` (signed by the contract account center, registered with their ABI); `/contract/call` (read) and `/contract/send` (write, signed by a user account of the caller's section) | [contract deployment](../features/contract-deployment.md) |
+| contracts | `/admin/contracts/check` and `/deploy` (signed by the contract account center, registered with their ABI; templates for the platform's contracts); `/contract/call` (read, also in batches), `/contract/events`, `/contract/list`; `/contract/send` (write, signed by a user account of the caller's section) and `/admin/contract/send` (signed by the center) | [contract deployment](../features/contract-deployment.md) |
 
 The full list with bodies and answers is in the [proxy API reference](../reference/proxy-api.md).
 
@@ -450,7 +414,7 @@ active proxy through its floating IP (`monitoring/prometheus/targets/proxy.yml`,
 | Group | Metrics |
 |---|---|
 | process | `proxy_up`, `proxy_process_resident_memory_bytes`, `proxy_process_heap_used_bytes`, `proxy_process_start_time_seconds`, `proxy_event_loop_lag_p99_seconds`, `proxy_event_loop_lag_max_seconds` (since the last scrape) |
-| HTTP | `proxy_http_requests_total{route, method, code}` (route = the pattern, e.g. `/nft/:tokenId`; `unmatched` for unknown paths; code `aborted` when the client left first), `proxy_http_request_duration_seconds{route}` (histogram, buckets 0.01–60 s), `proxy_http_in_flight` |
+| HTTP | `proxy_http_requests_total{route, method, code}` (route = the pattern, e.g. `/transfer/:txHash`; `unmatched` for unknown paths; code `aborted` when the client left first), `proxy_http_request_duration_seconds{route}` (histogram, buckets 0.01–60 s), `proxy_http_in_flight` |
 | Redis | `proxy_redis_up` (the proxy's own connection) |
 | senders | `proxy_senders_tracked`, and per `sender`: `proxy_sender_next_nonce`, `_pending_nonce`, `_confirmed_nonce`, `_inflight_transactions`, `_waiting_above_gap`, `_gap_seconds`, `_stalled`, `_stall_seconds`, `_check_error`, and the counters `_nonce_repairs_total`, `_filler_transactions_total`, `_nonce_adopted_total`, `_stalls_total` |
 | sections | `proxy_section_*`, `proxy_sender01_*`, `proxy_sections_metrics_*`: see [sections, monitoring](../features/sections.md#monitoring) |
@@ -488,8 +452,7 @@ More cases: [troubleshooting](../operations/troubleshooting.md#proxy-and-transac
 |---|---|---|
 | `policy: value above limit` | the amount is above `max_value_wei` in `quickstart/cluster.json` (default 1000 ETH per transaction) | raise it, then `./quickstart.sh down && ./quickstart.sh up` |
 | `/createaccount` or `/transfer` returns a `txHash`, but chainlens shows no transaction and the receipt is `null` | **nonce gap**: a nonce was used but its transaction never reached the chain, so later transactions wait in Besu's pool. | the proxy repairs this by itself (see *Nonces and balance checks*): check `GET /status/senders` (`gapSeconds`, `nonceRepairs`) and the log. With an old proxy: fill the gap once with `eth_sendTransaction` on the coordinator from the sender to itself, `value 0x0`, `nonce` = the missing one. |
-| `NFT_CONTRACT 0x… has no contract on this chain (was the chain reset?)` | `NFT_CONTRACT` in `proxy/.env` points to a contract from **before the chain was reset** | delete the `NFT_CONTRACT` line and run `docker compose up -d --build`; the proxy finds the collections on chain, or deploy one with `/nft/deploy` |
-| `collection 0x… is an old version without buy()` | the collection predates version 2 | deploy a new collection |
+| 410 `… was removed: use …` | an old `/nft/*`, `/nickname/*` or `/admin/nickname/*` route | use the call the message names ([removed routes](../reference/proxy-api.md#removed-routes)) |
 | `sender not managed by the MPC signer` | the `from` address is not an MPC key of this cluster | create accounts with `/createaccount` |
 | `X-Section-Key is required` | `SECTION_KEY_REQUIRED=true`, or a call that always needs a key (`/contract/send`) | send the section's key ([sections](../features/sections.md#application-api-section-calls)) |
 | `sections are not configured (REGISTRY_CONTRACT, REGISTRY_ADMIN)` (503) | a section call or admin call on a proxy without the registry | run `ansible-playbook 06-proxy.yml`, or set both in `.env` |

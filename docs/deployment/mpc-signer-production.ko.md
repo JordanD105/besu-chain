@@ -180,7 +180,7 @@ sha256sum cluster.json
 | `CHAIN_ID` | Besu 제네시스 `chainId` |
 | `MAX_VALUE_WEI` | 트랜잭션당 최대 값(기본값 1000 ETH) |
 | `MAX_GAS` | 트랜잭션당 최대 가스 한도 |
-| `ALLOWED_TO` | 선택적 목적지 허용 목록, 예: `ALLOWED_TO="0xabc…,0xdef…"`. **프록시용으로는 비워 두십시오**: 목록이 비어 있지 않으면 모든 키에 대해 다른 모든 목적지와 모든 컨트랙트 생성을 거부하므로 `/createaccount` 자금 충전, 새 주소로의 `/transfer`, `/nft/deploy`가 실패합니다. 잘못된 주소는 거부됩니다. |
+| `ALLOWED_TO` | 선택적 목적지 허용 목록, 예: `ALLOWED_TO="0xabc…,0xdef…"`. **프록시용으로는 비워 두십시오**: 목록이 비어 있지 않으면 모든 키에 대해 다른 모든 목적지와 모든 컨트랙트 생성을 거부하므로 `/createaccount` 자금 충전, 새 주소로의 `/transfer`, 컨트랙트 배포(`/admin/contracts/deploy`)가 실패합니다. 잘못된 주소는 거부됩니다. |
 
 **배포:** `cluster.json`을 노드 3개 모두(`docker-compose.yml` 옆)와 모든 코디네이터에 복사합니다.
 공개 파일이지만 무결성이 중요하므로, 사용하기 전에 **각 팀이 운영자의 `sha256sum`과 비교**합니다.
@@ -296,7 +296,9 @@ COORD=http://192.168.68.135:9100 ADMIN_TOKEN=<MPC_ADMIN_TOKEN> mpc-signer/deploy
 
   두 프록시 호스트에 같은 `.env`를 사용합니다(`proxy/.env.example`).
   [프록시 (애플리케이션 API)](../components/proxy.md)를 참조하십시오.
-- **컬렉션:** `/nft/deploy`로 NFT 컬렉션을 배포합니다. 민터는 `SENDER01`입니다.
+- **컬렉션:** NFT 컬렉션에는 섹션(Ansible이 설정하는 SectionRegistry와 컨트랙트 계정 센터)이 필요합니다.
+  `/admin/contracts/deploy`의 `nft-collection` 템플릿이나 chainlens Deploy 페이지로 배포하며, 민터는 컨트랙트
+  계정 센터입니다([NFT 워크플로](../features/nft-workflow.md)).
 
 ## 10. 운영 시작 전 확인 {#10-verify-before-going-live}
 

@@ -223,7 +223,7 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 
 | 패널 | 표시 내용 |
 |---|---|
-| **Requests per second by route** (경로별 초당 요청) | 경로 패턴별로 누적(토큰별이 아닌 `/nft/:tokenId`) |
+| **Requests per second by route** (경로별 초당 요청) | 경로 패턴별로 누적(트랜잭션별이 아닌 `/transfer/:txHash`) |
 | **Errors per second (4xx and 5xx)** (초당 오류, 4xx 및 5xx) | 경로와 상태별: **5xx** 프록시가 실패함, **4xx** 거부됨(잘못된 입력, 잘못된 키, 허용되지 않음), **aborted** 클라이언트가 먼저 연결을 끊음 |
 | **Answer time** (응답 시간) | `/createaccount`와 `/admin`을 제외한 모든 경로의 p50, p95, p99 |
 | **95th percentile by route** (경로별 95번째 백분위) | 원래 느린 경로를 포함한 모든 경로 |

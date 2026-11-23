@@ -42,22 +42,26 @@ The **nickname token** is this page: a name a user buys for themself, which can 
 ## How it works
 
 1. The application calls `POST /contract/send` with the section's key: function `buyNickname`,
-   args `[nickname]`, `from` = the user account.
+   args `{ "nickname": "Alice" }`, `from` = the user account.
 2. The proxy normalizes the name (NFC, trim), checks 1–256 characters and that it is free, and fills
    in the **payee** (the section's consumption account) and the **value** (the nickname price).
 3. The MPC signer signs `buyNickname(nickname, consumption)` **as the user account**.
 4. The contract asks the SectionRegistry: is the buyer a user account, is the payee its section's
    consumption account? Then it mints the token and forwards the price.
-5. Later, `POST /contract/send` with `upgradeEdge`, args `[level]`, sends
+5. Later, `POST /contract/send` with `upgradeEdge`, args `{ "level": 2 }`, sends
    `upgradeEdge(level, consumption)` with the quoted price; the edge is raised and the picture redrawn.
 
-Writes have no route of their own: they use the generic [`POST /contract/send`](../reference/proxy-api.md#post-contractsend--write)
-like any registered contract. The old `POST /nickname/buy` and `POST /nickname/edge` were removed
-(410). The read routes (`/nickname/edges`, `/nickname/check`, `/nickname/of/:account`,
-`/nickname/quote`) stay.
+There are no nickname routes: reads and writes use the generic contract API, like any registered
+contract ([proxy API, contracts](../reference/proxy-api.md#contracts)). Reads go through
+`POST /contract/call`, the user's writes through [`POST /contract/send`](../reference/proxy-api.md#post-contractsend--write),
+and the admin's writes (price, levels, reserved names) through `POST /admin/contract/send`, signed by
+the contract account center. With `args` as an object, the values are friendly (prices in ETH,
+`#rrggbb` colors, pattern names) and the answer has a friendly `result`. The old `/nickname/*` and
+`/admin/nickname/*` routes answer 410, except `GET /admin/nickname` ([removed routes](../reference/proxy-api.md#removed-routes)).
 
 - The collection is deployed by the **contract account center** and registered in the SectionRegistry
-  as a common contract. The proxy uses the **latest** registered contract that has `buyNickname`.
+  as a common contract. The one in use is the **latest** registered contract that has `buyNickname`:
+  `GET /contract/list?type=nickname` marks it `current: true`.
 - The picture (`tokenURI`) is made **on the chain**: JSON and SVG, base64. It reads the edge level's
   style each time, so a style edit redraws every nickname at that level (ERC-4906 `BatchMetadataUpdate`
   is emitted for wallets and explorers).
@@ -83,67 +87,90 @@ nicknames already at it keep it.
 ## 1. Deploy the collection
 
 Once, in chainlens **Nicknames** (`#/nicknames`, shown when `chainlens_sections_enabled: true`): name,
-symbol, nickname price and the name of the default edge, then **Deploy**. Or with the admin API:
+symbol, nickname price and the name of the default edge, then **Deploy**. Or with the admin API and
+the `nickname-collection` template:
 
 ```bash
-T=$(cat ansible/state/secrets/proxy_admin_token)
+P=http://192.168.68.151:30000; T=$(cat ansible/state/secrets/proxy_admin_token)
 curl -s -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -X POST \
-  --data '{"name":"Nicknames","symbol":"NICK","price":"1","edge0":"Simple"}' \
-  http://<proxy>:30000/admin/nickname/deploy
+  --data '{"template":"nickname-collection","name":"Nicknames","symbol":"NICK","price":"1","edge0":"Simple"}' \
+  $P/admin/contracts/deploy
+# { "success": true, "name": "Nicknames", "kind": "common", "address": "0xNicknames", "codeCheck": "matches the artifact", … }
 ```
 
 A second deploy is refused (409) unless the body has `"another": true`: then the new collection is
-used from then on and the old one stays readable on the chain.
+used from then on and the old one stays readable on the chain. Applications find the collection in
+use with `GET /contract/list?type=nickname` (`current: true`).
 
 ![The chainlens Nicknames page: price, edge levels with a preview, reserved nicknames, the list](../images/screenshots/chainlens-nicknames.png)
 
 ## 2. Edge levels
 
 On the Nicknames page every level has an editor with a live preview; **Add level** adds the next one.
-With the API:
+With the API, the contract account center signs (`POST /admin/contract/send`):
 
 ```bash
-curl -s -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -X POST \
-  --data '{"name":"Gold","price":"1","color":"#f59e0b","color2":"#fde68a","width":6,"radius":20,"pattern":"gradient"}' \
-  http://<proxy>:30000/admin/nickname/edges
+send() { curl -s -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -X POST --data "$1" $P/admin/contract/send; }
+# add the next level
+send '{"contract":"0xNicknames","function":"addEdge","args":{"name":"Gold","price":"1","color":"#f59e0b","color2":"#fde68a","width":6,"radius":20,"pattern":"gradient"}}'
+# change a level: only the fields given change
+send '{"contract":"0xNicknames","function":"setEdge","args":{"level":1,"color":"#ff0000"}}'
+# { "success": true, …, "result": { "edge": { "level": 1, "name": "Silver", "price": "0.5", "enabled": true, "style": { "color": "#ff0000", … } } } }
+# the nickname price (new buyers only), reserved names
+send '{"contract":"0xNicknames","function":"setNicknamePrice","args":{"price":"1.25"}}'
+send '{"contract":"0xNicknames","function":"reserve","args":{"nicknames":["admin"],"reserved":true}}'
 ```
 
-The page also changes the nickname price (new buyers only) and **reserves** names nobody can buy
-(for example `admin`).
+The page does the same: it changes the nickname price and **reserves** names nobody can buy (for
+example `admin`). `GET /admin/nickname` gives the page's summary: price, levels with holder counts,
+the nicknames.
 
 ## 3. Buy a nickname
 
 The application calls with the section's key. `from` is a user account of that section with
-enough ETH for the price (the gas is free on this chain). The collection's address is `collection`
-in `GET /nickname/edges`. Leave out the payee and `value`: the proxy fills them in.
+enough ETH for the price (the gas is free on this chain). Leave out the payee and `value`: the
+proxy fills them in.
 
 ```bash
 K=sk_…   # the section's API key
-curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/edges"
-# { "collection": "0xNicknameCollection", "nicknamePrice": "1", "edges": [ … ] }
-curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/check?name=Alice"
-# { "nickname": "Alice", "characters": 5, "available": true, "reason": null, … }
-curl -s -X POST http://<proxy>:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
-  --data '{"contract":"0xNicknameCollection","function":"buyNickname","args":["Alice"],"from":"0xUser"}'
+call() { curl -s -X POST $P/contract/call -H 'Content-Type: application/json' -H "X-Section-Key: $K" --data "$1"; }
+# the collection in use
+curl -s -H "X-Section-Key: $K" "$P/contract/list?type=nickname"
+# { "contracts": [ { "address": "0xNicknames", "name": "Nicknames", "type": "nickname", "current": true, … } ] }
+# levels, price and a name, in one batch
+call '{"calls":[{"contract":"0xNicknames","function":"edgeCount"},{"contract":"0xNicknames","function":"nicknamePrice"},{"contract":"0xNicknames","function":"isAvailable","args":{"nickname":"Alice"}}]}'
+# results: { "count": 4, "edges": [ … ] }, { "price": "1" }, { "nickname": "Alice", "characters": 5, "available": true, "reason": null, … }
+curl -s -X POST $P/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xNicknames","function":"buyNickname","args":{"nickname":"Alice"},"from":"0xUser"}'
 # { "success": true, "function": "buyNickname(string,address)", "from": "0xUser", "value": "1.0", "txHash": "0x…",
-#   "events": [ { "name": "NicknameBought", "args": { "tokenId": "…", "buyer": "0xUser", "nickname": "Alice", "price": "…", "paidTo": "0xConsumption" } } ] }
+#   "result": { "nickname": "Alice", "tokenId": "…", "account": "0xUser", "level": 0, "edge": "Simple", "image": "data:image/svg+xml;base64,…",
+#               "price": "1", "paidTo": "0xConsumption" },
+#   "events": [ { "name": "NicknameBought", "args": { "tokenId": "…", "buyer": "0xUser", "nickname": "Alice", "price": "1", "paidTo": "0xConsumption" } } ] }
 ```
 
-`GET /nickname/of/0xUser` gives an account's nickname, level and picture at any time.
+`nicknameOf` gives an account's nickname, level and picture at any time:
+
+```bash
+call '{"contract":"0xNicknames","function":"nicknameOf","args":{"account":"0xUser"}}'
+# { "result": { "nickname": "Alice", "tokenId": "…", "account": "0xUser", "level": 0, "edge": "Simple", "image": "data:image/svg+xml;base64,…" }, … }
+# an account without one: { "result": { "account": "0xUser", "nickname": null }, … }
+```
 
 ## 4. Raise the edge
 
 ```bash
-curl -s -H "X-Section-Key: $K" "http://<proxy>:30000/nickname/quote?account=0xUser&level=2"
-# { "account": "0xUser", "level": 2, "price": "1.5" }
-curl -s -X POST http://<proxy>:30000/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
-  --data '{"contract":"0xNicknameCollection","function":"upgradeEdge","args":[2],"from":"0xUser"}'
-# { "success": true, "value": "1.5", …, "events": [ { "name": "EdgeUpgraded", "args": { "tokenId": "…", "owner": "0xUser", "fromLevel": "0", "toLevel": "2", "price": "…", "paidTo": "0xConsumption" } } ] }
+call '{"contract":"0xNicknames","function":"quote","args":{"account":"0xUser","level":2}}'
+# { "result": { "account": "0xUser", "level": 2, "price": "1.5" }, … }
+curl -s -X POST $P/contract/send -H 'Content-Type: application/json' -H "X-Section-Key: $K" \
+  --data '{"contract":"0xNicknames","function":"upgradeEdge","args":{"level":2},"from":"0xUser"}'
+# { "success": true, "value": "1.5", …, "result": { "nickname": "Alice", "level": 2, "edge": "Gold", "image": "…", "price": "1.5", "paidTo": "0xConsumption", … },
+#   "events": [ { "name": "EdgeUpgraded", "args": { "tokenId": "…", "owner": "0xUser", "fromLevel": "0", "toLevel": "2", "price": "1.5", "paidTo": "0xConsumption" } } ] }
 ```
 
-The value is the quote (the sum of the step prices); the event has the new level, and
-`GET /nickname/of/0xUser` the new picture. A lower or equal level, a level that doesn't exist or is
-closed for sale, and too little ETH are refused.
+The value is the quote (the sum of the step prices); `result` has the new level and the new
+picture. A lower or equal level, a level that doesn't exist or is closed for sale, and too little
+ETH are refused. Every purchase and raise is in the events: `POST /contract/events` with
+`NicknameBought` or `EdgeUpgraded` (prices in ETH).
 
 ## Money and monitoring
 
@@ -158,14 +185,13 @@ the consumption account the money goes on with the usual sweep and payback ([sec
 
 ## Errors
 
-| Status | Message (start) | Cause |
-|---|---|---|
-All from `POST /contract/send`, except the 503 (read routes).
+All from `POST /contract/send`, except the last rows (reads and admin writes).
 
 | Status | Message (start) | Cause |
 |---|---|---|
 | 400 | `nickname: 1 to 256 characters` | empty after trimming, or too long |
 | 400 | `nickname: no control characters and none of …` | a forbidden character |
+| 400 | `args: no value for "…" (…); given: …` | a misnamed or missing argument, e.g. `{ "name": … }` for `buyNickname` |
 | 400 | `args[0]: the edge level to reach (1 or more)` | `upgradeEdge` without a valid level |
 | 400 | `level N: …` (a contract reason) | the level is missing, closed for sale, or not above the current one |
 | 400 | `payee: the consumption account of section …` | a payee was given and it is another account: leave it out |
@@ -177,8 +203,10 @@ All from `POST /contract/send`, except the 503 (read routes).
 | 404 | `… has no nickname: buy one first (buyNickname)` | edge raise before a buy |
 | 409 | `… already has a nickname (one per account)` | a second buy |
 | 409 | `nickname "…" is taken` / `is reserved` | another account has it (any case), or it is reserved |
-| 410 | `/nickname/buy was removed: use POST /contract/send …` | the old routes `POST /nickname/buy`, `POST /nickname/edge` |
-| 503 | `no nickname collection yet` | deploy one first |
+| 400 | `price: ETH, e.g. "0.5"` / `color: a color #RRGGBB` / `pattern: …` | admin write with a bad friendly value |
+| 404 | `level: no edge level N (levels 0-M)` | `setEdge` on a level that doesn't exist |
+| 409 | `a nickname collection exists at 0x… (send "another": true …)` | a second deploy |
+| 410 | `POST /nickname/buy was removed: use POST /contract/send …` | an old `/nickname/*` or `/admin/nickname/*` route |
 
 ## Files
 
@@ -186,6 +214,7 @@ All from `POST /contract/send`, except the 503 (read routes).
 |---|---|
 | `proxy/contracts/NicknameCollection.sol` | the contract (ERC-721 + ERC-5192 + ERC-4906, on-chain SVG) |
 | `proxy/nickname-collection.json` | its compiled artifact (`node scripts/compile-contract.js contracts/NicknameCollection.sol NicknameCollection nickname-collection.json`) |
-| `proxy/stress-latest.js` | the `/nickname/*` and `/admin/nickname/*` routes; `/contract/send` (`knownSend`: payee, price and nickname checks) |
+| `proxy/stress-latest.js` | the generic contract API: friendly args and results (`friendlyArgs`, `friendlyCall`, `friendlySend`), `/contract/send` (`knownSend`: payee, price and nickname checks), `/admin/contract/send`, the `nickname-collection` template, `GET /admin/nickname` |
+| `chainlens/server.js` | the Nicknames page's API: reads `/admin/nickname`, writes with `/admin/contract/send` and `/admin/contracts/deploy` |
 | `chainlens/public/app.js` | the Nicknames page (`showNicknames`, `edgeEditor`, `edgePreview`) |
 | `monitoring/grafana/tools/gen_sections_dashboard.py` | the income and the new columns of the Sections dashboard |

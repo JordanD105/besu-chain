@@ -35,5 +35,5 @@
 | **Upfront account** | A section's account that **pays out**: funds new user accounts and −x transfers; topped up from SENDER01 |
 | **User account** | An account created by a section (`/createaccount` with its key); belongs to that section |
 | **Validator** (val1–4) | Besu node that takes part in QBFT consensus; one per host .135–.138 |
-| **Version 2 / 3 collection** | NFT contract versions: v2 minted by SENDER01 (sale pays SENDER01); v3 minted by the contract center, first sale pays the buyer's section |
+| **Version 2 / 3 collection** | NFT contract versions: v3 minted by the contract center, first sale pays the buyer's section; v2 (minted by SENDER01) is retired: the proxy no longer reads, mints or sells it |
 | **+x / −x** | Section transfers: +x = user → consumption, −x = upfront → user |

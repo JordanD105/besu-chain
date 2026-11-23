@@ -96,7 +96,6 @@ const CONFIG = {
     // presignature pool class of accounts created by /createaccount when the request names none:
     // big (MPC_POOL_TARGET presignatures, like SENDER01), small (MPC_POOL_TARGET_SMALL), none (cold)
     MPC_NEW_ACCOUNT_POOL: (process.env.MPC_NEW_ACCOUNT_POOL || "small").trim().toLowerCase(),
-    NFT_BASE_URL: (process.env.NFT_BASE_URL || "").trim().replace(/\/$/, ""),
     // Sections (docs/features/sections.md): the on-chain SectionRegistry and the MPC account that writes it
     REGISTRY_CONTRACT: (process.env.REGISTRY_CONTRACT || "").trim(),
     REGISTRY_ADMIN: (process.env.REGISTRY_ADMIN || "").trim(),
@@ -163,9 +162,8 @@ async function cache(fn, fallback = null) {
 // Live state (authoritative while the process runs; one proxy replica, see withSenderLock).
 const memNonce = new Map();      // sender -> next nonce to use
 const memPending = new Map();    // sender -> Map(nonce -> wei string) not yet mined
-// NFT collections: the default collection (NFT_CONTRACT / nft:contract / first deployed),
-// every collection deployed by SENDER01, and the next token id per collection.
-const memNft = { contract: null, nextId: new Map(), collections: null };
+// NFT collections: the next token id per collection (for a mint through /admin/contract/send)
+const memNft = { nextId: new Map() };
 
 // =======================
 // JSON RPC Client

@@ -225,7 +225,7 @@ the **Alerts** row like every dashboard.
 
 | Panel | Shows |
 |---|---|
-| **Requests per second by route** | stacked by route pattern (`/nft/:tokenId`, not each token) |
+| **Requests per second by route** | stacked by route pattern (`/transfer/:txHash`, not each transaction) |
 | **Errors per second (4xx and 5xx)** | per route and status: **5xx** the proxy failed; **4xx** refused (bad input, wrong key, not allowed); **aborted** the client hung up first |
 | **Answer time** | p50, p95, p99 of all routes except `/createaccount` and `/admin` |
 | **95th percentile by route** | every route, including the slow-by-design ones |

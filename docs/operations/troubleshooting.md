@@ -74,7 +74,8 @@
 | `403 section "…" is disabled` | the section was disabled | enable it on the chainlens Sections page |
 | Section can't create accounts (`SectionUpfrontEmpty` / `Low`) | upfront account empty | top up on the Sections page |
 | NFT sale: `wrong price` / insufficient funds | the buyer has less than price + gas | send the buyer ETH (−x) |
-| `not minter` | the collection was not deployed by the contract account center | deploy collections through chainlens or `/nft/deploy` |
+| `not minter` | `mint` sent through `/contract/send`, or the collection was not deployed by the contract account center | mint with `POST /admin/contract/send`; deploy collections through chainlens or the `nft-collection` template |
+| `410 … was removed: use …` | an old `/nft/*`, `/nickname/*` or `/admin/nickname/*` route | use the call the message names ([removed routes](../reference/proxy-api.md#removed-routes)) |
 
 ## Hosts
 

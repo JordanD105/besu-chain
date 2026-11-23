@@ -57,6 +57,9 @@
 활성화하기 전까지는 숨겨져 있으며, `operator_ip`와 `chainlens_deploy_ips`에서만 관리자 토큰
 (`cat ansible/state/secrets/chainlens_deploy_token`; 해당 브라우저 탭에만 보관됨)으로 사용할 수 있습니다.
 요청은 프록시의 관리자 API로 전달되므로, 서명은 항상 프록시가 하며 chainlens는 서명하지 않습니다.
+**Deploy**와 닉네임 컬렉션 배포는 `/admin/contracts/deploy`, **Mint**와 닉네임 설정은
+`/admin/contract/send`(컨트랙트 계정 센터가 서명), **Sell**은 `/contract/send`(구매자가 서명)를
+호출하며, Nicknames 페이지는 `/admin/nickname`을 읽습니다.
 
 | 페이지 / 카드 | 활성화 설정 | 기능 | 안내 문서 |
 |---|---|---|---|

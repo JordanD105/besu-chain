@@ -27,7 +27,7 @@
 <text x="472.0" y="144" font-size="15" fill="#155e75" font-weight="700" text-anchor="middle">Deploy in chainlens</text>
 <text x="472.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Deploy page, kind NFT collection</text>
 <text x="472.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">args: name_, symbol_, registry_</text>
-<text x="472.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">or POST /nft/deploy</text>
+<text x="472.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">or the nft-collection template</text>
 <text x="472.0" y="221" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">signed by the contract account</text>
 <text x="472.0" y="239" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">center → it is the minter</text>
 <circle cx="362" cy="139" r="13" fill="#0891b2"/>
@@ -36,8 +36,8 @@
 <rect x="636" y="110" width="268" height="175" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#sh)"/>
 <text x="770.0" y="144" font-size="15" fill="#1e3a8a" font-weight="700" text-anchor="middle">Mint</text>
 <text x="770.0" y="164" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">Mint and sell card</text>
-<text x="770.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">or POST /nft/mint</text>
-<text x="770.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">amount = price, fixed for good</text>
+<text x="770.0" y="183" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">or POST /admin/contract/send mint</text>
+<text x="770.0" y="202" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">price fixed for good</text>
 <text x="770.0" y="221" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">signed by the center; the NFT</text>
 <text x="770.0" y="239" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">is held by the center, for sale</text>
 <circle cx="660" cy="139" r="13" fill="#2563eb"/>

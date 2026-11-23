@@ -82,6 +82,10 @@
 서명합니다(프록시가 가격과 payee를 채움). 최초 판매에서는 컬렉션 자체가 자금이 활성 섹션의 소비 계정으로 가는지
 확인합니다. 재판매에서는(판매자의 `approve` 후) 자금이 판매자에게 갑니다. NFT와 자금은 함께 이동하거나, 전혀 이동하지 않습니다.
 
+**컨트랙트:** 애플리케이션은 모든 등록 컨트랙트(NFT 컬렉션, 닉네임, 그 밖의 컨트랙트)를 하나의 범용 API로
+읽고 씁니다: `/contract/call`, `/contract/send`, `/contract/events`, `/contract/list`. 컨트랙트 계정 센터로서의
+관리자 쓰기(민팅, 닉네임 설정)는 `/admin/contract/send`를 사용합니다([프록시 API](../reference/proxy-api.md#contracts)).
+
 섹션의 자금 흐름: [섹션](../features/sections.md).
 
 ## 장애 발생 시 계속 동작하는 것 {#what-keeps-running-when-something-fails}
