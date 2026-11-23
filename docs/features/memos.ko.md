@@ -150,18 +150,18 @@ POST /transfer?lang=ko  { "account": "0xUser", "amount": "-0.2" }
 
 ## Chainlens: 메모 기록 {#chainlens-the-memo-log}
 
-![한국어로 본 chainlens 메모 페이지: 필터(종류, 섹션, 텍스트, 날짜, 요청)와 섹션 1의 메모](../images/screenshots/chainlens-memos.png)
+![chainlens 트랜잭션 페이지: 모든 트랜잭션과 메모, 필터, 내보내기](../images/screenshots/chainlens-transactions.png)
 
 | 위치 | 내용 |
 |---|---|
 | **트랜잭션**(모든 목록) | 모든 트랜잭션의 메모 열, 페이지 언어로. 검색은 문구, 종류, 호출자 문구를 찾음 |
-| **트랜잭션 하나** | 메모, 종류(그 종류로 필터한 메모 페이지 링크), 호출자가 직접 쓴 경우 기본 문구, 요청 id(그 호출의 모든 트랜잭션 링크) |
-| **메모** 페이지(`#/memos`) | 필터: 종류(또는 `avatar.` 같은 묶음), 섹션, 텍스트(메모, 주소, 해시), 날짜, 요청 id. **CSV 내보내기**(UTF-8, Excel에서 열림)와 **JSON** |
+| **트랜잭션 하나** | 메모, 종류(그 종류로 필터한 트랜잭션 페이지 링크), 호출자가 직접 쓴 경우 기본 문구, 요청 id(그 호출의 모든 트랜잭션 링크) |
+| **트랜잭션** 페이지(`#/activity/transactions`, 이전의 메모 페이지) | 필터: 텍스트(메모, 주소, 해시), 종류(아바타 같은 묶음 또는 메모 종류 하나), 섹션, 날짜, 요청 id, 계정. **CSV 내보내기**(UTF-8, Excel에서 열림)와 **JSON** |
 | **섹션 페이지 → 내역** | 메모 열 |
 | **관리 양식**(섹션, 아바타 카드, 닉네임) | **메모(선택)** 필드: 그 양식이 보내는 모든 트랜잭션에 붙음 |
 | **언어** | 위쪽 선택: English, 한국어, 中文(chainlens 화면 전체가 이제 한국어로도 제공) |
 
-API: `GET /api/memos?type=&section=&q=&from=&to=&request=&lang=&limit=&format=csv`(같은 필터; `limit` 최대 10 000).
+API: `GET /api/activity?`(모든 트랜잭션)와 `GET /api/memos?type=&section=&q=&from=&to=&request=&lang=&limit=&format=csv`(같은 필터; `limit` 최대 10 000).
 
 ## 게이트웨이 {#the-gateway}
 
@@ -216,5 +216,5 @@ API: `GET /api/memos?type=&section=&q=&from=&to=&request=&lang=&limit=&format=cs
 | [`memo/test.js`](../../memo/test.js), [`memo/sync.sh`](../../memo/sync.sh) | 테스트(형식, 언어, 한도, 사본 일치); 모듈을 앱에 복사 |
 | `proxy/memo/`, `chainlens/memo/`, `gateway/memo/` | 각 이미지가 쓰는 사본 |
 | [`proxy/stress-latest.js`](../../proxy/stress-latest.js) | 모든 트랜잭션의 메모, `memo` 파라미터, 응답, 메모 로그 |
-| [`chainlens/server.js`](../../chainlens/server.js), [`chainlens/public/app.js`](../../chainlens/public/app.js) | 디코딩, 메모 페이지, 내보내기, 양식 필드 |
+| [`chainlens/server.js`](../../chainlens/server.js), [`chainlens/public/app.js`](../../chainlens/public/app.js) | 디코딩, 메모가 있는 트랜잭션 페이지, 내보내기, 양식 필드 |
 | [`chainlens/public/i18n.js`](../../chainlens/public/i18n.js) | 영어, 한국어, 중국어 화면 |

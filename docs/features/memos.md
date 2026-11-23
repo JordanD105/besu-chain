@@ -152,18 +152,18 @@ then rebuild the images. Old transactions show the new text at once: only the co
 
 ## Chainlens: the memo log
 
-![The chainlens Memos page in Korean: filters (type, section, text, dates, request) and the memos of section 1](../images/screenshots/chainlens-memos.png)
+![The chainlens Transactions page: every transaction with its memo, filters and export](../images/screenshots/chainlens-transactions.png)
 
 | Where | What |
 |---|---|
 | **Transactions** (every list) | the memo column for every transaction, in the page's language; the search finds the text, the type and the caller's text |
-| **A transaction** | the memo, its type (link to the Memos page filtered by it), the default text when the caller wrote their own, the request id (link to all transactions of that call) |
-| **Memos** page (`#/memos`) | filters: type (or a family such as `avatar.`), section, text (memo, address, hash), dates, request id; **Export CSV** (UTF-8, opens in Excel) and **JSON** |
+| **A transaction** | the memo, its type (link to the Transactions page filtered by it), the default text when the caller wrote their own, the request id (link to all transactions of that call) |
+| **Transactions** page (`#/activity/transactions`, formerly the Memos page) | filters: text (memo, address, hash), kind (a family such as Avatars, or one memo type), section, dates, request id, account; **Export CSV** (UTF-8, opens in Excel) and **JSON** |
 | **Section page → history** | the memo column |
 | **Admin forms** (Sections, the avatar card, Nicknames) | a **Memo (optional)** field: it goes with every transaction those forms send |
 | **Language** | the selector at the top: English, 한국어, 中文 (the whole chainlens interface is now also in Korean) |
 
-API: `GET /api/memos?type=&section=&q=&from=&to=&request=&lang=&limit=&format=csv` (the same filters;
+API: `GET /api/activity?` (every transaction) and `GET /api/memos?type=&section=&q=&from=&to=&request=&lang=&limit=&format=csv` (the same filters;
 `limit` up to 10 000).
 
 ## The gateway
@@ -221,5 +221,5 @@ On the lab (`10.77.0.x`), section 1 "Shop B", through the proxy and the gateway 
 | [`memo/test.js`](../../memo/test.js), [`memo/sync.sh`](../../memo/sync.sh) | tests (format, languages, limits, the copies match); copies the module into the apps |
 | `proxy/memo/`, `chainlens/memo/`, `gateway/memo/` | the copies used by each image |
 | [`proxy/stress-latest.js`](../../proxy/stress-latest.js) | the memo on every transaction, the `memo` parameter, the answers, the memo log |
-| [`chainlens/server.js`](../../chainlens/server.js), [`chainlens/public/app.js`](../../chainlens/public/app.js) | decoding, the Memos page, the export, the form field |
+| [`chainlens/server.js`](../../chainlens/server.js), [`chainlens/public/app.js`](../../chainlens/public/app.js) | decoding, the Transactions page with memos, the export, the form field |
 | [`chainlens/public/i18n.js`](../../chainlens/public/i18n.js) | the interface in English, Korean, Chinese |

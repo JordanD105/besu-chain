@@ -28,36 +28,50 @@
 | **Who can open it** | `chainlens_ips` in `settings.yml` (plus the operator); see [access control](../deployment/access-control.md) |
 | **Reads** | rpc2 directly (`BESU_RPC`), the SectionRegistry's events, the contract records in `contracts/deployments/` |
 | **Writes** | nothing by itself; the admin pages forward to the proxy's admin API |
-| **Languages / themes** | English and Chinese (EN / 中文 switch), dark and light |
+| **Languages / themes** | English, Korean, Chinese (EN / 한국어 / 中文), dark and light |
 
 ![Chainlens dashboard: totals, platform overview and section balances](../images/screenshots/chainlens-dashboard.png)
 
 ## Pages
 
-| Page | URL | Shows |
-|---|---|---|
-| **Dashboard** | `#/` | totals (transactions, tokens, contracts, peers); **Platform overview**: SENDER01, the contract account center, the section registry, section counts, each section's balances (upfront / consumption / payment / users, stacked) and user accounts; **Section statistics** per day, week, month, quarter or year, or a date range (stacked closing balances, new users, income, avatar sales, nickname sales, level upgrades, nicknames and levels (ETH), undone / refunded (ETH), top-ups, sweeps…); the transaction chart; most active contracts; token types |
-| **Accounts** | `#/accounts` | every account with balance and transaction count; the **Section** column (section and role: user, upfront, consumption, payment, retired; system accounts SENDER01, contract center, registry admin) and a section filter. An account's page shows its section, transactions and tokens |
-| **NFTs** | `#/nfts` | NFTs (ERC-721 tokens) of every collection, avatars and nicknames, with image, owner and price; an NFT's page shows its metadata and history |
-| **Contracts** | `#/contracts` | contracts seen on chain; registered ones (deployed through the proxy or recorded in `contracts/deployments/`) have a page with their functions: **view / pure functions run in the page** (read only). Avatar collections get the **Mint and sell avatars** card (admin) |
-| **Transactions** / **Blocks** | `#/transactions`, `#/blocks` | lists and detail pages (decoded function calls, events, the memo of every transaction in the page's language) |
-| **Memos** | `#/memos` | the [memo](../features/memos.md) of every transaction: filters (type, section, text, dates, request id), export CSV / JSON (`GET /api/memos`) |
-| **Network** | `#/network` | the node chainlens reads: peers, versions |
-| **API** | `#/api` | chainlens's own JSON API (`/api/...`) |
+The navigation has three groups: **Explorer** (everyone), **Admin** (shown only from the admin
+addresses) and **Help**. Older links (`#/transactions`, `#/memos`, `#/blocks`, `#/nfts`, `#/sections`,
+`#/nicknames`, `#/deploy`) redirect to the new ones.
 
-Everything except the admin pages is visible to everyone who can open chainlens: the information is
-public on chain anyway.
+| Group | Page | URL | Shows |
+|---|---|---|---|
+| Explorer | **Overview** | `#/` | totals (transactions, tokens, contracts, peers); **Platform overview**: SENDER01, the contract account center, the section registry, section counts, each section's balances (stacked) and user accounts; **Section statistics** per day, week, month, quarter or year, or a date range; the transaction chart; most active contracts |
+| | **Transactions** | `#/activity/transactions` | every transaction with its [memo](../features/memos.md) in the page's language (**What**: the caller's text, the default text under it), section, amount, from → to, status; chips for *undone* / *undo of* and for transactions made by one API call (⛓ 2). Filters in the URL: text, **kind** (Transfers, Accounts, Sections, Avatars, Nicknames, Contracts, No memo, or one memo type), section, dates; *More filters*: request id, account. **Export CSV / JSON** (`/api/activity`). The former Memos page is this page |
+| | **Blocks** | `#/activity/blocks` | blocks and their transactions |
+| | **Accounts** | `#/accounts` | every account with balance and transaction count; the **Section** column (section and role) and a section filter. An account's page shows its section, transactions and tokens |
+| | **Avatars** / **Nicknames** | `#/items/avatars`, `#/items/nicknames` | the items of every avatar / nickname collection, with image or name, owner and price; an item's page shows its metadata and history |
+| | **Contracts** | `#/contracts` | contracts with their **type from the registry**: Avatar collection, Nickname collection, Section registry, Transfer undo, Contract (registered), ERC721, Contract; a type filter. Registered contracts have a page with their functions (view / pure functions run in the page) |
+| | **Network** | `#/network` | the chain (client, chain id, latest block, block time) and **every Besu node** (role, up/down, block, peers, started), read from each node's own metrics endpoint (`NETWORK_NODES`): RPC nodes keep the ADMIN API off in production, so node details no longer depend on it. Peers of the RPC node only where its ADMIN API is on (development) |
+| Help | **API**, **Docs ↗**, **Grafana ↗** | `#/api`, `DOCS_URL`, `GRAFANA_URL` | chainlens's own JSON API; the documentation site; Grafana |
+
+The sidebar shows the **versions** (commits) of chainlens and the proxy; in red when they differ (an
+update in progress: for example the proxy already updated by `site.yml`, chainlens not yet).
+
+![Transactions with memos, filters and export](../images/screenshots/chainlens-transactions.png)
+
+![Contracts with their types from the registry](../images/screenshots/chainlens-contracts-types.png)
+
+![Network: every Besu node from its metrics](../images/screenshots/chainlens-network.png)
 
 ![Chainlens Accounts page with the Section column](../images/screenshots/chainlens-accounts.png)
 
 ![Section statistics on the dashboard, per period](../images/screenshots/chainlens-statistics.png)
 
-![A registered contract page with its read-only functions](../images/screenshots/chainlens-contract.png)
-
 ## Admin pages
 
-Hidden until enabled, and usable only from `operator_ip` and `chainlens_deploy_ips`, with the
-admin token (`cat ansible/state/secrets/chainlens_deploy_token`; kept for the browser tab only).
+Shown only from `operator_ip` and `chainlens_deploy_ips`. **Sign in once** with the button in the top
+bar (the admin token: `cat ansible/state/secrets/chainlens_deploy_token`); the chip then reads
+*Admin ✓* (click to sign out). A wrong or expired token opens the sign-in again; any other error is
+shown as it is (not as a token prompt).
+
+**Results at once:** every admin action shows its result as a toast right away (the proxy's answer:
+memo, amount, transaction); when chainlens indexes the transaction (live feed `/api/live`, usually 1–3
+seconds) the toast turns ✓ and the page refreshes by itself. No manual refresh.
 They forward to the proxy's admin API, so the proxy signs, never chainlens: **Deploy** and the
 nickname collection's deploy call `/admin/contract/deploy`; **Mint**, **Change a price** and the user
 levels call `/admin/contract/send` (signed by the contract account center); **Sell an avatar** calls
@@ -67,10 +81,10 @@ levels call `/admin/contract/send` (signed by the contract account center); **Se
 
 | Page / card | Enabled by | Does | Guide |
 |---|---|---|---|
-| **Deploy** (`#/deploy`) | `chainlens_deploy_enabled: true` | deploy a compiled contract (Remix / Hardhat / Foundry artifact) as the contract account center, check first, register it | [contract deployment](../features/contract-deployment.md) |
-| **Sections** (`#/sections`) | `chainlens_sections_enabled: true` | create sections, top up, sweep, pay back, rename, info fields, keys, replace accounts, archive; a section's user accounts | [sections](../features/sections.md) |
-| **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | deploy the nickname collection (name, symbol, undo period in days); **Mint nicknames** (one per line, one price); **Change a price**; **User levels** (step price, for sale, holders; add a level); the list of nicknames (token id, nickname, price, account or *for sale*, user level) with **Undo** / **Undo level** while possible | [nicknames](../features/nicknames.md) |
-| **Mint and sell avatars** (on an avatar collection's page) | either of the above | **Mint an avatar** (image, price, description, attributes); **Change a price** (until sold); **Sell an avatar** (token id or image URL, buyer: a section's user account); the list of avatars (newest first) with **Undo** while possible | [avatars](../features/avatars.md) |
+| **Deploy** (`#/admin/deploy`) | `chainlens_deploy_enabled: true` | deploy a compiled contract (Remix / Hardhat / Foundry artifact) as the contract account center, check first, register it | [contract deployment](../features/contract-deployment.md) |
+| **Sections** (`#/admin/sections`) — tabs **Overview** (money), **Accounts**, **History** (with **Undo**), **Gateway**, **Settings** | `chainlens_sections_enabled: true` | create sections, top up, sweep, pay back, rename, info fields, keys, replace accounts, archive; a section's user accounts | [sections](../features/sections.md) |
+| **Nicknames** (`#/admin/nicknames`) | `chainlens_sections_enabled: true` | deploy the nickname collection (name, symbol, undo period in days); **Mint nicknames** (one per line, one price); **Change a price**; **User levels** (step price, for sale, holders; add a level); the list of nicknames (token id, nickname, price, account or *for sale*, user level) with **Undo** / **Undo level** while possible | [nicknames](../features/nicknames.md) |
+| **Avatars** (`#/admin/avatars`: pick a collection; also on the collection's page) | either of the above | **Mint an avatar** (image, price, description, attributes); **Change a price** (until sold); **Sell an avatar** (token id or image URL, buyer: a section's user account); the list of avatars (newest first) with **Undo** while possible | [avatars](../features/avatars.md) |
 
 **Section gateway notice:** with section gateways (`gateway_enabled`), the **Sections** page asks each
 gateway for its status (`GET /api/sections/gateways`, which calls `/gateway/status` on every gateway in
@@ -86,13 +100,19 @@ mode, queue, spare accounts, cuts, corrections and last snapshot, the list of
 gateways' report token `GATEWAY_REPORT_TOKEN`, which can only read and acknowledge). The Sections list
 shows a notice per section with open corrections.
 
+| **Gateways** (`#/admin/gateways`) | section gateways (`gateway_enabled`) | every gateway: mode, since, queue, spares, open / all corrections, cuts; links to each section's Gateway tab | [section gateway](gateway.md) |
+
+![A section page with its tabs (History, with Undo)](../images/screenshots/chainlens-section-tabs.png)
+
+![The admin sign-in](../images/screenshots/chainlens-signin.png)
+
 ![The admin Sections page: the list of sections and the New section form](../images/screenshots/chainlens-sections.png)
 
 ![The admin Deploy page](../images/screenshots/chainlens-deploy.png)
 
 ## How it works
 
-- **Indexing:** polls the RPC node every 4 s, indexes blocks, transactions, accounts and NFTs in
+- **Indexing:** polls the RPC node every 1.5 s, pushes each new block with transactions to open pages (`/api/live`, Server-Sent Events), indexes blocks, transactions, accounts and NFTs in
   memory; re-indexes from scratch after a chain reset. Balances are refreshed in the background.
 - **Registry:** reads the SectionRegistry's events every 15 s from its deployment block, in
   1,000-block chunks: sections, section accounts and roles, registered contracts with their ABI.
@@ -115,6 +135,9 @@ Written by Ansible (`ansible/templates/chainlens.env.j2`) into `chainlens/.env` 
 | `DEPLOY_ENABLED`, `SECTIONS_ENABLED` | turn the admin pages on |
 | `GATEWAYS` | the section gateways, `<section id>=http://<gateway host>:30010 …` (the Sections page notice, the Gateway card) |
 | `GATEWAY_REPORT_TOKEN` | reads the gateways' corrections and acknowledges them (`state/secrets/gateway_report_token`) |
+| `NETWORK_NODES` | the Network page: `name=host:metrics_port:role …`, from `besu_nodes` (each node's metrics endpoint; the monitoring host may read them) |
+| `APP_COMMIT`, `GRAFANA_URL`, `DOCS_URL` | the version in the sidebar (the proxy's comes from its `GET /version`); the Help links |
+| `TRANSFER_UNDO_DAYS` | the section history's **Undo** button ([transfer undo](../features/transfer-undo.md)) |
 
 In `settings.yml`: `chainlens_ips`, `chainlens_deploy_enabled`, `chainlens_sections_enabled`,
 `chainlens_deploy_ips`.
