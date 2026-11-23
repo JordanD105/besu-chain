@@ -20,6 +20,10 @@
   ansible.builtin.import_playbook: 07-ha.yml
 - name: Checks
   ansible.builtin.import_playbook: 08-check.yml
+# before monitoring: Prometheus checks that every target (gateways included) answers
+- name: Section gateways (gateway_enabled)
+  ansible.builtin.import_playbook: 14-gateway.yml
+  when: gateway_enabled | bool
 - name: Monitoring (Prometheus and Grafana)
   ansible.builtin.import_playbook: 09-monitoring.yml
 - name: Chainlens
@@ -28,9 +32,6 @@
   ansible.builtin.import_playbook: 12-remix.yml
 - name: Documentation website
   ansible.builtin.import_playbook: 13-docs-site.yml
-- name: Section gateways (gateway_enabled)
-  ansible.builtin.import_playbook: 14-gateway.yml
-  when: gateway_enabled | bool
 # last: it prints the summary with every URL
 - name: Backups
   ansible.builtin.import_playbook: 10-backups.yml
