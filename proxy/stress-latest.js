@@ -2559,8 +2559,8 @@ function adminPrice(value) {
 //   POST /admin/contract/send  write, signed by the contract account center (admin token)
 // "args" is a list (the ABI's raw values: wei, bytes, ...) or an object. With an object, the
 // platform's own contracts (the NFT collection v3 and the nickname collection) take friendly
-// values: ETH prices, "#rrggbb" colors, pattern names, metadata for a mint. Their answers carry a
-// "result" with friendly values too (ETH, decoded metadata and pictures, nickname details).
+// values: ETH prices, nickname edge levels, metadata for a mint. Their answers carry a
+// "result" with friendly values too (ETH, decoded metadata, nickname details and levels).
 
 // "nickname" (NicknameCollection version 5: levels only), "nft" (NftCollection v3) or null. An older
 // nickname collection (version 4, with edge styles) is an ordinary contract: no friendly values.
