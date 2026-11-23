@@ -23,10 +23,23 @@ const CONFIG_FILE = process.env.GATEWAY_CONFIG || "/config/gateway.json";
 const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
 const KEY = fs.readFileSync(process.env.GATEWAY_KEY_FILE || "/config/section.key", "utf8").trim();
 const L = Object.assign({
-    health_check_seconds: 3, offline_after_failures: 3, offline_max_hours: 24, offline_total_eth: 100,
-    offline_per_account_eth: 20, offline_operations: ["transfer", "createaccount", "avatar_buy", "nickname_buy", "level_upgrade", "undo", "account_pool"],
-    contract_send_allowed: [], spare_accounts: 20, spare_alert_below: 5, correction_webhook: "", report_keep_days: 365, sync_seconds: 30
+    health_check_seconds: 3, health_timeout_ms: 2000, recheck_ms: 500, offline_after_failures: 3, connect_timeout_ms: 2000,
+    offline_max_hours: 24,
+    // what is answered while offline: transfer, createaccount, account_pool, "<avatar|nickname|*>:<function>" for the
+    // platform's items, "<0xContract>:<function>" for another contract (queued, answered without a result)
+    offline_operations: ["transfer", "createaccount", "account_pool", "avatar:buy", "nickname:buy", "nickname:upgradeLevel", "*:undo", "nickname:undoLevel"],
+    spare_accounts: 100, spare_alert_below: 20, answer_gateway_field: false, correction_webhook: "", report_keep_days: 365,
+    sync_seconds: 30, backup_keep_days: 7
 }, cfg.limits || {});
+const REPORT_TOKEN = (() => {
+    try {
+        return fs.readFileSync(process.env.GATEWAY_REPORT_TOKEN_FILE || "/config/report.token", "utf8").trim();
+    } catch (error) {
+        return "";
+    }
+})();
+const REGISTRY = cfg.registry || {};    // { address, fromBlock }: the section's new accounts (AccountAdded)
+const ACCOUNT_ADDED = "0xcdf90f998fb308726a3c0cc206e7170e5ad701ef1666da2ea6642ec5bddade79";  // AccountAdded(uint256,address)
 const SECTION = cfg.section;            // { id, name, upfront, consumption, payment, users: [...] }
 const PROXY = String(cfg.proxy).replace(/\/$/, "");
 const RPC = String(cfg.rpc);
@@ -57,6 +70,14 @@ CREATE TABLE IF NOT EXISTS spares (address TEXT PRIMARY KEY, display TEXT, creat
 CREATE TABLE IF NOT EXISTS cache (k TEXT PRIMARY KEY, body TEXT, at INTEGER);
 CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, uid TEXT, kind TEXT, detail TEXT, delivered INTEGER DEFAULT 0);
 `);
+// added later: correction kind, ETH refunded, acknowledgement (chainlens)
+for (const col of ["correction TEXT", "refund_wei TEXT", "acked_at INTEGER", "acked_by TEXT"]) {
+    try {
+        db.exec(`ALTER TABLE reports ADD COLUMN ${col}`);
+    } catch (error) {
+        // already there
+    }
+}
 
 const q = (sql) => db.prepare(sql);
 const getMeta = (k, d) => { const r = q("SELECT v FROM meta WHERE k = ?").get(k); return r ? r.v : d; };
@@ -99,15 +120,75 @@ function tempHash(uid) {
     return "0x" + crypto.createHash("sha256").update("gateway:" + uid).digest("hex");
 }
 
-async function proxy(method, path, body, timeoutMs = 120000) {
-    const res = await fetch(PROXY + path, {
-        method,
-        headers: { "x-section-key": KEY, "content-type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs)
+// A call to the proxy: the connection must open within connect_timeout_ms (else the link is down), the
+// answer may take up to timeoutMs (a write waits for its block). track: abortable when the gateway goes
+// offline (the requests waiting on the proxy are then answered from the ledger).
+const inflight = new Set();
+
+function proxy(method, path, body, timeoutMs = 120000, track = false, connectMs = L.connect_timeout_ms) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(PROXY + path);
+        const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
+        let settled = false;
+        let connectTimer = null;
+        const entry = {};
+        const finish = () => {
+            settled = true;
+            clearTimeout(connectTimer);
+            clearTimeout(answerTimer);
+            inflight.delete(entry);
+        };
+        const fail = (error) => {
+            if (!settled) {
+                finish();
+                reject(error);
+            }
+        };
+        const req = http.request({
+            hostname: url.hostname, port: url.port || 80, path: url.pathname + url.search, method, agent: false,
+            headers: Object.assign({ "x-section-key": KEY }, payload ? { "content-type": "application/json", "content-length": payload.length } : {})
+        }, (res) => {
+            const chunks = [];
+            res.on("data", (c) => chunks.push(c));
+            res.on("end", () => {
+                if (settled) {
+                    return;
+                }
+                finish();
+                let data;
+                try {
+                    data = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+                } catch (error) {
+                    data = { error: "the proxy answered HTTP " + res.statusCode };
+                }
+                resolve({ status: res.statusCode, data });
+            });
+            res.on("error", fail);
+        });
+        entry.abort = (reason) => req.destroy(Object.assign(new Error(reason), { aborted: true }));
+        connectTimer = setTimeout(() => req.destroy(Object.assign(new Error(`no connection to the proxy within ${connectMs} ms`), { notSent: true })), connectMs);
+        req.on("socket", (socket) => {
+            if (socket.connecting) {
+                socket.once("connect", () => clearTimeout(connectTimer));
+            } else {
+                clearTimeout(connectTimer);
+            }
+        });
+        const answerTimer = setTimeout(() => req.destroy(new Error(`the proxy did not answer within ${timeoutMs} ms`)), timeoutMs);
+        req.on("error", (error) => {
+            if (!error.notSent && /ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ENOTFOUND/.test(error.code || error.message)) {
+                error.notSent = true;  // refused: the request never reached the proxy
+            }
+            fail(error);
+        });
+        if (track) {
+            inflight.add(entry);
+        }
+        if (payload) {
+            req.write(payload);
+        }
+        req.end();
     });
-    const data = await res.json().catch(() => ({ error: "the proxy answered HTTP " + res.status }));
-    return { status: res.status, data };
 }
 
 async function rpc(method, params, timeoutMs = 8000) {
@@ -194,7 +275,7 @@ for (const u of SECTION.users || []) {
 // ---------------------------------------------------------------- state: online / offline / draining
 
 const state = { mode: getMeta("mode", "online"), failures: 0, lastOk: 0, lastSync: Number(getMeta("lastSync", 0)), syncing: false,
-    draining: false, conflicts: Number(getMeta("conflicts", 0)) };
+    draining: false, conflicts: Number(getMeta("conflicts", 0)), authFailures: Number(getMeta("authFailures", 0)) };
 
 function setMode(mode) {
     if (state.mode === mode) {
@@ -205,15 +286,34 @@ function setMode(mode) {
         setMeta("offlineSince", now());
         setMeta("cut", Number(getMeta("cut", 0)) + 1);
     }
+    if (mode === "online") {
+        setMeta("offlineSeconds", Number(getMeta("offlineSeconds", 0)) + Math.round((now() - Number(getMeta("offlineSince", now()))) / 1000));
+    }
     state.mode = mode;
     setMeta("mode", mode);
+    if (mode === "offline") {
+        // the requests still waiting on the proxy are answered from the ledger now
+        for (const entry of [...inflight]) {
+            entry.abort("the gateway went offline");
+        }
+    } else if (mode === "draining") {
+        setTimeout(() => drain().catch((e) => console.error("gateway: drain:", e.message)), 0);
+    }
 }
 
 const queued = () => q("SELECT COUNT(*) AS n FROM outbox WHERE status IN ('queued', 'sending', 'uncertain')").get().n;
 
+// a failed contact with the proxy (a health check, or a request's network error)
+function proxyFailed() {
+    state.failures += 1;
+    if (state.failures >= L.offline_after_failures && state.mode !== "offline") {
+        setMode("offline");
+    }
+}
+
 async function healthCheck() {
     try {
-        const r = await proxy("GET", "/contract/list?type=none", undefined, 3000);
+        const r = await proxy("GET", "/contract/list?type=none", undefined, L.health_timeout_ms, false, L.health_timeout_ms);
         if (r.status !== 200) {
             throw new Error("HTTP " + r.status);
         }
@@ -223,11 +323,23 @@ async function healthCheck() {
             setMode(queued() ? "draining" : "online");
         }
     } catch (error) {
-        state.failures += 1;
-        if (state.failures >= L.offline_after_failures && state.mode !== "offline") {
-            setMode("offline");
+        proxyFailed();
+    }
+}
+
+// its own timer: never delayed by the sync, the spare accounts or the queue. After a failure (and not yet
+// offline) the next check comes after recheck_ms instead of health_check_seconds.
+let healthBusy = false;
+async function healthLoop() {
+    if (!healthBusy) {
+        healthBusy = true;
+        try {
+            await healthCheck();
+        } finally {
+            healthBusy = false;
         }
     }
+    setTimeout(healthLoop, state.failures > 0 && state.mode !== "offline" ? L.recheck_ms : L.health_check_seconds * 1000);
 }
 
 // ---------------------------------------------------------------- items: avatar and nickname cache
@@ -344,6 +456,30 @@ async function syncBalances() {
     }
 }
 
+// accounts of the section made outside the gateway (at the proxy, chainlens): AccountAdded(section id, account)
+async function learnAccounts() {
+    if (!isAddress(REGISTRY.address)) {
+        return;
+    }
+    const latest = Number(await rpc("eth_blockNumber", []));
+    let from = Number(getMeta("accountsBlock", REGISTRY.fromBlock || 0));
+    const topic = "0x" + BigInt(SECTION.id).toString(16).padStart(64, "0");
+    while (from <= latest) {
+        const to = Math.min(latest, from + 4999);
+        const logs = await rpc("eth_getLogs", [{ address: REGISTRY.address, topics: [ACCOUNT_ADDED, topic],
+            fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16) }], 20000);
+        for (const log of logs) {
+            const addr = "0x" + log.topics[2].slice(26);
+            if (!account(addr)) {
+                upsertAccount(addr, "user");
+                console.log(`gateway: learned account ${addr} (made outside the gateway)`);
+            }
+        }
+        from = to + 1;
+        setMeta("accountsBlock", from);
+    }
+}
+
 // The full sync (online, nothing queued): balances, items; differences against the ledger are reported
 async function sync(reportDiff) {
     if (state.syncing) {
@@ -352,6 +488,7 @@ async function sync(reportDiff) {
     state.syncing = true;
     try {
         const before = new Map(q("SELECT address, local_wei FROM accounts").all().map((a) => [a.address, a.local_wei]));
+        await learnAccounts();
         await syncBalances();
         await syncCollections();
         if (reportDiff) {
@@ -371,8 +508,31 @@ async function sync(reportDiff) {
 
 // ---------------------------------------------------------------- reports and the correction webhook
 
+// the kind of a correction, from the chain's reason
+function correctionKind(reason) {
+    const r = String(reason || "");
+    if (/already sold|not owned/i.test(r)) {
+        return "already_sold";
+    }
+    if (/value: the price is|wrong price/i.test(r)) {
+        return "price_changed";
+    }
+    if (/undo period/i.test(r)) {
+        return "undo_period_over";
+    }
+    if (/level/i.test(r)) {
+        return "level";
+    }
+    if (/insufficient|balance/i.test(r)) {
+        return "balance";
+    }
+    return "other";
+}
+
 function report(uid, kind, detail) {
-    q("INSERT INTO reports (at, uid, kind, detail) VALUES (?, ?, ?, ?)").run(now(), uid, kind, JSON.stringify(detail));
+    const refund = kind === "conflict" ? (detail.refund || []).reduce((s, x) => s + ethToWei(x.amount), 0n) : 0n;
+    q("INSERT INTO reports (at, uid, kind, detail, correction, refund_wei) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(now(), uid, kind, JSON.stringify(detail), kind === "conflict" ? correctionKind(detail.reason) : null, String(refund));
     if (kind === "conflict") {
         state.conflicts += 1;
         setMeta("conflicts", state.conflicts);
@@ -402,29 +562,26 @@ async function deliverReports() {
 
 // ---------------------------------------------------------------- offline limits
 
-function offlineAllowed(operation, account, spendWei) {
-    if (!L.offline_operations.includes(operation)) {
+// operation: "transfer", "createaccount", "account_pool", "avatar:buy", "nickname:upgradeLevel", "0x…:function"
+function operationAllowed(operation) {
+    const [kind, fn] = operation.split(":");
+    return L.offline_operations.some((entry) => {
+        const e = String(entry);
+        if (!fn) {
+            return e === operation;
+        }
+        const [k, f] = e.split(":");
+        return f !== undefined && lower(f) === lower(fn) && (k === "*" || lower(k) === lower(kind));
+    });
+}
+
+function offlineAllowed(operation) {
+    if (!operationAllowed(operation)) {
         throw httpError(503, `${operation} is not available while the proxy cannot be reached`);
     }
     const since = Number(getMeta("offlineSince", now()));
     if (state.mode === "offline" && now() - since > L.offline_max_hours * 3600000) {
         throw httpError(503, `offline for more than ${L.offline_max_hours} h: no more optimistic answers`);
-    }
-    const cut = Number(getMeta("cut", 0));
-    const rows = q("SELECT spend_account, spend_wei FROM outbox WHERE cut = ? AND status IN ('queued', 'sending', 'uncertain', 'done')").all(cut);
-    let total = 0n;
-    let mine = 0n;
-    for (const r of rows) {
-        total += BigInt(r.spend_wei || "0");
-        if (lower(r.spend_account) === lower(account)) {
-            mine += BigInt(r.spend_wei || "0");
-        }
-    }
-    if (total + spendWei > ethToWei(String(L.offline_total_eth))) {
-        throw httpError(503, `the offline limit of the section (${L.offline_total_eth} ETH) is reached`);
-    }
-    if (account && mine + spendWei > ethToWei(String(L.offline_per_account_eth))) {
-        throw httpError(503, `the offline limit of ${account} (${L.offline_per_account_eth} ETH) is reached`);
     }
 }
 
@@ -547,7 +704,7 @@ async function keepSpares() {
     if (n >= L.spare_accounts) {
         return;
     }
-    const r = await proxy("POST", "/createaccount", { amount: "0", pool: "none" }, 180000);
+    const r = await proxy("POST", "/createaccount", { amount: "0", pool: "none" }, 180000, true);
     if (r.status === 200 && isAddress(r.data.address)) {
         q("INSERT INTO spares (address, display, created) VALUES (?, ?, ?)").run(lower(r.data.address), r.data.address, now());
         console.log(`gateway: spare account ${r.data.address} (${n + 1}/${L.spare_accounts})`);
@@ -591,7 +748,7 @@ function offlineTransfer(body, uid) {
     const from = plus ? user.display : SECTION.upfront;
     const to = plus ? SECTION.consumption : user.display;
     const x = plus ? amount : -amount;
-    offlineAllowed("transfer", from, x);
+    offlineAllowed("transfer");
     needFunds(from, x);
     const answer = { success: true, section: section(), direction: plus ? "account -> consumption" : "upfront -> account", from, to,
         amount: weiToEth(x), memo: body.memo || "", txHash: tempHash(uid) };
@@ -601,7 +758,7 @@ function offlineTransfer(body, uid) {
 
 function offlineCreateAccount(body, uid) {
     const amount = ethToWei(body.amount === undefined ? "0" : body.amount);
-    offlineAllowed("createaccount", SECTION.upfront, amount);
+    offlineAllowed("createaccount");
     needFunds(SECTION.upfront, amount);
     const spare = q("SELECT * FROM spares WHERE used IS NULL ORDER BY created LIMIT 1").get();
     if (!spare) {
@@ -656,11 +813,7 @@ function offlineContractSend(body, uid) {
     const c = collection(body.contract || "");
     const fn = String(body.function || "").split("(")[0];
     if (!c) {
-        const allowed = (L.contract_send_allowed || []).map(lower).includes(lower(body.contract) + ":" + lower(fn));
-        if (!allowed) {
-            throw httpError(503, "this contract call is not available while the proxy cannot be reached");
-        }
-        offlineAllowed("contract_send", body.from, 0n);
+        offlineAllowed(`${lower(body.contract)}:${fn}`);
         enqueue({ uid, kind: "contract_send", signer: body.from, path: "/contract/send", body });
         return { success: true, section: section(), contract: body.contract, function: body.function, from: body.from, txHash: tempHash(uid),
             result: null, events: [], gateway: gw(uid) };
@@ -677,7 +830,7 @@ function offlineContractSend(body, uid) {
             throw httpError(409, `token ${tokenId} is already sold`);
         }
         const price = ethToWei(it.price);
-        offlineAllowed(c.type === "nickname" ? "nickname_buy" : "avatar_buy", user.display, price);
+        offlineAllowed(`${c.type}:buy`);
         needFunds(user.display, price);
         const paidAt = now();
         it.owner = user.display;
@@ -712,7 +865,7 @@ function offlineContractSend(body, uid) {
             }
             price += ethToWei(levels[l].price);
         }
-        offlineAllowed("level_upgrade", user.display, price);
+        offlineAllowed("nickname:upgradeLevel");
         needFunds(user.display, price);
         const paidAt = now();
         it.payments.push({ kind: "level", fromLevel: it.level, toLevel: to, amount: weiToEth(price), payer: user.display, paidTo: SECTION.consumption,
@@ -755,7 +908,7 @@ function offlineContractSend(body, uid) {
         }
         const payer = target.paidTo;
         const buyer = target.payer;
-        offlineAllowed("undo", payer, refund);
+        offlineAllowed(`${c.type}:${fn}`);
         needFunds(payer, refund);
         let result;
         if (fn === "undo") {
@@ -911,12 +1064,26 @@ async function passWrite(path, body, uid) {
     }
     let r;
     try {
-        r = await proxy("POST", path, body);
+        r = await proxy("POST", path, body, 120000, true);
     } catch (error) {
-        // the link dropped during the request: answer as offline; the queue checks the nonce before resending
-        state.failures = L.offline_after_failures;
-        setMode("offline");
-        const answer = offlineWrite(path, body, uid);
+        if (!error.aborted) {
+            proxyFailed();  // a network error counts as a failed health check
+        }
+        if (error.notSent) {
+            // the request never reached the proxy: queued like any offline request
+            return { status: 200, data: offlineWrite(path, body, uid) };
+        }
+        if (path === "/createaccount") {
+            // the proxy may have made the account already: no spare account in its place
+            throw httpError(503, "the proxy did not answer: try again");
+        }
+        // cut off after it was sent: answered from the ledger; before resending, the queue checks the nonce
+        let answer;
+        try {
+            answer = offlineWrite(path, body, uid);
+        } catch (e) {
+            throw httpError(503, "the proxy did not answer: the result is not known yet");
+        }
         q("UPDATE outbox SET status = 'uncertain', nonce_before = ? WHERE uid = ?").run(nonce, uid);
         return { status: 200, data: answer };
     }
@@ -956,7 +1123,7 @@ function offlineWrite(path, body, uid) {
         return offlineCreateAccount(body, uid);
     }
     if (path === "/account/pool") {
-        offlineAllowed("account_pool", null, 0n);
+        offlineAllowed("account_pool");
         enqueue({ uid, kind: "account_pool", path, body });
         return { success: true, address: body.address, pool: body.pool, gateway: gw(uid) };
     }
@@ -1005,44 +1172,131 @@ function readBody(req) {
     });
 }
 
+function corrections() {
+    const rows = q("SELECT correction, refund_wei, acked_at, delivered FROM reports WHERE kind = 'conflict'").all();
+    const byKind = {};
+    let refunded = 0n;
+    for (const r of rows) {
+        byKind[r.correction || "other"] = (byKind[r.correction || "other"] || 0) + 1;
+        refunded += BigInt(r.refund_wei || "0");
+    }
+    return { total: rows.length, open: rows.filter((r) => !r.acked_at).length, byKind, refundedEth: weiToEth(refunded),
+        undelivered: L.correction_webhook ? rows.filter((r) => !r.delivered).length : 0 };
+}
+
 function status() {
     const oldest = q("SELECT MIN(created) AS t FROM outbox WHERE status IN ('queued', 'sending', 'uncertain')").get().t;
-    const cut = Number(getMeta("cut", 0));
-    const spent = q("SELECT spend_wei FROM outbox WHERE cut = ? AND status IN ('queued', 'sending', 'uncertain', 'done')").all(cut)
+    const cutNo = Number(getMeta("cut", 0));
+    const spent = q("SELECT spend_wei FROM outbox WHERE cut = ? AND status IN ('queued', 'sending', 'uncertain', 'done')").all(cutNo)
         .reduce((s, r) => s + BigInt(r.spend_wei || "0"), 0n);
+    const c = corrections();
     return {
         section: section(), mode: state.mode, since: state.mode === "online" ? null : iso(Number(getMeta("offlineSince", now()))),
         queue: queued(), oldestSeconds: oldest ? Math.round((now() - oldest) / 1000) : 0,
         spares: q("SELECT COUNT(*) AS n FROM spares WHERE used IS NULL").get().n,
         offlineEth: state.mode === "online" ? "0" : weiToEth(spent), conflicts: state.conflicts,
-        lastSync: state.lastSync ? iso(state.lastSync) : null,
-        limits: { offlineMaxHours: L.offline_max_hours, offlineTotalEth: L.offline_total_eth, offlinePerAccountEth: L.offline_per_account_eth,
-            spareAccounts: L.spare_accounts, operations: L.offline_operations }
+        corrections: { open: c.open, total: c.total, refundedEth: c.refundedEth, undelivered: c.undelivered },
+        cuts: cutNo, lastSync: state.lastSync ? iso(state.lastSync) : null, lastBackup: Number(getMeta("lastBackup", 0)) ? iso(Number(getMeta("lastBackup", 0))) : null,
+        limits: { offlineMaxHours: L.offline_max_hours, spareAccounts: L.spare_accounts, operations: L.offline_operations }
     };
 }
 
 function metrics() {
     const s = status();
-    const lbl = `{section_id="${SECTION.id}",section="${String(SECTION.name).replace(/"/g, "'")}"}`;
+    const c = corrections();
+    const lbl = `section_id="${SECTION.id}",section="${String(SECTION.name).replace(/"/g, "'")}"`;
+    const m = (name, type, help, value, extra = "") => [`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`, `${name}{${lbl}${extra}} ${value}`];
+    const kinds = ["already_sold", "price_changed", "level", "undo_period_over", "balance", "other"];
+    let offlineSeconds = Number(getMeta("offlineSeconds", 0));
+    if (state.mode !== "online") {
+        offlineSeconds += Math.round((now() - Number(getMeta("offlineSince", now()))) / 1000);
+    }
     return [
-        "# HELP gateway_mode 0 online, 1 offline, 2 draining", "# TYPE gateway_mode gauge", `gateway_mode${lbl} ${{ online: 0, offline: 1, draining: 2 }[s.mode]}`,
-        "# HELP gateway_queue_length requests waiting to be sent", "# TYPE gateway_queue_length gauge", `gateway_queue_length${lbl} ${s.queue}`,
-        "# HELP gateway_queue_oldest_seconds age of the oldest waiting request", "# TYPE gateway_queue_oldest_seconds gauge", `gateway_queue_oldest_seconds${lbl} ${s.oldestSeconds}`,
-        "# HELP gateway_offline_eth ETH spent during the current cut", "# TYPE gateway_offline_eth gauge", `gateway_offline_eth${lbl} ${Number(s.offlineEth)}`,
-        "# HELP gateway_spare_accounts spare accounts left for /createaccount offline", "# TYPE gateway_spare_accounts gauge", `gateway_spare_accounts${lbl} ${s.spares}`,
-        "# HELP gateway_spare_target spare accounts wanted", "# TYPE gateway_spare_target gauge", `gateway_spare_target${lbl} ${L.spare_accounts}`,
-        "# HELP gateway_spare_alert_below the GatewaySparesLow threshold", "# TYPE gateway_spare_alert_below gauge", `gateway_spare_alert_below${lbl} ${L.spare_alert_below}`,
-        "# HELP gateway_conflicts_total queued requests the chain refused after reconnecting", "# TYPE gateway_conflicts_total counter", `gateway_conflicts_total${lbl} ${s.conflicts}`,
-        "# HELP gateway_last_sync_timestamp_seconds the last full sync with the chain", "# TYPE gateway_last_sync_timestamp_seconds gauge", `gateway_last_sync_timestamp_seconds${lbl} ${Math.round(state.lastSync / 1000)}`,
+        ...m("gateway_mode", "gauge", "0 online, 1 offline, 2 draining", { online: 0, offline: 1, draining: 2 }[s.mode]),
+        ...m("gateway_queue_length", "gauge", "requests waiting to be sent", s.queue),
+        ...m("gateway_queue_oldest_seconds", "gauge", "age of the oldest waiting request", s.oldestSeconds),
+        ...m("gateway_offline_eth", "gauge", "ETH spent during the current cut", Number(s.offlineEth)),
+        ...m("gateway_spare_accounts", "gauge", "spare accounts left for /createaccount offline", s.spares),
+        ...m("gateway_spare_target", "gauge", "spare accounts wanted", L.spare_accounts),
+        ...m("gateway_spare_alert_below", "gauge", "the GatewaySparesLow threshold", L.spare_alert_below),
+        ...m("gateway_conflicts_total", "counter", "queued requests the chain refused after reconnecting", s.conflicts),
+        "# HELP gateway_corrections_total corrections (queued requests the chain refused), by kind", "# TYPE gateway_corrections_total counter",
+        ...kinds.map((k) => `gateway_corrections_total{${lbl},kind="${k}"} ${c.byKind[k] || 0}`),
+        ...m("gateway_corrections_refunded_eth_total", "counter", "ETH given back to accounts by corrections", Number(c.refundedEth)),
+        ...m("gateway_corrections_open", "gauge", "corrections not acknowledged yet (chainlens)", c.open),
+        ...m("gateway_corrections_undelivered", "gauge", "corrections the webhook has not taken yet", c.undelivered),
+        ...m("gateway_cuts_total", "counter", "times the gateway went offline", s.cuts),
+        ...m("gateway_offline_seconds_total", "counter", "seconds spent offline or draining", offlineSeconds),
+        ...m("gateway_auth_failures_total", "counter", "requests with a wrong section key", state.authFailures),
+        ...m("gateway_last_sync_timestamp_seconds", "gauge", "the last full sync with the chain", Math.round(state.lastSync / 1000)),
+        ...m("gateway_last_backup_timestamp_seconds", "gauge", "the last database snapshot", Math.round(Number(getMeta("lastBackup", 0)) / 1000)),
         ""
     ].join("\n");
 }
 
 const WRITES = new Set(["/transfer", "/createaccount", "/account/pool", "/contract/send"]);
 
+// wrong keys: answered at once (401); 10 wrong keys from one address within 60 s -> 429 for 60 s
+const brake = new Map();
+function braked(ip) {
+    const b = brake.get(ip);
+    return Boolean(b && b.until > now());
+}
+function wrongKey(ip) {
+    state.authFailures += 1;
+    setMeta("authFailures", state.authFailures);
+    const t = now();
+    const b = brake.get(ip) || { start: t, count: 0, until: 0 };
+    if (t - b.start > 60000) {
+        b.start = t;
+        b.count = 0;
+    }
+    b.count += 1;
+    if (b.count >= 10) {
+        b.until = t + 60000;
+        b.count = 0;
+        b.start = t;
+    }
+    brake.set(ip, b);
+    if (brake.size > 10000) {
+        for (const [k, v] of brake) {
+            if (v.until < t && t - v.start > 60000) {
+                brake.delete(k);
+            }
+        }
+    }
+}
+
+function tokenEq(given, want) {
+    const g = Buffer.from(String(given || ""));
+    const w = Buffer.from(String(want || ""));
+    return w.length > 0 && g.length === w.length && crypto.timingSafeEqual(g, w);
+}
+const reportTokenOk = (req) => Boolean(REPORT_TOKEN) && tokenEq(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""), REPORT_TOKEN);
+
+// the answers are the proxy's, unchanged: the gateway's own field only with answer_gateway_field
+function plain(data) {
+    if (L.answer_gateway_field || !data || typeof data !== "object") {
+        return data;
+    }
+    delete data.gateway;
+    if (Array.isArray(data.results)) {
+        data.results.forEach((r) => r && typeof r === "object" && delete r.gateway);
+    }
+    return data;
+}
+
+function reportRow(r) {
+    const d = JSON.parse(r.detail);
+    return { id: r.id, at: iso(r.at), request: r.uid, kind: r.kind, correction: r.correction || undefined,
+        refundEth: r.kind === "conflict" ? weiToEth(BigInt(r.refund_wei || "0")) : undefined, ...d,
+        delivered: Boolean(r.delivered), acked: r.acked_at ? { at: iso(r.acked_at), by: r.acked_by } : null };
+}
+
 async function handle(req, res) {
     const url = new URL(req.url, "http://gateway");
     const path = url.pathname;
+    const ip = String(req.socket.remoteAddress || "");
 
     if (req.method === "GET" && path === "/gateway/status") {
         return send(res, 200, status());
@@ -1050,13 +1304,42 @@ async function handle(req, res) {
     if (req.method === "GET" && path === "/metrics") {
         return send(res, 200, metrics());
     }
-    if (!keyOk(req)) {
-        return setTimeout(() => send(res, 401, { error: "X-Section-Key: the section's key is required" }), 500);
+    if (braked(ip)) {
+        return send(res, 429, { error: "too many wrong keys: wait a minute" });
     }
-    if (req.method === "GET" && path === "/gateway/report") {
-        const since = Date.parse(url.searchParams.get("since") || "") || 0;
-        return send(res, 200, { success: true, reports: q("SELECT * FROM reports WHERE at >= ? ORDER BY id DESC LIMIT 500").all(since)
-            .map((r) => ({ at: iso(r.at), request: r.uid, kind: r.kind, ...JSON.parse(r.detail), delivered: Boolean(r.delivered) })) });
+
+    // reports: the section key, or the read-and-acknowledge report token (chainlens)
+    if (path === "/gateway/report" || /^\/gateway\/report\/\d+\/ack$/.test(path)) {
+        if (!keyOk(req) && !reportTokenOk(req)) {
+            wrongKey(ip);
+            return send(res, 401, { error: "the section key or the report token is required" });
+        }
+        if (req.method === "GET" && path === "/gateway/report") {
+            const since = Date.parse(url.searchParams.get("since") || "") || 0;
+            const open = url.searchParams.get("open") === "1";
+            const kind = url.searchParams.get("kind");
+            const rows = q("SELECT * FROM reports WHERE at >= ? ORDER BY id DESC LIMIT 500").all(since)
+                .filter((r) => (!open || (r.kind === "conflict" && !r.acked_at)) && (!kind || r.kind === kind));
+            return send(res, 200, { success: true, section: section(), corrections: corrections(), reports: rows.map(reportRow) });
+        }
+        if (req.method === "POST") {
+            const body = await readBody(req);
+            const id = Number(path.split("/")[3]);
+            const r = q("SELECT * FROM reports WHERE id = ?").get(id);
+            if (!r) {
+                return send(res, 404, { error: "unknown report" });
+            }
+            if (!r.acked_at) {
+                q("UPDATE reports SET acked_at = ?, acked_by = ? WHERE id = ?").run(now(), String(body.by || "").slice(0, 100) || null, id);
+            }
+            return send(res, 200, { success: true, report: reportRow(q("SELECT * FROM reports WHERE id = ?").get(id)) });
+        }
+        return send(res, 405, { error: "GET /gateway/report, POST /gateway/report/:id/ack" });
+    }
+
+    if (!keyOk(req)) {
+        wrongKey(ip);
+        return send(res, 401, { error: "X-Section-Key: the section's key is required" });
     }
     if (req.method === "GET" && path.startsWith("/gateway/request/")) {
         const r = q("SELECT * FROM outbox WHERE uid = ? OR temp_hash = ?").get(path.slice(17), path.slice(17));
@@ -1065,44 +1348,44 @@ async function handle(req, res) {
     }
 
     const body = req.method === "POST" ? await readBody(req) : undefined;
-    const uid = String(req.headers["x-request-id"] || "").slice(0, 100) || crypto.randomUUID();
-
-    // a retried request (same X-Request-Id): its first answer
-    if (req.headers["x-request-id"]) {
-        const seen = q("SELECT answer, temp_hash, real_hash, status FROM outbox WHERE uid = ?").get(uid);
-        if (seen) {
-            const a = JSON.parse(seen.answer || "null");
-            return send(res, 200, Object.assign({}, a && a.result, { txHash: seen.real_hash || seen.temp_hash, gateway: { request: uid, status: seen.status, repeated: true } }));
-        }
-    }
+    const uid = crypto.randomUUID();
 
     if (req.method === "POST" && WRITES.has(path)) {
         if (state.mode === "online" && !queued()) {
             const r = await passWrite(path, body, uid);
-            return send(res, r.status, r.data);
+            return send(res, r.status, plain(r.data));
         }
-        return send(res, 200, offlineWrite(path, body, uid));
+        return send(res, 200, plain(offlineWrite(path, body, uid)));
     }
 
     if (req.method === "GET" && path.startsWith("/transfer/")) {
         const hash = path.slice(10);
         const row = q("SELECT * FROM outbox WHERE temp_hash = ? OR real_hash = ?").get(hash, hash);
         if (row && !row.real_hash) {
-            return send(res, 200, { success: true, txHash: hash, status: row.status === "failed" || row.status === "cancelled" ? "failed" : "pending",
-                error: row.error || undefined, gateway: { mode: state.mode, request: row.uid, status: row.status } });
+            return send(res, 200, plain({ success: true, txHash: hash, status: row.status === "failed" || row.status === "cancelled" ? "failed" : "pending",
+                error: row.error || undefined, gateway: { mode: state.mode, request: row.uid, status: row.status } }));
         }
         if (state.mode === "online") {
-            const r = await proxy("GET", "/transfer/" + (row ? row.real_hash : hash));
-            return send(res, r.status, r.data);
+            try {
+                const r = await proxy("GET", "/transfer/" + (row ? row.real_hash : hash), undefined, 30000, true);
+                if (r.status === 200 && row && r.data && r.data.txHash) {
+                    r.data.txHash = hash;  // the hash the application was given
+                }
+                return send(res, r.status, r.data);
+            } catch (error) {
+                if (!error.aborted) {
+                    proxyFailed();
+                }
+            }
         }
-        return send(res, 503, { error: "the proxy cannot be reached" });
+        return send(res, 200, plain({ success: true, txHash: hash, status: row ? "success" : "pending", gateway: { mode: state.mode } }));
     }
 
     // reads
     const readPath = path + url.search;
     if (state.mode === "online") {
         try {
-            const r = await proxy(req.method, readPath, body);
+            const r = await proxy(req.method, readPath, body, 120000, true);
             if (r.status === 200) {
                 if (path === "/contract/call" && Array.isArray(body.calls)) {
                     body.calls.forEach((c, i) => r.data.results[i] && r.data.results[i].success && remember("/contract/call", { contract: c.contract, function: c.function, args: c.args }, r.data.results[i]));
@@ -1114,13 +1397,15 @@ async function handle(req, res) {
             }
             return send(res, r.status, r.data);
         } catch (error) {
-            state.failures += 1;
+            if (!error.aborted) {
+                proxyFailed();
+            }
         }
     }
     if (path === "/contract/call") {
-        return send(res, 200, offlineCall(body || {}));
+        return send(res, 200, plain(offlineCall(body || {})));
     }
-    return send(res, 200, readCached(readPath, body));
+    return send(res, 200, plain(readCached(readPath, body)));
 }
 
 const server = http.createServer((req, res) => {
@@ -1132,16 +1417,36 @@ const server = http.createServer((req, res) => {
     });
 });
 
-// ---------------------------------------------------------------- loops
+// ---------------------------------------------------------------- loops (the health check runs on its own: healthLoop)
+
+// a daily snapshot of the ledger: <data>/backup/gateway-YYYYMMDD.db, kept backup_keep_days
+function backup() {
+    if (now() - Number(getMeta("lastBackup", 0)) < 86400000) {
+        return;
+    }
+    const dir = require("node:path").join(require("node:path").dirname(DB_FILE), "backup");
+    fs.mkdirSync(dir, { recursive: true });
+    const file = require("node:path").join(dir, `gateway-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.db`);
+    fs.rmSync(file, { force: true });
+    db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+    setMeta("lastBackup", now());
+    for (const f of fs.readdirSync(dir)) {
+        const full = require("node:path").join(dir, f);
+        if (/^gateway-\d{8}\.db$/.test(f) && now() - fs.statSync(full).mtimeMs > L.backup_keep_days * 86400000) {
+            fs.rmSync(full, { force: true });
+        }
+    }
+    console.log(`gateway: snapshot ${file}`);
+}
 
 let busy = false;
-async function tick() {
+async function jobs() {
     if (busy) {
         return;
     }
     busy = true;
     try {
-        await healthCheck();
+        backup();
         if (state.mode === "draining" || (state.mode !== "offline" && queued())) {
             await drain();
         } else if (state.mode === "online") {
@@ -1152,7 +1457,7 @@ async function tick() {
             await deliverReports();
         }
     } catch (error) {
-        console.error("gateway: tick:", error.message);
+        console.error("gateway: jobs:", error.message);
     } finally {
         busy = false;
     }
@@ -1160,6 +1465,7 @@ async function tick() {
 
 server.listen(PORT, () => {
     console.log(`gateway for section ${SECTION.id} ("${SECTION.name}") on :${PORT}, proxy ${PROXY}, mode ${state.mode}`);
-    setInterval(tick, L.health_check_seconds * 1000);
-    tick();
+    healthLoop();
+    setInterval(jobs, 1000);
+    jobs();
 });
