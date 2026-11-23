@@ -147,6 +147,9 @@ send '{"contract":"0xNicknames","function":"setLevel","args":{"level":3,"forSale
 
 ## 4. 닉네임 구매 {#4-buy-a-nickname}
 
+**chainlens에서:** 관리 → 닉네임 → **Sell a nickname**: 토큰 id 또는 닉네임과 구매자(섹션의 사용자 계정; 추천 목록에
+표시). API로는:
+
 애플리케이션은 섹션의 키로 호출합니다. `from`은 가격만큼의 ETH가 있는 그 섹션의 사용자 계정입니다(이
 체인에서 가스는 무료). payee와 `value`는 생략하십시오: 프록시가 채웁니다.
 

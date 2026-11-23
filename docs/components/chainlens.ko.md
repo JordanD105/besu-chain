@@ -79,7 +79,7 @@
 |---|---|---|---|
 | **Deploy** (`#/admin/deploy`) | `chainlens_deploy_enabled: true` | 컴파일된 컨트랙트(Remix / Hardhat / Foundry 아티팩트)를 컨트랙트 계정 센터로 배포하고, 먼저 검사한 뒤 등록합니다 | [컨트랙트 배포](../features/contract-deployment.md) |
 | **Sections** (`#/admin/sections`) — 탭 **개요**(자금), **계정**, **내역**(**취소** 포함), **게이트웨이**, **설정** | `chainlens_sections_enabled: true` | 섹션 생성, 충전, 스윕, 반환, 이름 변경, 정보 필드, 키, 계정 교체, 보관; 섹션의 사용자 계정 | [섹션](../features/sections.md) |
-| **Nicknames** (`#/admin/nicknames`) | `chainlens_sections_enabled: true` | 닉네임 컬렉션 배포(이름, 심볼, 취소 기간(일)); **Mint nicknames**(한 줄에 하나, 가격 하나); **Change a price**; **User levels**(단계 가격, 판매 여부, 보유자 수; 레벨 추가); 닉네임 목록(토큰 ID, 닉네임, 가격, 계정 또는 *for sale*, 사용자 레벨)과 가능한 동안 **Undo** / **Undo level** | [닉네임](../features/nicknames.md) |
+| **Nicknames** (`#/admin/nicknames`) | `chainlens_sections_enabled: true` | 닉네임 컬렉션 배포(이름, 심볼, 취소 기간(일)); **Mint nicknames**(한 줄에 하나, 가격 하나); **Change a price**; **Sell a nickname**(토큰 ID 또는 닉네임, 구매자: 섹션의 사용자 계정); **User levels**(단계 가격, 판매 여부, 보유자 수; 레벨 추가); 닉네임 목록(토큰 ID, 닉네임, 가격, 계정 또는 *for sale*, 사용자 레벨)과 가능한 동안 **Undo** / **Undo level** | [닉네임](../features/nicknames.md) |
 | **Avatars** (`#/admin/avatars`: 컬렉션 선택; 컬렉션 페이지에도 있음) | 위 둘 중 하나 | **Mint an avatar**(이미지, 가격, 설명, 속성); **Change a price**(판매 전까지); **Sell an avatar**(토큰 ID 또는 이미지 URL, 구매자: 섹션의 사용자 계정); 아바타 목록(최신 순)과 가능한 동안 **Undo** | [아바타](../features/avatars.md) |
 
 **섹션 게이트웨이 안내:** 섹션 게이트웨이를 사용하면(`gateway_enabled`) **Sections** 페이지가 각 게이트웨이의

@@ -151,6 +151,9 @@ send '{"contract":"0xNicknames","function":"setLevel","args":{"level":3,"forSale
 
 ## 4. Buy a nickname
 
+**In chainlens:** Admin → Nicknames → **Sell a nickname**: the token id or the nickname, and the buyer
+(a section's user account; suggestions list them). Through the API:
+
 The application calls with the section's key. `from` is a user account of that section with enough
 ETH for the price (the gas is free on this chain). Leave out the payee and `value`: the proxy fills
 them in.

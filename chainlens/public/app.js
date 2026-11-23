@@ -2840,6 +2840,17 @@ async function showNicknames(q) {
     const price = itemForm(t("item.setPrice"), t("item.setPriceNote"), [["nft.tokenId", p.tokenId], ["nft.price", p.price]], t("nick.save"),
         () => nicknamePut("/api/nicknames/price/" + encodeURIComponent(p.tokenId.value.trim()), { price: p.price.value.trim() }));
 
+    // sell a nickname to a section's user account (the buyer pays the price; undo within the hold period)
+    const ns = { token: itemInput("nick.tokenOrName", { placeholder: "1 or Alice" }), buyer: itemInput("nft.buyer", { list: "nickname-buyers", placeholder: "0x…" }) };
+    const nickBuyers = el("datalist", { id: "nickname-buyers" });
+    api("/api/accounts?limit=20000").then((d) => {
+        nickBuyers.replaceChildren(...d.items.filter((a) => a.role === "user").map((a) => el("option", { value: a.address }, a.section + " · " + a.balance + " ETH")));
+    }).catch(() => {});
+    const sell = itemForm(t("nick.sell"), t("nick.sellNote"), [["nick.tokenOrName", ns.token], ["nft.buyer", ns.buyer]], t("nick.sell"), () => {
+        const v = ns.token.value.trim();
+        return deployPost("/api/nicknames/sell", Object.assign({ to: ns.buyer.value.trim() }, /^\d+$/.test(v) ? { tokenId: v } : { nickname: v }));
+    }, (r) => t("item.sold").replace("{id}", r.tokenId).replace("{price}", r.paid).replace("{until}", String(r.undoUntil || "").replace("T", " ").slice(0, 16)));
+
     // nicknames
     const search = el("input", { class: "table-search", value: q, placeholder: t("nick.search"), "aria-label": t("nick.search") });
     search.addEventListener("keydown", (event) => {
@@ -2867,7 +2878,7 @@ async function showNicknames(q) {
                 el("span", { class: "muted" }, [c.name + " (" + c.symbol + ") ", el("a", { href: "#/contracts/" + c.address }, short(c.address))])]),
             el("div", { class: "muted", style: "margin-bottom:12px" }, t("nick.summary").replace("{n}", data.minted).replace("{levels}", data.levels.length).replace("{days}", c.holdDays)),
             memoBox(),
-            mint, price
+            mint, price, sell, nickBuyers
         ]),
         el("section", { class: "card stack" }, [
             el("h2", {}, t("nick.edges")),

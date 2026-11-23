@@ -2603,6 +2603,20 @@ app.post("/api/nicknames/mint", sectionsJson, sectionsGuard, (req, res) => nickn
 }));
 app.put("/api/nicknames/price/:tokenId", sectionsJson, sectionsGuard, (req, res) => nicknameWrite(req, res, "price",
     (address) => center(address, "setPrice", { tokenId: String(req.params.tokenId), price: String((req.body || {}).price) })));
+// Sell a nickname to a section's user account: { tokenId | nickname, to }. The proxy signs as the buyer
+// (POST /contract/send buy), the price goes to the buyer's section at once, undoable within the hold period.
+app.post("/api/nicknames/sell", sectionsJson, sectionsGuard, (req, res) => nicknameWrite(req, res, "sell", async (address) => {
+    const b = req.body || {};
+    if (!/^0x[0-9a-fA-F]{40}$/.test(String(b.to || ""))) {
+        return { status: 400, data: { error: "to: the buyer (a section's user account)" } };
+    }
+    const args = /^\d+$/.test(String(b.tokenId || "")) ? { tokenId: String(b.tokenId) } : { nickname: String(b.nickname || "") };
+    if (!args.tokenId && !args.nickname) {
+        return { status: 400, data: { error: "tokenId or nickname" } };
+    }
+    return proxyAdmin("POST", "/contract/send", { contract: address, function: "buy", args, from: b.to });
+}));
+
 app.post("/api/nicknames/levels", sectionsJson, sectionsGuard, (req, res) => nicknameWrite(req, res, "addLevel",
     (address) => center(address, "addLevel", { price: String((req.body || {}).price) })));
 app.put("/api/nicknames/levels/:level", sectionsJson, sectionsGuard, (req, res) => {
