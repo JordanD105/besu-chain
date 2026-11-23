@@ -17,6 +17,14 @@
         group: "1000"
         mode: "0750"
 
+    - name: Directory for the section tokens (hashes; the container user is uid 1000)
+      ansible.builtin.file:
+        path: "{{ chainlens_tokens_dir }}"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0700"
+
     - name: Chainlens settings
       ansible.builtin.template:
         src: templates/chainlens.env.j2

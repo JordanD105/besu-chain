@@ -67,6 +67,7 @@ app_images:
   docs-site: localhost/besu-docs/docs
   gateway: localhost/besu-gateway/gateway
 chainlens_local_registry: /var/lib/chainlens/deployments   # Deploy page records on the monitoring host
+chainlens_tokens_dir: /var/lib/chainlens/tokens            # section tokens (hashes only), never copied to the repository
 # Directories of the repository that 01-hosts.yml copies to the hosts
 # (docs: built into the documentation site image by 02-images.yml)
 deployed_dirs: [besu-production, ha, monitoring, mpc-signer/deploy, proxy, chainlens, contracts, remix, docs-site, docs, gateway]

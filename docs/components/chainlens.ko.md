@@ -81,11 +81,35 @@
 
 섹션 통계 카드는 개요 페이지에서 이 페이지로 옮겨졌습니다.
 
+## 역할 {#roles}
+
+모두 로그인합니다(위쪽 바의 **로그인** 버튼 또는 로그인 페이지). chainlens는 토큰으로 누구인지 판단합니다. 토큰이
+없으면 로그인 페이지만 보입니다(`chainlens_public: true`면 방화벽이 허용한 누구에게나 읽기 전용 탐색기를 다시 보여 줍니다).
+
+| | **관리자** | **섹션 *i*** |
+|---|---|---|
+| **로그인 수단** | 관리자 토큰(`cat ansible/state/secrets/chainlens_deploy_token`), 설정된 경우 `chainlens_admin_ips`에서만 | 관리자가 섹션 페이지(*Settings* → *섹션 토큰*)에서 만든 **섹션 토큰** |
+| **보이는 것** | 전부 | 섹션 *i*만: **내 섹션**(`#/my`), 그 트랜잭션과 메모, 계정, 사용자가 가진 아이템, 통계. 블록, 컨트랙트, 네트워크, 관리자 페이지는 없음 |
+| **자금** | **충전**(SENDER01 → 선지급) | **회수**(소비 → 결제)와 **반환**(결제 → SENDER01) |
+| **취소** | — | 자기 +x / −x 송금(*History*), 사용자의 아이템 판매와 레벨 업그레이드(*Items*) |
+| **게이트웨이** | 정정을 봄 | 게이트웨이의 정정을 **확인** |
+| **그 밖의 모든 것** | 생성, 이름 변경, 정보, API 키, 계정, +x / −x, 보관, 민팅, 가격, 판매, 배포, 섹션 토큰 | — |
+
+- **서버가 결정합니다**(모든 `/api` 호출마다): 섹션 토큰으로는 다른 섹션의 데이터를 읽거나(403) 관리자 경로를
+  호출할 수 없고(403), 관리자 토큰으로는 섹션의 회수, 반환, 취소를 할 수 없습니다(403). 탐색 메뉴는 역할이 열 수
+  없는 것을 숨길 뿐입니다.
+- **섹션 토큰:** *생성*, *교체*(이전 토큰은 즉시 무효), *폐기*(섹션 팀은 즉시 로그아웃). 토큰은 만들 때 한 번만
+  보이며 chainlens는 해시만 보관합니다(`chainlens_tokens_dir`, 저장소로 복사되지 않음). 섹션의 API 키와는 별개이므로
+  애플리케이션의 키가 브라우저에 놓이지 않습니다.
+- **틀린 토큰:** 각각 1초 뒤에 응답하며, 한 주소에서 1분 안에 10번 틀리면 그 주소는 1분 동안 막힙니다.
+- **브라우저에서** 토큰은 브라우저 세션 동안의 HttpOnly 쿠키입니다(브라우저를 닫으면 로그아웃. 위쪽 바의 칩은
+  *관리자 ✓* 또는 *&lt;섹션&gt; ✓*, 누르면 로그아웃).
+- 모든 쓰기는 누가 했는지와 함께 기록됩니다. 예: `sections: sweep section 1 … by section 1 (NewStar) from 192.168.68.20`.
+
 ## 관리자 페이지 {#admin-pages}
 
-`operator_ip`와 `chainlens_deploy_ips`에서만 보입니다. 위쪽 바의 버튼으로 **한 번 로그인**합니다(관리 토큰:
-`cat ansible/state/secrets/chainlens_deploy_token`). 그러면 칩이 *관리자 ✓*로 바뀝니다(누르면 로그아웃). 토큰이
-틀리거나 만료되면 로그인 창이 다시 열리고, 그 밖의 오류는 토큰 요청이 아니라 오류 그대로 표시됩니다.
+관리자에게 보입니다([역할](#roles)). 토큰이 틀리거나 폐기되면 로그인이 다시 열리고, 그 밖의 오류는 토큰 요청이
+아니라 오류 그대로 표시됩니다.
 
 **결과를 바로:** 모든 관리 작업은 결과를 즉시 토스트로 보여줍니다(프록시의 응답: 메모, 금액, 트랜잭션). chainlens가
 트랜잭션을 인덱싱하면(라이브 피드 `/api/live`, 보통 1–3초) 토스트가 ✓로 바뀌고 페이지가 스스로 새로 고쳐집니다.
@@ -144,7 +168,9 @@ Ansible(`ansible/templates/chainlens.env.j2`)이 h139의 `chainlens/.env`에 작
 | `PORT` | 30100 |
 | `REGISTRY_CONTRACT`, `REGISTRY_FROM_BLOCK` | SectionRegistry와 그 배포 블록 |
 | `CONTRACT_CENTER` | 컨트랙트 계정 센터(Accounts와 개요에 표시됨) |
-| `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | 관리자 페이지의 토큰과 허용 주소 |
+| `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | 관리자 토큰, 관리자가 로그인할 수 있는 주소(`chainlens_admin_ips`, 비어 있으면 어디서나) |
+| `CHAINLENS_PUBLIC` | `true`: 로그인 없이 읽기 전용 탐색기(`chainlens_public`) |
+| `TOKENS_DIR`, `CHAINLENS_TOKENS_DIR` | 섹션 토큰의 해시: 컨테이너의 `/tokens`, 호스트의 `chainlens_tokens_dir` |
 | `PROXY_ADMIN_URL`, `PROXY_ADMIN_TOKEN` | 관리자 페이지가 요청을 전달하는 곳(프록시 VIP) |
 | `DEPLOY_ENABLED`, `SECTIONS_ENABLED` | 관리자 페이지 활성화 |
 | `GATEWAYS` | 섹션 게이트웨이, `<section id>=http://<gateway host>:30010 …`(Sections 페이지 안내, Gateway 카드) |
@@ -154,7 +180,7 @@ Ansible(`ansible/templates/chainlens.env.j2`)이 h139의 `chainlens/.env`에 작
 | `TRANSFER_UNDO_DAYS` | 섹션 내역의 **취소** 버튼([이체 취소](../features/transfer-undo.md)) |
 
 `settings.yml`의 항목: `chainlens_ips`, `chainlens_deploy_enabled`, `chainlens_sections_enabled`,
-`chainlens_deploy_ips`.
+`chainlens_deploy_ips`(관리자 PC에 방화벽을 엶), `chainlens_public`, `chainlens_admin_ips`.
 
 ## 실행 및 업데이트 {#run-and-update}
 

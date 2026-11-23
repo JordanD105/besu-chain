@@ -144,11 +144,9 @@
         lines:
           - "Deployment complete. Applications: http://{{ vip_proxy }}:30000"
           - "Grafana: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:3000 (admin / state/secrets/grafana_admin_password)"
-          - "Chainlens: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:30100"
-          - "{{ ('Chainlens Deploy page: http://' ~ ip_of[groups['monitoring_hosts'][0]] ~ ':30100/#/deploy (token in '
-               ~ state_dir ~ '/secrets/chainlens_deploy_token, from ' ~ ([operator_ip] + chainlens_deploy_ips) | join(', ')
-               ~ ' only)') if chainlens_deploy_enabled | bool else '' }}"
-          - "{{ ('Chainlens Sections page: http://' ~ ip_of[groups['monitoring_hosts'][0]] ~ ':30100/#/sections (same token as the Deploy page)')
+          - "Chainlens: http://{{ ip_of[groups['monitoring_hosts'][0]] }}:30100 (admin sign-in: the token in {{ state_dir }}/secrets/chainlens_deploy_token{{ (', from ' ~ chainlens_admin_ips | join(', ')) if chainlens_admin_ips else '' }}; sections: their section tokens, made on each section's page)"
+          - "{{ ('Chainlens Deploy page: http://' ~ ip_of[groups['monitoring_hosts'][0]] ~ ':30100/#/admin/deploy (the admin)') if chainlens_deploy_enabled | bool else '' }}"
+          - "{{ ('Chainlens Sections page: http://' ~ ip_of[groups['monitoring_hosts'][0]] ~ ':30100/#/admin/sections (the admin)')
                if chainlens_sections_enabled | bool else '' }}"
           - "{{ ('Remix IDE: http://' ~ ip_of[groups['monitoring_hosts'][0]] ~ ':30200 (evmVersion cancun)')
                if remix_enabled | bool else 'Remix IDE: off (remix_enabled)' }}"

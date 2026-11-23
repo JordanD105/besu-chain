@@ -712,3 +712,8 @@ body.light .stat-date { color-scheme: light; }
 .fn-run.small { padding: 4px 10px; font-size: 12px; }
 @media (max-width: 640px) { .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat-tile b { font-size: 18px; } }
 .stats-page td:first-child { white-space: nowrap; }
+
+/* Sign-in page */
+.signin { max-width: 460px; margin: 40px auto; }
+.signin input { width: 100%; }
+#nav [hidden], .top [hidden] { display: none !important; }

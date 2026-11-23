@@ -311,10 +311,13 @@ function notice(status) {
 
 async function api(path) {
     const response = await fetch(path, { cache: "no-store" });
-    const body = await response.json();
+    const body = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-        throw new Error(body.error || "Request failed");
+        if (response.status === 401 && body.signIn) {
+            signedOut();
+        }
+        throw Object.assign(new Error(body.error || "Request failed"), { status: response.status });
     }
 
     return body;
@@ -772,6 +775,18 @@ async function render(options) {
     markNav(path);
 
     try {
+        if (!session.known) {
+            await loadSession();
+            paintChrome({});
+        }
+        if (!canRead() || path === "#/signin") {
+            return canRead() ? (location.hash = "#/") : showSignIn();
+        }
+        // a section's home is its own section page
+        if (session.role === "section" && (path === "#/" || path === "")) {
+            location.replace("#/my");
+            return;
+        }
         const status = await api("/api/status");
 
         if (token !== showToken) {
@@ -837,6 +852,10 @@ async function render(options) {
             return showStatistics(params);
         }
 
+        if (path === "#/my" && session.role === "section") {
+            return showSection(String(session.section.id), params.get("tab") || "overview", true);
+        }
+
         // admin (hidden unless this address may use it; the server checks the token)
         if (path === "#/admin/sections") {
             return showSections();
@@ -869,6 +888,9 @@ async function render(options) {
             return;
         }
 
+        if (error.status === 401 && !canRead()) {
+            return showSignIn();
+        }
         show(el("div", { class: "card" }, uiError(error.message)));
     } finally {
         if (token === showToken) {
@@ -1142,9 +1164,15 @@ const STAT_DEFS = {
     avatarSales: {}, avatarEth: { unit: "eth" }, nicknameSales: {}, nicknameEth: { unit: "eth" }, levelUpgrades: {}
 };
 
+function statTopicKeys() {
+    return session.role === "section" ? STAT_TOPIC_KEYS.filter((k) => k !== "network") : STAT_TOPIC_KEYS;
+}
+
 function statTopicMeasures(topic) {
     return {
-        overview: ["txs", "activeAccounts", "newUsers", "users", "income", "avatarSales", "nicknameSales", "topup"],
+        overview: session.role === "section"
+            ? ["sectionTxs", "newUsers", "users", "income", "avatarSales", "nicknameSales", "sweep", "payback"]
+            : ["txs", "activeAccounts", "newUsers", "users", "income", "avatarSales", "nicknameSales", "topup"],
         network: ["txs", "activeAccounts", "failed", "newContracts", "blocks"],
         users: ["newUsers", "users", "sectionTxs"],
         money: ["balances", "income", "fromUsers", "toUsers", "refunds", "topup", "sweep", "payback"],
@@ -1275,7 +1303,7 @@ async function showStatistics(params) {
     const today = new Date().toISOString().slice(0, 10);
     const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
     const v = {
-        topic: STAT_TOPIC_KEYS.includes(params.get("topic")) ? params.get("topic") : "overview",
+        topic: statTopicKeys().includes(params.get("topic")) ? params.get("topic") : "overview",
         period: STAT_PERIOD_KEYS.includes(params.get("period")) ? params.get("period") : "month",
         section: params.get("section") || "all",
         m: params.get("m") || "",
@@ -1330,7 +1358,7 @@ async function showStatistics(params) {
         b.addEventListener("click", () => pick(k));
         return b;
     }));
-    const topicTabs = el("div", { class: "stat-topics" }, tabs(STAT_TOPIC_KEYS, v.topic, (k) => t("stats.topic." + k), (k) => go({ topic: k, m: "" })));
+    const topicTabs = el("div", { class: "stat-topics" }, tabs(statTopicKeys(), v.topic, (k) => t("stats.topic." + k), (k) => go({ topic: k, m: "" })));
     const periodTabs = tabs(STAT_PERIOD_KEYS, v.period, (k) => t("stats." + k), (k) => go({ period: k, at: null }));
     const presetKey = !v.from ? "last" : (v.to === today && v.from === daysAgo(29) ? "30d" : (v.to === today && v.from === today.slice(0, 4) + "-01-01" ? "year" : "custom"));
     const fromInput = el("input", { type: "date", class: "stat-date", max: today, value: v.from, "aria-label": t("dash.start") });
@@ -1370,7 +1398,7 @@ async function showStatistics(params) {
     sectionSelect.addEventListener("change", () => go({ section: sectionSelect.value }));
     const chainOnly = v.topic === "network";
     const controls = el("div", { class: "stat-bar" }, [
-        el("div", { class: "stat-controls" }, [periodTabs, stats.sections.length && !chainOnly ? sectionSelect : null,
+        el("div", { class: "stat-controls" }, [periodTabs, stats.sections.length > 1 && !chainOnly ? sectionSelect : null,
             chainOnly ? el("span", { class: "muted" }, "· " + t("stats.wholeChain")) : null]),
         el("div", { class: "stat-range" }, [el("span", { class: "muted" }, t("stats.rangeLabel")), presets, custom,
             el("span", { class: "muted" }, stats.range
@@ -1389,7 +1417,7 @@ async function showStatistics(params) {
         ]);
         b.addEventListener("click", () => {
             if (v.topic === "overview") {
-                const topic = STAT_TOPIC_KEYS.find((k) => k !== "overview" && statTopicMeasures(k).includes(x));
+                const topic = statTopicKeys().find((k) => k !== "overview" && statTopicMeasures(k).includes(x));
                 go({ topic, m: x });
             } else {
                 go({ m: x });
@@ -2007,6 +2035,10 @@ function undoCell(row, level) {
 
 // A button that undoes a sale (or a nickname's newest level upgrade) after a confirmation
 function undoButton(label, confirmText, path, body) {
+    if (session.role !== "section") {
+        // undos are done by the section that sold the item (its section token), not by the admin
+        return el("span", { class: "muted", title: t("item.bySectionTip") }, t("item.bySection"));
+    }
     const b = el("button", { type: "button", class: "fn-run" }, label);
     b.addEventListener("click", async () => {
         if (!window.confirm(confirmText)) {
@@ -2577,8 +2609,14 @@ async function showSections() {
     ]));
 }
 
-async function showSection(id, tab) {
+// The section page: the admin's (#/admin/sections/<id>) or a section's own (#/my, its section token).
+// Admin: top-ups, accounts, settings and the section token. Section: sweep, pay back, its undos,
+// its items and its gateway's corrections.
+async function showSection(id, tab, mine) {
     const token = showToken;
+    const isAdmin = session.role === "admin";
+    const isSection = session.role === "section" && String(session.section.id) === String(id);
+    const base = mine ? "#/my" : "#/admin/sections/" + id;
     const status = await api("/api/sections/status");
     if (token !== showToken) {
         return;
@@ -2586,7 +2624,7 @@ async function showSection(id, tab) {
     if (!status.enabled) {
         return show(el("section", { class: "card" }, [el("h2", {}, t("sections.title")), el("div", { class: "empty" }, t("sections.off"))]));
     }
-    if (!isSignedIn()) {
+    if (!isAdmin && !isSection) {
         return show(adminError({ status: 401 }, t("sections.title")));
     }
     let data;
@@ -2751,7 +2789,7 @@ async function showSection(id, tab) {
             return el("a", { href: "#/activity/transactions/" + row.undoOf, class: "muted" }, t("sections.undoOfLink"));
         }
         const fresh = row.timestamp && Date.now() / 1000 - row.timestamp < (data.undoDays || 7) * 86400;
-        if (!(row.memoType === "transfer.in" || row.memoType === "transfer.out") || row.status !== "success" || !fresh) {
+        if (!isSection || !(row.memoType === "transfer.in" || row.memoType === "transfer.out") || row.status !== "success" || !fresh) {
             return "";
         }
         const b = el("button", { type: "button", class: "fn-run" }, t("sections.undo"));
@@ -2760,6 +2798,61 @@ async function showSection(id, tab) {
         return b;
     };
     const gatewayBox = el("div");
+
+    // the section token (admin): the section's team signs in to chainlens with it and sees only this section
+    const tokenState = data.sectionToken || { set: false };
+    const tokenAct = async (button, method, confirmText) => {
+        if (!window.confirm(confirmText)) {
+            return;
+        }
+        button.disabled = true;
+        try {
+            const r = await fetch("/api/section-tokens/" + id, { method, headers: { "content-type": "application/json" } });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                throw new Error(d.error || "HTTP " + r.status);
+            }
+            result.replaceChildren(method === "POST"
+                ? el("div", { class: "key-box" }, [el("b", {}, t("sections.tokenFor").replace("{name}", s.name)),
+                    el("div", { class: "muted" }, t("sections.tokenOnce")), el("div", { class: "key-value" }, [el("code", {}, d.token), copyButton(d.token)])])
+                : el("span", {}, t("sections.tokenRevoked").replace("{name}", s.name)));
+            result.scrollIntoView({ block: "nearest" });
+        } catch (error) {
+            result.replaceChildren(el("span", { class: "bad-text" }, error.message));
+        }
+        button.disabled = false;
+    };
+    const tokenMake = el("button", { type: "button", class: "fn-run" }, t(tokenState.set ? "sections.tokenReplace" : "sections.tokenCreate"));
+    tokenMake.addEventListener("click", () => tokenAct(tokenMake, "POST", t(tokenState.set ? "sections.tokenConfirmReplace" : "sections.tokenConfirmCreate").replace(/\{name\}/g, s.name)));
+    const tokenRevoke = el("button", { type: "button", class: "fn-run danger" }, t("sections.tokenRevoke"));
+    tokenRevoke.addEventListener("click", () => tokenAct(tokenRevoke, "DELETE", t("sections.tokenConfirmRevoke").replace(/\{name\}/g, s.name)));
+    const tokenRow = el("div", { class: "section-inputs" }, [
+        el("span", { class: "muted" }, tokenState.set ? t("sections.tokenSet").replace("{date}", String(tokenState.createdAt || "").replace("T", " ").slice(0, 16)) : t("sections.tokenNone")),
+        tokenMake, tokenState.set ? tokenRevoke : null]);
+
+    // the section's items (avatars and nicknames its users bought), with Undo while the window is open
+    const itemsBox = el("section", { class: "card stack" }, [el("h2", {}, t("sitems.title")), el("span", { class: "muted" }, "…")]);
+    if (isSection && tab === "items") {
+        sectionGet("/api/sections/" + id + "/items").then((d) => {
+            const undo = (r, level) => {
+                const b = el("button", { type: "button", class: "fn-run" }, t(level ? "item.undoLevel" : "item.undo"));
+                b.addEventListener("click", () => act(b, "items/undo", { collection: r.collection, tokenId: r.tokenId, level },
+                    t(level ? "item.confirmUndoLevel" : "item.confirmUndo").replace("{id}", r.tokenId), (x) => done(x, t("item.undone").replace("{id}", r.tokenId))));
+                return b;
+            };
+            itemsBox.replaceChildren(el("h2", {}, t("sitems.title")), el("div", { class: "muted", style: "margin-bottom:8px" }, t("sitems.note")),
+                d.items.length ? dataTable([
+                    { label: "sitems.item", sort: (r) => (r.nickname || r.image || ""), search: (r) => r.collectionName + " " + (r.nickname || r.image || ""),
+                        cell: (r) => el("a", { href: "#/nfts/" + r.collection + "/" + r.tokenId }, (r.kind === "nickname" ? r.nickname : "#" + r.tokenId) + " · " + r.collectionName) },
+                    { label: "nick.account", search: (r) => r.owner, cell: (r) => addr(r.owner) },
+                    { label: "sitems.paid", sort: (r) => Number(r.paid || 0), cell: (r) => (r.paid ? r.paid + " ETH" : "—") },
+                    { label: "item.undo", cell: (r) => el("span", {}, [
+                        r.canUndo ? el("span", {}, [undoCell(r, false) + " ", undo(r, false)]) : null,
+                        r.canUndoLevel ? el("span", {}, [" " + undoCell(r, true) + " ", undo(r, true)]) : null,
+                        !r.canUndo && !r.canUndoLevel ? "—" : null]) }
+                ], d.items, { key: "section-items" }) : el("div", { class: "empty" }, t("sitems.none")));
+        }).catch((error) => itemsBox.replaceChildren(el("h2", {}, t("sitems.title")), el("div", { class: "bad-text" }, error.message)));
+    }
     const history = dataTable([
         { label: "col.time", sort: (row) => row.timestamp || 0, cell: (row) => stamp(row.timestamp) },
         { label: "sections.kind", sort: (row) => row.memoType || row.kind, search: (row) => (row.memoType || row.kind) + " " + memoOf(row), cell: (row) => el("span", { class: "badge type" }, row.memoType || row.kind) },
@@ -2772,24 +2865,24 @@ async function showSection(id, tab) {
     ], data.history, { sort: 0, dir: "desc", key: "section-history" });
 
     // tabs (docs/components/chainlens.md): overview (money), accounts, history (with undo), gateway, settings
-    const tabs = ["overview", "accounts", "history"].concat(adminState.allowed && document.querySelector('[data-admin="gateways"]') && !document.querySelector('[data-admin="gateways"]').hidden ? ["gateway"] : []).concat(["settings"]);
+    const tabs = ["overview", "accounts", "history"].concat(isSection ? ["items"] : [], data.hasGateway ? ["gateway"] : [], isAdmin ? ["settings"] : []);
     const current = tabs.includes(tab) ? tab : "overview";
     const panes = {
         overview: () => [el("section", { class: "card" }, [memoBox()]),
         el("section", { class: "card stack" }, [
             el("h2", {}, t("sections.money")),
-            el("div", { class: "section-actions" }, [
-                moveRow(t("sections.topup"), "topup", false, "SENDER01", t("sections.upfront")),
-                moveRow(t("sections.sweep"), "sweep", true, t("sections.consumption"), t("sections.payment")),
-                moveRow(t("sections.payback"), "payback", true, t("sections.payment"), "SENDER01")
-            ])
+            el("div", { class: "section-actions" }, isAdmin
+                ? [moveRow(t("sections.topup"), "topup", false, "SENDER01", t("sections.upfront"))]
+                : [moveRow(t("sections.sweep"), "sweep", true, t("sections.consumption"), t("sections.payment")),
+                    moveRow(t("sections.payback"), "payback", true, t("sections.payment"), "SENDER01")]),
+            el("div", { class: "muted small", style: "margin-top:8px" }, t(isAdmin ? "sections.moneyNoteAdmin" : "sections.moneyNoteSection"))
         ])],
         accounts: () => [el("section", { class: "card" }, [memoBox()]),
         el("section", { class: "card stack" }, [
             el("h2", {}, t("sections.accounts")),
             el("div", { class: "muted", style: "margin-bottom:10px" }, t("sections.accountsNote")),
             accountsBox,
-            el("div", { class: "section-actions", style: "margin-top:12px" }, [
+            !isAdmin ? null : el("div", { class: "section-actions", style: "margin-top:12px" }, [
                 el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.newAccount")), el("div", { class: "section-inputs" }, [newAmount, newPool, newButton])]),
                 el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.transferLabel")), el("div", { class: "section-inputs" }, [transferAccount, moveAmount, moveButton])])
             ])
@@ -2800,6 +2893,7 @@ async function showSection(id, tab) {
             data.history.length ? history : el("div", { class: "empty" }, t("sections.noHistory"))
         ])],
         gateway: () => [gatewayBox],
+        items: () => [el("section", { class: "card" }, [memoBox()]), itemsBox],
         settings: () => [el("section", { class: "card" }, [memoBox()]),
         el("section", { class: "card stack" }, [
             el("h2", {}, t("sections.settings")),
@@ -2808,12 +2902,13 @@ async function showSection(id, tab) {
                 el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.infoFields")), infoRows]),
                 el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.keyLabel")), el("div", { class: "section-inputs" }, [keyButton, activeButton])]),
                 el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.accountsLabel")), el("div", { class: "section-inputs" }, replaceButtons)]),
+                el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.tokenLabel")), tokenRow]),
                 el("div", { class: "section-action" }, [el("span", { class: "muted" }, t("sections.archiveLabel")), el("div", { class: "section-inputs" }, [archiveButton])])
             ])
         ])]
     };
     show(el("div", {}, [
-        el("div", { class: "muted", style: "margin-bottom:10px" }, [el("a", { href: "#/admin/sections" }, t("sections.title")), " / ", s.name]),
+        mine ? null : el("div", { class: "muted", style: "margin-bottom:10px" }, [el("a", { href: "#/admin/sections" }, t("sections.title")), " / ", s.name]),
         el("section", { class: "card" }, [
             el("div", { class: "card-head" }, [
                 el("h2", {}, [s.name + " ", el("span", { class: "badge " + (s.active ? "type" : "create") }, s.active ? t("sections.active") : t("sections.disabled"))]),
@@ -2827,7 +2922,7 @@ async function showSection(id, tab) {
                 el("span", { class: "muted" }, t("sections.created")), el("span", {}, stamp(s.createdAt))
             ])
         ]),
-        el("div", { class: "tabs page-tabs" }, tabs.map((k) => el("a", { href: "#/admin/sections/" + id + (k === "overview" ? "" : "?tab=" + k), class: k === current ? "active" : "" }, t("sectab." + k)))),
+        el("div", { class: "tabs page-tabs" }, tabs.map((k) => el("a", { href: base + (k === "overview" ? "" : "?tab=" + k), class: k === current ? "active" : "" }, t("sectab." + k)))),
         result,
         ...panes[current]()
     ]));
@@ -2859,6 +2954,9 @@ async function gatewayCard(id) {
     openOnly.checked = corrections.some((r) => !r.acked);
     const list = el("div");
     const ackButton = (r) => {
+        if (session.role !== "section") {
+            return el("span", { class: "muted", title: t("gateway.ackBySectionTip") }, t("gateway.ackBySection"));
+        }
         const b = el("button", { type: "button", class: "fn-run" }, t("gateway.ack"));
         b.addEventListener("click", async () => {
             b.disabled = true;
@@ -3107,27 +3205,115 @@ async function showNicknames(q) {
 
 // ---- Navigation chrome: the Admin group and sign-in, versions, links (from /api/status)
 let adminState = { allowed: false, signedIn: false };
+let lastAdminFlags = {};
+
+// ---- Who is signed in (docs/components/chainlens.md, Roles): the admin, a section (its section
+// token), or nobody (the sign-in page; CHAINLENS_PUBLIC: the read-only explorer). The token is in an
+// HttpOnly cookie for this browser session: the page never holds it.
+const session = { role: "anonymous", section: null, public: false, known: false };
+
+async function loadSession() {
+    try {
+        const r = await fetch("/api/auth/me", { cache: "no-store" });
+        const d = await r.json();
+        Object.assign(session, { role: d.role, section: d.section, public: Boolean(d.public) });
+    } catch (error) {
+        session.role = "anonymous";
+    }
+    session.known = true;
+    return session;
+}
+
+function canRead() {
+    return session.role === "admin" || session.role === "section" || session.public;
+}
+
+// the server refused the token (revoked, replaced, or the session ended): back to the sign-in page
+function signedOut() {
+    if (session.role === "anonymous") {
+        return;
+    }
+    session.role = "anonymous";
+    session.section = null;
+    fetch("/api/auth/signout", { method: "POST" }).catch(() => {});
+    if (liveSource && !session.public) {
+        liveSource.close();
+        liveSource = null;
+    }
+    paintChrome({});
+}
+
+function showSignIn() {
+    const input = el("input", { class: "table-search", type: "password", autocomplete: "off", placeholder: t("signin.token"), "aria-label": t("signin.token") });
+    const message = el("div", { class: "bad-text", role: "alert" });
+    const ok = el("button", { type: "button", class: "fn-run" }, t("admin.signIn"));
+    const submit = async () => {
+        const token = input.value.trim();
+        if (!token) {
+            return;
+        }
+        ok.disabled = true;
+        message.textContent = "";
+        try {
+            const r = await fetch("/api/auth/signin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token }) });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                throw new Error(d.error || "HTTP " + r.status);
+            }
+            Object.assign(session, { role: d.role, section: d.section, known: true });
+            setDeployToken("");
+            paintChrome({});
+            liveFeed();
+            api("/api/status").then(paintChrome).catch(() => {});
+            if (location.hash === "#/" || location.hash === "" || location.hash === "#/signin") {
+                render();
+            } else {
+                location.hash = "#/";
+            }
+        } catch (error) {
+            message.textContent = error.message;
+            ok.disabled = false;
+        }
+    };
+    ok.addEventListener("click", submit);
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter") submit(); });
+    show(el("section", { class: "card stack signin" }, [
+        el("h2", {}, t("signin.title")),
+        el("div", { class: "muted" }, t("signin.note")),
+        input, message, el("div", { class: "deploy-buttons" }, [ok])
+    ]));
+    input.focus();
+}
 let lastAdminStatus = 0;
 
 function paintChrome(status) {
-    const admin = status.admin || {};
-    adminState.allowed = Boolean(admin.allowed);
-    adminState.signedIn = adminState.allowed && isSignedIn();
-    document.querySelectorAll(".admin-only").forEach((node) => { node.hidden = !adminState.allowed; });
-    document.querySelectorAll('[data-admin="sections"]').forEach((node) => { node.hidden = !adminState.allowed || !admin.sections; });
-    document.querySelectorAll('[data-admin="deploy"]').forEach((node) => { node.hidden = !adminState.allowed || !admin.deploy; });
-    document.querySelectorAll('[data-admin="gateways"]').forEach((node) => { node.hidden = !adminState.allowed || !admin.gateways; });
+    const admin = status.admin || lastAdminFlags;
+    if (status.admin) {
+        lastAdminFlags = status.admin;
+    }
+    adminState.allowed = session.role === "admin";
+    adminState.signedIn = adminState.allowed;
+    // the navigation shows what this role may open (the server checks every call anyway)
+    const role = session.role === "anonymous" && session.public ? "public" : session.role;
+    document.querySelectorAll("#nav [data-roles]").forEach((node) => { node.hidden = !node.dataset.roles.split(" ").includes(role); });
+    document.querySelectorAll('[data-admin="sections"]').forEach((node) => { node.hidden = node.hidden || !admin.sections; });
+    document.querySelectorAll('[data-admin="deploy"]').forEach((node) => { node.hidden = node.hidden || !admin.deploy; });
+    document.querySelectorAll('[data-admin="gateways"]').forEach((node) => { node.hidden = node.hidden || !admin.gateways; });
+    document.querySelector("#search").hidden = !canRead();
+    document.querySelector("#status-badge").hidden = !canRead();
     const chip = document.querySelector("#admin-chip");
-    chip.hidden = !adminState.allowed;
-    chip.textContent = adminState.signedIn ? t("admin.signedIn") : t("admin.signIn");
-    chip.classList.toggle("on", adminState.signedIn);
+    chip.hidden = false;
+    chip.textContent = session.role === "admin" ? t("admin.signedIn") : session.role === "section" ? session.section.name + " ✓" : t("admin.signIn");
+    chip.title = session.role === "section" ? t("signin.asSection").replace("{name}", session.section.name) : "";
+    chip.classList.toggle("on", session.role === "admin" || session.role === "section");
     const links = status.links || {};
     const docs = document.querySelector("#nav-docs");
-    docs.hidden = !links.docs;
+    docs.hidden = docs.hidden || !links.docs;
     docs.href = links.docs || "#";
     const grafana = document.querySelector("#nav-grafana");
-    grafana.hidden = !links.grafana;
+    grafana.hidden = grafana.hidden || !links.grafana;
     grafana.href = links.grafana || "#";
+    document.querySelector('#nav [data-i18n="nav.help"]').hidden = docs.hidden && grafana.hidden;
     const v = status.version || {};
     const short7 = (c) => (c ? c.slice(0, 7) : "?");
     const differ = v.chainlens && v.proxy && v.chainlens !== v.proxy;
@@ -3136,61 +3322,23 @@ function paintChrome(status) {
     box.textContent = v.chainlens || v.proxy ? "chainlens " + short7(v.chainlens) + " · proxy " + short7(v.proxy) + (differ ? " · " + t("admin.versionsDiffer") : "") : "";
 }
 
-// Sign in once (the admin token); 401 anywhere opens this again
-function signInDialog(onDone) {
-    const old = document.querySelector(".modal");
-    if (old) {
-        old.remove();
-    }
-    const input = el("input", { class: "table-search", type: "password", autocomplete: "off", placeholder: t("sections.token"), "aria-label": t("sections.token") });
-    const message = el("div", { class: "bad-text" });
-    const ok = el("button", { type: "button", class: "fn-run" }, t("admin.signIn"));
-    const cancel = el("button", { type: "button", class: "fn-run" }, t("admin.cancel"));
-    const modal = el("div", { class: "modal" }, el("div", { class: "card modal-box stack" }, [
-        el("h2", {}, t("admin.signInTitle")),
-        el("div", { class: "muted" }, t("sections.needToken")),
-        input, message, el("div", { class: "deploy-buttons" }, [ok, cancel])
-    ]));
-    const submit = async () => {
-        ok.disabled = true;
-        message.textContent = "";
-        try {
-            const r = await fetch("/api/admin/check", { method: "POST", headers: { authorization: "Bearer " + input.value.trim() } });
-            const d = await r.json().catch(() => ({}));
-            if (!r.ok) {
-                throw new Error(d.error || "HTTP " + r.status);
-            }
-            setDeployToken(input.value.trim());
-            sessionStorage.setItem("chainlens.adminOk", input.value.trim());
-            modal.remove();
-            const status = await api("/api/status");
-            paintChrome(status);
-            if (onDone) {
-                onDone();
-            } else {
-                render();
-            }
-        } catch (error) {
-            message.textContent = error.message;
-            ok.disabled = false;
-        }
-    };
-    ok.addEventListener("click", submit);
-    cancel.addEventListener("click", () => modal.remove());
-    input.addEventListener("keydown", (event) => { if (event.key === "Enter") submit(); });
-    document.body.append(modal);
-    input.focus();
+// 401 anywhere: the sign-in page
+function signInDialog() {
+    signedOut();
+    showSignIn();
 }
 
-function signOut() {
+async function signOut() {
     setDeployToken("");
-    sessionStorage.removeItem("chainlens.adminOk");
+    await fetch("/api/auth/signout", { method: "POST" }).catch(() => {});
+    signedOut();
+    session.role = "anonymous";
     location.hash = "#/";
-    api("/api/status").then(paintChrome).catch(() => {});
+    render();
 }
 
 document.querySelector("#admin-chip").addEventListener("click", () => {
-    if (adminState.signedIn) {
+    if (session.role === "admin" || session.role === "section") {
         if (window.confirm(t("admin.signOutConfirm"))) {
             signOut();
         }
@@ -3201,14 +3349,12 @@ document.querySelector("#admin-chip").addEventListener("click", () => {
 
 // Signed in = a token that was checked in this browser session (the chip in the top bar says the same)
 function isSignedIn() {
-    const token = deployToken();
-    return Boolean(token) && sessionStorage.getItem("chainlens.adminOk") === token;
+    return session.role === "admin";
 }
 
 // An admin page's error: 401 -> sign in; anything else -> the real message
 function adminError(error, title) {
     if (error.status === 401) {
-        sessionStorage.removeItem("chainlens.adminOk");
         return el("section", { class: "card stack" }, [el("h2", {}, title || t("admin.title")), el("div", { class: "muted" }, t("admin.needSignIn")),
             el("div", { class: "deploy-buttons" }, [el("button", { type: "button", class: "fn-run", onclick: () => signInDialog() }, t("admin.signIn"))])]);
     }
@@ -3281,11 +3427,13 @@ async function watchIndexed(hash, tries) {
     setTimeout(() => watchIndexed(hash, tries + 1), tries === 0 ? 500 : 2000);
 }
 
+let liveSource = null;
 function liveFeed() {
-    if (!window.EventSource) {
+    if (!window.EventSource || liveSource) {
         return;
     }
     const source = new EventSource("/api/live");
+    liveSource = source;
     source.onmessage = (event) => {
         let data;
         try {
@@ -3499,8 +3647,13 @@ async function showNetwork() {
 
 
 window.addEventListener("hashchange", render);
-api("/api/status").then(paintChrome).catch(() => {});
-liveFeed();
+loadSession().then(() => {
+    paintChrome({});
+    if (canRead()) {
+        api("/api/status").then(paintChrome).catch(() => {});
+        liveFeed();
+    }
+});
 document.addEventListener("localechange", () => {
     themeButton.setAttribute("aria-label", t(document.body.classList.contains("light") ? "theme.dark" : "theme.light"));
     render({ refresh: true });

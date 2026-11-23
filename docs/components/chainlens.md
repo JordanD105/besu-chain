@@ -25,7 +25,7 @@
 | | |
 |---|---|
 | **URL** | `http://192.168.68.139:30100` (production, h139); `http://localhost:30100` (development) |
-| **Who can open it** | `chainlens_ips` in `settings.yml` (plus the operator); see [access control](../deployment/access-control.md) |
+| **Who can open it** | `chainlens_ips` in `settings.yml` (plus the operator); see [access control](../deployment/access-control.md). Inside, everyone signs in: see [Roles](#roles) |
 | **Reads** | rpc2 directly (`BESU_RPC`), the SectionRegistry's events, the contract records in `contracts/deployments/` |
 | **Writes** | nothing by itself; the admin pages forward to the proxy's admin API |
 | **Languages / themes** | English, Korean, Chinese (EN / 한국어 / 中文), dark and light |
@@ -85,12 +85,38 @@ dates, section, measure, chosen period), so a view can be bookmarked or sent.
 
 The section statistics card left the Overview page for this page.
 
+## Roles
+
+Everyone signs in (the **Sign in** button in the top bar, or the sign-in page): chainlens tells from the
+token who you are. Without a token you see only the sign-in page (`chainlens_public: true` brings back
+the read-only explorer for anyone the firewall lets in).
+
+| | **Admin** | **Section *i*** |
+|---|---|---|
+| **Signs in with** | the admin token (`cat ansible/state/secrets/chainlens_deploy_token`), from `chainlens_admin_ips` when set | its **section token**, made by the admin on the section's page (*Settings* → *Section token*) |
+| **Sees** | everything | only section *i*: **My section** (`#/my`), its transactions and memos, its accounts, the items its users own, its statistics; no Blocks, Contracts, Network or admin pages |
+| **Money** | **top-ups** (SENDER01 → upfront) | **sweep** (consumption → payment) and **pay back** (payment → SENDER01) |
+| **Undos** | — | its own +x / −x transfers (*History*), its users' item sales and level upgrades (*Items*) |
+| **Gateway** | sees the corrections | **acknowledges** its gateway's corrections |
+| **Everything else** | create, rename, info, API keys, accounts, +x / −x, archive, mint, prices, sell, deploy, section tokens | — |
+
+- **The server decides**, on every `/api` call: a section's token can't read another section's data
+  (403) or call the admin's routes (403), and the admin's token is refused for a section's money moves
+  and undos (403). The navigation only hides what the role can't open.
+- **Section tokens:** *Create*, *Replace* (the old one stops at once) or *Revoke* (its team is signed out
+  at once). A token is shown only when made; chainlens keeps only its hash
+  (`chainlens_tokens_dir`, never copied to the repository). It is separate from the section's API key,
+  so the application's key never sits in a browser.
+- **Wrong tokens:** each is answered after 1 s; 10 from one address within a minute block that address
+  for a minute.
+- **In the browser** the token is an HttpOnly cookie for the browser session (closing the browser signs
+  out; the chip in the top bar reads *Admin ✓* or *&lt;section&gt; ✓*, click to sign out).
+- Every write is logged with who made it, e.g. `sections: sweep section 1 … by section 1 (NewStar) from 192.168.68.20`.
+
 ## Admin pages
 
-Shown only from `operator_ip` and `chainlens_deploy_ips`. **Sign in once** with the button in the top
-bar (the admin token: `cat ansible/state/secrets/chainlens_deploy_token`); the chip then reads
-*Admin ✓* (click to sign out). A wrong or expired token opens the sign-in again; any other error is
-shown as it is (not as a token prompt).
+Shown to the admin ([Roles](#roles)). A wrong or revoked token opens the sign-in again; any other
+error is shown as it is (not as a token prompt).
 
 **Results at once:** every admin action shows its result as a toast right away (the proxy's answer:
 memo, amount, transaction); when chainlens indexes the transaction (live feed `/api/live`, usually 1–3
@@ -105,9 +131,10 @@ levels call `/admin/contract/send` (signed by the contract account center); **Se
 | Page / card | Enabled by | Does | Guide |
 |---|---|---|---|
 | **Deploy** (`#/admin/deploy`) | `chainlens_deploy_enabled: true` | deploy a compiled contract (Remix / Hardhat / Foundry artifact) as the contract account center, check first, register it | [contract deployment](../features/contract-deployment.md) |
-| **Sections** (`#/admin/sections`) — tabs **Overview** (money), **Accounts**, **History** (with **Undo**), **Gateway**, **Settings** | `chainlens_sections_enabled: true` | create sections, top up, sweep, pay back, rename, info fields, keys, replace accounts, archive; a section's user accounts | [sections](../features/sections.md) |
-| **Nicknames** (`#/admin/nicknames`) | `chainlens_sections_enabled: true` | deploy the nickname collection (name, symbol, undo period in days); **Mint nicknames** (one per line, one price); **Change a price**; **Sell a nickname** (token id or nickname, buyer: a section's user account); **User levels** (step price, for sale, holders; add a level); the list of nicknames (token id, nickname, price, account or *for sale*, user level) with **Undo** / **Undo level** while possible | [nicknames](../features/nicknames.md) |
-| **Avatars** (`#/admin/avatars`: pick a collection; also on the collection's page) | either of the above | **Mint an avatar** (image, price, description, attributes); **Change a price** (until sold); **Sell an avatar** (token id or image URL, buyer: a section's user account); the list of avatars (newest first) with **Undo** while possible | [avatars](../features/avatars.md) |
+| **Sections** (`#/admin/sections`) — tabs **Overview** (top-up), **Accounts**, **History**, **Gateway**, **Settings** (with the **section token**) | `chainlens_sections_enabled: true` | create sections, top up, rename, info fields, API keys, section tokens, replace accounts, archive; a section's user accounts | [sections](../features/sections.md) |
+| **My section** (`#/my`, a section's own) — tabs **Overview** (sweep, pay back), **Accounts**, **History** (with **Undo**), **Items** (with **Undo** / **Undo level**), **Gateway** (with **Acknowledge**) | `chainlens_sections_enabled: true` | the section's own page | [Roles](#roles) |
+| **Nicknames** (`#/admin/nicknames`) | `chainlens_sections_enabled: true` | deploy the nickname collection (name, symbol, undo period in days); **Mint nicknames** (one per line, one price); **Change a price**; **Sell a nickname** (token id or nickname, buyer: a section's user account); **User levels** (step price, for sale, holders; add a level); the list of nicknames (token id, nickname, price, account or *for sale*, user level) and their undo windows (the undo itself: the section, on **My section** → **Items**) | [nicknames](../features/nicknames.md) |
+| **Avatars** (`#/admin/avatars`: pick a collection; also on the collection's page) | either of the above | **Mint an avatar** (image, price, description, attributes); **Change a price** (until sold); **Sell an avatar** (token id or image URL, buyer: a section's user account); the list of avatars (newest first) and their undo windows (the undo itself: the section) | [avatars](../features/avatars.md) |
 
 **Section gateway notice:** with section gateways (`gateway_enabled`), the **Sections** page asks each
 gateway for its status (`GET /api/sections/gateways`, which calls `/gateway/status` on every gateway in
@@ -118,7 +145,7 @@ answer*. See [the single-writer rule](gateway.md#the-single-writer-rule).
 
 **Gateway card:** on a section's page, when the section has a gateway, a **Gateway** card shows its
 mode, queue, spare accounts, cuts, corrections and last snapshot, the list of
-[corrections](gateway.md#corrections) with an **Acknowledge** button, and the reconcile reports
+[corrections](gateway.md#corrections) (the section acknowledges them, signed in with its section token), and the reconcile reports
 (`GET /api/sections/:id/gateway`, `POST /api/sections/:id/gateway/ack/:report`, through the
 gateways' report token `GATEWAY_REPORT_TOKEN`, which can only read and acknowledge). The Sections list
 shows a notice per section with open corrections.
@@ -154,7 +181,9 @@ Written by Ansible (`ansible/templates/chainlens.env.j2`) into `chainlens/.env` 
 | `PORT` | 30100 |
 | `REGISTRY_CONTRACT`, `REGISTRY_FROM_BLOCK` | the SectionRegistry and its deployment block |
 | `CONTRACT_CENTER` | the contract account center (marked in Accounts and the overview) |
-| `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | the admin pages' token and allowed addresses |
+| `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | the admin token; the addresses the admin may sign in from (`chainlens_admin_ips`; empty: any) |
+| `CHAINLENS_PUBLIC` | `true`: the read-only explorer without signing in (`chainlens_public`) |
+| `TOKENS_DIR`, `CHAINLENS_TOKENS_DIR` | the section tokens' hashes: `/tokens` in the container, `chainlens_tokens_dir` on the host |
 | `PROXY_ADMIN_URL`, `PROXY_ADMIN_TOKEN` | where the admin pages forward (the proxy VIP) |
 | `DEPLOY_ENABLED`, `SECTIONS_ENABLED` | turn the admin pages on |
 | `GATEWAYS` | the section gateways, `<section id>=http://<gateway host>:30010 …` (the Sections page notice, the Gateway card) |
@@ -163,8 +192,8 @@ Written by Ansible (`ansible/templates/chainlens.env.j2`) into `chainlens/.env` 
 | `APP_COMMIT`, `GRAFANA_URL`, `DOCS_URL` | the version in the sidebar (the proxy's comes from its `GET /version`); the Help links |
 | `TRANSFER_UNDO_DAYS` | the section history's **Undo** button ([transfer undo](../features/transfer-undo.md)) |
 
-In `settings.yml`: `chainlens_ips`, `chainlens_deploy_enabled`, `chainlens_sections_enabled`,
-`chainlens_deploy_ips`.
+In `settings.yml`: `chainlens_ips`, `chainlens_public`, `chainlens_admin_ips`, `chainlens_deploy_enabled`,
+`chainlens_sections_enabled`, `chainlens_deploy_ips` (opens the firewall for admin machines).
 
 ## Run and update
 

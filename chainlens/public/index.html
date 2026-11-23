@@ -29,25 +29,26 @@
     <div class="shell">
         <aside class="side">
             <nav id="nav">
-                <div class="nav-group" data-i18n="nav.explorer">Explorer</div>
-                <a href="#/" data-nav="overview"><span class="ico">⌂</span> <span data-i18n="nav.overview">Overview</span></a>
-                <a href="#/activity/transactions" data-nav="transactions"><span class="ico">⇄</span> <span data-i18n="nav.transactions">Transactions</span></a>
-                <a href="#/activity/blocks" data-nav="blocks"><span class="ico">▦</span> <span data-i18n="nav.blocks">Blocks</span></a>
-                <a href="#/accounts" data-nav="accounts"><span class="ico">▤</span> <span data-i18n="nav.accounts">Accounts</span></a>
-                <a href="#/items/avatars" data-nav="avatars"><span class="ico">◆</span> <span data-i18n="nav.avatars">Avatars</span></a>
-                <a href="#/items/nicknames" data-nav="nicknames"><span class="ico">✎</span> <span data-i18n="nav.nicknamesPublic">Nicknames</span></a>
-                <a href="#/statistics" data-nav="statistics"><span class="ico">▥</span> <span data-i18n="nav.statistics">Statistics</span></a>
-                <a href="#/contracts" data-nav="contracts"><span class="ico">⧉</span> <span data-i18n="nav.contracts">Contracts</span></a>
-                <a href="#/network" data-nav="network"><span class="ico">◎</span> <span data-i18n="nav.network">Network</span></a>
-                <div class="nav-group admin-only" hidden data-i18n="nav.admin">Admin</div>
-                <a href="#/admin/sections" class="admin-only" data-admin="sections" hidden><span class="ico">▣</span> <span data-i18n="nav.sections">Sections</span></a>
-                <a href="#/admin/avatars" class="admin-only" data-admin="sections" hidden><span class="ico">◆</span> <span data-i18n="nav.avatarAdmin">Avatars</span></a>
-                <a href="#/admin/nicknames" class="admin-only" data-admin="sections" hidden><span class="ico">✎</span> <span data-i18n="nav.nicknames">Nicknames</span></a>
-                <a href="#/admin/deploy" class="admin-only" data-admin="deploy" hidden><span class="ico">⇪</span> <span data-i18n="nav.deploy">Deploy</span></a>
-                <a href="#/admin/gateways" class="admin-only" data-admin="gateways" hidden><span class="ico">⇋</span> <span data-i18n="nav.gateways">Gateways</span></a>
-                <div class="nav-group" data-i18n="nav.help">Help</div>
-                <a id="nav-docs" href="#" target="_blank" rel="noopener" hidden><span class="ico">?</span> <span data-i18n="nav.docs">Docs</span> ↗</a>
-                <a id="nav-grafana" href="#" target="_blank" rel="noopener" hidden><span class="ico">▲</span> Grafana ↗</a>
+                <div class="nav-group" data-i18n="nav.explorer" data-roles="admin section public" hidden>Explorer</div>
+                <a href="#/" data-nav="overview" data-roles="admin public" hidden><span class="ico">⌂</span> <span data-i18n="nav.overview">Overview</span></a>
+                <a href="#/my" data-nav="my" data-roles="section" hidden><span class="ico">▣</span> <span data-i18n="nav.mySection">My section</span></a>
+                <a href="#/activity/transactions" data-nav="transactions" data-roles="admin section public" hidden><span class="ico">⇄</span> <span data-i18n="nav.transactions">Transactions</span></a>
+                <a href="#/activity/blocks" data-nav="blocks" data-roles="admin public" hidden><span class="ico">▦</span> <span data-i18n="nav.blocks">Blocks</span></a>
+                <a href="#/accounts" data-nav="accounts" data-roles="admin section public" hidden><span class="ico">▤</span> <span data-i18n="nav.accounts">Accounts</span></a>
+                <a href="#/items/avatars" data-nav="avatars" data-roles="admin section public" hidden><span class="ico">◆</span> <span data-i18n="nav.avatars">Avatars</span></a>
+                <a href="#/items/nicknames" data-nav="nicknames" data-roles="admin section public" hidden><span class="ico">✎</span> <span data-i18n="nav.nicknamesPublic">Nicknames</span></a>
+                <a href="#/statistics" data-nav="statistics" data-roles="admin section public" hidden><span class="ico">▥</span> <span data-i18n="nav.statistics">Statistics</span></a>
+                <a href="#/contracts" data-nav="contracts" data-roles="admin public" hidden><span class="ico">⧉</span> <span data-i18n="nav.contracts">Contracts</span></a>
+                <a href="#/network" data-nav="network" data-roles="admin public" hidden><span class="ico">◎</span> <span data-i18n="nav.network">Network</span></a>
+                <div class="nav-group" data-roles="admin" hidden data-i18n="nav.admin">Admin</div>
+                <a href="#/admin/sections" data-roles="admin" data-admin="sections" hidden><span class="ico">▣</span> <span data-i18n="nav.sections">Sections</span></a>
+                <a href="#/admin/avatars" data-roles="admin" data-admin="sections" hidden><span class="ico">◆</span> <span data-i18n="nav.avatarAdmin">Avatars</span></a>
+                <a href="#/admin/nicknames" data-roles="admin" data-admin="sections" hidden><span class="ico">✎</span> <span data-i18n="nav.nicknames">Nicknames</span></a>
+                <a href="#/admin/deploy" data-roles="admin" data-admin="deploy" hidden><span class="ico">⇪</span> <span data-i18n="nav.deploy">Deploy</span></a>
+                <a href="#/admin/gateways" data-roles="admin" data-admin="gateways" hidden><span class="ico">⇋</span> <span data-i18n="nav.gateways">Gateways</span></a>
+                <div class="nav-group" data-i18n="nav.help" data-roles="admin section public anonymous" hidden>Help</div>
+                <a id="nav-docs" href="#" target="_blank" rel="noopener" data-roles="admin section public anonymous" hidden><span class="ico">?</span> <span data-i18n="nav.docs">Docs</span> ↗</a>
+                <a id="nav-grafana" href="#" target="_blank" rel="noopener" data-roles="admin public" hidden><span class="ico">▲</span> Grafana ↗</a>
             </nav>
             <div id="versions" class="versions"></div>
             <div class="status-row" id="status-badge" tabindex="0" aria-describedby="status-pop">

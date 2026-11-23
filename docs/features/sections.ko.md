@@ -148,11 +148,14 @@ IP는 폐기됩니다.
   선택적 설명)은 API 키를 복사 버튼과 함께 한 번만 표시합니다.
 - **섹션 페이지:** 섹션의 계정과 잔액, **사용자 계정**(잔액이 포함된 목록,
   선지급 계정에서 자금을 받는 **Create account**, **Transfer** `+amount` 계정 → 소비 /
-  `−amount` 선지급 → 계정), **Top up**, **Sweep**, **Pay back**(금액, 또는 스윕과 반환의 경우
-  `all`), **Rename**, **정보 필드**(추가, 편집, 제거), **New API key**,
+  `−amount` 선지급 → 계정), **Top up**, **Rename**, **정보 필드**(추가, 편집, 제거), **New API key**,
   **Enable / Disable**, **New upfront / consumption / payment account**, **Archive**(확인을 위해 이름
   입력), 그리고 **이력**: 3개 계정의 최근 인덱싱된 트랜잭션 500건이 레이블과 함께 표시됩니다
   (top-up, upfront → account, account → consumption, sweep, pay back).
+- **누가 자금을 옮기나**([chainlens 역할](../components/chainlens.md#roles)): 관리자는 **충전**하고, 섹션은 **섹션 토큰**으로
+  로그인해 **내 섹션**(`#/my`)에서 직접 **회수**, **반환**(금액 또는 `all`), 송금과 사용자 아이템 판매의 **취소**를 합니다.
+  섹션 팀에 접근을 주려면: 섹션 페이지 → **Settings** → **섹션 토큰** → **생성**, 토큰 전달(한 번만 표시, 유출되면
+  **교체**, 즉시 차단은 **폐기**). 팀은 자기 섹션만 봅니다.
 - **게이트웨이 안내:** [섹션 게이트웨이](../components/gateway.md)가 offline, draining이거나 응답하지 않는
   섹션마다 맨 위에 빨간 안내가 표시됩니다. 복구될 때까지 그 섹션에 관리 쓰기를 하지 마십시오
   ([단일 작성자 규칙](../components/gateway.md#the-single-writer-rule)).

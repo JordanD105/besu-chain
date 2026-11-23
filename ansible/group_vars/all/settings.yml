@@ -10,8 +10,16 @@ operator_ip: ""
 proxy_client_ips: []
 # Applications calling a section gateway (:30010 on the gateway hosts, gateway_enabled below)
 gateway_client_ips: []
-# Users of chainlens, the block explorer (monitoring host :30100)
+# Users of chainlens, the block explorer (monitoring host :30100): the admin's and the section teams'
+# machines. Inside chainlens everyone signs in: the admin token (state/secrets/chainlens_deploy_token)
+# sees everything; a section token (made by the admin on the section's page) sees only that section.
 chainlens_ips: []
+# true: chainlens shows the read-only explorer to anyone the firewall lets in, without signing in
+# (as before the roles). false: nothing without signing in.
+chainlens_public: false
+# Addresses (or networks) the admin may sign in from, e.g. [192.168.68.1]; empty: any address the
+# firewall lets in (chainlens_ips). Section tokens work from any of them.
+chainlens_admin_ips: []
 # Users of Grafana, the monitoring dashboards (monitoring host :3000)
 grafana_ips: []
 # Developers using the Remix IDE (monitoring host :30200, remix_enabled below)
@@ -140,16 +148,16 @@ prometheus_retention_size: 20GB
 
 # Deploy page in chainlens (#/deploy, docs/features/contract-deployment.md): deploy compiled contracts (common
 # or NFT collections) from the browser, through the proxy, signed by the contract account center and
-# registered on chain. Only operator_ip and chainlens_deploy_ips can use it, with the token Ansible
-# generates (state/secrets/chainlens_deploy_token). Off by default.
+# registered on chain. Only the admin (the token Ansible generates: state/secrets/chainlens_deploy_token,
+# from chainlens_admin_ips when set). Off by default.
 chainlens_deploy_enabled: false
-# Addresses (or networks) allowed to use the Deploy page besides operator_ip, e.g. an admin PC:
-# [192.168.68.1]. They can deploy contracts (with the token): list admin machines only. The firewall
-# opens chainlens (:30100) for them too, so they need not be in chainlens_ips.
+# Admin machines besides operator_ip, e.g. [192.168.68.1]: the firewall opens chainlens (:30100) for them
+# while the Deploy or Sections page is on (they need not be in chainlens_ips). To limit the admin's
+# sign-in to some addresses use chainlens_admin_ips.
 chainlens_deploy_ips: []
 # Sections page in chainlens (#/sections, docs/features/sections.md): create sections, top up, sweep, pay
-# back, rename, info fields, API keys, accounts, archive, history. Same access as the Deploy page (operator_ip,
-# chainlens_deploy_ips, the same token). Off by default.
+# back, rename, info fields, API keys, accounts, archive, history, section tokens. The admin tops up; each
+# section sweeps, pays back and undoes its own (signed in with its section token). Off by default.
 chainlens_sections_enabled: false
 # (chainlens_deployer is no longer used: the Deploy page deploys through the proxy, signed by the
 # contract account center, created by Ansible: state/contract-center)

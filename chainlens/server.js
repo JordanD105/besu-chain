@@ -283,6 +283,220 @@ app.use("/api", (req, res, next) => {
     res.set("cache-control", "no-store");
     next();
 });
+
+// ---- Who is calling (docs/components/chainlens.md, Roles). Every /api call carries a token (the
+// cl_token cookie set at sign-in, or Authorization: Bearer):
+//   the admin token  -> admin: everything except a section's own money moves (sweep, pay back, undos)
+//   a section token  -> section i: only section i's data; sweep, pay back, its undos, its gateway's corrections
+//   none             -> nothing but the sign-in (CHAINLENS_PUBLIC=true: the read-only explorer)
+const PUBLIC = String(process.env.CHAINLENS_PUBLIC || "").toLowerCase() === "true";
+const TOKENS_FILE = path.join(process.env.TOKENS_DIR || "/tokens", "section-tokens.json");
+const sectionTokens = { byId: new Map(), byHash: new Map() };   // id -> { hash, createdAt }; hash -> id
+const sha256 = (text) => crypto.createHash("sha256").update(String(text)).digest("hex");
+
+function loadSectionTokens() {
+    try {
+        const data = JSON.parse(fs.readFileSync(TOKENS_FILE, "utf8"));
+        for (const [id, entry] of Object.entries(data)) {
+            if (entry && /^[0-9a-f]{64}$/.test(entry.hash)) {
+                sectionTokens.byId.set(Number(id), entry);
+                sectionTokens.byHash.set(entry.hash, Number(id));
+            }
+        }
+    } catch (error) {
+        if (error.code !== "ENOENT") {
+            console.error("section tokens:", TOKENS_FILE, error.message);
+        }
+    }
+}
+loadSectionTokens();
+
+function saveSectionTokens() {
+    const data = Object.fromEntries([...sectionTokens.byId.entries()].map(([id, e]) => [String(id), e]));
+    const tmp = TOKENS_FILE + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", { mode: 0o600 });
+    fs.renameSync(tmp, TOKENS_FILE);
+}
+
+// a new token for a section (replaces its old one at once); only its hash is kept
+function issueSectionToken(id) {
+    const token = "cls_" + crypto.randomBytes(32).toString("base64url");
+    const old = sectionTokens.byId.get(id);
+    if (old) {
+        sectionTokens.byHash.delete(old.hash);
+    }
+    const entry = { hash: sha256(token), createdAt: new Date().toISOString() };
+    sectionTokens.byId.set(id, entry);
+    sectionTokens.byHash.set(entry.hash, id);
+    saveSectionTokens();
+    return { token, createdAt: entry.createdAt };
+}
+
+function revokeSectionToken(id) {
+    const old = sectionTokens.byId.get(id);
+    if (old) {
+        sectionTokens.byHash.delete(old.hash);
+        sectionTokens.byId.delete(id);
+        saveSectionTokens();
+    }
+    return Boolean(old);
+}
+
+function tokenOf(req) {
+    const header = String(req.headers.authorization || "").replace(/^Bearer\b\s*/i, "").trim();
+    if (header) {
+        return header;
+    }
+    const m = String(req.headers.cookie || "").match(/(?:^|;\s*)cl_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+}
+
+function sameText(a, b) {
+    const x = Buffer.from(String(a));
+    const y = Buffer.from(String(b));
+    return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+function who(req) {
+    const token = tokenOf(req);
+    if (!token) {
+        return { role: "anonymous" };
+    }
+    if (DEPLOY.token && DEPLOY.token.length >= 16 && sameText(token, DEPLOY.token)) {
+        return ipAllowed(req.socket.remoteAddress) ? { role: "admin" } : { role: "anonymous", wrong: true, reason: "the admin is only allowed from chainlens_admin_ips" };
+    }
+    const id = sectionTokens.byHash.get(sha256(token));
+    const s = id ? sectionBook.sections.get(id) : null;
+    if (id && (!s || !s.archived)) {
+        return { role: "section", id, name: s ? s.name : "#" + id };
+    }
+    return { role: "anonymous", wrong: true };
+}
+
+// wrong tokens: each answered after 1 s; 10 from one address within 60 s -> that address waits 60 s
+const tokenBrake = new Map();
+function braked(ip) {
+    const b = tokenBrake.get(ip);
+    return Boolean(b && b.until > Date.now());
+}
+function wrongToken(ip) {
+    const now = Date.now();
+    const b = tokenBrake.get(ip) || { start: now, count: 0, until: 0 };
+    if (now - b.start > 60000) {
+        b.start = now;
+        b.count = 0;
+    }
+    b.count += 1;
+    if (b.count >= 10) {
+        b.until = now + 60000;
+        console.warn("chainlens: 10 wrong tokens from", ip, "- blocked for 60 s");
+    }
+    tokenBrake.set(ip, b);
+    if (tokenBrake.size > 10000) {
+        for (const [k, v] of tokenBrake) {
+            if (v.until < now && now - v.start > 60000) {
+                tokenBrake.delete(k);
+            }
+        }
+    }
+}
+
+// what each role may call (paths below /api); anything not listed is the admin's
+const ACCESS = {
+    open: [["POST", /^\/auth\/(signin|signout)$/], ["GET", /^\/auth\/me$/]],
+    publicRead: /^\/(status|live|network(\/nodes)?|stats|sections\/stats|overview|dashboard|accounts(\/0x[0-9a-fA-F]{40})?|contracts(\/0x[0-9a-fA-F]{40})?|activity|memos|transactions(\/0x[0-9a-fA-F]{64})?|blocks(\/[^/]+)?|nfts(\/[^/]+\/[^/]+)?|search|sections\/status|avataradmin\/status|deploy\/status)$/,
+    sectionRead: /^\/(status|live|stats|sections\/stats|overview|accounts(\/0x[0-9a-fA-F]{40})?|activity|memos|transactions(\/0x[0-9a-fA-F]{64})?|nfts(\/[^/]+\/[^/]+)?|search|sections\/status)$/,
+    // the section's own pages and actions (the id in the path must be the token's section)
+    sectionOwn: [["GET", /^\/sections\/(\d+)(\/(accounts|history|gateway|items))?$/], ["POST", /^\/sections\/(\d+)\/(sweep|payback|undo)$/],
+        ["POST", /^\/sections\/(\d+)\/gateway\/ack\/\d+$/], ["POST", /^\/sections\/(\d+)\/items\/undo$/]],
+    // done by the section only: the admin is refused
+    sectionOnly: [["POST", /^\/sections\/\d+\/(sweep|payback|undo)$/], ["POST", /^\/sections\/\d+\/gateway\/ack\/\d+$/], ["POST", /^\/sections\/\d+\/items\/undo$/],
+        ["POST", /^\/avataradmin\/undo$/], ["POST", /^\/nicknames\/(undo|undolevel)\/[^/]+$/]]
+};
+const matches = (list, req) => list.find(([method, re]) => method === req.method && re.test(req.path));
+
+app.use("/api", (req, res, next) => {
+    const ip = req.socket.remoteAddress;
+    req.who = who(req);
+    if (matches(ACCESS.open, req)) {
+        return next();
+    }
+    if (braked(ip)) {
+        return res.status(429).json({ error: "too many wrong tokens: wait a minute", signIn: true });
+    }
+    const w = req.who;
+    if (w.wrong) {
+        wrongToken(ip);
+        return setTimeout(() => res.status(401).json({ error: w.reason || "wrong or revoked token: sign in again", signIn: true }), 1000);
+    }
+    if (w.role === "admin") {
+        if (matches(ACCESS.sectionOnly, req)) {
+            return res.status(403).json({ error: "only the section does this (signed in with its section token): sweep, pay back, undos and its gateway's corrections" });
+        }
+        return next();
+    }
+    if (w.role === "section") {
+        if (req.method === "GET" && ACCESS.sectionRead.test(req.path)) {
+            return next();
+        }
+        const own = matches(ACCESS.sectionOwn, req);
+        if (own) {
+            return Number(req.path.match(own[1])[1]) === w.id ? next() : res.status(403).json({ error: "another section's data" });
+        }
+        return res.status(403).json({ error: "not open to a section" });
+    }
+    if (PUBLIC && req.method === "GET" && ACCESS.publicRead.test(req.path)) {
+        req.who = { role: "public" };
+        return next();
+    }
+    res.status(401).json({ error: "sign in", signIn: true });
+});
+
+// the section of a scoped caller (a section token), or null (the admin, the public explorer)
+function scopeOf(req) {
+    return req.who && req.who.role === "section" ? req.who.id : null;
+}
+function mine(id, address) {
+    const s = address ? sectionOf(address) : null;
+    return Boolean(s && s.sectionId === id);
+}
+function txMine(id, tx) {
+    return tx.memoSection === id || mine(id, tx.from) || mine(id, tx.to) || mine(id, tx.contractAddress);
+}
+
+function whoText(req) {
+    const w = req.who || {};
+    return (w.role === "section" ? "section " + w.id + " (" + w.name + ")" : w.role || "?") + " from " + req.socket.remoteAddress;
+}
+
+const authJson = express.json({ limit: "4kb" });
+app.post("/api/auth/signin", authJson, (req, res) => {
+    const ip = req.socket.remoteAddress;
+    if (braked(ip)) {
+        return res.status(429).json({ error: "too many wrong tokens: wait a minute" });
+    }
+    const token = String((req.body && req.body.token) || tokenOf(req) || "").trim();
+    const w = who({ headers: { authorization: "Bearer " + token }, socket: req.socket });
+    if (w.role !== "admin" && w.role !== "section") {
+        wrongToken(ip);
+        console.warn("chainlens: wrong token from", ip);
+        return setTimeout(() => res.status(401).json({ error: w.reason || "wrong token" }), 1000);
+    }
+    // the browser keeps it for this session only; JavaScript can't read it; never sent cross-site
+    res.set("set-cookie", "cl_token=" + encodeURIComponent(token) + "; Path=/; HttpOnly; SameSite=Strict");
+    console.log("chainlens: signed in as", w.role === "section" ? "section " + w.id + " (" + w.name + ")" : "admin", "from", ip);
+    res.json({ role: w.role, section: w.role === "section" ? { id: w.id, name: w.name } : null });
+});
+
+app.post("/api/auth/signout", (req, res) => {
+    res.set("set-cookie", "cl_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+    res.json({ success: true });
+});
+
+app.get("/api/auth/me", (req, res) => {
+    const w = req.who.wrong ? { role: "anonymous" } : req.who;
+    res.json({ role: w.role, section: w.role === "section" ? { id: w.id, name: w.name } : null, public: PUBLIC });
+});
 app.use(express.static(path.join(__dirname, "public")));
 
 function formatEth(wei) {
@@ -1442,12 +1656,21 @@ const liveClients = new Set();
 function liveSend(data) {
     const line = "data: " + JSON.stringify(data) + "\n\n";
     for (const res of liveClients) {
-        res.write(line);
+        if (res.sectionId) {
+            // a section hears only of its own transactions
+            const txs = (data.txs || []).filter((h) => { const tx = db.txByHash.get(h); return tx && txMine(res.sectionId, tx); });
+            if (txs.length) {
+                res.write("data: " + JSON.stringify(Object.assign({}, data, { txs, sections: [res.sectionId] })) + "\n\n");
+            }
+        } else {
+            res.write(line);
+        }
     }
 }
 app.get("/api/live", (req, res) => {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
     res.write("data: " + JSON.stringify({ hello: true, indexed: db.indexed }) + "\n\n");
+    res.sectionId = scopeOf(req);
     liveClients.add(res);
     const keep = setInterval(() => res.write(": keep-alive\n\n"), 25000);
     req.on("close", () => {
@@ -1493,10 +1716,17 @@ app.get("/api/network/nodes", async (req, res) => {
 });
 
 app.get("/api/status", (req, res) => {
+    if (scopeOf(req) !== null) {
+        // a section: the chain's progress and the links, nothing about other sections or the hosts
+        return res.json({ version: { chainlens: APP.commit, proxy: APP.proxyCommit }, links: APP.links, role: "section",
+            admin: { allowed: false }, ready: db.ready, syncing: db.syncing, error: db.error ? "the chain is not reachable" : null,
+            head: db.head, indexed: db.indexed, chainId: db.chainId });
+    }
     res.json({
+        role: req.who.role,
         version: { chainlens: APP.commit, proxy: APP.proxyCommit },
         links: APP.links,
-        admin: { allowed: ipAllowed(req.socket.remoteAddress) && (DEPLOY.enabled || SECTIONS.enabled), sections: SECTIONS.enabled, deploy: DEPLOY.enabled,
+        admin: { allowed: tokenOk(req) && (DEPLOY.enabled || SECTIONS.enabled), sections: SECTIONS.enabled, deploy: DEPLOY.enabled,
             gateways: SECTIONS.gateways.length },
         ready: db.ready,
         syncing: db.syncing,
@@ -2026,12 +2256,26 @@ app.get(["/api/stats", "/api/sections/stats"], (req, res) => {
         }
         statsCache.set(key, { at: Date.now(), data: buildSectionStats(period, range) });
     }
-    res.json(statsCache.get(key).data);
+    const data = statsCache.get(key).data;
+    const id = scopeOf(req);
+    if (id === null) {
+        return res.json(data);
+    }
+    // a section: its own row; no whole-chain figures; the memos of its own transactions
+    const own = data.sections.filter((s) => s.id === id);
+    res.json(Object.assign({}, data, { sections: own, chain: null, memos: data.periods.map((p, i) => (own[0] ? own[0].values[i].memos || {} : {})) }));
 });
 
 app.get("/api/overview", async (req, res) => {
     if (!overview.data) {
         await refreshOverview();
+    }
+    const id = scopeOf(req);
+    if (id !== null) {
+        const own = ((overview.data && overview.data.sections) || []).filter((s) => s.id === id);
+        return res.json({ updatedAt: overview.data ? overview.data.updatedAt : 0, sections: own,
+            sectionCounts: { total: own.length, active: own.filter((s) => s.active).length, disabled: own.filter((s) => !s.active).length, archived: 0,
+                users: own.reduce((n, s) => n + (s.users || 0), 0) } });
     }
     res.json(overview.data || { updatedAt: 0, sections: [], sectionCounts: { total: 0, active: 0, disabled: 0, archived: 0, users: 0 } });
 });
@@ -2062,8 +2306,9 @@ app.get("/api/dashboard", (req, res) => {
 });
 
 app.get("/api/accounts", (req, res) => {
+    const id = scopeOf(req);
     const rows = [...db.accounts.values()]
-        .filter((row) => !db.contracts.has(row.address.toLowerCase()))
+        .filter((row) => !db.contracts.has(row.address.toLowerCase()) && (id === null || mine(id, row.address)))
         .map(publicAccount)
         .sort((a, b) => (BigInt(b.balanceWei) > BigInt(a.balanceWei) ? 1 : -1));
     res.json(pageOf(rows, req));
@@ -2075,6 +2320,9 @@ app.get("/api/accounts/:address", async (req, res) => {
     }
 
     const key = req.params.address.toLowerCase();
+    if (scopeOf(req) !== null && !mine(scopeOf(req), key)) {
+        return res.status(403).json({ error: "not an account of this section" });
+    }
     let row = db.accounts.get(key);
 
     if (!row) {
@@ -2260,13 +2508,13 @@ const SECTIONS = {
     // reads the gateways' corrections and acknowledges them (it can do nothing else on a gateway)
     gatewayToken: process.env.GATEWAY_REPORT_TOKEN || ""
 };
-if (SECTIONS.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !DEPLOY.allowed.length || !SECTIONS.proxy || !SECTIONS.proxyToken)) {
-    console.error("Sections page: ADMIN_TOKEN (16+ characters), ADMIN_ALLOWED_IPS, PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
+if (SECTIONS.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !SECTIONS.proxy || !SECTIONS.proxyToken)) {
+    console.error("Sections page: ADMIN_TOKEN (16+ characters), PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
     SECTIONS.enabled = false;
 }
 // The Deploy page deploys through the proxy (signed by the contract account center, registered on chain)
-if (DEPLOY.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !DEPLOY.allowed.length || !SECTIONS.proxy || !SECTIONS.proxyToken)) {
-    console.error("Deploy page: ADMIN_TOKEN (16+ characters), ADMIN_ALLOWED_IPS, PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
+if (DEPLOY.enabled && (!DEPLOY.token || DEPLOY.token.length < 16 || !SECTIONS.proxy || !SECTIONS.proxyToken)) {
+    console.error("Deploy page: ADMIN_TOKEN (16+ characters), PROXY_ADMIN_URL and PROXY_ADMIN_TOKEN are required; the page stays off");
     DEPLOY.enabled = false;
 }
 
@@ -2276,7 +2524,11 @@ function ipv4ToInt(ip) {
         ? ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0 : null;
 }
 
+// the admin's source addresses (ADMIN_ALLOWED_IPS = chainlens_admin_ips): empty = any address
 function ipAllowed(ip) {
+    if (!DEPLOY.allowed.length) {
+        return true;
+    }
     const addr = ipv4ToInt(String(ip || "").replace(/^::ffff:/, ""));
     if (addr === null) {
         return false;
@@ -2293,10 +2545,9 @@ function ipAllowed(ip) {
     });
 }
 
+// the admin (the access check in front of /api has already checked the token and the address)
 function tokenOk(req) {
-    const given = Buffer.from(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
-    const want = Buffer.from(DEPLOY.token);
-    return given.length === want.length && crypto.timingSafeEqual(given, want);
+    return Boolean(req.who && req.who.role === "admin");
 }
 
 function deployGuard(req, res, next) {
@@ -2304,7 +2555,7 @@ function deployGuard(req, res, next) {
         return res.status(404).json({ error: "the Deploy page is off (chainlens_deploy_enabled)" });
     }
     if (!ipAllowed(req.socket.remoteAddress)) {
-        return res.status(403).json({ error: "deploying is only allowed from operator_ip and chainlens_deploy_ips" });
+        return res.status(403).json({ error: "the admin is only allowed from chainlens_admin_ips" });
     }
     if (!tokenOk(req)) {
         console.warn("deploy: wrong token from", req.socket.remoteAddress);
@@ -2347,12 +2598,9 @@ function sectionsGuard(req, res, next) {
     if (!SECTIONS.enabled) {
         return res.status(404).json({ error: "the Sections page is off (chainlens_sections_enabled)" });
     }
-    if (!ipAllowed(req.socket.remoteAddress)) {
-        return res.status(403).json({ error: "the Sections page is only allowed from operator_ip and chainlens_deploy_ips" });
-    }
-    if (!tokenOk(req)) {
-        console.warn("sections: wrong token from", req.socket.remoteAddress);
-        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
+    // the admin, or a section on its own pages (checked by the access check in front of /api)
+    if (!tokenOk(req) && !(req.who && req.who.role === "section")) {
+        return res.status(401).json({ error: "sign in", signIn: true });
     }
     next();
 }
@@ -2424,7 +2672,7 @@ app.get("/api/sections/:id/gateway", sectionsGuard, async (req, res) => {
 
 app.post("/api/sections/:id/gateway/ack/:report", sectionsGuard, async (req, res) => {
     try {
-        const r = await gatewayCall(req.params.id, "POST", "/gateway/report/" + Number(req.params.report) + "/ack", { by: "chainlens " + req.socket.remoteAddress });
+        const r = await gatewayCall(req.params.id, "POST", "/gateway/report/" + Number(req.params.report) + "/ack", { by: "chainlens, " + whoText(req) });
         res.json(r.data);
     } catch (error) {
         res.status(error.status || 502).json({ error: error.message });
@@ -2447,9 +2695,13 @@ function activityQuery(req, res, all) {
     const type = String(q.type || "");
     const section = q.section ? Number(q.section) : null;
     const limit = Math.min(Number(q.limit) || 1000, 10000);
+    const own = scopeOf(req);
     const rows = [];
     for (let i = db.txs.length - 1; i >= 0 && rows.length < limit; i -= 1) {
         const tx = db.txs[i];
+        if (own !== null && !txMine(own, tx)) {
+            continue;
+        }
         if (!all && !tx.memoType && !tx.memo) {
             continue;
         }
@@ -2500,13 +2752,7 @@ function activityQuery(req, res, all) {
 
 // The admin sign-in: is this token right? (the same token as the Deploy and Sections pages)
 app.post("/api/admin/check", (req, res) => {
-    if (!ipAllowed(req.socket.remoteAddress)) {
-        return res.status(403).json({ error: "the admin pages are only allowed from operator_ip and chainlens_deploy_ips" });
-    }
-    if (!tokenOk(req)) {
-        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
-    }
-    res.json({ success: true });
+    res.json({ success: tokenOk(req) });
 });
 
 app.get("/api/sections/status", (req, res) => {
@@ -2559,13 +2805,97 @@ app.get("/api/sections/:id", sectionsGuard, async (req, res) => {
     }
 });
 
+// ---- Section tokens (the admin): a section's team signs in to chainlens with it and sees only its section
+app.post("/api/section-tokens/:id", sectionsGuard, (req, res) => {
+    const id = Number(req.params.id);
+    const s = sectionBook.sections.get(id);
+    if (!tokenOk(req) || !s || s.archived) {
+        return res.status(tokenOk(req) ? 404 : 403).json({ error: tokenOk(req) ? "no such section" : "the admin's" });
+    }
+    try {
+        const t = issueSectionToken(id);
+        console.log("chainlens: section token", "section " + id + " (" + s.name + ")", "made by", whoText(req));
+        res.json({ section: { id, name: s.name }, token: t.token, createdAt: t.createdAt });
+    } catch (error) {
+        res.status(500).json({ error: "cannot store the token: " + error.message + " (TOKENS_DIR " + path.dirname(TOKENS_FILE) + ")" });
+    }
+});
+
+app.delete("/api/section-tokens/:id", sectionsGuard, (req, res) => {
+    if (!tokenOk(req)) {
+        return res.status(403).json({ error: "the admin's" });
+    }
+    try {
+        const removed = revokeSectionToken(Number(req.params.id));
+        console.log("chainlens: section token of section", req.params.id, "revoked by", whoText(req));
+        res.json({ revoked: removed });
+    } catch (error) {
+        res.status(500).json({ error: "cannot store the change: " + error.message });
+    }
+});
+
+// ---- A section's items (avatars and nicknames its accounts bought) with their undo windows
+async function itemCollections() {
+    const out = [];
+    for (const kind of ["avatar", "nickname"]) {
+        const d = proxyOk(await proxyAdmin("GET", "/contract/list?type=" + kind));
+        (d.contracts || []).forEach((c) => out.push({ address: c.address, name: c.name, kind }));
+    }
+    return out;
+}
+
+app.get("/api/sections/:id/items", sectionsGuard, async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+        const items = [];
+        for (const c of await itemCollections()) {
+            const { rows } = await itemRows(c.address, c.kind, "");
+            rows.filter((r) => r.sold && mine(id, r.owner)).forEach((r) => items.push(Object.assign({ collection: c.address, collectionName: c.name, kind: c.kind }, r)));
+        }
+        res.json({ items });
+    } catch (error) {
+        res.status(error.status || 502).json({ error: "proxy: " + error.message });
+    }
+});
+
+// undo { collection, tokenId, level }: a sale (or the last level upgrade) of an item a user of this section bought
+app.post("/api/sections/:id/items/undo", sectionsJson, sectionsGuard, async (req, res) => {
+    const id = Number(req.params.id);
+    const b = req.body || {};
+    if (!/^0x[0-9a-fA-F]{40}$/.test(String(b.collection || "")) || !/^\d+$/.test(String(b.tokenId || ""))) {
+        return res.status(400).json({ error: "collection (an address) and tokenId" });
+    }
+    try {
+        const kind = (await itemCollections()).find((c) => c.address.toLowerCase() === b.collection.toLowerCase());
+        if (!kind || (b.level && kind.kind !== "nickname")) {
+            return res.status(400).json({ error: "not an avatar or nickname collection" + (b.level ? " with levels" : "") });
+        }
+        const [owner] = await proxyCalls([{ contract: b.collection, function: "ownerOf", args: { tokenId: String(b.tokenId) } }]);
+        if (!owner || !mine(id, owner.owner)) {
+            return res.status(403).json({ error: "this item is not owned by an account of this section" });
+        }
+        const r = await itemUndo(b.collection, b.level ? "undoLevel" : "undo", b.tokenId);
+        console.log("items: undo" + (b.level ? " level" : ""), b.collection, b.tokenId, "by", whoText(req), "->", r.status);
+        res.status(r.status).json(r.status === 200 ? Object.assign({}, r.data, r.data.result || {}) : r.data);
+    } catch (error) {
+        res.status(error.status || 502).json({ error: "proxy: " + error.message });
+    }
+});
+
 app.post("/api/sections/:id/:action", sectionsJson, sectionsGuard, async (req, res) => {
     if (!/^\d+$/.test(req.params.id) || !SECTION_ACTIONS.includes(req.params.action)) {
         return res.status(404).json({ error: "unknown section action" });
     }
+    if (req.params.action === "undo") {
+        // only a transfer of this section: its own +x / -x
+        const tx = db.txByHash.get(String((req.body || {}).txHash || "").toLowerCase());
+        if (!tx || !txMine(Number(req.params.id), tx)) {
+            return res.status(403).json({ error: "not a transfer of this section" });
+        }
+    }
     try {
         const r = await proxyAdmin("POST", "/admin/sections/" + req.params.id + "/" + req.params.action, req.body || {});
-        console.log("sections:", req.params.action, "section", req.params.id, JSON.stringify(req.body || {}), "from", req.socket.remoteAddress, "->", r.status);
+        console.log("sections:", req.params.action, "section", req.params.id, JSON.stringify(req.body || {}), "by", whoText(req), "->", r.status);
         res.status(r.status).json(r.data);
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });
@@ -2657,12 +2987,8 @@ function avatarGuard(req, res, next) {
     if (!avatarAdminEnabled()) {
         return res.status(404).json({ error: "avatar admin needs the Deploy or Sections page on" });
     }
-    if (!ipAllowed(req.socket.remoteAddress)) {
-        return res.status(403).json({ error: "only allowed from operator_ip and chainlens_deploy_ips" });
-    }
     if (!tokenOk(req)) {
-        console.warn("avatar: wrong token from", req.socket.remoteAddress);
-        return setTimeout(() => res.status(401).json({ error: "wrong admin token" }), 1000);
+        return res.status(401).json({ error: "sign in as the admin", signIn: true });
     }
     next();
 }
@@ -2868,8 +3194,11 @@ app.get("/api/sections/:id/history", sectionsGuard, async (req, res) => {
             ...publicTx(tx),
             kind: kind(tx.from.toLowerCase(), tx.to ? tx.to.toLowerCase() : "")
         }));
+        const tokenEntry = sectionTokens.byId.get(Number(req.params.id));
         res.json({ section: r.data.section, history: rows, indexed: db.indexed, head: db.head,
-            undoDays: Number(process.env.TRANSFER_UNDO_DAYS || 7) });
+            undoDays: Number(process.env.TRANSFER_UNDO_DAYS || 7),
+            hasGateway: SECTIONS.gateways.some((g) => g.section === Number(req.params.id)),
+            sectionToken: tokenOk(req) ? { set: Boolean(tokenEntry), createdAt: tokenEntry ? tokenEntry.createdAt : null } : undefined });
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });
     }
@@ -2944,7 +3273,8 @@ app.post("/api/deploy/send", deployJson, deployGuard, async (req, res) => {
 });
 
 app.get("/api/transactions", (req, res) => {
-    let rows = db.txs.slice().reverse();
+    const own = scopeOf(req);
+    let rows = db.txs.slice().reverse().filter((tx) => own === null || txMine(own, tx));
 
     if (req.query.type && req.query.type !== "all") {
         rows = rows.filter((tx) => tx.type === req.query.type);
@@ -2961,7 +3291,7 @@ app.get("/api/transactions", (req, res) => {
 app.get("/api/transactions/:hash", (req, res) => {
     const tx = db.txByHash.get(req.params.hash.toLowerCase());
 
-    if (!tx) {
+    if (!tx || (scopeOf(req) !== null && !txMine(scopeOf(req), tx))) {
         return res.status(404).json({ error: "transaction not found" });
     }
 
@@ -3016,7 +3346,8 @@ app.get("/api/network", (req, res) => {
 });
 
 app.get("/api/nfts", (req, res) => {
-    let rows = [...db.nfts.values()].map(publicNft);
+    const own = scopeOf(req);
+    let rows = [...db.nfts.values()].filter((nft) => own === null || mine(own, nft.owner)).map(publicNft);
 
     // Items: kind=avatar | nickname (the collection's type from the registry)
     if (req.query.kind === "avatar" || req.query.kind === "nickname") {
@@ -3036,7 +3367,7 @@ app.get("/api/nfts/:contract/:tokenId", (req, res) => {
     const key = req.params.contract.toLowerCase() + ":" + req.params.tokenId;
     const nft = db.nfts.get(key);
 
-    if (!nft) {
+    if (!nft || (scopeOf(req) !== null && !mine(scopeOf(req), nft.owner))) {
         return res.status(404).json({ error: "token not found" });
     }
 
@@ -3087,6 +3418,24 @@ app.get("/api/search", (req, res) => {
         }
     }
 
+    const own = scopeOf(req);
+    if (own !== null) {
+        // a section finds only its own accounts, transactions and items
+        return res.json({ results: results.filter((r) => {
+            if (r.kind === "account") {
+                return mine(own, q);
+            }
+            if (r.kind === "transaction") {
+                return txMine(own, db.txByHash.get(q.toLowerCase()));
+            }
+            if (r.kind === "nft") {
+                const [, , contract, tokenId] = r.href.split("/");
+                const nft = db.nfts.get(contract.toLowerCase() + ":" + tokenId);
+                return Boolean(nft && mine(own, nft.owner));
+            }
+            return false;
+        }) });
+    }
     res.json({ results });
 });
 

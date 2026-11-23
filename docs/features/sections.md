@@ -149,11 +149,16 @@ admin API (the proxy's token never reaches the browser) and logs it with the req
   optional description) shows the API key once, with a copy button.
 - **A section's page:** its accounts and balances; its **user accounts** (list with balances,
   **Create account** funded from the upfront account, **Transfer** `+amount` account → consumption /
-  `−amount` upfront → account); **Top up**, **Sweep**, **Pay back** (amount, or
-  `all` for sweep and pay back); **Rename**; **info fields** (add, edit, remove); **New API key**;
+  `−amount` upfront → account); **Top up**; **Rename**; **info fields** (add, edit, remove); **New API key**;
   **Enable / Disable**; **New upfront / consumption / payment account**; **Archive** (type the
   name to confirm); and its **history**: the last 500 indexed transactions of its 3 accounts, labelled
   (top-up, upfront → account, account → consumption, sweep, pay back).
+- **Who moves the money** ([chainlens roles](../components/chainlens.md#roles)): the admin **tops up**;
+  the section itself **sweeps**, **pays back** (amount, or `all`) and **undoes** its transfers and its
+  users' item sales, on **My section** (`#/my`), signed in with its **section token**. To give a
+  section's team access: its page → **Settings** → **Section token** → **Create**, and hand the token
+  over (shown once; **Replace** if it leaks, **Revoke** to cut access at once). The team sees only its
+  own section.
 - **Gateway notice:** a red notice at the top for each section whose
   [section gateway](../components/gateway.md) is offline, draining or not answering: make no admin
   writes on that section until it is back ([the single-writer rule](../components/gateway.md#the-single-writer-rule)).
@@ -332,9 +337,9 @@ start is not included.
 |---|---|---|
 | **Create section** (UI) | proxy admin API | 3 MPC keys; registry entry (registry admin); API key shown once. No funding. |
 | **Rename / info / key / enable–disable** (UI) | proxy admin API | registry admin |
-| **Top up** (UI, amount) | proxy admin API | SENDER01 → `upfront_account_i`, manual only |
-| **Sweep** (UI, amount or all) | proxy admin API | `consumption_account_i` → `payment_account_i` |
-| **Pay back** (UI, amount or all) | proxy admin API | `payment_account_i` → SENDER01 |
+| **Top up** (UI: the admin, amount) | proxy admin API | SENDER01 → `upfront_account_i`, manual only |
+| **Sweep** (UI: the section, amount or all) | proxy admin API | `consumption_account_i` → `payment_account_i` |
+| **Pay back** (UI: the section, amount or all) | proxy admin API | `payment_account_i` → SENDER01 |
 | **Replace an account** (UI) | proxy admin API | new MPC key; registry admin; old account (now retired) → new account (whole balance) |
 | **Archive** (UI) | proxy admin API | the 3 accounts → SENDER01 (all), then registry admin |
 | `/createaccount` (section_i) | proxy | registry admin: account → section_i; then `upfront_account_i` → new user account |
