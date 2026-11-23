@@ -277,6 +277,7 @@ for (const u of SECTION.users || []) {
 // ---------------------------------------------------------------- state: online / offline / draining
 
 const state = { mode: getMeta("mode", "online"), failures: 0, lastOk: 0, lastSync: Number(getMeta("lastSync", 0)), syncing: false,
+    syncError: "", syncFailures: 0, syncFailuresTotal: 0, syncRetryAt: 0,
     draining: false, conflicts: Number(getMeta("conflicts", 0)), authFailures: Number(getMeta("authFailures", 0)) };
 
 function setMode(mode) {
@@ -442,9 +443,10 @@ async function syncCollections() {
 
 async function syncBalances() {
     const list = q("SELECT address, display FROM accounts").all();
-    for (let i = 0; i < list.length; i += 500) {
-        const part = list.slice(i, i + 500);
-        const out = await rpcBatch(part.map((a) => ["eth_getBalance", [a.display, "latest"]]));
+    // batches of 100: a batch of 500 balance reads can take Besu longer than the time limit
+    for (let i = 0; i < list.length; i += 100) {
+        const part = list.slice(i, i + 100);
+        const out = await rpcBatch(part.map((a) => ["eth_getBalance", [a.display, "latest"]]), 30000);
         part.forEach((a, j) => {
             if (out[j] !== null && out[j] !== undefined) {
                 const w = BigInt(out[j]).toString();
@@ -501,8 +503,15 @@ async function sync(reportDiff) {
         }
         state.lastSync = now();
         setMeta("lastSync", state.lastSync);
+        state.syncError = "";
+        state.syncFailures = 0;
     } catch (error) {
-        console.error("gateway: sync:", error.message);
+        // shown in /gateway/status and the metrics (alert GatewaySyncFailing); retried after a pause, not every second
+        state.syncError = error.message;
+        state.syncFailures += 1;
+        state.syncFailuresTotal += 1;
+        state.syncRetryAt = now() + Math.min(300, 15 * state.syncFailures) * 1000;
+        console.error(`gateway: sync: ${error.message} (failure ${state.syncFailures} in a row, next try in ${Math.round((state.syncRetryAt - now()) / 1000)} s)`);
     } finally {
         state.syncing = false;
     }
@@ -1284,7 +1293,7 @@ function status() {
         spares: q("SELECT COUNT(*) AS n FROM spares WHERE used IS NULL").get().n,
         offlineEth: state.mode === "online" ? "0" : weiToEth(spent), conflicts: state.conflicts,
         corrections: { open: c.open, total: c.total, refundedEth: c.refundedEth, undelivered: c.undelivered },
-        cuts: cutNo, lastSync: state.lastSync ? iso(state.lastSync) : null, lastBackup: Number(getMeta("lastBackup", 0)) ? iso(Number(getMeta("lastBackup", 0))) : null,
+        cuts: cutNo, lastSync: state.lastSync ? iso(state.lastSync) : null, syncError: state.syncError || null, lastBackup: Number(getMeta("lastBackup", 0)) ? iso(Number(getMeta("lastBackup", 0))) : null,
         limits: { offlineMaxHours: L.offline_max_hours, spareAccounts: L.spare_accounts, operations: L.offline_operations }
     };
 }
@@ -1317,6 +1326,9 @@ function metrics() {
         ...m("gateway_offline_seconds_total", "counter", "seconds spent offline or draining", offlineSeconds),
         ...m("gateway_auth_failures_total", "counter", "requests with a wrong section key", state.authFailures),
         ...m("gateway_last_sync_timestamp_seconds", "gauge", "the last full sync with the chain", Math.round(state.lastSync / 1000)),
+        ...m("gateway_sync_failing", "gauge", "1 = the last full sync with the chain failed (see the gateway log)", state.syncError ? 1 : 0),
+        ...m("gateway_sync_failures_total", "counter", "full syncs that failed since the gateway started", state.syncFailuresTotal),
+        ...m("gateway_sync_interval_seconds", "gauge", "sync_seconds: how often it syncs while online", L.sync_seconds),
         ...m("gateway_last_backup_timestamp_seconds", "gauge", "the last database snapshot", Math.round(Number(getMeta("lastBackup", 0)) / 1000)),
         ""
     ].join("\n");
@@ -1570,7 +1582,7 @@ async function jobs() {
         if (state.mode === "draining" || (state.mode !== "offline" && queued())) {
             await drain();
         } else if (state.mode === "online") {
-            if (now() - state.lastSync > L.sync_seconds * 1000) {
+            if (now() - state.lastSync > L.sync_seconds * 1000 && now() >= state.syncRetryAt) {
                 await sync(false);
             }
             await keepSpares();

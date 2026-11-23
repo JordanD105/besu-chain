@@ -3759,11 +3759,31 @@ function countSectionOp(section, op, amountEth) {
     sectionOps.set(key, entry);
 }
 
+// User accounts per section (AccountAdded events), counted incrementally: only new blocks are read
+const userAccounts = { next: null, bySection: new Map() };   // section id -> Set of accounts
+async function refreshUserAccounts() {
+    const from = userAccounts.next === null ? CONFIG.REGISTRY_FROM_BLOCK : userAccounts.next;
+    const head = parseInt(await rpc(CONFIG.BESU_RPC, "eth_blockNumber", []), 16);
+    if (from > head) {
+        return;
+    }
+    const logs = await registryLogs(CONFIG.REGISTRY_CONTRACT, from, [registryIface.getEvent("AccountAdded").topicHash]);
+    for (const log of logs) {
+        const id = Number(BigInt(log.topics[1]));
+        if (!userAccounts.bySection.has(id)) {
+            userAccounts.bySection.set(id, new Set());
+        }
+        userAccounts.bySection.get(id).add(("0x" + log.topics[2].slice(26)).toLowerCase());
+    }
+    userAccounts.next = head + 1;
+}
+
 async function refreshSectionMetrics() {
     try {
         const rows = [];
 
         if (sectionsConfigured()) {
+            await refreshUserAccounts().catch(() => {});
             for (const section of (await listSections()).filter((s) => !s.archived)) {
                 // every counter exists from the start at 0, so the first operation counts in increase()
                 for (const op of SECTION_OPS) {
@@ -3862,6 +3882,8 @@ function sectionMetricLines() {
 
     metric("proxy_section_balance_eth", "gauge", "Balance of a section account (role upfront, consumption, payment).",
         sectionMetrics.rows.map((r) => [`${sec(r.id, r.name)},role="${r.role}",active="${r.active ? 1 : 0}"`, r.eth]));
+    metric("proxy_section_user_accounts", "gauge", "User accounts registered to the section (a gateway's spare accounts included: gateway_spare_accounts).",
+        [...new Map(sectionMetrics.rows.map((r) => [r.id, r])).values()].map((r) => [sec(r.id, r.name), (userAccounts.bySection.get(r.id) || new Set()).size]));
     metric("proxy_section_active", "gauge", "1 = the section is enabled (archived sections are not listed).",
         [...new Map(sectionMetrics.rows.map((r) => [r.id, r])).values()].map((r) => [sec(r.id, r.name), r.active ? 1 : 0]));
     metric("proxy_section_operations_total", "counter", "Section operations since the proxy started (op: create_account, transfer_in, transfer_out, transfer_in_undo, transfer_out_undo, avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback, account_replaced, archive_return).",

@@ -15,7 +15,7 @@
 - [MPC signer](#mpc-signer): [MpcBelowThreshold](#mpcbelowthreshold) · [MpcCoordinatorDown](#mpccoordinatordown) · [MpcNodeDown](#mpcnodedown) · [MpcPoolEmpty](#mpcpoolempty) · [MpcSmallPoolsEmpty](#mpcsmallpoolsempty) · [MpcPresignFailing](#mpcpresignfailing) · [MpcSignErrors](#mpcsignerrors) · [MpcPolicyRefusals](#mpcpolicyrefusals)
 - [Proxy and Redis](#proxy-and-redis): [ProxyDown](#proxydown) · [ProxySenderStalled](#proxysenderstalled) · [ProxyNonceGap](#proxynoncegap) · [ProxyNonceRepaired](#proxynoncerepaired) · [ProxySenderCheckFailing](#proxysendercheckfailing) · [ProxyHttpErrors](#proxyhttperrors) · [ProxySlow](#proxyslow) · [ProxyEventLoopBlocked](#proxyeventloopblocked) · [ProxyRedisDisconnected](#proxyredisdisconnected) · [RedisDown](#redisdown) · [RedisMemoryHigh](#redismemoryhigh)
 - [Sections](#sections): [SectionUpfrontEmpty](#sectionupfrontempty) · [SectionUpfrontLow](#sectionupfrontlow) · [Sender01Low](#sender01low) · [SectionMetricsFailing](#sectionmetricsfailing)
-- [Section gateways](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayCorrectionsOpen](#gatewaycorrectionsopen) · [GatewayDown](#gatewaydown)
+- [Section gateways](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayCorrectionsOpen](#gatewaycorrectionsopen) · [GatewaySyncFailing](#gatewaysyncfailing) · [GatewayLedgerStale](#gatewayledgerstale) · [GatewayDown](#gatewaydown)
 - [Hosts](#hosts): [HostDown](#hostdown) · [HostMemoryHigh](#hostmemoryhigh) · [HostDiskFull](#hostdiskfull) · [HostClockNotSynced](#hostclocknotsynced)
 - [Backups](#backups): [BackupFailed](#backupfailed) · [ChainSnapshotTooOld](#chainsnapshottooold) · [ChainSnapshotMissing](#chainsnapshotmissing) · [MpcShareBackupTooOld](#mpcsharebackuptooold) · [MpcShareBackupMissing](#mpcsharebackupmissing) · [ValidatorKeyBackupMissing](#validatorkeybackupmissing)
 
@@ -597,9 +597,28 @@ uses them; with none left it answers 503.
    `gateway_corrections_undelivered`.
 3. **Check:** `gateway_corrections_open` is 0.
 
+### GatewaySyncFailing
+
+**Warning.** An online gateway answers, but its sync with the chain (balances, items, new section
+accounts, every `sync_seconds`) has failed for 5 minutes. Its log shows `gateway: sync: <reason>`.
+
+1. **Confirm:** Grafana → Sections → Gateways, column *Sync* = FAILING; `GET /gateway/status` →
+   `syncError`; `docker compose logs --tail 50 gateway` on its host.
+2. **Fix:** *The operation was aborted due to timeout*: Besu on the RPC node the gateway reads is slow
+   or stuck (check BesuDown / BlockProductionStalled, its disk) or the network to it is cut. After a
+   failure the gateway waits 15 s, 30 s, ... up to 5 minutes before the next try.
+3. **Check:** *Sync* = ok and *Last sync* below `sync_seconds` (30 s by default).
+
+### GatewayLedgerStale
+
+**Critical.** An online gateway hasn't synced for over 30 minutes: if the cut came now, it would answer
+from old balances and items. Fix it as [GatewaySyncFailing](#gatewaysyncfailing).
+
 ### GatewayDown
 
 **Critical.** Prometheus can't scrape a gateway for 2 minutes: the section's application can't work.
+A gateway Prometheus doesn't know is never DOWN: after adding a host to `gateway_hosts`, run
+`ansible-playbook 01-hosts.yml 14-gateway.yml 09-monitoring.yml` (09 writes the Prometheus target).
 
 1. **Confirm:** on the gateway host, `docker compose ps` and `docker compose logs --tail 50 gateway`.
 2. **Fix:** `docker compose up -d`, or rerun `ansible-playbook 14-gateway.yml` (from `ansible/`). The

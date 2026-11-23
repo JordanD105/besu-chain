@@ -969,13 +969,204 @@
       }
     },
     {
-      "type": "row",
-      "title": "Sections (one row per section; filter with Section and Search above)",
+      "type": "stat",
+      "title": "User accounts",
       "id": 14,
-      "collapsed": false,
+      "description": "Accounts given to users (a gateway's spare accounts not counted)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "gridPos": {
         "x": 0,
         "y": 13,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(max by (section) (proxy_section_user_accounts{section=~\"$section\",section=~\"(?i).*$search.*\"} - on(section_id) group_left() max by (section_id) (gateway_spare_accounts) or proxy_section_user_accounts{section=~\"$section\",section=~\"(?i).*$search.*\"})) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Spare accounts",
+      "id": 15,
+      "description": "Made in advance by the section gateways for /createaccount while offline; not given to a user yet",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 13,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(max by (section) (proxy_section_active{section=~\"$section\",section=~\"(?i).*$search.*\"} * 0 + on(section_id) group_left() max by (section_id) (gateway_spare_accounts))) or vector(0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "User and spare accounts",
+      "id": 16,
+      "description": "Of the selected sections. A spare account becomes a user account when /createaccount hands it out.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 13,
+        "w": 16,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(max by (section) (proxy_section_user_accounts{section=~\"$section\",section=~\"(?i).*$search.*\"} - on(section_id) group_left() max by (section_id) (gateway_spare_accounts) or proxy_section_user_accounts{section=~\"$section\",section=~\"(?i).*$search.*\"}))",
+          "legendFormat": "user accounts",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum(max by (section) (proxy_section_active{section=~\"$section\",section=~\"(?i).*$search.*\"} * 0 + on(section_id) group_left() max by (section_id) (gateway_spare_accounts)))",
+          "legendFormat": "spare accounts",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Sections (one row per section; filter with Section and Search above)",
+      "id": 17,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 18,
         "w": 24,
         "h": 1
       },
@@ -984,7 +1175,7 @@
     {
       "type": "table",
       "title": "Sections needing attention",
-      "id": 15,
+      "id": 18,
       "description": "Only the sections with a problem now: EMPTY (upfront at 0: new accounts and -x fail), LOW (upfront below upfront_low_balance_eth), < 7 DAYS LEFT (at the last 7 days' spending). Top up on the chainlens Sections page. Empty table = all sections OK.",
       "datasource": {
         "type": "prometheus",
@@ -992,7 +1183,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 14,
+        "y": 19,
         "w": 24,
         "h": 7
       },
@@ -1092,6 +1283,30 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "refId": "S",
+          "expr": "max by (section) (proxy_section_user_accounts{section=~\"$section\",section=~\"(?i).*$search.*\"} - on(section_id) group_left() max by (section_id) (gateway_spare_accounts) or proxy_section_user_accounts{section=~\"$section\",section=~\"(?i).*$search.*\"})",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "T",
+          "expr": "max by (section) (proxy_section_active{section=~\"$section\",section=~\"(?i).*$search.*\"} * 0 + on(section_id) group_left() max by (section_id) (gateway_spare_accounts))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -1114,6 +1329,8 @@
               "Value #E": "Payment",
               "Value #F": "Days left",
               "Value #G": "Spend / day",
+              "Value #S": "User accounts",
+              "Value #T": "Spare accounts",
               "section": "Section"
             },
             "indexByName": {
@@ -1124,6 +1341,8 @@
               "Value #E": 7,
               "Value #F": 4,
               "Value #G": 5,
+              "Value #S": 8,
+              "Value #T": 9,
               "section": 0
             }
           }
@@ -1321,6 +1540,34 @@
                 "value": 0
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User accounts"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Spare accounts"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "noValue",
+                "value": "no gateway"
+              }
+            ]
           }
         ]
       }
@@ -1328,7 +1575,7 @@
     {
       "type": "table",
       "title": "All sections",
-      "id": 16,
+      "id": 19,
       "description": "Every section: balances now (ETH), days the upfront account lasts at the last 7 days' spending (-x and new-account funding), and the activity of the last $period. Sorted by upfront (lowest first); click a title to sort, the funnel to filter; pages at the bottom.",
       "datasource": {
         "type": "prometheus",
@@ -1336,7 +1583,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 26,
         "w": 24,
         "h": 11
       },
@@ -1428,6 +1675,30 @@
         {
           "refId": "H",
           "expr": "max by (section) (count by (section, role) (proxy_section_balance_eth{section=~\"$section\",section=~\"(?i).*$search.*\"}))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "S",
+          "expr": "max by (section) (proxy_section_user_accounts{section=~\"$section\",section=~\"(?i).*$search.*\"} - on(section_id) group_left() max by (section_id) (gateway_spare_accounts) or proxy_section_user_accounts{section=~\"$section\",section=~\"(?i).*$search.*\"})",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "T",
+          "expr": "max by (section) (proxy_section_active{section=~\"$section\",section=~\"(?i).*$search.*\"} * 0 + on(section_id) group_left() max by (section_id) (gateway_spare_accounts))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -1578,6 +1849,8 @@
               "Value #E": "Payment",
               "Value #F": "Days left",
               "Value #G": "Spend / day",
+              "Value #S": "User accounts",
+              "Value #T": "Spare accounts",
               "section": "Section",
               "Value #I": "New accounts ($period)",
               "Value #J": "+x in ($period)",
@@ -1598,17 +1871,19 @@
               "Value #E": 7,
               "Value #F": 4,
               "Value #G": 5,
+              "Value #S": 8,
+              "Value #T": 9,
               "section": 0,
-              "Value #I": 8,
-              "Value #J": 9,
-              "Value #K": 10,
-              "Value #L": 11,
-              "Value #M": 12,
-              "Value #N": 13,
-              "Value #O": 14,
-              "Value #P": 15,
-              "Value #Q": 16,
-              "Value #R": 17
+              "Value #I": 10,
+              "Value #J": 11,
+              "Value #K": 12,
+              "Value #L": 13,
+              "Value #M": 14,
+              "Value #N": 15,
+              "Value #O": 16,
+              "Value #P": 17,
+              "Value #Q": 18,
+              "Value #R": 19
             }
           }
         },
@@ -1805,6 +2080,34 @@
                 "value": 0
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User accounts"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Spare accounts"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "noValue",
+                "value": "no gateway"
+              }
+            ]
           }
         ]
       }
@@ -1812,11 +2115,11 @@
     {
       "type": "row",
       "title": "Balances (ETH)",
-      "id": 17,
+      "id": 20,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 37,
         "w": 24,
         "h": 1
       },
@@ -1825,7 +2128,7 @@
     {
       "type": "bargauge",
       "title": "Lowest upfront: 10 sections",
-      "id": 18,
+      "id": 21,
       "description": "The 10 enabled sections with the least money left to fund accounts and -x (red below upfront_low_balance_eth)",
       "datasource": {
         "type": "prometheus",
@@ -1833,7 +2136,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 33,
+        "y": 38,
         "w": 8,
         "h": 10
       },
@@ -1904,7 +2207,7 @@
     {
       "type": "bargauge",
       "title": "Fewest days left: 10 sections",
-      "id": 19,
+      "id": 22,
       "description": "Days the upfront account lasts at the last 7 days' spending (sections that spend nothing are not listed)",
       "datasource": {
         "type": "prometheus",
@@ -1912,7 +2215,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 33,
+        "y": 38,
         "w": 8,
         "h": 10
       },
@@ -1983,7 +2286,7 @@
     {
       "type": "bargauge",
       "title": "Most collected: 10 sections",
-      "id": 20,
+      "id": 23,
       "description": "ETH in each section's consumption + payment accounts (earned, not paid back yet)",
       "datasource": {
         "type": "prometheus",
@@ -1991,7 +2294,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 33,
+        "y": 38,
         "w": 8,
         "h": 10
       },
@@ -2054,7 +2357,7 @@
     {
       "type": "timeseries",
       "title": "All sections, by account role",
-      "id": 21,
+      "id": 24,
       "description": "Upfront, consumption and payment balances of the selected sections, added up",
       "datasource": {
         "type": "prometheus",
@@ -2062,7 +2365,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 43,
+        "y": 48,
         "w": 12,
         "h": 8
       },
@@ -2112,7 +2415,7 @@
     {
       "type": "timeseries",
       "title": "Lowest upfront over time: 10 sections",
-      "id": 22,
+      "id": 25,
       "description": "At each moment the 10 enabled sections with the least upfront money; the dashed line is upfront_low_balance_eth",
       "datasource": {
         "type": "prometheus",
@@ -2120,7 +2423,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 43,
+        "y": 48,
         "w": 12,
         "h": 8
       },
@@ -2205,11 +2508,11 @@
     {
       "type": "row",
       "title": "Activity per $period (Period: Day, Week, Month = 30 days, Quarter = 90 days, Year = 365 days)",
-      "id": 23,
+      "id": 26,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 56,
         "w": 24,
         "h": 1
       },
@@ -2218,7 +2521,7 @@
     {
       "type": "stat",
       "title": "New accounts, last $period",
-      "id": 24,
+      "id": 27,
       "description": "Accounts created by the selected sections in the last period",
       "datasource": {
         "type": "prometheus",
@@ -2226,7 +2529,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 57,
         "w": 6,
         "h": 5
       },
@@ -2280,7 +2583,7 @@
     {
       "type": "stat",
       "title": "+x from users, last $period (ETH)",
-      "id": 25,
+      "id": 28,
       "description": "Paid by users into the consumption accounts (+x)",
       "datasource": {
         "type": "prometheus",
@@ -2288,7 +2591,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 52,
+        "y": 57,
         "w": 6,
         "h": 5
       },
@@ -2342,7 +2645,7 @@
     {
       "type": "stat",
       "title": "Avatar sales, last $period (ETH)",
-      "id": 26,
+      "id": 29,
       "description": "First avatar sales, paid into the consumption accounts (avatar_sale; nft_first_sale before the rename)",
       "datasource": {
         "type": "prometheus",
@@ -2350,7 +2653,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 52,
+        "y": 57,
         "w": 6,
         "h": 5
       },
@@ -2404,7 +2707,7 @@
     {
       "type": "stat",
       "title": "Top-ups, last $period (ETH)",
-      "id": 27,
+      "id": 30,
       "description": "SENDER01 -> upfront accounts",
       "datasource": {
         "type": "prometheus",
@@ -2412,7 +2715,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 52,
+        "y": 57,
         "w": 6,
         "h": 5
       },
@@ -2466,7 +2769,7 @@
     {
       "type": "bargauge",
       "title": "Most income, last $period: 10 sections",
-      "id": 28,
+      "id": 31,
       "description": "+x from users, avatar and nickname sales and level upgrades, minus undone (refunded) payments, per section, in the last period",
       "datasource": {
         "type": "prometheus",
@@ -2474,7 +2777,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 57,
+        "y": 62,
         "w": 8,
         "h": 10
       },
@@ -2537,7 +2840,7 @@
     {
       "type": "bargauge",
       "title": "Most new accounts, last $period: 10 sections",
-      "id": 29,
+      "id": 32,
       "description": "Accounts created per section in the last period",
       "datasource": {
         "type": "prometheus",
@@ -2545,7 +2848,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 57,
+        "y": 62,
         "w": 8,
         "h": 10
       },
@@ -2608,7 +2911,7 @@
     {
       "type": "bargauge",
       "title": "Most spent, last $period: 10 sections",
-      "id": 30,
+      "id": 33,
       "description": "Paid out of the upfront account (-x and new-account funding) per section in the last period",
       "datasource": {
         "type": "prometheus",
@@ -2616,7 +2919,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 57,
+        "y": 62,
         "w": 8,
         "h": 10
       },
@@ -2679,7 +2982,7 @@
     {
       "type": "timeseries",
       "title": "Operations per $period",
-      "id": 31,
+      "id": 34,
       "description": "All selected sections, per kind of operation: create_account, transfer_in (+x), transfer_out (-x), transfer_in_undo, transfer_out_undo, avatar_sale, avatar_undo, nickname_sale, nickname_undo, level_upgrade, level_undo, topup, sweep, payback (older names kept for history: nft_first_sale, nft_resale, avatar_resale, edge_upgrade). One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
@@ -2687,7 +2990,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 67,
+        "y": 72,
         "w": 12,
         "h": 8
       },
@@ -2738,7 +3041,7 @@
     {
       "type": "timeseries",
       "title": "ETH moved per $period",
-      "id": 32,
+      "id": 35,
       "description": "ETH moved by each kind of operation (all selected sections). One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
@@ -2746,7 +3049,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 67,
+        "y": 72,
         "w": 12,
         "h": 8
       },
@@ -2797,7 +3100,7 @@
     {
       "type": "timeseries",
       "title": "Income per $period: top 10 sections",
-      "id": 33,
+      "id": 36,
       "description": "+x, avatar and nickname sales and level upgrades, minus undos; the 10 sections with the most income in each period. One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
@@ -2805,7 +3108,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 75,
+        "y": 80,
         "w": 24,
         "h": 8
       },
@@ -2856,7 +3159,7 @@
     {
       "type": "table",
       "title": "ETH moved in the selected time range",
-      "id": 34,
+      "id": 37,
       "description": "Per section and operation, over the dashboard's time range; pages at the bottom",
       "datasource": {
         "type": "prometheus",
@@ -2864,7 +3167,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 83,
+        "y": 88,
         "w": 24,
         "h": 9
       },
@@ -2916,11 +3219,11 @@
     {
       "type": "row",
       "title": "Gateways (sections whose application calls a gateway)",
-      "id": 35,
+      "id": 38,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 92,
+        "y": 97,
         "w": 24,
         "h": 1
       },
@@ -2929,15 +3232,15 @@
     {
       "type": "table",
       "title": "Gateways now",
-      "id": 36,
+      "id": 39,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Mode: online, offline (answers from its ledger, queues the writes) or draining (sending the queue). Open corrections: queued requests the chain refused after a cut, not acknowledged yet in chainlens (Sections, Gateway).",
+      "description": "Answers: Prometheus can read the gateway (DOWN = alert GatewayDown; a gateway missing from this table is not monitored: run ansible-playbook 09-monitoring.yml after adding it). Sync: its last read of the chain (balances, items, new accounts) worked; FAILING = alert GatewaySyncFailing, see its log. Mode: online, offline (answers from its ledger, queues the writes) or draining (sending the queue). Open corrections: queued requests the chain refused after a cut, not acknowledged yet in chainlens (Sections, Gateway).",
       "gridPos": {
         "x": 0,
-        "y": 93,
+        "y": 98,
         "w": 24,
         "h": 7
       },
@@ -3037,6 +3340,42 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "refId": "I",
+          "expr": "max by (section) (gateway_sync_failing{section=~\"$section\",section=~\"(?i).*$search.*\"})",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "J",
+          "expr": "max by (section) (time() - gateway_last_sync_timestamp_seconds{section=~\"$section\",section=~\"(?i).*$search.*\"})",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "K",
+          "expr": "max by (section) (label_replace(up{job=\"gateway\"}, \"section\", \"$1\", \"name\", \"gateway-(.*)\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -3059,7 +3398,17 @@
               "Value #E": "Open corrections",
               "Value #F": "Undelivered (webhook)",
               "Value #G": "Cuts",
-              "Value #H": "Time offline"
+              "Value #H": "Time offline",
+              "Value #I": "Sync",
+              "Value #J": "Last sync",
+              "Value #K": "Answers"
+            },
+            "indexByName": {
+              "section": 0,
+              "Value #K": 1,
+              "Value #A": 2,
+              "Value #I": 3,
+              "Value #J": 4
             }
           }
         }
@@ -3111,6 +3460,82 @@
                 "value": {
                   "type": "color-background"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Answers"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "yes",
+                        "color": "green"
+                      },
+                      "0": {
+                        "text": "DOWN",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sync"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "ok",
+                        "color": "green"
+                      },
+                      "1": {
+                        "text": "FAILING",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last sync"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
               }
             ]
           },
@@ -3174,7 +3599,7 @@
     {
       "type": "timeseries",
       "title": "Gateway mode and queue",
-      "id": 37,
+      "id": 40,
       "description": "Mode 0 online, 1 offline, 2 draining; the queue grows while offline and empties while draining.",
       "datasource": {
         "type": "prometheus",
@@ -3182,7 +3607,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 100,
+        "y": 105,
         "w": 8,
         "h": 8
       },
@@ -3241,7 +3666,7 @@
     {
       "type": "timeseries",
       "title": "Corrections per $period, by kind",
-      "id": 38,
+      "id": 41,
       "description": "already_sold, price_changed, level, undo_period_over, balance, other. One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
@@ -3249,7 +3674,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 100,
+        "y": 105,
         "w": 8,
         "h": 8
       },
@@ -3300,7 +3725,7 @@
     {
       "type": "timeseries",
       "title": "ETH given back by corrections per $period",
-      "id": 39,
+      "id": 42,
       "description": "The ETH the gateway had taken in its ledger for requests the chain then refused. One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
@@ -3308,7 +3733,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 100,
+        "y": 105,
         "w": 8,
         "h": 8
       },
@@ -3359,7 +3784,7 @@
     {
       "type": "timeseries",
       "title": "Spare accounts",
-      "id": 40,
+      "id": 43,
       "description": "Accounts made in advance for /createaccount while offline (spare_accounts); GatewaySparesLow below spare_alert_below.",
       "datasource": {
         "type": "prometheus",
@@ -3367,7 +3792,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 108,
+        "y": 113,
         "w": 8,
         "h": 8
       },
@@ -3426,7 +3851,7 @@
     {
       "type": "timeseries",
       "title": "Cuts per $period",
-      "id": 41,
+      "id": 44,
       "description": "Times each gateway went offline. One bar per period. Choose a time range holding several periods (Day: last 14-30 days; Year: several years). Prometheus keeps prometheus_retention (settings.yml).",
       "datasource": {
         "type": "prometheus",
@@ -3434,7 +3859,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 108,
+        "y": 113,
         "w": 8,
         "h": 8
       },
@@ -3485,7 +3910,7 @@
     {
       "type": "timeseries",
       "title": "Open and undelivered corrections",
-      "id": 42,
+      "id": 45,
       "description": "Open: not acknowledged in chainlens (GatewayCorrectionsOpen after 1 h). Undelivered: the correction_webhook has not taken them (0 without a webhook).",
       "datasource": {
         "type": "prometheus",
@@ -3493,7 +3918,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 108,
+        "y": 113,
         "w": 8,
         "h": 8
       },

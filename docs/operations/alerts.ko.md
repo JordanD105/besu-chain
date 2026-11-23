@@ -135,6 +135,8 @@ Redis, 섹션, 호스트, 백업, 섹션 게이트웨이의 일곱 파일).
 | [**GatewaySparesLow**](alert-runbook.md#gatewayspareslow) | warning | 30 min | 예비 계정이 `spare_alert_below`(기본값 20)보다 적음 | 오프라인 `/createaccount`가 예비 계정을 소진합니다. 새 예비 계정은 온라인에서 3개 MPC 노드가 모두 있을 때만 만들어집니다 |
 | [**GatewayConflicts**](alert-runbook.md#gatewayconflicts) | warning | – | 재연결 후 큐 요청이 거부됨(지난 1시간) | 게이트웨이가 원장에서 되돌렸습니다: chainlens(Sections → 섹션 → Gateway)에서 정정을 확인하십시오 |
 | [**GatewayCorrectionsOpen**](alert-runbook.md#gatewaycorrectionsopen) | warning | 1 h | 확인되지 않은 정정(`gateway_corrections_open > 0`) | 섹션 팀과 처리한 뒤 chainlens에서 **Acknowledge** |
+| [**GatewaySyncFailing**](alert-runbook.md#gatewaysyncfailing) | warning | 5 min | 온라인 게이트웨이가 체인을 읽지 못함(`gateway_sync_failing == 1`, 로그 `gateway: sync: ...`) | 원장이 오래되어 갑니다. 게이트웨이 로그와 읽는 RPC 노드의 Besu를 확인 |
+| [**GatewayLedgerStale**](alert-runbook.md#gatewayledgerstale) | critical | 5 min | 온라인 게이트웨이의 마지막 동기화가 30분보다 오래됨 | 지금 단절되면 오래된 잔액과 아이템으로 응답합니다: 동기화부터 고치십시오 |
 | [**GatewayDown**](alert-runbook.md#gatewaydown) | critical | 2 min | Prometheus가 게이트웨이를 수집할 수 없음 | 섹션의 애플리케이션은 게이트웨이 없이 동작할 수 없습니다: 호스트, `docker compose ps`, `14-gateway.yml` 재실행 |
 
 ---

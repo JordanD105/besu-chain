@@ -319,6 +319,7 @@ days, Quarter = 90 days, Year = 365 days). The default time range is the last 30
 | **Runs out within 7 days** | sections whose upfront account lasts less than 7 more days at the last 7 days' spending | 0 | top up before it runs out |
 | **SENDER01 (ETH)** | SENDER01's balance: it funds every top-up | above `sender01_low_balance_eth` | refill, or pay back from the payment accounts (`Sender01Low`) |
 | **All upfront (ETH)** / **Collected (ETH)** | ETH in every upfront account / in every consumption + payment account | | |
+| **User accounts** / **Spare accounts** / **User and spare accounts** | accounts given to users / made in advance by the [section gateways](../components/gateway.md#spare-accounts) for `/createaccount` offline, not given to anyone yet; and both over time | | spares low: `GatewaySparesLow` |
 
 ### Sections
 
@@ -333,6 +334,7 @@ Each column can be sorted, or filtered with the funnel.
 | **Upfront** / **Consumption** / **Payment** | balances now (ETH) |
 | **Days left** | how long the upfront account lasts at the last 7 days' spending; *no spending* when it paid nothing out. Red under 3, orange under 7 |
 | **Spend / day** | ETH paid out of the upfront account per day over the last 7 days (−x transfers and the funding of new accounts) |
+| **User accounts** / **Spare accounts** | accounts given to users / a gateway's spare accounts (*no gateway* when the section has none) |
 | **New accounts**, **+x in**, **−x out**, **Avatar sales**, **Top-ups**, **Swept**, **Paid back**, **Nicknames**, **Level upgrades**, **Undone** (All sections only) | the last Period (ETH, except New accounts). **Undone**: the ETH refunded by undos of avatar sales, nickname sales and level upgrades |
 
 ### Balances (ETH)

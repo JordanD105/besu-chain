@@ -316,6 +316,7 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 | **Runs out within 7 days** (7일 안에 소진) | 최근 7일의 지출 기준으로 선지급 계정이 7일을 버티지 못하는 섹션 | 0 | 소진되기 전에 충전하십시오 |
 | **SENDER01 (ETH)** | SENDER01의 잔액: 모든 충전 자금을 제공함 | `sender01_low_balance_eth` 초과 | 보충하거나 결제 계정에서 반환하십시오(`Sender01Low`) |
 | **All upfront (ETH)** / **Collected (ETH)** (전체 선지급 / 모인 금액) | 모든 선지급 계정의 ETH / 모든 소비 + 결제 계정의 ETH | | |
+| **User accounts** / **Spare accounts** / **User and spare accounts** (사용자 계정 / 예비 계정) | 사용자에게 준 계정 / [섹션 게이트웨이](../components/gateway.md#spare-accounts)가 오프라인 `/createaccount`용으로 미리 만든, 아직 아무에게도 주지 않은 계정, 그리고 둘의 추이 | | 예비 계정 부족: `GatewaySparesLow` |
 
 ### 섹션 (Sections) {#sections-1}
 
@@ -330,6 +331,7 @@ MPC 노드 재시작 후에는 몇 분 동안 *Pools*가 비고 *Failures*에 �
 | **Upfront** / **Consumption** / **Payment** | 현재 잔액(ETH) |
 | **Days left** | 최근 7일의 지출 기준으로 선지급 계정이 버티는 기간. 지급한 것이 없으면 *no spending*. 3 미만 빨간색, 7 미만 주황색 |
 | **Spend / day** | 최근 7일 동안 선지급 계정에서 하루에 지급된 ETH(−x 송금과 새 계정 자금 제공) |
+| **User accounts** / **Spare accounts** | 사용자에게 준 계정 / 게이트웨이의 예비 계정(게이트웨이가 없으면 *no gateway*) |
 | **New accounts**, **+x in**, **−x out**, **Avatar sales**, **Top-ups**, **Swept**, **Paid back**, **Nicknames**, **Level upgrades**, **Undone** (All sections에만 있음) | 지난 Period의 값(New accounts를 빼면 ETH). **Undone**: 아바타 판매, 닉네임 판매, 레벨 업그레이드를 취소해 환불한 ETH |
 
 ### 잔액 (ETH) (Balances (ETH)) {#balances-eth}

@@ -135,6 +135,8 @@ per section, next to its application; label `section` is the section's name.
 | [**GatewaySparesLow**](alert-runbook.md#gatewayspareslow) | warning | 30 min | Fewer spare accounts than `spare_alert_below` (default 20) | `/createaccount` offline uses them up; new ones are made only while online with all 3 MPC nodes |
 | [**GatewayConflicts**](alert-runbook.md#gatewayconflicts) | warning | – | Queued requests were refused after reconnecting (last hour) | The gateway undid them in its ledger: see the corrections in chainlens (Sections → the section → Gateway) |
 | [**GatewayCorrectionsOpen**](alert-runbook.md#gatewaycorrectionsopen) | warning | 1 h | Corrections not acknowledged (`gateway_corrections_open > 0`) | Handle them with the section's team, then **Acknowledge** in chainlens |
+| [**GatewaySyncFailing**](alert-runbook.md#gatewaysyncfailing) | warning | 5 min | An online gateway can't read the chain (`gateway_sync_failing == 1`; log `gateway: sync: ...`) | Its ledger is getting old. The gateway log and Besu on the RPC node it reads |
+| [**GatewayLedgerStale**](alert-runbook.md#gatewayledgerstale) | critical | 5 min | An online gateway's last sync is more than 30 minutes old | A cut now would make it answer with old balances and items: fix the sync first |
 | [**GatewayDown**](alert-runbook.md#gatewaydown) | critical | 2 min | Prometheus can't scrape a gateway | The section's application can't work without it: its host, `docker compose ps`, rerun `14-gateway.yml` |
 
 ---

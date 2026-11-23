@@ -15,7 +15,7 @@
 - [MPC 서명기](#mpc-signer): [MpcBelowThreshold](#mpcbelowthreshold) · [MpcCoordinatorDown](#mpccoordinatordown) · [MpcNodeDown](#mpcnodedown) · [MpcPoolEmpty](#mpcpoolempty) · [MpcSmallPoolsEmpty](#mpcsmallpoolsempty) · [MpcPresignFailing](#mpcpresignfailing) · [MpcSignErrors](#mpcsignerrors) · [MpcPolicyRefusals](#mpcpolicyrefusals)
 - [프록시와 Redis](#proxy-and-redis): [ProxyDown](#proxydown) · [ProxySenderStalled](#proxysenderstalled) · [ProxyNonceGap](#proxynoncegap) · [ProxyNonceRepaired](#proxynoncerepaired) · [ProxySenderCheckFailing](#proxysendercheckfailing) · [ProxyHttpErrors](#proxyhttperrors) · [ProxySlow](#proxyslow) · [ProxyEventLoopBlocked](#proxyeventloopblocked) · [ProxyRedisDisconnected](#proxyredisdisconnected) · [RedisDown](#redisdown) · [RedisMemoryHigh](#redismemoryhigh)
 - [섹션](#sections): [SectionUpfrontEmpty](#sectionupfrontempty) · [SectionUpfrontLow](#sectionupfrontlow) · [Sender01Low](#sender01low) · [SectionMetricsFailing](#sectionmetricsfailing)
-- [섹션 게이트웨이](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayCorrectionsOpen](#gatewaycorrectionsopen) · [GatewayDown](#gatewaydown)
+- [섹션 게이트웨이](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayCorrectionsOpen](#gatewaycorrectionsopen) · [GatewaySyncFailing](#gatewaysyncfailing) · [GatewayLedgerStale](#gatewayledgerstale) · [GatewayDown](#gatewaydown)
 - [호스트](#hosts): [HostDown](#hostdown) · [HostMemoryHigh](#hostmemoryhigh) · [HostDiskFull](#hostdiskfull) · [HostClockNotSynced](#hostclocknotsynced)
 - [백업](#backups): [BackupFailed](#backupfailed) · [ChainSnapshotTooOld](#chainsnapshottooold) · [ChainSnapshotMissing](#chainsnapshotmissing) · [MpcShareBackupTooOld](#mpcsharebackuptooold) · [MpcShareBackupMissing](#mpcsharebackupmissing) · [ValidatorKeyBackupMissing](#validatorkeybackupmissing)
 
@@ -595,9 +595,28 @@ docker logs --since 30m <container> 2>&1 | grep -iE "error|fail|exception|warn" 
    `gateway_corrections_undelivered`도 확인하십시오.
 3. **해제 확인:** `gateway_corrections_open`이 0입니다.
 
+### GatewaySyncFailing {#gatewaysyncfailing}
+
+**Warning.** 온라인 게이트웨이가 응답은 하지만 체인과의 동기화(잔액, 아이템, 새 섹션 계정, `sync_seconds`마다)가
+5분 동안 실패했습니다. 로그에 `gateway: sync: <이유>`가 보입니다.
+
+1. **확인:** Grafana → Sections → Gateways의 *Sync* 열이 FAILING, `GET /gateway/status`의 `syncError`,
+   호스트에서 `docker compose logs --tail 50 gateway`.
+2. **조치:** *The operation was aborted due to timeout*: 게이트웨이가 읽는 RPC 노드의 Besu가 느리거나 멈췄거나
+   (BesuDown / BlockProductionStalled, 디스크 확인) 그쪽 네트워크가 끊긴 것입니다. 실패 후 게이트웨이는
+   15초, 30초, ... 최대 5분을 기다린 뒤 다시 시도합니다.
+3. **해제 확인:** *Sync*가 ok이고 *Last sync*가 `sync_seconds`(기본 30초)보다 작습니다.
+
+### GatewayLedgerStale {#gatewayledgerstale}
+
+**Critical.** 온라인 게이트웨이가 30분 넘게 동기화하지 못했습니다. 지금 단절되면 오래된 잔액과 아이템으로
+응답합니다. [GatewaySyncFailing](#gatewaysyncfailing)처럼 조치하십시오.
+
 ### GatewayDown {#gatewaydown}
 
 **Critical.** Prometheus가 2분 동안 게이트웨이를 수집할 수 없습니다. 섹션의 애플리케이션이 동작할 수 없습니다.
+Prometheus가 모르는 게이트웨이는 DOWN이 되지 않습니다: `gateway_hosts`에 호스트를 추가한 뒤
+`ansible-playbook 01-hosts.yml 14-gateway.yml 09-monitoring.yml`을 실행하십시오(09가 Prometheus 대상을 씁니다).
 
 1. **확인:** 게이트웨이 호스트에서 `docker compose ps`와 `docker compose logs --tail 50 gateway`.
 2. **조치:** `docker compose up -d`, 또는 `ansible-playbook 14-gateway.yml` 재실행(`ansible/`에서). 원장과 큐는

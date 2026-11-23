@@ -352,6 +352,7 @@ periods**는 기본값으로 돌아갑니다. chainlens가 인덱싱한 트랜�
 |---|---|
 | `proxy_section_balance_eth{section_id, section, role, active}` | 각 계정의 잔액(역할 upfront / consumption / payment), 15초마다 갱신. 보관된 섹션은 나열되지 않음 |
 | `proxy_section_active{section_id, section}` | 1 = 활성화됨 |
+| `proxy_section_user_accounts{section_id, section}` | 섹션에 등록된 사용자 계정 수(`AccountAdded`), 게이트웨이의 예비 계정 포함. Grafana는 *User accounts* = 이 값 − `gateway_spare_accounts`, 그리고 *Spare accounts*를 보여 줍니다 |
 | `proxy_section_operations_total`, `proxy_section_amount_eth_total` `{section_id, section, op}` | 프록시 시작 이후의 작업 수와 이동한 ETH (op: `create_account`, `transfer_in`, `transfer_out`, `avatar_sale`, `avatar_undo`, `nickname_sale`, `nickname_undo`, `level_upgrade`, `level_undo`, `topup`, `sweep`, `payback`, `account_replaced`, `archive_return`). 프록시와 함께 0부터 다시 시작합니다(대시보드는 `increase()` 사용) |
 | `proxy_sender01_balance_eth` | SENDER01의 잔액 |
 | `proxy_section_low_balance_eth`, `proxy_sender01_low_balance_eth` | 알림 임계값 |

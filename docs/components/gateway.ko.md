@@ -420,6 +420,7 @@ Prometheus job `gateway`(IP 계획에서 만든 대상: `name: gateway-<section 
 | `gateway_cuts_total`, `gateway_offline_seconds_total` | 오프라인이 된 횟수와 오프라인 시간 |
 | `gateway_auth_failures_total` | 틀린 키의 요청 |
 | `gateway_last_sync_timestamp_seconds`, `gateway_last_backup_timestamp_seconds` | 마지막 전체 동기화와 스냅숏 |
+| `gateway_sync_failing`, `gateway_sync_failures_total` | 1 = 마지막 체인 동기화 실패, 실패한 동기화 수(이유: `/gateway/status`의 `syncError`, 로그) |
 
 Grafana: **Sections** 대시보드의 **Gateways** 행: 섹션별 표(모드, 큐, 가장 오래된 요청, 예비 계정, 미확인과
 미전달 정정, 단절, 오프라인 시간), 시간에 따른 모드와 큐, 기간별 종류별 정정, 기간별 돌려준 ETH, 예비 계정,
@@ -435,6 +436,8 @@ Grafana: **Sections** 대시보드의 **Gateways** 행: 섹션별 표(모드, �
 | [GatewaySparesLow](../operations/alert-runbook.md#gatewayspareslow) | warning | 30분 | 예비 계정이 `spare_alert_below`보다 적음 |
 | [GatewayConflicts](../operations/alert-runbook.md#gatewayconflicts) | warning | – | 지난 1시간 동안 큐 요청이 거부됨 |
 | [GatewayCorrectionsOpen](../operations/alert-runbook.md#gatewaycorrectionsopen) | warning | 1시간 | chainlens에서 확인되지 않은 정정 |
+| [GatewaySyncFailing](../operations/alert-runbook.md#gatewaysyncfailing) | warning | 5분 | 온라인이지만 체인 동기화가 계속 실패 |
+| [GatewayLedgerStale](../operations/alert-runbook.md#gatewayledgerstale) | critical | 5분 | 온라인이고 마지막 동기화가 30분보다 오래됨 |
 | [GatewayDown](../operations/alert-runbook.md#gatewaydown) | critical | 2분 | 게이트웨이가 응답하지 않음 |
 
 ## 백업 {#backup}

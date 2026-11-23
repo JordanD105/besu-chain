@@ -95,6 +95,12 @@ SPEND_DAY = f'(sum by (section) (increase({OUTFLOW}[7d])) / 7)'
 DAYS_LEFT = f'({UPFRONT} / on(section) ({SPEND_DAY} > 0))'
 THRESHOLD = '(proxy_section_low_balance_eth > 0)'
 ACTIVE = f'max by (section) (proxy_section_active{{{SEL}}})'
+# user accounts: real ones and a gateway's spare accounts (made in advance for /createaccount offline, not given to a user yet).
+# proxy_section_user_accounts counts both; the gateway's spares are matched by section id (its name label can be older)
+SPARE_BY_ID = 'max by (section_id) (gateway_spare_accounts)'
+REAL_USERS = (f'max by (section) (proxy_section_user_accounts{{{SEL}}} - on(section_id) group_left() {SPARE_BY_ID}'
+              f' or proxy_section_user_accounts{{{SEL}}})')
+SPARES = f'max by (section) (proxy_section_active{{{SEL}}} * 0 + on(section_id) group_left() {SPARE_BY_ID})'
 
 y = 0
 y = alerts_row(panels, nid, y)
@@ -118,6 +124,14 @@ stat("All upfront (ETH)", f'sum({BAL[:-1]},role="upfront"}}) or vector(0)', 18, 
 stat("Collected (ETH)", f'sum({BAL[:-1]},role=~"consumption|payment"}}) or vector(0)', 21, y, decimals=2, color_mode="value",
      desc="In all consumption and payment accounts: earned by the sections, not paid back yet")
 y += 5
+stat("User accounts", f'sum({REAL_USERS}) or vector(0)', 0, y, w=4, decimals=0, color_mode="value",
+     desc="Accounts given to users (a gateway's spare accounts not counted)")
+stat("Spare accounts", f'sum({SPARES}) or vector(0)', 4, y, w=4, decimals=0, color_mode="value",
+     desc="Made in advance by the section gateways for /createaccount while offline; not given to a user yet")
+timeseries("User and spare accounts", [target(f'sum({REAL_USERS})', "user accounts", ref="A"),
+                                       target(f'sum({SPARES})', "spare accounts", ref="B")], 8, y, w=16, h=5,
+           desc="Of the selected sections. A spare account becomes a user account when /createaccount hands it out.")
+y += 5
 
 # ---- the tables: one row per section
 STATE = (f'(max by (section) ({BAL[:-1]},role="upfront",active="1"}}) == 0 and on() {THRESHOLD}) * 0 + 3'
@@ -138,14 +152,16 @@ def section_table(title, state_expr, y, h, desc, only_problems):
     q = [("A", state_expr), ("B", ACTIVE),
          ("C", f'max by (section) ({BAL[:-1]},role="upfront"}})'), ("D", f'max by (section) ({BAL[:-1]},role="consumption"}})'),
          ("E", f'max by (section) ({BAL[:-1]},role="payment"}})'), ("F", DAYS_LEFT), ("G", SPEND_DAY),
-         ("H", f'max by (section) (count by (section, role) ({BAL}))')]
+         ("H", f'max by (section) (count by (section, role) ({BAL}))'), ("S", REAL_USERS), ("T", SPARES)]
     names = {"Value #A": "State", "Value #B": "Status", "Value #C": "Upfront", "Value #D": "Consumption", "Value #E": "Payment",
-             "Value #F": "Days left", "Value #G": "Spend / day", "section": "Section"}
+             "Value #F": "Days left", "Value #G": "Spend / day", "Value #S": "User accounts", "Value #T": "Spare accounts",
+             "section": "Section"}
     if not only_problems:
         for ref, op, metric, label in PERIOD_OPS:
             q.append((ref, f'round(sum by (section) (increase(proxy_section_{metric}{{op=~"{op}",{SEL}}}[$period])), 0.01)'))
             names[f"Value #{ref}"] = f"{label} ($period)"
-    order = ["Section", "State", "Status", "Upfront", "Days left", "Spend / day", "Consumption", "Payment"] + \
+    order = ["Section", "State", "Status", "Upfront", "Days left", "Spend / day", "Consumption", "Payment",
+             "User accounts", "Spare accounts"] + \
             [f"{label} ($period)" for _, _, _, label in PERIOD_OPS]
     transformations = [{"id": "merge", "options": {}},
                        {"id": "organize", "options": {"excludeByName": {"Time": True, "Value #H": True}, "renameByName": names,
@@ -177,7 +193,10 @@ def section_table(title, state_expr, y, h, desc, only_problems):
                                 {"id": "noValue", "value": "no spending"},
                                 {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                                     {"color": "red", "value": None}, {"color": "orange", "value": 3}, {"color": "green", "value": 7}]}}]},
-                            {"matcher": {"id": "byName", "options": "New accounts ($period)"}, "properties": [{"id": "decimals", "value": 0}]}]}})
+                            {"matcher": {"id": "byName", "options": "New accounts ($period)"}, "properties": [{"id": "decimals", "value": 0}]},
+                            {"matcher": {"id": "byName", "options": "User accounts"}, "properties": [{"id": "decimals", "value": 0}]},
+                            {"matcher": {"id": "byName", "options": "Spare accounts"}, "properties": [
+                                {"id": "decimals", "value": 0}, {"id": "noValue", "value": "no gateway"}]}]}})
 
 
 row("Sections (one row per section; filter with Section and Search above)", y); y += 1
@@ -266,7 +285,10 @@ GW = 'section=~"$section",section=~"(?i).*$search.*"'
 row("Gateways (sections whose application calls a gateway)", y); y += 1
 panels.append({
     "type": "table", "title": "Gateways now", "id": nid(), "datasource": DS,
-    "description": "Mode: online, offline (answers from its ledger, queues the writes) or draining (sending the queue). "
+    "description": "Answers: Prometheus can read the gateway (DOWN = alert GatewayDown; a gateway missing from this table is not "
+                   "monitored: run ansible-playbook 09-monitoring.yml after adding it). Sync: its last read of the chain (balances, "
+                   "items, new accounts) worked; FAILING = alert GatewaySyncFailing, see its log. "
+                   "Mode: online, offline (answers from its ledger, queues the writes) or draining (sending the queue). "
                    "Open corrections: queued requests the chain refused after a cut, not acknowledged yet in chainlens (Sections, Gateway).",
     "gridPos": {"x": 0, "y": y, "w": 24, "h": 7},
     "targets": [target(f'max by (section) (gateway_mode{{{GW}}})', instant=True, fmt="table", ref="A"),
@@ -276,18 +298,30 @@ panels.append({
                 target(f'max by (section) (gateway_corrections_open{{{GW}}})', instant=True, fmt="table", ref="E"),
                 target(f'max by (section) (gateway_corrections_undelivered{{{GW}}})', instant=True, fmt="table", ref="F"),
                 target(f'max by (section) (gateway_cuts_total{{{GW}}})', instant=True, fmt="table", ref="G"),
-                target(f'max by (section) (gateway_offline_seconds_total{{{GW}}})', instant=True, fmt="table", ref="H")],
+                target(f'max by (section) (gateway_offline_seconds_total{{{GW}}})', instant=True, fmt="table", ref="H"),
+                target(f'max by (section) (gateway_sync_failing{{{GW}}})', instant=True, fmt="table", ref="I"),
+                target(f'max by (section) (time() - gateway_last_sync_timestamp_seconds{{{GW}}})', instant=True, fmt="table", ref="J"),
+                target(f'max by (section) (label_replace(up{{job="gateway"}}, "section", "$1", "name", "gateway-(.*)"))', instant=True, fmt="table", ref="K")],
     "transformations": [{"id": "merge", "options": {}},
                         {"id": "organize", "options": {"excludeByName": {"Time": True},
                          "renameByName": {"section": "Section", "Value #A": "Mode", "Value #B": "Queued", "Value #C": "Oldest queued",
                                           "Value #D": "Spare accounts", "Value #E": "Open corrections", "Value #F": "Undelivered (webhook)",
-                                          "Value #G": "Cuts", "Value #H": "Time offline"}}}],
+                                          "Value #G": "Cuts", "Value #H": "Time offline", "Value #I": "Sync", "Value #J": "Last sync",
+                                          "Value #K": "Answers"},
+                         "indexByName": {"section": 0, "Value #K": 1, "Value #A": 2, "Value #I": 3, "Value #J": 4}}}],
     "options": {"showHeader": True, "cellHeight": "sm", "footer": {"show": False}},
     "fieldConfig": {"defaults": {"custom": {"align": "auto"}}, "overrides": [
         {"matcher": {"id": "byName", "options": "Mode"}, "properties": [
             {"id": "mappings", "value": [{"type": "value", "options": {"0": {"text": "online", "color": "green"}, "1": {"text": "offline", "color": "red"},
                                                                          "2": {"text": "draining", "color": "orange"}}}]},
             {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+        {"matcher": {"id": "byName", "options": "Answers"}, "properties": [
+            {"id": "mappings", "value": [{"type": "value", "options": {"1": {"text": "yes", "color": "green"}, "0": {"text": "DOWN", "color": "red"}}}]},
+            {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+        {"matcher": {"id": "byName", "options": "Sync"}, "properties": [
+            {"id": "mappings", "value": [{"type": "value", "options": {"0": {"text": "ok", "color": "green"}, "1": {"text": "FAILING", "color": "red"}}}]},
+            {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+        {"matcher": {"id": "byName", "options": "Last sync"}, "properties": [{"id": "unit", "value": "s"}]},
         {"matcher": {"id": "byName", "options": "Oldest queued"}, "properties": [{"id": "unit", "value": "s"}]},
         {"matcher": {"id": "byName", "options": "Time offline"}, "properties": [{"id": "unit", "value": "s"}]},
         {"matcher": {"id": "byName", "options": "Open corrections"}, "properties": [

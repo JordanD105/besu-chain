@@ -438,6 +438,7 @@ Prometheus job `gateway` (targets from the IP plan: `name: gateway-<section id>`
 | `gateway_cuts_total`, `gateway_offline_seconds_total` | times it went offline, and the time spent offline |
 | `gateway_auth_failures_total` | requests with a wrong key |
 | `gateway_last_sync_timestamp_seconds`, `gateway_last_backup_timestamp_seconds` | the last full sync and snapshot |
+| `gateway_sync_failing`, `gateway_sync_failures_total` | 1 = the last sync with the chain failed; failed syncs (the reason: `syncError` in `/gateway/status`, the log) |
 
 Grafana: **Sections** dashboard, row **Gateways**: a table per section (mode, queued, oldest,
 spares, open and undelivered corrections, cuts, time offline), mode and queue over time,
@@ -453,6 +454,8 @@ Alerts (`monitoring/prometheus/rules/gateway.yml`, [alerts](../operations/alerts
 | [GatewaySparesLow](../operations/alert-runbook.md#gatewayspareslow) | warning | 30 min | fewer spare accounts than `spare_alert_below` |
 | [GatewayConflicts](../operations/alert-runbook.md#gatewayconflicts) | warning | – | queued requests were refused in the last hour |
 | [GatewayCorrectionsOpen](../operations/alert-runbook.md#gatewaycorrectionsopen) | warning | 1 h | corrections not acknowledged in chainlens |
+| [GatewaySyncFailing](../operations/alert-runbook.md#gatewaysyncfailing) | warning | 5 min | online, but its sync with the chain keeps failing |
+| [GatewayLedgerStale](../operations/alert-runbook.md#gatewayledgerstale) | critical | 5 min | online, and the last sync is over 30 minutes old |
 | [GatewayDown](../operations/alert-runbook.md#gatewaydown) | critical | 2 min | the gateway doesn't answer |
 
 ## Backup

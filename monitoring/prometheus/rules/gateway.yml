@@ -50,6 +50,23 @@ groups:
           summary: "Section {{ $labels.section }}: {{ $value | printf \"%.0f\" }} gateway corrections not acknowledged"
           description: "Queued requests the chain refused after a cut (an item sold meanwhile, a changed price, ...). Tell the section's team what changed for their users, then press Acknowledge in chainlens (Sections, Gateway)."
 
+      - alert: GatewaySyncFailing
+        # the gateway answers, but cannot read the chain (balances, items, new section accounts): see its log, "gateway: sync: ..."
+        expr: gateway_sync_failing == 1 and gateway_mode == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Section {{ $labels.section }}: the gateway's sync with the chain keeps failing"
+          description: "Its ledger is getting old: balances and items it answers with may be out of date, and it would go offline with them. Check the gateway log (docker logs gateway on its host) and Besu on the RPC node it reads."
+
+      - alert: GatewayLedgerStale
+        expr: time() - gateway_last_sync_timestamp_seconds > 30 * 60 and gateway_mode == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Section {{ $labels.section }}: the gateway has not synced with the chain for {{ $value | humanizeDuration }}"
+          description: "It is online but its ledger is stale: a cut now would make it answer with old balances and items. Fix the sync (alert GatewaySyncFailing, gateway log) before anything else."
+
       - alert: GatewayDown
         expr: up{job="gateway"} == 0
         for: 2m
