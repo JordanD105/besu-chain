@@ -2387,6 +2387,8 @@ async function showSections() {
         { label: "sections.upfront", sort: (row) => Number(row.balances.upfront), cell: (row) => row.balances.upfront },
         { label: "sections.consumption", sort: (row) => Number(row.balances.consumption), cell: (row) => row.balances.consumption },
         { label: "sections.payment", sort: (row) => Number(row.balances.payment), cell: (row) => row.balances.payment },
+        { label: "platform.userAccounts", sort: (row) => row.users || 0, cell: (row) => formatCount(row.users || 0) },
+        { label: "spare.accounts", sort: (row) => row.spares || 0, cell: (row) => (row.spares ? el("span", { class: "muted", title: t("spare.hint") }, formatCount(row.spares)) : "—") },
         { label: "sections.info", sort: (row) => infoText(row.info), search: (row) => infoText(row.info), cell: (row) => infoText(row.info) }
     ], data.sections, { sort: 0, dir: "asc", key: "sections" });
 

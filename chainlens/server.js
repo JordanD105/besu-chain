@@ -2470,6 +2470,18 @@ const SECTION_ACTIONS = ["name", "info", "key", "active", "topup", "sweep", "pay
 app.get("/api/sections", sectionsGuard, async (req, res) => {
     try {
         const r = await proxyAdmin("GET", "/admin/sections?fresh=1" + (req.query.archived === "1" ? "&archived=1" : ""));
+        if (r.status === 200 && Array.isArray(r.data.sections)) {
+            // user accounts per section: real ones and the gateway's spare accounts (not handed out yet)
+            const counts = new Map();
+            for (const [address, entry] of sectionBook.accounts) {
+                if (entry.role === "user") {
+                    const c = counts.get(entry.id) || { users: 0, spares: 0 };
+                    c[isSpare(address) ? "spares" : "users"] += 1;
+                    counts.set(entry.id, c);
+                }
+            }
+            r.data.sections.forEach((s) => Object.assign(s, counts.get(Number(s.id)) || { users: 0, spares: 0 }));
+        }
         res.status(r.status).json(r.data);
     } catch (error) {
         res.status(502).json({ error: "proxy: " + error.message });
