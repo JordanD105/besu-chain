@@ -2536,7 +2536,7 @@ async function showSection(id, tab) {
     const gatewayBox = el("div");
     const history = dataTable([
         { label: "col.time", sort: (row) => row.timestamp || 0, cell: (row) => stamp(row.timestamp) },
-        { label: "sections.kind", sort: (row) => row.kind, search: (row) => row.kind + " " + memoOf(row), cell: (row) => el("span", { class: "badge type" }, row.kind) },
+        { label: "sections.kind", sort: (row) => row.memoType || row.kind, search: (row) => (row.memoType || row.kind) + " " + memoOf(row), cell: (row) => el("span", { class: "badge type" }, row.memoType || row.kind) },
         { label: "col.value", sort: (row) => Number(row.value), cell: (row) => row.value },
         { label: "col.from", sort: (row) => row.from, cell: (row) => addr(row.from) },
         { label: "col.to", sort: (row) => row.to || "", cell: (row) => (row.to ? addr(row.to) : el("span", {}, "—")) },
@@ -3325,7 +3325,7 @@ async function showActivity(params, status) {
         { label: "col.value", sort: (r) => BigInt(r.valueWei || 0), search: (r) => r.value + " ETH", cell: (r) => r.value + " ETH" },
         { label: "col.from", sort: (r) => r.from, cell: (r) => addr(r.from) },
         { label: "col.to", sort: (r) => r.toLabel || r.to || r.contractAddress || "", search: (r) => [r.to, r.toLabel, r.contractAddress].filter(Boolean).join(" "), cell: (r) => txTo(r) },
-        { label: "tx.status", sort: (r) => r.status, cell: (r) => el("span", { class: r.status === "success" ? "" : "bad-text", title: r.status }, r.status === "success" ? "✓" : "✗") },
+        { label: "col.status", sort: (r) => r.status, cell: (r) => el("span", { class: r.status === "success" ? "" : "bad-text", title: r.status }, r.status === "success" ? "✓" : "✗") },
         { label: "col.hash", sort: (r) => r.hash, cell: (r) => ident(r.hash, "#/activity/transactions/" + r.hash) }
     ], data.rows, { sort: 0, dir: "desc", key: "activity" });
     show(el("div", {}, [
