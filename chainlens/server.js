@@ -372,7 +372,7 @@ function decodeLogs(logs) {
 function memoFields(tx) {
     const rec = MEMO.fromTransaction(tx);
     if (!rec) {
-        return { memo: "", memos: null, memoDefaults: null, memoType: null, memoUser: null, memoRequest: null, memoSection: null, memoUndoOf: null };
+        return { memo: "", memos: null, memoDefaults: null, memoType: null, memoUser: null, memoRequest: null, memoSection: null, memoSectionName: null, memoUndoOf: null };
     }
     const memos = {};
     const memoDefaults = {};
@@ -389,6 +389,7 @@ function memoFields(tx) {
         memoUser: rec.u || null,
         memoRequest: rec.r || null,
         memoSection: rec.s && rec.s[0] ? Number(rec.s[0]) : null,
+        memoSectionName: rec.s && rec.s[1] ? String(rec.s[1]) : null,
         memoUndoOf: rec.p && rec.p.undoOf ? String(rec.p.undoOf) : null
     };
 }
@@ -687,6 +688,7 @@ function ingest(tx, receipt, block) {
         memoUser: kind.memoUser,
         memoRequest: kind.memoRequest,
         memoSection: kind.memoSection,
+        memoSectionName: kind.memoSectionName,
         memoUndoOf: kind.memoUndoOf,
         decoded: kind.decoded || decodeInput(MEMO.stripMemo(tx.input || tx.data || "0x")),
         status: receipt && receipt.status && BigInt(receipt.status) === 0n ? "failed" : "success",
@@ -1264,6 +1266,8 @@ function publicTx(tx) {
         memoUser: tx.memoUser || null,
         memoRequest: tx.memoRequest || null,
         memoSection: tx.memoSection || null,
+        // the section's current name (renames apply to old transactions too), else the name in the memo
+        memoSectionName: tx.memoSection ? ((sectionBook.sections.get(Number(tx.memoSection)) || {}).name || tx.memoSectionName || null) : null,
         undoOf: tx.memoUndoOf || null,
         undoneBy: db.undoneBy.get(String(tx.hash).toLowerCase()) || null,
         status: tx.status,

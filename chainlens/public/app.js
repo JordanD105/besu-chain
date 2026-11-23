@@ -3403,7 +3403,8 @@ async function showActivity(params, status) {
     const table = dataTable([
         { label: "col.time", sort: (r) => r.timestamp || 0, search: (r) => stamp(r.timestamp), cell: (r) => stamp(r.timestamp) },
         { label: "memo.what", sort: (r) => r.shown || "", search: (r) => [r.shown, r.memo, r.memoType, r.memoUser, r.functionName].filter(Boolean).join(" "), cell: what },
-        { label: "memo.section", sort: (r) => r.memoSection || 0, cell: (r) => (r.memoSection ? el("a", { href: "#/activity/transactions?section=" + r.memoSection }, "#" + r.memoSection) : "—") },
+        { label: "memo.section", sort: (r) => r.memoSectionName || "", search: (r) => r.memoSectionName || "", cell: (r) => (r.memoSection
+            ? el("a", { href: "#/activity/transactions?section=" + r.memoSection, title: "#" + r.memoSection }, r.memoSectionName || "#" + r.memoSection) : "—") },
         { label: "col.value", sort: (r) => BigInt(r.valueWei || 0), search: (r) => r.value + " ETH", cell: (r) => r.value + " ETH" },
         { label: "col.from", sort: (r) => r.from, cell: (r) => addr(r.from) },
         { label: "col.to", sort: (r) => r.toLabel || r.to || r.contractAddress || "", search: (r) => [r.to, r.toLabel, r.contractAddress].filter(Boolean).join(" "), cell: (r) => txTo(r) },
