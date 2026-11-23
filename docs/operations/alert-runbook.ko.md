@@ -15,7 +15,7 @@
 - [MPC 서명기](#mpc-signer): [MpcBelowThreshold](#mpcbelowthreshold) · [MpcCoordinatorDown](#mpccoordinatordown) · [MpcNodeDown](#mpcnodedown) · [MpcPoolEmpty](#mpcpoolempty) · [MpcSmallPoolsEmpty](#mpcsmallpoolsempty) · [MpcPresignFailing](#mpcpresignfailing) · [MpcSignErrors](#mpcsignerrors) · [MpcPolicyRefusals](#mpcpolicyrefusals)
 - [프록시와 Redis](#proxy-and-redis): [ProxyDown](#proxydown) · [ProxySenderStalled](#proxysenderstalled) · [ProxyNonceGap](#proxynoncegap) · [ProxyNonceRepaired](#proxynoncerepaired) · [ProxySenderCheckFailing](#proxysendercheckfailing) · [ProxyHttpErrors](#proxyhttperrors) · [ProxySlow](#proxyslow) · [ProxyEventLoopBlocked](#proxyeventloopblocked) · [ProxyRedisDisconnected](#proxyredisdisconnected) · [RedisDown](#redisdown) · [RedisMemoryHigh](#redismemoryhigh)
 - [섹션](#sections): [SectionUpfrontEmpty](#sectionupfrontempty) · [SectionUpfrontLow](#sectionupfrontlow) · [Sender01Low](#sender01low) · [SectionMetricsFailing](#sectionmetricsfailing)
-- [섹션 게이트웨이](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayDown](#gatewaydown)
+- [섹션 게이트웨이](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayCorrectionsOpen](#gatewaycorrectionsopen) · [GatewayDown](#gatewaydown)
 - [호스트](#hosts): [HostDown](#hostdown) · [HostMemoryHigh](#hostmemoryhigh) · [HostDiskFull](#hostdiskfull) · [HostClockNotSynced](#hostclocknotsynced)
 - [백업](#backups): [BackupFailed](#backupfailed) · [ChainSnapshotTooOld](#chainsnapshottooold) · [ChainSnapshotMissing](#chainsnapshotmissing) · [MpcShareBackupTooOld](#mpcsharebackuptooold) · [MpcShareBackupMissing](#mpcsharebackupmissing) · [ValidatorKeyBackupMissing](#validatorkeybackupmissing)
 
@@ -572,18 +572,28 @@ docker logs --since 30m <container> 2>&1 | grep -iE "error|fail|exception|warn" 
 
 ### GatewayConflicts {#gatewayconflicts}
 
-**Warning.** 재연결 후 체인이 큐 요청을 거부했습니다(지난 1시간).
+**Warning.** 재연결 후 체인이 큐 요청을 거부했습니다(지난 1시간): 정정입니다.
 
-1. **읽기**(`gateway_client_ips`의 호스트 또는 운영자 머신에서):
+1. **읽기:** chainlens → **Sections** → 해당 섹션 → **Gateway** 카드(종류, 요청, 계정, 돌려준 ETH, 이유,
+   취소된 요청), 또는 Grafana → Sections → **Gateways**. 운영자 머신에서:
    ```bash
-   curl -s http://<gateway host>:30010/gateway/report -H "X-Section-Key: $(cat state/secrets/gateway-section-<id>.key)"
+   curl -s "http://<gateway host>:30010/gateway/report?open=1" -H "Authorization: Bearer $(cat state/secrets/gateway_report_token)"
    ```
-   각 `conflict`에는 요청, 이유, 환불, 취소된 요청이 있습니다. `delivered`는 애플리케이션의
-   `correction_webhook`이 받았는지를 나타냅니다.
-2. **조치:** 체인에서 할 일은 없습니다(자금은 움직이지 않았습니다). 애플리케이션이 정정을 처리했는지
-   확인하고, `delivered`가 false이면 웹훅을 점검하십시오. 차이가 있는 `reconcile` 항목은 단절 중 메인 측에서
+2. **조치:** 체인에서 할 일은 없습니다(자금은 움직이지 않았습니다). 섹션 팀에 사용자에게 무엇이 바뀌었는지
+   알린 뒤 chainlens에서 각 정정을 **Acknowledge** 하십시오. 차이가 있는 `reconcile` 항목은 단절 중 메인 측에서
    그 섹션에 쓰기가 있었다는 뜻입니다.
-3. **해제 확인:** 마지막 충돌 1시간 후 알림이 해제됩니다.
+3. **해제 확인:** 마지막 정정 1시간 후 알림이 해제됩니다.
+
+### GatewayCorrectionsOpen {#gatewaycorrectionsopen}
+
+**Warning.** 1시간 동안 확인(Acknowledge)되지 않은 정정이 있습니다.
+
+1. **확인:** chainlens → Sections → 해당 섹션 → Gateway, *Open only*. 또는 지표 `gateway_corrections_open`.
+2. **조치:** 섹션 팀과 각 정정을 처리한 뒤([GatewayConflicts](#gatewayconflicts) 참고) **Acknowledge**를
+   누르십시오. chainlens에 *GATEWAY_REPORT_TOKEN is not set* 또는 502가 보이면
+   `ansible-playbook 14-gateway.yml 11-chainlens.yml`을 다시 실행하십시오. `correction_webhook`을 쓰면
+   `gateway_corrections_undelivered`도 확인하십시오.
+3. **해제 확인:** `gateway_corrections_open`이 0입니다.
 
 ### GatewayDown {#gatewaydown}
 

@@ -221,10 +221,13 @@ MPC 이미지 버전이 변경되면 MPC 노드 팀은 `site.yml`을 다시 실�
 |---|---|---|
 | `gateway_enabled` | `false` | 섹션마다 애플리케이션 옆에 낙관적 게이트웨이 하나, `gateway_hosts`의 호스트에서(`inventory.yml`, 각 호스트에 `gateway_section: <id>`) |
 | `gateway_port` | `30010` | 게이트웨이의 포트 |
-| `gateway_defaults` | 해당 페이지 참고 | 상태 점검, 오프라인 한도, 예비 계정, 정정 웹훅 |
+| `gateway_defaults` | 해당 페이지 참고 | 상태 점검과 제한 시간, `offline_operations`, 예비 계정, `answer_gateway_field`, 선택적 정정 웹훅, 스냅숏 |
 | `gateway_sections` | `{}` | 섹션 id별로 다른 값 |
 
 섹션 키: `state/secrets/gateway-section-<id>.key`, 또는 새 키는 `-e gateway_new_key=true`.
+chainlens는 `state/secrets/gateway_report_token`(처음 사용할 때 생성)으로 정정을 읽습니다. 게이트웨이 호스트는
+서버 중 하나이거나 `gateway_hosts`에만 있는 **게이트웨이 전용 호스트**일 수 있습니다(단계 00, 01, 02, 14가
+준비하며 방화벽은 `ROLE=gateway`).
 호출할 수 있는 대상: `gateway_client_ips`. 자세한 내용: [섹션 게이트웨이](../components/gateway.md).
 
 ### HAProxy 호스트의 RPC 상태 검사 {#rpc-health-on-the-haproxy-hosts}

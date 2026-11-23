@@ -132,8 +132,9 @@ per section, next to its application; label `section` is the section's name.
 | [**GatewayOffline**](alert-runbook.md#gatewayoffline) | warning | 1 min | A gateway can't reach the proxy (`gateway_mode == 1`) | Its application keeps working from the gateway's ledger, the writes are queued. **No admin writes on that section** until it is back; find the cut between the gateway host and the VIPs |
 | [**GatewayDrainingLong**](alert-runbook.md#gatewaydraininglong) | warning | 15 min | A gateway has been sending its queue for 15 minutes | A request may be failing again and again: the gateway's log and `/gateway/status` |
 | [**GatewayQueueOld**](alert-runbook.md#gatewayqueueold) | warning | 5 min | A queued request is more than 1 hour old | A long cut: undo periods may run out and conflicts grow after reconnecting |
-| [**GatewaySparesLow**](alert-runbook.md#gatewayspareslow) | warning | 30 min | Fewer spare accounts than `spare_alert_below` (default 5) | `/createaccount` offline uses them up; new ones are made only while online with all 3 MPC nodes |
-| [**GatewayConflicts**](alert-runbook.md#gatewayconflicts) | warning | – | Queued requests were refused after reconnecting (last hour) | The gateway undid them and sent corrections to the application: read `/gateway/report` |
+| [**GatewaySparesLow**](alert-runbook.md#gatewayspareslow) | warning | 30 min | Fewer spare accounts than `spare_alert_below` (default 20) | `/createaccount` offline uses them up; new ones are made only while online with all 3 MPC nodes |
+| [**GatewayConflicts**](alert-runbook.md#gatewayconflicts) | warning | – | Queued requests were refused after reconnecting (last hour) | The gateway undid them in its ledger: see the corrections in chainlens (Sections → the section → Gateway) |
+| [**GatewayCorrectionsOpen**](alert-runbook.md#gatewaycorrectionsopen) | warning | 1 h | Corrections not acknowledged (`gateway_corrections_open > 0`) | Handle them with the section's team, then **Acknowledge** in chainlens |
 | [**GatewayDown**](alert-runbook.md#gatewaydown) | critical | 2 min | Prometheus can't scrape a gateway | The section's application can't work without it: its host, `docker compose ps`, rerun `14-gateway.yml` |
 
 ---

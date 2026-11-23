@@ -75,6 +75,12 @@
 (… 이후 offline, 큐 N개) … 복구될 때까지 이 섹션에 관리 쓰기(이체, 충전, 스윕, 계정 교체)를 하지 마십시오*,
 또는 *게이트웨이가 응답하지 않음*입니다. [단일 작성자 규칙](gateway.md#the-single-writer-rule)을 참조하십시오.
 
+**Gateway 카드:** 섹션에 게이트웨이가 있으면 섹션 페이지에 **Gateway** 카드가 나타납니다: 모드, 큐, 예비 계정,
+단절 횟수, 정정, 마지막 스냅숏, **Acknowledge** 버튼이 있는 [정정](gateway.md#corrections) 목록, 대사 보고서
+(`GET /api/sections/:id/gateway`, `POST /api/sections/:id/gateway/ack/:report`. 게이트웨이의 보고서 토큰
+`GATEWAY_REPORT_TOKEN`을 사용하며, 이 토큰은 읽기와 확인만 할 수 있습니다). Sections 목록은 미확인 정정이 있는
+섹션마다 안내를 보여줍니다.
+
 ![chainlens Sections 페이지: 섹션 목록과 New section 양식](../images/screenshots/chainlens-sections.png)
 
 ![chainlens Deploy 페이지](../images/screenshots/chainlens-deploy.png)
@@ -101,7 +107,8 @@ Ansible(`ansible/templates/chainlens.env.j2`)이 h139의 `chainlens/.env`에 작
 | `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | 관리자 페이지의 토큰과 허용 주소 |
 | `PROXY_ADMIN_URL`, `PROXY_ADMIN_TOKEN` | 관리자 페이지가 요청을 전달하는 곳(프록시 VIP) |
 | `DEPLOY_ENABLED`, `SECTIONS_ENABLED` | 관리자 페이지 활성화 |
-| `GATEWAYS` | 섹션 게이트웨이, `<section id>=http://<gateway host>:30010 …`(Sections 페이지 안내) |
+| `GATEWAYS` | 섹션 게이트웨이, `<section id>=http://<gateway host>:30010 …`(Sections 페이지 안내, Gateway 카드) |
+| `GATEWAY_REPORT_TOKEN` | 게이트웨이의 정정을 읽고 확인(`state/secrets/gateway_report_token`) |
 
 `settings.yml`의 항목: `chainlens_ips`, `chainlens_deploy_enabled`, `chainlens_sections_enabled`,
 `chainlens_deploy_ips`.

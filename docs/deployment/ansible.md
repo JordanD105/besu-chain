@@ -223,10 +223,13 @@ Who may open it: `remix_ips`. More: [Remix IDE (self-hosted)](../components/remi
 |---|---|---|
 | `gateway_enabled` | `false` | one optimistic gateway per section, next to its application, on the hosts of `gateway_hosts` (`inventory.yml`, each with `gateway_section: <id>`) |
 | `gateway_port` | `30010` | the gateways' port |
-| `gateway_defaults` | see the page | health check, offline limits, spare accounts, correction webhook |
+| `gateway_defaults` | see the page | health check and timeouts, `offline_operations`, spare accounts, `answer_gateway_field`, optional correction webhook, snapshots |
 | `gateway_sections` | `{}` | per section id, the values that differ |
 
 The section key: `state/secrets/gateway-section-<id>.key`, or `-e gateway_new_key=true` for a new one.
+Chainlens reads the corrections with `state/secrets/gateway_report_token` (made on first use). A
+gateway host may be one of the servers or a **gateway-only host** listed only in `gateway_hosts`
+(phases 00, 01, 02, 14 prepare it; firewall `ROLE=gateway`).
 Who may call them: `gateway_client_ips`. More: [Section gateway](../components/gateway.md).
 
 ### RPC health on the HAProxy hosts

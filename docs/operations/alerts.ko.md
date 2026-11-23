@@ -132,8 +132,9 @@ Redis, 섹션, 호스트, 백업, 섹션 게이트웨이의 일곱 파일).
 | [**GatewayOffline**](alert-runbook.md#gatewayoffline) | warning | 1 min | 게이트웨이가 프록시에 연결할 수 없음(`gateway_mode == 1`) | 애플리케이션은 게이트웨이의 원장으로 계속 동작하고 쓰기는 큐에 저장됩니다. 복구될 때까지 **그 섹션에 관리 쓰기를 하지 마십시오**. 게이트웨이 호스트와 VIP 사이의 단절을 찾으십시오 |
 | [**GatewayDrainingLong**](alert-runbook.md#gatewaydraininglong) | warning | 15 min | 게이트웨이가 15분 동안 큐를 전송 중 | 요청 하나가 계속 실패하고 있을 수 있습니다: 게이트웨이 로그와 `/gateway/status` |
 | [**GatewayQueueOld**](alert-runbook.md#gatewayqueueold) | warning | 5 min | 큐 요청이 1시간보다 오래됨 | 긴 단절: 취소 기간이 끝날 수 있고, 재연결 후 충돌이 늘어납니다 |
-| [**GatewaySparesLow**](alert-runbook.md#gatewayspareslow) | warning | 30 min | 예비 계정이 `spare_alert_below`(기본값 5)보다 적음 | 오프라인 `/createaccount`가 예비 계정을 소진합니다. 새 예비 계정은 온라인에서 3개 MPC 노드가 모두 있을 때만 만들어집니다 |
-| [**GatewayConflicts**](alert-runbook.md#gatewayconflicts) | warning | – | 재연결 후 큐 요청이 거부됨(지난 1시간) | 게이트웨이가 그것을 되돌리고 애플리케이션에 정정을 보냈습니다: `/gateway/report`를 읽으십시오 |
+| [**GatewaySparesLow**](alert-runbook.md#gatewayspareslow) | warning | 30 min | 예비 계정이 `spare_alert_below`(기본값 20)보다 적음 | 오프라인 `/createaccount`가 예비 계정을 소진합니다. 새 예비 계정은 온라인에서 3개 MPC 노드가 모두 있을 때만 만들어집니다 |
+| [**GatewayConflicts**](alert-runbook.md#gatewayconflicts) | warning | – | 재연결 후 큐 요청이 거부됨(지난 1시간) | 게이트웨이가 원장에서 되돌렸습니다: chainlens(Sections → 섹션 → Gateway)에서 정정을 확인하십시오 |
+| [**GatewayCorrectionsOpen**](alert-runbook.md#gatewaycorrectionsopen) | warning | 1 h | 확인되지 않은 정정(`gateway_corrections_open > 0`) | 섹션 팀과 처리한 뒤 chainlens에서 **Acknowledge** |
 | [**GatewayDown**](alert-runbook.md#gatewaydown) | critical | 2 min | Prometheus가 게이트웨이를 수집할 수 없음 | 섹션의 애플리케이션은 게이트웨이 없이 동작할 수 없습니다: 호스트, `docker compose ps`, `14-gateway.yml` 재실행 |
 
 ---

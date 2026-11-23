@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1480" viewBox="0 0 1600 1480" font-family="Inter, 'DejaVu Sans', sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#15803d"/></marker>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2410c"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1d4ed8"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/></marker>
+  </defs>
+  <rect width="1600" height="1480" fill="#ffffff"/>
+  <text x="40" y="52" font-size="30" font-weight="700" fill="#0f172a">Section gateway: the whole workflow</text>
+  <text x="40" y="82" font-size="16" fill="#475569">One gateway per section, next to its application. Online: pass-through. Offline: answers from its ledger and queues. Draining: sends the queue, then reconciles.</text>
+
+  <!-- ===== Panel 1: components ===== -->
+  <text x="40" y="128" font-size="20" font-weight="700" fill="#0f172a">1. Who talks to whom</text>
+  <rect x="40" y="145" width="1520" height="430" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+  <!-- application -->
+  <rect x="70" y="250" width="210" height="130" rx="12" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="175" y="290" font-size="18" font-weight="700" text-anchor="middle" fill="#0f172a">Application</text>
+  <text x="175" y="315" font-size="14" text-anchor="middle" fill="#334155">section 1 (h137 side)</text>
+  <text x="175" y="340" font-size="13" text-anchor="middle" fill="#475569">X-Section-Key</text>
+  <text x="175" y="360" font-size="13" text-anchor="middle" fill="#475569">same requests as to the proxy</text>
+  <!-- gateway -->
+  <rect x="340" y="170" width="640" height="385" rx="14" fill="#eef2ff" stroke="#4338ca" stroke-width="2.5"/>
+  <text x="660" y="200" font-size="19" font-weight="700" text-anchor="middle" fill="#312e81">Gateway (h137 :30010)</text>
+  <rect x="365" y="218" width="185" height="96" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="457" y="243" font-size="15" font-weight="700" text-anchor="middle" fill="#1e1b4b">Router</text>
+  <text x="457" y="265" font-size="13" text-anchor="middle" fill="#334155">same API as the proxy</text>
+  <text x="457" y="285" font-size="13" text-anchor="middle" fill="#334155">mode: online /</text>
+  <text x="457" y="303" font-size="13" text-anchor="middle" fill="#334155">offline / draining</text>
+  <rect x="570" y="218" width="190" height="96" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="665" y="243" font-size="15" font-weight="700" text-anchor="middle" fill="#1e1b4b">Ledger</text>
+  <text x="665" y="265" font-size="13" text-anchor="middle" fill="#334155">balances of the section's</text>
+  <text x="665" y="285" font-size="13" text-anchor="middle" fill="#334155">accounts; avatars, nicknames,</text>
+  <text x="665" y="303" font-size="13" text-anchor="middle" fill="#334155">levels, payments</text>
+  <rect x="780" y="218" width="180" height="96" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="870" y="243" font-size="15" font-weight="700" text-anchor="middle" fill="#1e1b4b">Outbox (queue)</text>
+  <text x="870" y="265" font-size="13" text-anchor="middle" fill="#334155">writes in order;</text>
+  <text x="870" y="285" font-size="13" text-anchor="middle" fill="#334155">temporary tx hashes;</text>
+  <text x="870" y="303" font-size="13" text-anchor="middle" fill="#334155">nonce before send</text>
+  <rect x="365" y="332" width="185" height="96" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="457" y="357" font-size="15" font-weight="700" text-anchor="middle" fill="#1e1b4b">Spare accounts</text>
+  <text x="457" y="379" font-size="13" text-anchor="middle" fill="#334155">made while online;</text>
+  <text x="457" y="399" font-size="13" text-anchor="middle" fill="#334155">/createaccount offline</text>
+  <rect x="570" y="332" width="190" height="96" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="665" y="357" font-size="15" font-weight="700" text-anchor="middle" fill="#1e1b4b">Read cache</text>
+  <text x="665" y="379" font-size="13" text-anchor="middle" fill="#334155">last answers of other</text>
+  <text x="665" y="399" font-size="13" text-anchor="middle" fill="#334155">reads (list, events, …)</text>
+  <rect x="780" y="332" width="180" height="96" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="870" y="357" font-size="15" font-weight="700" text-anchor="middle" fill="#1e1b4b">Report</text>
+  <text x="870" y="379" font-size="13" text-anchor="middle" fill="#334155">conflicts, reconcile;</text>
+  <text x="870" y="399" font-size="13" text-anchor="middle" fill="#334155">chainlens, Grafana</text>
+  <rect x="365" y="446" width="595" height="90" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="662" y="471" font-size="15" font-weight="700" text-anchor="middle" fill="#1e1b4b">Background jobs</text>
+  <text x="662" y="494" font-size="13" text-anchor="middle" fill="#334155">health check: own timer (3 s; 0.5 s after a failure) · sync every 30 s</text>
+  <text x="662" y="514" font-size="13" text-anchor="middle" fill="#334155">spares · send the queue · corrections · daily snapshot · /metrics</text>
+  <!-- main side -->
+  <rect x="1060" y="170" width="220" height="150" rx="12" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="1170" y="210" font-size="18" font-weight="700" text-anchor="middle" fill="#0f172a">Proxy (VIP)</text>
+  <text x="1170" y="236" font-size="14" text-anchor="middle" fill="#334155">:30000, h135 / h136</text>
+  <text x="1170" y="262" font-size="13" text-anchor="middle" fill="#475569">application API</text>
+  <text x="1170" y="282" font-size="13" text-anchor="middle" fill="#475569">signs with MPC</text>
+  <rect x="1330" y="170" width="200" height="70" rx="12" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="1430" y="200" font-size="16" font-weight="700" text-anchor="middle" fill="#0f172a">MPC signer</text>
+  <text x="1430" y="222" font-size="13" text-anchor="middle" fill="#475569">2 of 3 nodes</text>
+  <rect x="1330" y="255" width="200" height="70" rx="12" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="1430" y="285" font-size="16" font-weight="700" text-anchor="middle" fill="#0f172a">Besu chain</text>
+  <text x="1430" y="307" font-size="13" text-anchor="middle" fill="#475569">3 of 4 validators</text>
+  <rect x="1060" y="350" width="220" height="80" rx="12" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="1170" y="382" font-size="16" font-weight="700" text-anchor="middle" fill="#0f172a">RPC (VIP) :8545</text>
+  <text x="1170" y="406" font-size="13" text-anchor="middle" fill="#475569">balances, nonces, blocks</text>
+  <rect x="1060" y="455" width="470" height="80" rx="12" fill="#fff7ed" stroke="#c2410c" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="1295" y="487" font-size="15" font-weight="700" text-anchor="middle" fill="#9a3412">The cut: h137 + application lose the VIPs</text>
+  <text x="1295" y="511" font-size="13" text-anchor="middle" fill="#9a3412">the chain and the other sections keep working</text>
+  <!-- arrows -->
+  <line x1="280" y1="300" x2="360" y2="270" stroke="#334155" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="360" y1="290" x2="282" y2="320" stroke="#334155" stroke-width="2.5" marker-end="url(#a)"/>
+  <text x="300" y="250" font-size="13" fill="#334155">requests</text>
+  <text x="300" y="348" font-size="13" fill="#334155">answers</text>
+  <line x1="980" y1="250" x2="1056" y2="250" stroke="#15803d" stroke-width="2.5" marker-end="url(#g)"/>
+  <text x="986" y="240" font-size="12" fill="#15803d">pass-through</text>
+  <line x1="980" y1="380" x2="1056" y2="390" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#b)"/>
+  <text x="984" y="372" font-size="12" fill="#1d4ed8">nonce check</text>
+  <line x1="1280" y1="215" x2="1326" y2="205" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="1280" y1="275" x2="1326" y2="285" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="1430" y1="325" x2="1290" y2="380" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- ===== Panel 2: modes ===== -->
+  <text x="40" y="620" font-size="20" font-weight="700" fill="#0f172a">2. Modes</text>
+  <rect x="40" y="637" width="1520" height="300" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+  <rect x="90" y="690" width="340" height="190" rx="16" fill="#f0fdf4" stroke="#15803d" stroke-width="2.5"/>
+  <text x="260" y="725" font-size="20" font-weight="700" text-anchor="middle" fill="#14532d">ONLINE</text>
+  <text x="260" y="755" font-size="14" text-anchor="middle" fill="#14532d">every request passes through</text>
+  <text x="260" y="777" font-size="14" text-anchor="middle" fill="#14532d">ledger updated from the answers</text>
+  <text x="260" y="799" font-size="14" text-anchor="middle" fill="#14532d">sync every 30 s, reads cached</text>
+  <text x="260" y="821" font-size="14" text-anchor="middle" fill="#14532d">spare accounts kept full</text>
+  <text x="260" y="843" font-size="14" text-anchor="middle" fill="#14532d">new section accounts learned</text>
+  <rect x="630" y="690" width="340" height="190" rx="16" fill="#fff7ed" stroke="#c2410c" stroke-width="2.5"/>
+  <text x="800" y="725" font-size="20" font-weight="700" text-anchor="middle" fill="#7c2d12">OFFLINE</text>
+  <text x="800" y="755" font-size="14" text-anchor="middle" fill="#7c2d12">writes: answered from the ledger,</text>
+  <text x="800" y="777" font-size="14" text-anchor="middle" fill="#7c2d12">queued, temporary tx hash</text>
+  <text x="800" y="799" font-size="14" text-anchor="middle" fill="#7c2d12">reads: ledger, else cache, else 503</text>
+  <text x="800" y="821" font-size="14" text-anchor="middle" fill="#7c2d12">/createaccount: a spare account</text>
+  <text x="800" y="843" font-size="14" text-anchor="middle" fill="#7c2d12">not in offline_operations: 503</text>
+  <rect x="1170" y="690" width="340" height="190" rx="16" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2.5"/>
+  <text x="1340" y="725" font-size="20" font-weight="700" text-anchor="middle" fill="#1e3a8a">DRAINING</text>
+  <text x="1340" y="755" font-size="14" text-anchor="middle" fill="#1e3a8a">queue sent in order (panel 3)</text>
+  <text x="1340" y="777" font-size="14" text-anchor="middle" fill="#1e3a8a">new requests: still the ledger,</text>
+  <text x="1340" y="799" font-size="14" text-anchor="middle" fill="#1e3a8a">queued behind (order kept)</text>
+  <text x="1340" y="821" font-size="14" text-anchor="middle" fill="#1e3a8a">queue empty: reconcile with the</text>
+  <text x="1340" y="843" font-size="14" text-anchor="middle" fill="#1e3a8a">chain, report differences</text>
+  <path d="M430 760 L626 760" stroke="#c2410c" stroke-width="3" fill="none" marker-end="url(#o)"/>
+  <text x="528" y="745" font-size="13" text-anchor="middle" fill="#9a3412">3 failed checks in a row</text>
+  <text x="528" y="782" font-size="12" text-anchor="middle" fill="#9a3412">(or a request's network error)</text>
+  <path d="M970 760 L1166 760" stroke="#1d4ed8" stroke-width="3" fill="none" marker-end="url(#b)"/>
+  <text x="1068" y="745" font-size="13" text-anchor="middle" fill="#1e3a8a">a check succeeds</text>
+  <path d="M1170 840 C1080 900 1010 900 972 850" stroke="#c2410c" stroke-width="2.5" fill="none" marker-end="url(#o)"/>
+  <text x="1068" y="830" font-size="12" text-anchor="middle" fill="#9a3412">fails again → offline</text>
+  <path d="M1340 880 C1340 925 260 925 260 884" stroke="#15803d" stroke-width="3" fill="none" marker-end="url(#g)"/>
+  <text x="800" y="928" font-size="13" text-anchor="middle" fill="#14532d">queue empty and reconciled → online</text>
+
+  <!-- ===== Panel 3: a queued request ===== -->
+  <text x="40" y="985" font-size="20" font-weight="700" fill="#0f172a">3. One queued request (draining)</text>
+  <rect x="40" y="1002" width="1520" height="440" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+  <rect x="70" y="1040" width="230" height="80" rx="10" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="185" y="1072" font-size="15" font-weight="700" text-anchor="middle" fill="#0f172a">oldest queued request</text>
+  <text x="185" y="1096" font-size="13" text-anchor="middle" fill="#475569">one at a time, in order</text>
+  <rect x="350" y="1040" width="250" height="80" rx="10" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="475" y="1072" font-size="15" font-weight="700" text-anchor="middle" fill="#0f172a">read the signer's nonce</text>
+  <text x="475" y="1096" font-size="13" text-anchor="middle" fill="#475569">user / upfront / consumption</text>
+  <rect x="650" y="1040" width="250" height="80" rx="10" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="775" y="1072" font-size="15" font-weight="700" text-anchor="middle" fill="#0f172a">send to the proxy</text>
+  <text x="775" y="1096" font-size="13" text-anchor="middle" fill="#475569">with the promised price</text>
+  <line x1="300" y1="1080" x2="346" y2="1080" stroke="#334155" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="600" y1="1080" x2="646" y2="1080" stroke="#334155" stroke-width="2.5" marker-end="url(#a)"/>
+  <!-- outcomes -->
+  <rect x="980" y="1030" width="550" height="100" rx="10" fill="#f0fdf4" stroke="#15803d" stroke-width="2"/>
+  <text x="1000" y="1060" font-size="15" font-weight="700" fill="#14532d">200: done</text>
+  <text x="1000" y="1084" font-size="13" fill="#14532d">temporary hash → real hash (GET /transfer/:hash answers the real one)</text>
+  <text x="1000" y="1106" font-size="13" fill="#14532d">next request</text>
+  <rect x="980" y="1150" width="550" height="150" rx="10" fill="#fef2f2" stroke="#b91c1c" stroke-width="2"/>
+  <text x="1000" y="1180" font-size="15" font-weight="700" fill="#7f1d1d">4xx: refused by the chain = conflict</text>
+  <text x="1000" y="1204" font-size="13" fill="#7f1d1d">e.g. item sold to someone else, price changed, undo period over</text>
+  <text x="1000" y="1226" font-size="13" fill="#7f1d1d">· undo it in the ledger (refund the payer)</text>
+  <text x="1000" y="1248" font-size="13" fill="#7f1d1d">· cancel the later queued requests on the same item</text>
+  <text x="1000" y="1270" font-size="13" fill="#7f1d1d">· correction: chainlens (Acknowledge), Grafana, alert</text>
+  <rect x="980" y="1320" width="550" height="105" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="1000" y="1350" font-size="15" font-weight="700" fill="#1e3a8a">network error / no answer: uncertain</text>
+  <text x="1000" y="1374" font-size="13" fill="#1e3a8a">next try: read the nonce again — moved: it happened (find the</text>
+  <text x="1000" y="1396" font-size="13" fill="#1e3a8a">hash, done) · same: send again. Never twice. Link down → offline</text>
+  <path d="M900 1070 L976 1070" stroke="#15803d" stroke-width="2.5" fill="none" marker-end="url(#g)"/>
+  <path d="M900 1095 C940 1095 940 1200 976 1220" stroke="#b91c1c" stroke-width="2.5" fill="none" marker-end="url(#r)"/>
+  <path d="M900 1110 C930 1150 930 1350 976 1370" stroke="#1d4ed8" stroke-width="2.5" fill="none" marker-end="url(#b)"/>
+  <!-- left notes -->
+  <rect x="70" y="1160" width="830" height="265" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="90" y="1190" font-size="15" font-weight="700" fill="#0f172a">Why a queued payment never lacks money</text>
+  <text x="90" y="1214" font-size="13" fill="#334155">Only the gateway spends the section's money: the ledger knows every balance, so it refuses</text>
+  <text x="90" y="1234" font-size="13" fill="#334155">what the chain would refuse. Rule for operators: no admin writes on the section during a cut</text>
+  <text x="90" y="1254" font-size="13" fill="#334155">(alert GatewayOffline, notice on the chainlens Sections page).</text>
+  <text x="90" y="1290" font-size="15" font-weight="700" fill="#0f172a">What can still conflict (other sections, the center)</text>
+  <text x="90" y="1314" font-size="13" fill="#334155">an item bought on the main side first · a price or level changed by the center ·</text>
+  <text x="90" y="1334" font-size="13" fill="#334155">an undo period that ran out before the link came back</text>
+  <text x="90" y="1370" font-size="15" font-weight="700" fill="#0f172a">After the queue: reconcile</text>
+  <text x="90" y="1394" font-size="13" fill="#334155">balances and items are read from the chain again; every difference with the ledger</text>
+  <text x="90" y="1414" font-size="13" fill="#334155">goes into the report (GET /gateway/report)</text>
+</svg>

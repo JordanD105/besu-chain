@@ -78,6 +78,13 @@ online: *its gateway cannot reach the proxy (offline since …, N queued) … ma
 section (transfers, top-ups, sweeps, account changes) until it is back*, or *its gateway does not
 answer*. See [the single-writer rule](gateway.md#the-single-writer-rule).
 
+**Gateway card:** on a section's page, when the section has a gateway, a **Gateway** card shows its
+mode, queue, spare accounts, cuts, corrections and last snapshot, the list of
+[corrections](gateway.md#corrections) with an **Acknowledge** button, and the reconcile reports
+(`GET /api/sections/:id/gateway`, `POST /api/sections/:id/gateway/ack/:report`, through the
+gateways' report token `GATEWAY_REPORT_TOKEN`, which can only read and acknowledge). The Sections list
+shows a notice per section with open corrections.
+
 ![The admin Sections page: the list of sections and the New section form](../images/screenshots/chainlens-sections.png)
 
 ![The admin Deploy page](../images/screenshots/chainlens-deploy.png)
@@ -105,7 +112,8 @@ Written by Ansible (`ansible/templates/chainlens.env.j2`) into `chainlens/.env` 
 | `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | the admin pages' token and allowed addresses |
 | `PROXY_ADMIN_URL`, `PROXY_ADMIN_TOKEN` | where the admin pages forward (the proxy VIP) |
 | `DEPLOY_ENABLED`, `SECTIONS_ENABLED` | turn the admin pages on |
-| `GATEWAYS` | the section gateways, `<section id>=http://<gateway host>:30010 …` (the Sections page notice) |
+| `GATEWAYS` | the section gateways, `<section id>=http://<gateway host>:30010 …` (the Sections page notice, the Gateway card) |
+| `GATEWAY_REPORT_TOKEN` | reads the gateways' corrections and acknowledges them (`state/secrets/gateway_report_token`) |
 
 In `settings.yml`: `chainlens_ips`, `chainlens_deploy_enabled`, `chainlens_sections_enabled`,
 `chainlens_deploy_ips`.

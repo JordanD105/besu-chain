@@ -15,7 +15,7 @@
 - [MPC signer](#mpc-signer): [MpcBelowThreshold](#mpcbelowthreshold) · [MpcCoordinatorDown](#mpccoordinatordown) · [MpcNodeDown](#mpcnodedown) · [MpcPoolEmpty](#mpcpoolempty) · [MpcSmallPoolsEmpty](#mpcsmallpoolsempty) · [MpcPresignFailing](#mpcpresignfailing) · [MpcSignErrors](#mpcsignerrors) · [MpcPolicyRefusals](#mpcpolicyrefusals)
 - [Proxy and Redis](#proxy-and-redis): [ProxyDown](#proxydown) · [ProxySenderStalled](#proxysenderstalled) · [ProxyNonceGap](#proxynoncegap) · [ProxyNonceRepaired](#proxynoncerepaired) · [ProxySenderCheckFailing](#proxysendercheckfailing) · [ProxyHttpErrors](#proxyhttperrors) · [ProxySlow](#proxyslow) · [ProxyEventLoopBlocked](#proxyeventloopblocked) · [ProxyRedisDisconnected](#proxyredisdisconnected) · [RedisDown](#redisdown) · [RedisMemoryHigh](#redismemoryhigh)
 - [Sections](#sections): [SectionUpfrontEmpty](#sectionupfrontempty) · [SectionUpfrontLow](#sectionupfrontlow) · [Sender01Low](#sender01low) · [SectionMetricsFailing](#sectionmetricsfailing)
-- [Section gateways](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayDown](#gatewaydown)
+- [Section gateways](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayCorrectionsOpen](#gatewaycorrectionsopen) · [GatewayDown](#gatewaydown)
 - [Hosts](#hosts): [HostDown](#hostdown) · [HostMemoryHigh](#hostmemoryhigh) · [HostDiskFull](#hostdiskfull) · [HostClockNotSynced](#hostclocknotsynced)
 - [Backups](#backups): [BackupFailed](#backupfailed) · [ChainSnapshotTooOld](#chainsnapshottooold) · [ChainSnapshotMissing](#chainsnapshotmissing) · [MpcShareBackupTooOld](#mpcsharebackuptooold) · [MpcShareBackupMissing](#mpcsharebackupmissing) · [ValidatorKeyBackupMissing](#validatorkeybackupmissing)
 
@@ -572,18 +572,30 @@ uses them; with none left it answers 503.
 
 ### GatewayConflicts
 
-**Warning.** Queued requests were refused by the chain after reconnecting (in the last hour).
+**Warning.** Queued requests were refused by the chain after reconnecting (in the last hour): corrections.
 
-1. **Read them** (from a host in `gateway_client_ips` or the operator):
+1. **Read them:** chainlens → **Sections** → the section → **Gateway** card (kind, request, account,
+   ETH given back, reason, cancelled requests), or Grafana → Sections → **Gateways**. From the
+   operator:
    ```bash
-   curl -s http://<gateway host>:30010/gateway/report -H "X-Section-Key: $(cat state/secrets/gateway-section-<id>.key)"
+   curl -s "http://<gateway host>:30010/gateway/report?open=1" -H "Authorization: Bearer $(cat state/secrets/gateway_report_token)"
    ```
-   Each `conflict` has the request, the reason, the refund and the cancelled requests; `delivered`
-   says whether the application's `correction_webhook` received it.
-2. **Fix:** nothing on the chain (the money never moved). Make sure the application handled the
-   corrections; if `delivered` is false, check its webhook. A `reconcile` entry with differences
-   means a write on the section was made on the main side during the cut.
-3. **Check:** the alert clears an hour after the last conflict.
+2. **Fix:** nothing on the chain (the money never moved). Tell the section's team what changed for
+   their users, then **Acknowledge** each correction in chainlens. A `reconcile` entry with
+   differences means a write on the section was made on the main side during the cut.
+3. **Check:** the alert clears an hour after the last correction.
+
+### GatewayCorrectionsOpen
+
+**Warning.** Corrections not acknowledged for an hour.
+
+1. **Confirm:** chainlens → Sections → the section → Gateway, *Open only*; or metric
+   `gateway_corrections_open`.
+2. **Fix:** handle each correction with the section's team (see [GatewayConflicts](#gatewayconflicts)),
+   then press **Acknowledge**. If chainlens shows *GATEWAY_REPORT_TOKEN is not set* or a 502, rerun
+   `ansible-playbook 14-gateway.yml 11-chainlens.yml`. With a `correction_webhook`, also check
+   `gateway_corrections_undelivered`.
+3. **Check:** `gateway_corrections_open` is 0.
 
 ### GatewayDown
 
