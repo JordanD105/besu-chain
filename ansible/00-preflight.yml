@@ -22,6 +22,11 @@
           Set operator_ip (this machine's IP, as the hosts see it) in group_vars/all/settings.yml.
           The firewall only lets operator_ip in.
 
+    - name: mpc_install is ansible or teams
+      ansible.builtin.assert:
+        that: mpc_install in ['ansible', 'teams']
+        fail_msg: "mpc_install must be ansible (Ansible installs the MPC nodes) or teams (each team installs its node); it is {{ mpc_install }}"
+
     - name: Access lists are lists of IPv4 addresses
       ansible.builtin.assert:
         that:
