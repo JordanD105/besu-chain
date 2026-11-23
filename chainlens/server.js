@@ -2595,7 +2595,9 @@ app.post("/api/nicknames/mint", sectionsJson, sectionsGuard, (req, res) => nickn
     const results = [];
     for (const nickname of names) {
         const r = await center(address, "mint", { nickname: String(nickname), price: String((req.body || {}).price || "0") });
-        results.push(r.status === 200 ? { nickname, tokenId: r.data.result.tokenId } : { nickname, error: r.data.error });
+        // each nickname's transaction and memo: the page shows a notice per nickname
+        results.push(r.status === 200 ? { nickname, tokenId: r.data.result.tokenId, txHash: r.data.txHash, memo: r.data.memo, memoType: r.data.memoType }
+            : { nickname, error: r.data.error });
     }
     return { status: 200, data: { success: results.every((r) => !r.error), results } };
 }));

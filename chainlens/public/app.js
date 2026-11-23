@@ -2027,6 +2027,22 @@ function setDeployToken(value) {
 }
 
 async function deployPost(path, body) {
+    const sending = sendingToast();
+    try {
+        return await deployPostNow(path, body);
+    } finally {
+        sending.remove();
+    }
+}
+
+// "Sending…" at once: an admin action can take a while (MPC signing, several transactions)
+function sendingToast() {
+    const toast = el("div", { class: "toast" }, [el("span", { class: "toast-state" }, "⏳"), el("span", {}, t("toast.sending"))]);
+    toastHost().append(toast);
+    return toast;
+}
+
+async function deployPostNow(path, body) {
     const response = await fetch(path, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: "Bearer " + deployToken() },
@@ -2702,6 +2718,15 @@ async function gatewayCard(id) {
 // signed by the contract account center through the proxy.
 
 async function nicknamePut(path, body) {
+    const sending = sendingToast();
+    try {
+        return await nicknamePutNow(path, body);
+    } finally {
+        sending.remove();
+    }
+}
+
+async function nicknamePutNow(path, body) {
     const response = await fetch(path, {
         method: "PUT",
         headers: { "content-type": "application/json", authorization: "Bearer " + deployToken() },
