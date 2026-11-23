@@ -108,6 +108,13 @@ MPC 노드 3개가 분산 키 생성을 실행합니다. 개인 키는 어디에
 상태(pending, mined, failed)와 메모를 반환합니다: `memo`(호출자 문구, 없으면 요청한 언어의 기본 문구), `memoType`,
 `memoText`, `memoParams`, `userMemo`, `memoRequest`.
 
+### `POST /transfer/undo` — 이체 취소 {#post-transferundo--undo-a-transfer}
+
+`X-Section-Key`와 함께 `{ "txHash": "0x…", "memo": "선택" }`. 섹션의 +x 또는 −x를 취소합니다: 전액이 돌아가며
+(+x: 소비 → 사용자, −x: 사용자 → 선지급) 한 번, `transfer_undo_days`(7)일 안에만 가능합니다. 오류 409(이 섹션의
++x / −x가 아님, 이미 취소됨, 기한 초과, 잔액 부족), 404, 401. +x / −x의 `GET /transfer/:txHash`는 `undoneBy`를
+보여줍니다. 관리: `POST /admin/sections/:id/undo`. [이체 취소](../features/transfer-undo.md).
+
 ---
 
 ## 섹션 호출 (`X-Section-Key`) {#section-calls-x-section-key}

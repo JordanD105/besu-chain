@@ -84,6 +84,7 @@ plugins:
             Avatars: 아바타
             Nicknames: 닉네임
             Memos: 메모
+            Transfer undo: 이체 취소
             Operations: 운영
             Alerts: 알림
             Alert runbook: 알림 런북
@@ -155,6 +156,7 @@ nav:
       - Avatars: features/avatars.md
       - Nicknames: features/nicknames.md
       - Memos: features/memos.md
+      - Transfer undo: features/transfer-undo.md
   - Operations:
       - Alerts: operations/alerts.md
       - Alert runbook: operations/alert-runbook.md

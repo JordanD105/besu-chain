@@ -131,6 +131,7 @@ POST /transfer?lang=ko  { "account": "0xUser", "amount": "-0.2" }
 | 종류 | 한국어 기본 문구 |
 |---|---|
 | `transfer.in` / `transfer.out` / `transfer` | {amount} ETH 결제 / {amount} ETH 지급 / {amount} ETH 이체 |
+| `transfer.undoIn` / `transfer.undoOut` | {amount} ETH 결제 취소(환불) / {amount} ETH 지급 취소(반환) — [이체 취소](transfer-undo.md) |
 | `account.create` / `account.fund` | 새 계정 등록 / 새 계정 충전 {amount} ETH |
 | `account.replace` / `account.move` | {role} 계정 교체 / {role} 계정 교체: {amount} ETH를 새 계정으로 이동 |
 | `section.create` / `rename` / `info` / `key` | 섹션 "{name}" 생성 / 이름 변경 "{from}" → "{to}" / 정보 "{key}" 변경 / API 키 교체 |

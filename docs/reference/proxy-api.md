@@ -108,6 +108,14 @@ A section's accounts can't be moved this way (403).
 Status (pending, mined, failed) and the memo: `memo` (the caller's text, else the default text in
 the asked language), `memoType`, `memoText`, `memoParams`, `userMemo`, `memoRequest`.
 
+### `POST /transfer/undo` — undo a transfer
+
+With `X-Section-Key`: `{ "txHash": "0x…", "memo": "optional" }`. Undoes a +x or −x of the section: the
+full amount goes back (+x: consumption → user; −x: user → upfront), once, within `transfer_undo_days`
+(7). Errors 409 (not a +x / −x of this section, already undone, too late, not enough balance), 404,
+401. `GET /transfer/:txHash` of a +x / −x shows `undoneBy`. Admin: `POST /admin/sections/:id/undo`.
+[Transfer undo](../features/transfer-undo.md).
+
 ---
 
 ## Section calls (`X-Section-Key`)

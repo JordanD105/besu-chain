@@ -133,6 +133,7 @@ A type the reader doesn't know (a newer proxy) is shown as its code.
 | Type | English default text |
 |---|---|
 | `transfer.in` / `transfer.out` / `transfer` | Payment of {amount} ETH / Payout of {amount} ETH / Transfer of {amount} ETH |
+| `transfer.undoIn` / `transfer.undoOut` | Payment of {amount} ETH undone (refunded) / Payout of {amount} ETH undone (returned) — [transfer undo](transfer-undo.md) |
 | `account.create` / `account.fund` | New account registered / New account funded with {amount} ETH |
 | `account.replace` / `account.move` | {role} account replaced / {role} account replaced: {amount} ETH moved to the new account |
 | `section.create` / `rename` / `info` / `key` | Section "{name}" created / Renamed "{from}" → "{to}" / Info "{key}" changed / API key replaced |
