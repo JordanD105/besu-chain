@@ -472,7 +472,7 @@ async function learnAccounts() {
             const addr = "0x" + log.topics[2].slice(26);
             if (!account(addr)) {
                 upsertAccount(addr, "user");
-                console.log(`gateway: learned account ${addr} (made outside the gateway)`);
+                console.log(`gateway: new section account ${addr} (from the registry)`);
             }
         }
         from = to + 1;
@@ -1172,13 +1172,22 @@ function readBody(req) {
     });
 }
 
+// ETH given back by a correction (reports from before the refund_wei column: from its detail)
+function refundOf(r) {
+    if (r.refund_wei !== null && r.refund_wei !== undefined) {
+        return BigInt(r.refund_wei);
+    }
+    return (JSON.parse(r.detail).refund || []).reduce((sum, x) => sum + ethToWei(x.amount), 0n);
+}
+
 function corrections() {
-    const rows = q("SELECT correction, refund_wei, acked_at, delivered FROM reports WHERE kind = 'conflict'").all();
+    const rows = q("SELECT correction, detail, refund_wei, acked_at, delivered FROM reports WHERE kind = 'conflict'").all();
     const byKind = {};
     let refunded = 0n;
     for (const r of rows) {
-        byKind[r.correction || "other"] = (byKind[r.correction || "other"] || 0) + 1;
-        refunded += BigInt(r.refund_wei || "0");
+        const kind = r.correction || correctionKind(JSON.parse(r.detail).reason);
+        byKind[kind] = (byKind[kind] || 0) + 1;
+        refunded += refundOf(r);
     }
     return { total: rows.length, open: rows.filter((r) => !r.acked_at).length, byKind, refundedEth: weiToEth(refunded),
         undelivered: L.correction_webhook ? rows.filter((r) => !r.delivered).length : 0 };
@@ -1288,8 +1297,8 @@ function plain(data) {
 
 function reportRow(r) {
     const d = JSON.parse(r.detail);
-    return { id: r.id, at: iso(r.at), request: r.uid, kind: r.kind, correction: r.correction || undefined,
-        refundEth: r.kind === "conflict" ? weiToEth(BigInt(r.refund_wei || "0")) : undefined, ...d,
+    return { id: r.id, at: iso(r.at), request: r.uid, kind: r.kind, correction: r.kind === "conflict" ? (r.correction || correctionKind(d.reason)) : undefined,
+        refundEth: r.kind === "conflict" ? weiToEth(refundOf(r)) : undefined, ...d,
         delivered: Boolean(r.delivered), acked: r.acked_at ? { at: iso(r.acked_at), by: r.acked_by } : null };
 }
 
