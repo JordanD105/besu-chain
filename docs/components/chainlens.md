@@ -2,7 +2,7 @@
 
 > **What:** the web explorer of the chain (`chainlens/`): blocks, transactions, accounts, contracts,
 > NFTs, the platform overview and section statistics, plus admin pages for deploying contracts,
-> managing sections and minting / selling avatars.
+> managing sections, and minting, selling and undoing avatars and nicknames.
 >
 > **For:** everyone who looks at the chain; the admin pages are for operators.
 >
@@ -36,7 +36,7 @@
 
 | Page | URL | Shows |
 |---|---|---|
-| **Dashboard** | `#/` | totals (transactions, tokens, contracts, peers); **Platform overview**: SENDER01, the contract account center, the section registry, section counts, each section's balances (upfront / consumption / payment / users, stacked) and user accounts; **Section statistics** per day, week, month, quarter or year, or a date range (stacked closing balances, new users, income, avatar sales, top-ups, sweeps…); the transaction chart; most active contracts; token types |
+| **Dashboard** | `#/` | totals (transactions, tokens, contracts, peers); **Platform overview**: SENDER01, the contract account center, the section registry, section counts, each section's balances (upfront / consumption / payment / users, stacked) and user accounts; **Section statistics** per day, week, month, quarter or year, or a date range (stacked closing balances, new users, income, avatar sales, nickname sales, level upgrades, nicknames and levels (ETH), undone / refunded (ETH), top-ups, sweeps…); the transaction chart; most active contracts; token types |
 | **Accounts** | `#/accounts` | every account with balance and transaction count; the **Section** column (section and role: user, upfront, consumption, payment, retired; system accounts SENDER01, contract center, registry admin) and a section filter. An account's page shows its section, transactions and tokens |
 | **NFTs** | `#/nfts` | NFTs (ERC-721 tokens) of every collection, avatars and nicknames, with image, owner and price; an NFT's page shows its metadata and history |
 | **Contracts** | `#/contracts` | contracts seen on chain; registered ones (deployed through the proxy or recorded in `contracts/deployments/`) have a page with their functions: **view / pure functions run in the page** (read only). Avatar collections get the **Mint and sell avatars** card (admin) |
@@ -58,16 +58,18 @@ public on chain anyway.
 Hidden until enabled, and usable only from `operator_ip` and `chainlens_deploy_ips`, with the
 admin token (`cat ansible/state/secrets/chainlens_deploy_token`; kept for the browser tab only).
 They forward to the proxy's admin API, so the proxy signs, never chainlens: **Deploy** and the
-nickname collection's deploy call `/admin/contract/deploy`; **Mint an avatar** and the nickname settings call
-`/admin/contract/send` (signed by the contract account center); **Sell an avatar** calls `/contract/send`
-(signed by the buyer); the Nicknames page reads `/contract/list`, `/contract/call` and `/contract/events`.
+nickname collection's deploy call `/admin/contract/deploy`; **Mint**, **Change a price** and the user
+levels call `/admin/contract/send` (signed by the contract account center); **Sell an avatar** calls
+`/contract/send` (signed by the buyer); **Undo** and **Undo level** call `/contract/send` without `from`
+(signed by the consumption account that was paid, which refunds the buyer); the lists read
+`/contract/list` and `/contract/call` (`totalSupply`, `ownerOf`, `priceOf`, `paymentsOf`…).
 
 | Page / card | Enabled by | Does | Guide |
 |---|---|---|---|
 | **Deploy** (`#/deploy`) | `chainlens_deploy_enabled: true` | deploy a compiled contract (Remix / Hardhat / Foundry artifact) as the contract account center, check first, register it | [contract deployment](../features/contract-deployment.md) |
 | **Sections** (`#/sections`) | `chainlens_sections_enabled: true` | create sections, top up, sweep, pay back, rename, info fields, keys, replace accounts, archive; a section's user accounts | [sections](../features/sections.md) |
-| **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | deploy the nickname collection, its price, edge levels (step price, for sale, holders; add a level), reserved names; the list of nicknames (nickname, edge level, account) | [nicknames](../features/nicknames.md) |
-| **Mint and sell avatars** (on an avatar collection's page) | either of the above | mint an avatar (price fixed at mint); sell it to a section's user account | [avatars](../features/avatars.md) |
+| **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | deploy the nickname collection (name, symbol, undo period in days); **Mint nicknames** (one per line, one price); **Change a price**; **User levels** (step price, for sale, holders; add a level); the list of nicknames (token id, nickname, price, account or *for sale*, user level) with **Undo** / **Undo level** while possible | [nicknames](../features/nicknames.md) |
+| **Mint and sell avatars** (on an avatar collection's page) | either of the above | **Mint an avatar** (image, price, description, attributes); **Change a price** (until sold); **Sell an avatar** (token id or image URL, buyer: a section's user account); the list of avatars (newest first) with **Undo** while possible | [avatars](../features/avatars.md) |
 
 ![The admin Sections page: the list of sections and the New section form](../images/screenshots/chainlens-sections.png)
 

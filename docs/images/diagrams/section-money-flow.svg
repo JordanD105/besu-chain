@@ -34,11 +34,11 @@
 <text x="730.0" y="515" font-size="15" fill="#14532d" font-weight="700" text-anchor="middle">payment_account_i</text>
 <text x="730.0" y="535" font-size="13" fill="#334155" font-weight="400" text-anchor="middle">collects · kind 4 payment</text>
 <rect x="1210" y="295" width="270" height="130" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="2" filter="url(#sh)"/>
-<text x="1345.0" y="320" font-size="15" fill="#4c1d95" font-weight="700" text-anchor="middle">③ first avatar sale</text>
-<text x="1345.0" y="339" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">/contract/send buy + X-Section-Key</text>
-<text x="1345.0" y="357" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">AvatarCollection: buy(tokenId, payee)</text>
-<text x="1345.0" y="375" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">payee must be the consumption account</text>
-<text x="1345.0" y="393" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">of an active section (checked on chain)</text>
+<text x="1345.0" y="320" font-size="15" fill="#4c1d95" font-weight="700" text-anchor="middle">③ item sale</text>
+<text x="1345.0" y="339" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">/contract/send buy, upgradeLevel</text>
+<text x="1345.0" y="357" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">+ X-Section-Key: buy(tokenId, payee)</text>
+<text x="1345.0" y="375" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">paid at once to the buyer's section's</text>
+<text x="1345.0" y="393" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">consumption account (checked on chain)</text>
 <path d="M270,215 L588,215" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#aG)"/>
 <text x="430" y="180" font-size="14" fill="#14532d" font-weight="700" text-anchor="middle">① Top up</text>
 <text x="430" y="198" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">POST /admin/sections/:id/topup</text>
@@ -63,5 +63,5 @@
 <text x="430" y="508" font-size="12" fill="#334155" font-weight="400" text-anchor="middle">POST /admin/sections/:id/payback</text>
 <text x="430" y="546" font-size="12" fill="#64748b" font-weight="400" text-anchor="middle">{amount | "all"}</text>
 <text x="40" y="650" font-size="13" fill="#475569" font-weight="400" text-anchor="start">Same actions on the chainlens Sections page: Top up, Create account / Transfer, Sweep, Pay back. Archive sends all money of the 3 accounts back to SENDER01.</text>
-<text x="40" y="674" font-size="13" fill="#475569" font-weight="400" text-anchor="start">A keyless call can't move a section's money (403). Resales pay the seller, not the section.</text>
+<text x="40" y="674" font-size="13" fill="#475569" font-weight="400" text-anchor="start">A keyless call can't move a section's money (403). An undo (within the hold period) refunds the buyer from the consumption account.</text>
 </svg>

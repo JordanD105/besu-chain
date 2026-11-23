@@ -85,8 +85,8 @@ exist), an application API with sections, avatars and nicknames, high availabili
 | [Sections](features/sections.md) | business units with their own accounts, key and money flow; the SectionRegistry; contracts; avatar collections; monitoring |
 | [Contract deployment](features/contract-deployment.md) | the chainlens Deploy page |
 | [Contract records](features/contract-records.md) | `contracts/deployments/`: one record per contract |
-| [Avatars](features/avatars.md) | the platform's image tokens: Remix → deploy → mint → sell, step by step |
-| [Nicknames](features/nicknames.md) | soulbound nickname tokens: buy one, raise its edge; rules, API, chainlens page |
+| [Avatars](features/avatars.md) | the platform's image tokens: Remix → deploy → mint → sell once → undo, step by step |
+| [Nicknames](features/nicknames.md) | nickname tokens minted by the center: buy once, raise the user level, undo; rules, API, chainlens page |
 
 ### Operations
 | Document | Contents |

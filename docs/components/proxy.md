@@ -17,7 +17,7 @@
 - [How the proxy decides who signs](#how-the-proxy-decides-who-signs)
 - [Nonces and balance checks: fast path + periodic chain check](#nonces-and-balance-checks-fast-path--periodic-chain-check)
 - [Redis is optional (no replica needed)](#redis-is-optional-no-replica-needed)
-- [Avatar collections](#avatar-collections)
+- [Avatar and nickname collections](#avatar-collections)
 - [Sections and registered contracts](#sections-and-registered-contracts)
 - [Metrics and monitoring](#metrics-and-monitoring)
 - [Operating it](#operating-it)
@@ -222,8 +222,8 @@ curl -s localhost:30000/transfer -H 'content-type: application/json' \
 Avatar collections, nicknames and other contracts need sections (the SectionRegistry and the contract
 account center): without them `/contract/*` answers 503 `sections are not configured`. With
 sections, a collection is deployed from a template, minted by the center and sold with `buy`
-through `POST /contract/send`. See [Avatar collections](#avatar-collections) and
-[avatars](../features/avatars.md).
+through `POST /contract/send`. See [Avatar and nickname collections](#avatar-collections),
+[avatars](../features/avatars.md) and [nicknames](../features/nicknames.md).
 
 Signer side:
 
@@ -252,7 +252,7 @@ Read at start-up. In production Ansible writes the file
 | `REDIS_IMAGE`, `REDIS_EXPORTER_IMAGE`, `REDIS_EXPORTER_PORT` | `redis:8.10.3`, `oliver006/redis_exporter:v1.67.0`, 9121 | used by `docker-compose.yml` only |
 | `REGISTRY_CONTRACT`, `REGISTRY_ADMIN` | – | the SectionRegistry and the MPC key that writes it (Ansible: `state/registry.json`). Both set = sections on |
 | `REGISTRY_FROM_BLOCK` | 0 | the block the registry was deployed in; its events are read from there |
-| `CONTRACT_CENTER` | – | the contract account center (Ansible: `state/contract-center`): deploys contracts and avatar collections, mints the avatars, signs `/admin/contract/send` |
+| `CONTRACT_CENTER` | – | the contract account center (Ansible: `state/contract-center`): deploys contracts and the avatar and nickname collections, mints the avatars and nicknames, signs `/admin/contract/send` |
 | `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | – | the admin API (`/admin/*`): token (16+ characters) and allowed source addresses or networks. Ansible: `state/secrets/proxy_admin_token`, `operator_ip` and the monitoring host. Without both the admin API answers 404 |
 | `SECTION_KEY_REQUIRED` | `false` | `true`: calls without `X-Section-Key` are refused (Ansible: `sections_required`) |
 | `UPFRONT_LOW_BALANCE_ETH`, `SENDER01_LOW_BALANCE_ETH` | 0 (off) | alert thresholds published on `/metrics` (Ansible: `upfront_low_balance_eth`, `sender01_low_balance_eth`) |
@@ -277,8 +277,8 @@ Which account a request may send from is decided before that:
 | keyless `/createaccount` | `SENDER01` |
 | keyless `/transfer {from, to, amount}` | `from` (a negative `amount` sends from `to` to `from`); a section's account, the registry admin or the contract center is refused (403) |
 | `/createaccount`, `/transfer` with `X-Section-Key` | the section's upfront account, or the user account for `+x` ([sections](../features/sections.md#application-api-section-calls)) |
-| `/contract/send` | `from`, a user account of the caller's section (also the avatar `buy` / `approve` and the nickname `buyNickname` / `upgradeEdge`) |
-| `/admin/contract/send` | the contract account center (avatar `mint`, nickname price, edge levels, reserved names) |
+| `/contract/send` | `from`, a user account of the caller's section (also the item `buy` and the nickname `upgradeLevel`); `undo` / `undoLevel`: no `from`, the section's consumption account that was paid |
+| `/admin/contract/send` | the contract account center (`mint`, `setPrice`, the nickname user levels `addLevel` / `setLevel`) |
 | `/admin/*` writes | the registry admin (registry), `SENDER01` / section accounts (money), the contract account center (deployments) |
 
 ## Nonces and balance checks: fast path + periodic chain check
@@ -353,7 +353,6 @@ while the connection is down (alert `ProxyRedisDisconnected`).
 |---|---|
 | `nonce:<sender>` | the nonce is counted in memory; when the proxy starts (or after an error) it takes max(Redis, `eth_getTransactionCount(pending)`), so a stale or missing value is harmless |
 | `pending-value:<sender>` | kept in memory; entries are dropped once their nonce is mined |
-| `avatar:nextId:<contract>` | the next token id of a `mint` per collection: max(memory/Redis, highest token id minted on chain) + 1 |
 
 Sections, their accounts and the registered contracts are never in Redis: the proxy reads them from
 the SectionRegistry on chain (sections cached for 10 s, contracts re-read every 10 s).
@@ -364,29 +363,32 @@ and metadata kept working, and every transaction was mined with no nonce gaps.
 
 Still one proxy replica: the per-sender lock is in process memory.
 
-## Avatar collections
+## Avatar and nickname collections {#avatar-collections}
 
-An **avatar** is the platform's image token. The proxy serves one avatar collection contract
-([`AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol), compiled into the image as
-`avatar-collection.json`; version-3 collections are the same code). It needs sections and `CONTRACT_CENTER`.
+An **avatar** is the platform's image token, a **nickname** its name token; both are **items**
+([`BoundItems.sol`](../../proxy/contracts/BoundItems.sol)). The proxy serves the avatar collection
+([`AvatarCollection.sol`](../../proxy/contracts/AvatarCollection.sol) version 4, compiled into the image
+as `avatar-collection.json`) and the nickname collection
+([`NicknameCollection.sol`](../../proxy/contracts/NicknameCollection.sol) version 6,
+`nickname-collection.json`). They need sections and `CONTRACT_CENTER`.
 
 | | |
 |---|---|
-| Deployed by | the contract account center: `POST /admin/contract/deploy` with `{"template": "avatar-collection", "name", "symbol"}`, or the chainlens Deploy page. Names and symbols are unique among the avatar collections (409) |
-| Registered in the SectionRegistry | yes (kind avatar); `GET /contract/list?type=avatar` lists the collections |
-| Minted by | the contract account center: `POST /admin/contract/send` `mint` (the proxy builds the metadata, picks the next token id, converts the price) |
-| Sale | `POST /contract/send` `buy` `{ tokenId }` from the buyer, with `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. the chainlens Sell an avatar form) may send it without a key: the section is then the buyer's |
-| First sale pays | the section's consumption account (checked on chain by `isConsumptionAccount`) |
-| Resale pays | the seller; the seller's section first sends `approve` `{ tokenId }` with `/contract/send` (it approves the collection), then the buyer's section sends `buy` (the sections may differ) |
-| Reading | `/contract/call` (owner, price, metadata; in batches) and `/contract/events` (tokens owned, mint transaction, sales) |
+| Deployed by | the contract account center: `POST /admin/contract/deploy` with `{"template": "avatar-collection" \| "nickname-collection", "name", "symbol", "holdDays"}` (the undo period, default 7 days), or the chainlens Deploy / Nicknames pages. Avatar names and symbols are unique among the avatar collections (409) |
+| Registered in the SectionRegistry | yes (avatar: kind avatar; nickname: common); `GET /contract/list?type=avatar` / `?type=nickname` lists them |
+| Minted by | the contract account center: `POST /admin/contract/send` `mint` (avatar `{ image, price, … }`: the proxy builds the metadata; nickname `{ nickname, price }`); token ids 1, 2, 3… from the contract. `setPrice` until sold |
+| Sale | `POST /contract/send` `buy` `{ tokenId }` (or `{ imageUrl }` / `{ nickname }`) from the buyer, with `X-Section-Key`; the buyer must be a user account of that section. The admin API caller (admin token from `ADMIN_ALLOWED_IPS`, e.g. chainlens) may send it without a key: the section is then the buyer's |
+| Sale pays | at once, the buyer's section's consumption account (checked on chain). No resale, no transfer |
+| Nickname user level | `upgradeLevel` `{ tokenId, level }` from the owner: the step prices, at once to its section's consumption account |
+| Undo | `undo` / `undoLevel` `{ tokenId }` with `/contract/send`, no `from`, within the hold period: the proxy signs as the consumption account that was paid, which sends the refund ([proxy API](../reference/proxy-api.md#undo-signed-by-the-consumption-account)) |
+| Reading | `/contract/call` (`tokensOf`, `tokenOf`, `ownerOf`, `priceOf`, `tokenURI`, `paymentsOf`; in batches) and `/contract/events` (`Sold`, `Undone`, `LevelUpgraded`, `LevelUndone`) |
 
-The price is set at mint and fixed for every later sale, and a sale is one `buy` transaction
-signed by the buyer: the token and the ETH move together or not at all. Token ids start at 1 in
-each collection.
-
-**Version-2 collections** (minted by `SENDER01`) are retired: the proxy no longer reads, mints or
-sells them. The old `/nft/*` routes answer 410 with the call that replaces each. Examples are in the
-[proxy API reference](../reference/proxy-api.md#avatar-collections).
+A sale is one `buy` transaction signed by the buyer: the token and the ETH move together or not at
+all. Older collections (avatar version 3, nickname versions 4 and 5) are ordinary contracts to the
+proxy. **Version-2 collections** (minted by `SENDER01`) are retired: the proxy no longer reads, mints
+or sells them. The old `/nft/*` and `/nickname/*` routes answer 410 with the call that replaces
+each. Examples are in the [proxy API reference](../reference/proxy-api.md#avatar-collections);
+step by step: [avatars](../features/avatars.md), [nicknames](../features/nicknames.md).
 
 ## Sections and registered contracts
 
@@ -399,7 +401,7 @@ registry 0x… v2, N section(s), admin API on`).
 
 | Feature | Endpoints | Guide |
 |---|---|---|
-| section calls | `/createaccount`, `/transfer` (+x / −x), `/contract/send` (also avatar sales and nicknames) with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
+| section calls | `/createaccount`, `/transfer` (+x / −x), `/contract/send` (also item sales, level upgrades and undos) with `X-Section-Key` | [sections](../features/sections.md#application-api-section-calls) |
 | admin API | `/admin/sections/*`: create, rename, info, key rotation, enable / disable, top-up, sweep, pay back, replace an account, archive, user accounts | [sections](../features/sections.md#admin-api) |
 | contracts | `/admin/contract/check` and `/deploy` (signed by the contract account center, registered with their ABI; templates for the platform's contracts); `/contract/call` (read, also in batches), `/contract/events`, `/contract/list`; `/contract/send` (write, signed by a user account of the caller's section) and `/admin/contract/send` (signed by the center) | [contract deployment](../features/contract-deployment.md) |
 

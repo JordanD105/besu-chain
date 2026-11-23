@@ -85,8 +85,8 @@
 | [섹션](features/sections.md) | 자체 계정, 키, 자금 흐름을 가진 비즈니스 단위; SectionRegistry; 컨트랙트; 아바타 컬렉션; 모니터링 |
 | [컨트랙트 배포](features/contract-deployment.md) | chainlens의 Deploy 페이지 |
 | [컨트랙트 기록](features/contract-records.md) | `contracts/deployments/`: 컨트랙트마다 하나의 기록 |
-| [아바타](features/avatars.md) | 플랫폼의 이미지 토큰: Remix → 배포 → 민팅 → 판매, 단계별 안내 |
-| [닉네임](features/nicknames.md) | 소울바운드 닉네임 토큰: 구매하고 테두리 올리기; 규칙, API, chainlens 페이지 |
+| [아바타](features/avatars.md) | 플랫폼의 이미지 토큰: Remix → 배포 → 민팅 → 한 번 판매 → 취소, 단계별 안내 |
+| [닉네임](features/nicknames.md) | 센터가 민팅하는 닉네임 토큰: 한 번 구매, 사용자 레벨 올리기, 취소; 규칙, API, chainlens 페이지 |
 
 ### 운영 {#operations}
 | 문서 | 내용 |

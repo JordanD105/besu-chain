@@ -80,10 +80,12 @@ the ports Docker publishes (nftables table `inet besu_docker`).
 never exists. The account is registered under the section on chain and funded from the section's
 upfront account.
 
-**Avatar sale (`POST /contract/send`, function `buy`):** the buyer signs **one** `buy` transaction with
-exactly the price (the proxy fills in the price and the payee). On a first sale the collection itself
-checks that the money goes to a live section's consumption account; on a resale (after the seller's
-`approve`) it goes to the seller. Avatar and money move together or not at all.
+**Item sale (`POST /contract/send`, function `buy`):** the buyer signs **one** `buy` transaction with
+exactly the price (the proxy fills in the price and the payee). The collection itself checks that the
+money goes, at once, to the consumption account of the buyer's own section. Item and money move
+together or not at all; avatars and nicknames are never resold. Within the hold period (default 7
+days) the section can **undo** the sale: the proxy signs as that consumption account, which refunds
+the buyer in the same transaction.
 
 **Contracts:** applications read and write every registered contract (avatar collections, nicknames,
 others) through one generic API: `/contract/call`, `/contract/send`, `/contract/events` and
