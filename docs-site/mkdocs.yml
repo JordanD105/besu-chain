@@ -76,6 +76,7 @@ plugins:
             Remix: Remix
             Monitoring: 모니터링
             Documentation website: 문서 웹사이트
+            Section gateway: 섹션 게이트웨이
             Features: 기능
             Sections: 섹션
             Contract deployment: 컨트랙트 배포
@@ -145,6 +146,7 @@ nav:
       - Remix: components/remix.md
       - Monitoring: components/monitoring.md
       - Documentation website: components/docs-site.md
+      - Section gateway: components/gateway.md
   - Features:
       - Sections: features/sections.md
       - Contract deployment: features/contract-deployment.md

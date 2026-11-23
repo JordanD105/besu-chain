@@ -155,7 +155,7 @@ and `type=nickname`):
 
 | Function | Offline |
 |---|---|
-| `buy` (by `tokenId`, `imageUrl` or `nickname`) | **write:** the item must be unsold in the ledger; the price is paid user → consumption; the undo deadline starts now |
+| `buy` (by `tokenId`, `imageUrl` or `nickname`) | **write:** the item must be unsold in the ledger; the price is paid user → consumption; the undo deadline starts now. The queued request carries that price: if the center changes it meanwhile, the buy becomes a [correction](#corrections), never a different payment |
 | `upgradeLevel` (nicknames) | **write:** owner only, level only up, every level on the way for sale |
 | `undo` | **write:** within the undo period: the consumption account refunds everything paid for the item, which goes back to the center |
 | `undoLevel` (nicknames) | **write:** the newest level upgrade, within its undo period |

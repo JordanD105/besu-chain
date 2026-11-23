@@ -15,13 +15,14 @@
 - [4. Sections (`sections.yml`)](#4-sections-sectionsyml)
 - [5. Hosts (`hosts.yml`)](#5-hosts-hostsyml)
 - [6. Backups (`backups.yml`)](#6-backups-backupsyml)
+- [7. Section gateways (`gateway.yml`)](#7-section-gateways-gatewayyml)
 - [Reading an incident](#reading-an-incident)
 
 ---
 
 Click an alert's name for its step-by-step solution in the [alert runbook](alert-runbook.md). The rules are in
-[`monitoring/prometheus/rules/`](../../monitoring/prometheus/rules/) (six files: Besu, MPC, proxy
-and Redis, sections, hosts, backups).
+[`monitoring/prometheus/rules/`](../../monitoring/prometheus/rules/) (seven files: Besu, MPC, proxy
+and Redis, sections, hosts, backups, section gateways).
 
 ## How alerts work here
 
@@ -120,6 +121,20 @@ that host is down, its backups look missing.
 | [**MpcShareBackupTooOld**](alert-runbook.md#mpcsharebackuptooold) | warning | – | An MPC node's key share backup is more than 2 h old (it runs hourly at :07) | Shares of accounts created since then exist only on the live node. Fires after a host was down, until its next hourly run (or run `backup.sh` by hand) |
 | [**MpcShareBackupMissing**](alert-runbook.md#mpcsharebackupmissing) | warning | 1 h | Fewer than 3 MPC nodes have a recorded share backup | Backups not set up on a node (`mpc_backup_cron`), or that host is down |
 | [**ValidatorKeyBackupMissing**](alert-runbook.md#validatorkeybackupmissing) | warning | 1 h | Not every validator has a recorded key backup | Losing 2 of 4 validator keys ends the chain for good: run the key backup (`10-backups.yml`). Also fires while a validator's host is down |
+
+## 7. Section gateways (`gateway.yml`)
+
+Only with section gateways (`gateway_enabled`, [section gateway](../components/gateway.md)). One gateway
+per section, next to its application; label `section` is the section's name.
+
+| Alert | Severity | Wait | Fires when | What it means / what to do |
+|---|---|---|---|---|
+| [**GatewayOffline**](alert-runbook.md#gatewayoffline) | warning | 1 min | A gateway can't reach the proxy (`gateway_mode == 1`) | Its application keeps working from the gateway's ledger, the writes are queued. **No admin writes on that section** until it is back; find the cut between the gateway host and the VIPs |
+| [**GatewayDrainingLong**](alert-runbook.md#gatewaydraininglong) | warning | 15 min | A gateway has been sending its queue for 15 minutes | A request may be failing again and again: the gateway's log and `/gateway/status` |
+| [**GatewayQueueOld**](alert-runbook.md#gatewayqueueold) | warning | 5 min | A queued request is more than 1 hour old | A long cut: undo periods may run out and conflicts grow after reconnecting |
+| [**GatewaySparesLow**](alert-runbook.md#gatewayspareslow) | warning | 30 min | Fewer spare accounts than `spare_alert_below` (default 5) | `/createaccount` offline uses them up; new ones are made only while online with all 3 MPC nodes |
+| [**GatewayConflicts**](alert-runbook.md#gatewayconflicts) | warning | – | Queued requests were refused after reconnecting (last hour) | The gateway undid them and sent corrections to the application: read `/gateway/report` |
+| [**GatewayDown**](alert-runbook.md#gatewaydown) | critical | 2 min | Prometheus can't scrape a gateway | The section's application can't work without it: its host, `docker compose ps`, rerun `14-gateway.yml` |
 
 ---
 

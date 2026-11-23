@@ -4,7 +4,7 @@
 >
 > **For:** architects, developers, business admins.
 >
-> **Related:** [proxy API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md) · [avatars](avatars.md)
+> **Related:** [proxy API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md) · [avatars](avatars.md) · [section gateway](../components/gateway.md)
 
 **Contents**
 
@@ -154,6 +154,9 @@ admin API (the proxy's token never reaches the browser) and logs it with the req
   **Enable / Disable**; **New upfront / consumption / payment account**; **Archive** (type the
   name to confirm); and its **history**: the last 500 indexed transactions of its 3 accounts, labelled
   (top-up, upfront → account, account → consumption, sweep, pay back).
+- **Gateway notice:** a red notice at the top for each section whose
+  [section gateway](../components/gateway.md) is offline, draining or not answering: make no admin
+  writes on that section until it is back ([the single-writer rule](../components/gateway.md#the-single-writer-rule)).
 
 ## Application API: section calls
 
@@ -178,6 +181,11 @@ for applications not moved yet, with one guard: **they can't move any section's 
 section account (user, upfront, consumption, payment, retired), the registry admin or the contract
 account center as sender is refused. With `sections_required: true` they are refused altogether
 (`X-Section-Key is required`).
+
+**Section gateway (optional):** an application can call its section's
+[gateway](../components/gateway.md) (`http://<gateway host>:30010`) instead of the proxy, with the same
+key and the same calls. The gateway keeps the application working while its host is cut from the
+proxy: it answers from its own ledger, queues the writes and sends them when the link is back.
 
 | Error | Cause |
 |---|---|

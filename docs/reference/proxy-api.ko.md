@@ -7,6 +7,10 @@
 > **관련 문서:** [프록시 구성 요소](../components/proxy.md) · [섹션](../features/sections.md) ·
 > [아바타](../features/avatars.md) · [닉네임](../features/nicknames.md) · [용어집](../glossary.md)
 
+**섹션 게이트웨이:** 섹션의 애플리케이션은 프록시 대신 [섹션 게이트웨이](../components/gateway.md)
+(`http://<gateway host>:30010`)를 같은 섹션 키, 같은 API로 호출할 수 있습니다. 게이트웨이는 프록시에 연결할
+수 없는 동안에도 계속 응답합니다(쓰기는 큐에 저장, 응답에 `gateway` 필드).
+
 **목차**
 
 - [규칙](#conventions)

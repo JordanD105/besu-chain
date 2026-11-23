@@ -7,6 +7,10 @@
 > **Related:** [proxy component](../components/proxy.md) · [sections](../features/sections.md) ·
 > [avatars](../features/avatars.md) · [nicknames](../features/nicknames.md) · [glossary](../glossary.md)
 
+**Section gateway:** a section's application may call its [section gateway](../components/gateway.md)
+(`http://<gateway host>:30010`) instead of the proxy, with the same section key and the same API. The
+gateway keeps answering while the proxy can't be reached (queued writes, a `gateway` field in the answers).
+
 **Contents**
 
 - [Conventions](#conventions)

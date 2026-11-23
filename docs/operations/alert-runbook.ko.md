@@ -15,6 +15,7 @@
 - [MPC 서명기](#mpc-signer): [MpcBelowThreshold](#mpcbelowthreshold) · [MpcCoordinatorDown](#mpccoordinatordown) · [MpcNodeDown](#mpcnodedown) · [MpcPoolEmpty](#mpcpoolempty) · [MpcSmallPoolsEmpty](#mpcsmallpoolsempty) · [MpcPresignFailing](#mpcpresignfailing) · [MpcSignErrors](#mpcsignerrors) · [MpcPolicyRefusals](#mpcpolicyrefusals)
 - [프록시와 Redis](#proxy-and-redis): [ProxyDown](#proxydown) · [ProxySenderStalled](#proxysenderstalled) · [ProxyNonceGap](#proxynoncegap) · [ProxyNonceRepaired](#proxynoncerepaired) · [ProxySenderCheckFailing](#proxysendercheckfailing) · [ProxyHttpErrors](#proxyhttperrors) · [ProxySlow](#proxyslow) · [ProxyEventLoopBlocked](#proxyeventloopblocked) · [ProxyRedisDisconnected](#proxyredisdisconnected) · [RedisDown](#redisdown) · [RedisMemoryHigh](#redismemoryhigh)
 - [섹션](#sections): [SectionUpfrontEmpty](#sectionupfrontempty) · [SectionUpfrontLow](#sectionupfrontlow) · [Sender01Low](#sender01low) · [SectionMetricsFailing](#sectionmetricsfailing)
+- [섹션 게이트웨이](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayDown](#gatewaydown)
 - [호스트](#hosts): [HostDown](#hostdown) · [HostMemoryHigh](#hostmemoryhigh) · [HostDiskFull](#hostdiskfull) · [HostClockNotSynced](#hostclocknotsynced)
 - [백업](#backups): [BackupFailed](#backupfailed) · [ChainSnapshotTooOld](#chainsnapshottooold) · [ChainSnapshotMissing](#chainsnapshotmissing) · [MpcShareBackupTooOld](#mpcsharebackuptooold) · [MpcShareBackupMissing](#mpcsharebackupmissing) · [ValidatorKeyBackupMissing](#validatorkeybackupmissing)
 
@@ -509,6 +510,90 @@ docker logs --since 30m <container> 2>&1 | grep -iE "error|fail|exception|warn" 
    ([ProxySenderCheckFailing](#proxysendercheckfailing) 1단계)와
    `/opt/besu-chain/proxy/.env`의 `REGISTRY_CONTRACT`를 확인하십시오(`06-proxy.yml` 재실행).
 3. **해제 확인:** Sections 대시보드가 다시 갱신됩니다.
+
+---
+
+## 섹션 게이트웨이 {#section-gateways}
+
+섹션 게이트웨이를 사용할 때만 해당합니다([섹션 게이트웨이](../components/gateway.md)). 명령은 게이트웨이
+호스트의 `/opt/besu-chain/gateway`에서 실행합니다. `<gateway host>`는 그 주소이며 포트는 30010입니다.
+
+### GatewayOffline {#gatewayoffline}
+
+**Warning.** 섹션의 게이트웨이가 1분 동안 프록시에 연결할 수 없습니다. 애플리케이션은 게이트웨이의
+원장으로 계속 동작하고 쓰기는 큐에 저장됩니다.
+
+1. **관리자에게 알리기:** 복구될 때까지 그 섹션에 쓰기(이체, 충전, 스윕, 반환, 계정 교체)를 하지 마십시오
+   ([단일 작성자 규칙](../components/gateway.md#the-single-writer-rule)). chainlens Sections 페이지에도 같은
+   안내가 표시됩니다.
+2. **확인:** `curl -s http://<gateway host>:30010/gateway/status` → `mode`, `since`, `queue`, `offlineEth`.
+   게이트웨이 호스트에서:
+   ```bash
+   curl -s -m 5 -o /dev/null -w '%{http_code}\n' http://192.168.68.151:30000/contract/list?type=none   # 프록시 VIP
+   curl -s -m 5 -X POST http://192.168.68.150:8545 -H 'Content-Type: application/json' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'                           # RPC VIP
+   ```
+3. **조치:** 게이트웨이 호스트와 VIP 사이의 네트워크(스위치, 라우팅, 방화벽: HA 쌍에서
+   `firewall-cmd --list-all`, `PROXY_CLIENTS`에 게이트웨이 호스트 포함 여부). 프록시 자체가 다운되었으면:
+   [ProxyDown](#proxydown).
+4. **해제 확인:** 모드가 `draining`을 거쳐 `online`이 됩니다. 그다음 [GatewayConflicts](#gatewayconflicts)를
+   지켜보십시오.
+
+### GatewayDrainingLong {#gatewaydraininglong}
+
+**Warning.** 게이트웨이가 15분 동안 큐를 전송하고 있습니다.
+
+1. **확인:** `GET /gateway/status`(`queue`가 줄지 않음)와 로그:
+   `docker compose logs --since 20m gateway | tail -50`.
+2. **조치:** 5xx로 응답받은 요청은 `uncertain`으로 남아 라운드마다 재시도됩니다. 로그에서 프록시의 오류를
+   읽고 그것을 해결하십시오([ProxyHttpErrors](#proxyhttperrors), [MpcBelowThreshold](#mpcbelowthreshold)).
+   요청 하나: `GET /gateway/request/<id>`(섹션 키 필요).
+3. **해제 확인:** `queue` 0, `mode` `online`.
+
+### GatewayQueueOld {#gatewayqueueold}
+
+**Warning.** 큐 요청이 1시간보다 오래되었습니다. 긴 단절이거나, 전송할 수 없는 큐입니다.
+
+1. **확인:** `GET /gateway/status` → `oldestSeconds`, `mode`.
+2. **조치:** [GatewayOffline](#gatewayoffline)(offline) 또는 [GatewayDrainingLong](#gatewaydraininglong)
+   (draining)과 같습니다. 단절이 길수록 끝나는 취소 기간과 이후의 충돌이 늘어납니다. `offline_max_hours`(24)
+   이후에는 게이트웨이가 오프라인 응답을 멈춥니다(503).
+3. **해제 확인:** 큐가 전송되면 알림이 해제됩니다.
+
+### GatewaySparesLow {#gatewayspareslow}
+
+**Warning.** 30분 동안 예비 계정이 `spare_alert_below`보다 적습니다. 오프라인 `/createaccount`가 예비 계정을
+사용하며, 하나도 없으면 503으로 응답합니다.
+
+1. **확인:** `GET /gateway/status` → `spares`. 로그: `docker compose logs gateway | grep -i spare | tail`.
+2. **조치:** 새 예비 계정은 **온라인이고 큐가 비어 있을 때**, **3개 MPC 노드가 모두** 있을 때만 만들어집니다.
+   [MpcNodeDown](#mpcnodedown)과 섹션의 선지급 계정이 비어 있지 않은지 확인하십시오.
+3. **해제 확인:** `spares`가 `spare_accounts`까지 다시 늘어납니다(라운드마다 하나).
+
+### GatewayConflicts {#gatewayconflicts}
+
+**Warning.** 재연결 후 체인이 큐 요청을 거부했습니다(지난 1시간).
+
+1. **읽기**(`gateway_client_ips`의 호스트 또는 운영자 머신에서):
+   ```bash
+   curl -s http://<gateway host>:30010/gateway/report -H "X-Section-Key: $(cat state/secrets/gateway-section-<id>.key)"
+   ```
+   각 `conflict`에는 요청, 이유, 환불, 취소된 요청이 있습니다. `delivered`는 애플리케이션의
+   `correction_webhook`이 받았는지를 나타냅니다.
+2. **조치:** 체인에서 할 일은 없습니다(자금은 움직이지 않았습니다). 애플리케이션이 정정을 처리했는지
+   확인하고, `delivered`가 false이면 웹훅을 점검하십시오. 차이가 있는 `reconcile` 항목은 단절 중 메인 측에서
+   그 섹션에 쓰기가 있었다는 뜻입니다.
+3. **해제 확인:** 마지막 충돌 1시간 후 알림이 해제됩니다.
+
+### GatewayDown {#gatewaydown}
+
+**Critical.** Prometheus가 2분 동안 게이트웨이를 수집할 수 없습니다. 섹션의 애플리케이션이 동작할 수 없습니다.
+
+1. **확인:** 게이트웨이 호스트에서 `docker compose ps`와 `docker compose logs --tail 50 gateway`.
+2. **조치:** `docker compose up -d`, 또는 `ansible-playbook 14-gateway.yml` 재실행(`ansible/`에서). 원장과 큐는
+   디스크(`/var/lib/besu-gateway`)에 있으므로 유지됩니다. Prometheus만 연결할 수 없다면: 방화벽(모니터링
+   호스트에서 포트 30010, `01-hosts.yml`).
+3. **해제 확인:** `GET /gateway/status`가 응답하고, Prometheus 대상 `gateway-<id>`가 UP입니다.
 
 ---
 

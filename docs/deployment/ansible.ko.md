@@ -41,9 +41,11 @@ Ansible은 전체 프로덕션 구성([프로덕션 구성](../overview/producti
 | 11 | `11-chainlens.yml` | .139 | chainlens([Chainlens](../components/chainlens.md)). Deploy 페이지 기록을 운영자 저장소로 다시 복사합니다 |
 | 12 | `12-remix.yml` | .139 | Remix IDE([Remix IDE (자체 호스팅)](../components/remix.md)). `remix_enabled: false`이면 중지합니다 |
 | 13 | `13-docs-site.yml` | .139 | 문서 웹사이트([문서 웹사이트](../components/docs-site.md)). `docs_site_enabled: false`이면 중지합니다 |
+| 14 | `14-gateway.yml` | `gateway_hosts` | 섹션 게이트웨이, 섹션마다 애플리케이션 옆에 하나([섹션 게이트웨이](../components/gateway.md)). `gateway_enabled: true`일 때만 |
 
-`site.yml`은 이 단계들을 순서대로 실행하되, 10단계는 마지막에 실행합니다(모든 URL이 담긴 요약을
-출력하기 때문입니다). 02~13단계는 먼저 호스트에 현재 코드가 있는지 확인합니다
+`site.yml`은 이 단계들을 순서대로 실행하되, 14단계는 08단계 바로 다음에(모니터링 전에, Prometheus가
+게이트웨이의 응답을 확인할 수 있도록), 10단계는 마지막에 실행합니다(모든 URL이 담긴 요약을
+출력하기 때문입니다). 02~14단계는 먼저 호스트에 현재 코드가 있는지 확인합니다
 (`code-current.yml`, [5. 다시 실행하기](#5-running-it-again) 참고).
 
 ![site.yml이 실행하는 Ansible 단계의 순서](../images/diagrams/ansible-phases.svg)
@@ -108,6 +110,7 @@ VIP를 사용하지 않는지 확인합니다. 계획은 첫 배포 **전에** �
 | `grafana_ips` | 대시보드인 Grafana(`.139:3000`)의 사용자 |
 | `remix_ips` | Remix IDE(`.139:30200`)를 사용하는 개발자 |
 | `docs_ips` | 문서 웹사이트(`.139:30300`)의 독자 |
+| `gateway_client_ips` | 섹션 게이트웨이를 호출하는 애플리케이션(게이트웨이 호스트의 `:30010`, `gateway_enabled`일 때만) |
 | `chainlens_deploy_ips` | `operator_ip` 외에 chainlens 관리자 페이지(Deploy, Sections)를 사용할 수 있는 관리자 PC입니다. 해당 페이지 중 하나가 켜져 있으면 방화벽은 이들에게도 chainlens를 엽니다 |
 
 목록에는 주소와 네트워크를 지정합니다(`192.168.68.*`가 아니라 `192.168.68.0/24`). 접근 추가, 제거,
@@ -211,6 +214,18 @@ MPC 이미지 버전이 변경되면 MPC 노드 팀은 `site.yml`을 다시 실�
 제공합니다. `02-images.yml`이 `docs/`로부터 이미지를 빌드하고 `13-docs-site.yml`이 시작합니다.
 `false`이면 중지합니다. 열 수 있는 대상: `docs_ips`. 자세한 내용:
 [문서 웹사이트](../components/docs-site.md).
+
+### 섹션 게이트웨이 {#section-gateways}
+
+| 설정 | 기본값 | 내용 |
+|---|---|---|
+| `gateway_enabled` | `false` | 섹션마다 애플리케이션 옆에 낙관적 게이트웨이 하나, `gateway_hosts`의 호스트에서(`inventory.yml`, 각 호스트에 `gateway_section: <id>`) |
+| `gateway_port` | `30010` | 게이트웨이의 포트 |
+| `gateway_defaults` | 해당 페이지 참고 | 상태 점검, 오프라인 한도, 예비 계정, 정정 웹훅 |
+| `gateway_sections` | `{}` | 섹션 id별로 다른 값 |
+
+섹션 키: `state/secrets/gateway-section-<id>.key`, 또는 새 키는 `-e gateway_new_key=true`.
+호출할 수 있는 대상: `gateway_client_ips`. 자세한 내용: [섹션 게이트웨이](../components/gateway.md).
 
 ### HAProxy 호스트의 RPC 상태 검사 {#rpc-health-on-the-haproxy-hosts}
 
@@ -324,8 +339,8 @@ SectionRegistry와 컨트랙트 계정 센터를 배포하게 됩니다).
 
 **`git pull`이나 새 커밋 후에는 먼저 `01-hosts.yml`을 실행하십시오**(또는 전체 `site.yml`).
 1단계는 커밋된 코드를 호스트에 복사하며, 2단계의 이미지 빌드는 그 사본을 사용합니다.
-02~13단계는 배포된 디렉터리(`layout.yml`의 `deployed_dirs`: `besu-production`, `ha`, `monitoring`,
-`mpc-signer/deploy`, `proxy`, `chainlens`, `contracts`, `remix`, `docs-site`, `docs`)를 변경한 마지막
+02~14단계는 배포된 디렉터리(`layout.yml`의 `deployed_dirs`: `besu-production`, `ha`, `monitoring`,
+`mpc-signer/deploy`, `proxy`, `chainlens`, `contracts`, `remix`, `docs-site`, `docs`, `gateway`)를 변경한 마지막
 커밋을 `state/repo.commit`과 비교하고, 그 이후 1단계가 실행되지 않았다면 "The hosts have older code"
 메시지와 함께 멈춥니다. `settings.yml`, `inventory.yml` 또는 플레이북 변경에는 1단계가 필요하지 않습니다.
 
@@ -342,6 +357,9 @@ ansible-playbook 01-hosts.yml
 | `chainlens/` 코드, 또는 chainlens 설정(`chainlens_*`) | `01-hosts.yml 02-images.yml 11-chainlens.yml` |
 | Remix(`remix_commit`, `remix_solc_versions`, `remix_enabled`) | `02-images.yml 12-remix.yml` |
 | 문서(`docs/`, `docs-site/`), `docs_site_enabled` | `01-hosts.yml 02-images.yml 13-docs-site.yml` |
+| `gateway/` 코드 | `01-hosts.yml 02-images.yml 14-gateway.yml` |
+| 게이트웨이 설정(`gateway_defaults`, `gateway_sections`) | `14-gateway.yml`(원장과 큐는 유지) |
+| 게이트웨이 호스트 추가(`gateway_hosts`), `gateway_enabled`, `gateway_port` | `01-hosts.yml 02-images.yml 14-gateway.yml 09-monitoring.yml 11-chainlens.yml` |
 | `monitoring/`(대시보드, 알림 규칙), Prometheus 설정, IP 계획의 대상 | `01-hosts.yml 09-monitoring.yml` |
 | 접근 목록(`*_ips`, `operator_ip`) | `01-hosts.yml`(방화벽). `chainlens_deploy_ips`는 `11-chainlens.yml`도, `operator_ip`는 `06-proxy.yml`과 `11-chainlens.yml`도 실행합니다(각 관리자 허용 목록) |
 | `ha/`, RPC 상태 설정(`rpc_*`) | `01-hosts.yml 07-ha.yml` |

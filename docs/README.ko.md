@@ -78,6 +78,7 @@
 | [Remix](components/remix.md) | 자체 호스팅 IDE |
 | [모니터링](components/monitoring.md) | Prometheus, Grafana 대시보드, 메트릭 엔드포인트, 알림 목록 |
 | [문서 웹사이트](components/docs-site.md) | 이 문서를 자체 호스팅 웹사이트로 제공 (Docker, 포트 30300) |
+| [섹션 게이트웨이](components/gateway.md) | 섹션마다 하나, 애플리케이션 옆에서: 프록시와 단절되어도 애플리케이션이 계속 동작 (원장, 큐, 정정) |
 
 ### 기능 {#features}
 | 문서 | 내용 |

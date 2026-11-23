@@ -7,7 +7,7 @@
 > **For:** everyone who looks at the chain; the admin pages are for operators.
 >
 > **Related:** [sections](../features/sections.md) · [contract deployment](../features/contract-deployment.md) ·
-> [avatars](../features/avatars.md) · [access control](../deployment/access-control.md)
+> [avatars](../features/avatars.md) · [access control](../deployment/access-control.md) · [section gateway](gateway.md)
 
 **Contents**
 
@@ -71,6 +71,13 @@ levels call `/admin/contract/send` (signed by the contract account center); **Se
 | **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | deploy the nickname collection (name, symbol, undo period in days); **Mint nicknames** (one per line, one price); **Change a price**; **User levels** (step price, for sale, holders; add a level); the list of nicknames (token id, nickname, price, account or *for sale*, user level) with **Undo** / **Undo level** while possible | [nicknames](../features/nicknames.md) |
 | **Mint and sell avatars** (on an avatar collection's page) | either of the above | **Mint an avatar** (image, price, description, attributes); **Change a price** (until sold); **Sell an avatar** (token id or image URL, buyer: a section's user account); the list of avatars (newest first) with **Undo** while possible | [avatars](../features/avatars.md) |
 
+**Section gateway notice:** with section gateways (`gateway_enabled`), the **Sections** page asks each
+gateway for its status (`GET /api/sections/gateways`, which calls `/gateway/status` on every gateway in
+`GATEWAYS`, 3 s timeout) and shows a red notice at the top for each section whose gateway is not
+online: *its gateway cannot reach the proxy (offline since …, N queued) … make no admin writes on this
+section (transfers, top-ups, sweeps, account changes) until it is back*, or *its gateway does not
+answer*. See [the single-writer rule](gateway.md#the-single-writer-rule).
+
 ![The admin Sections page: the list of sections and the New section form](../images/screenshots/chainlens-sections.png)
 
 ![The admin Deploy page](../images/screenshots/chainlens-deploy.png)
@@ -98,6 +105,7 @@ Written by Ansible (`ansible/templates/chainlens.env.j2`) into `chainlens/.env` 
 | `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | the admin pages' token and allowed addresses |
 | `PROXY_ADMIN_URL`, `PROXY_ADMIN_TOKEN` | where the admin pages forward (the proxy VIP) |
 | `DEPLOY_ENABLED`, `SECTIONS_ENABLED` | turn the admin pages on |
+| `GATEWAYS` | the section gateways, `<section id>=http://<gateway host>:30010 …` (the Sections page notice) |
 
 In `settings.yml`: `chainlens_ips`, `chainlens_deploy_enabled`, `chainlens_sections_enabled`,
 `chainlens_deploy_ips`.

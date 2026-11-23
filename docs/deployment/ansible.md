@@ -41,9 +41,11 @@ All commands below run in `ansible/` on the operator.
 | 11 | `11-chainlens.yml` | .139 | chainlens ([Chainlens](../components/chainlens.md)); copies Deploy page records back to the operator's repository |
 | 12 | `12-remix.yml` | .139 | Remix IDE ([Remix IDE (self-hosted)](../components/remix.md)); `remix_enabled: false` stops it |
 | 13 | `13-docs-site.yml` | .139 | documentation website ([Documentation website](../components/docs-site.md)); `docs_site_enabled: false` stops it |
+| 14 | `14-gateway.yml` | `gateway_hosts` | section gateways, one per section next to its application ([Section gateway](../components/gateway.md)); only with `gateway_enabled: true` |
 
-`site.yml` runs them in order, except phase 10, which runs last (it prints the summary with every
-URL). Phases 02–13 first check that the hosts have the current code
+`site.yml` runs them in order, except phase 14, which runs right after 08 (before monitoring, so
+Prometheus finds the gateways answering), and phase 10, which runs last (it prints the summary with every
+URL). Phases 02–14 first check that the hosts have the current code
 (`code-current.yml`, see [5. Running it again](#5-running-it-again)).
 
 ![The phases in the order site.yml runs them, with the hosts each one touches](../images/diagrams/ansible-phases.svg)
@@ -110,6 +112,7 @@ then; moving a deployed node to a new IP follows
 | `grafana_ips` | users of Grafana, the dashboards (`.139:3000`) |
 | `remix_ips` | developers using the Remix IDE (`.139:30200`) |
 | `docs_ips` | readers of the documentation website (`.139:30300`) |
+| `gateway_client_ips` | the applications calling a section gateway (`:30010` on the gateway hosts, only with `gateway_enabled`) |
 | `chainlens_deploy_ips` | admin PCs allowed to use the chainlens admin pages (Deploy, Sections), besides `operator_ip`. When one of those pages is on, the firewall opens chainlens for them too |
 
 The lists take addresses and networks (`192.168.68.0/24`, not `192.168.68.*`). Adding, removing
@@ -213,6 +216,18 @@ Who may open it: `remix_ips`. More: [Remix IDE (self-hosted)](../components/remi
 (`.139:30300`), built from `docs/` into an image by `02-images.yml` and started by
 `13-docs-site.yml`; `false` stops it. Who may open it: `docs_ips`. More:
 [Documentation website](../components/docs-site.md).
+
+### Section gateways
+
+| Setting | Default | What |
+|---|---|---|
+| `gateway_enabled` | `false` | one optimistic gateway per section, next to its application, on the hosts of `gateway_hosts` (`inventory.yml`, each with `gateway_section: <id>`) |
+| `gateway_port` | `30010` | the gateways' port |
+| `gateway_defaults` | see the page | health check, offline limits, spare accounts, correction webhook |
+| `gateway_sections` | `{}` | per section id, the values that differ |
+
+The section key: `state/secrets/gateway-section-<id>.key`, or `-e gateway_new_key=true` for a new one.
+Who may call them: `gateway_client_ips`. More: [Section gateway](../components/gateway.md).
 
 ### RPC health on the HAProxy hosts
 
@@ -327,9 +342,9 @@ contract account center, the smoke test.
 
 **After a `git pull` or a new commit, run `01-hosts.yml` first** (or the whole `site.yml`).
 Phase 1 copies the committed code to the hosts, and the image builds of phase 2 use that copy.
-Phases 02–13 compare the last commit touching the deployed directories (`deployed_dirs` in
+Phases 02–14 compare the last commit touching the deployed directories (`deployed_dirs` in
 `layout.yml`: `besu-production`, `ha`, `monitoring`, `mpc-signer/deploy`, `proxy`, `chainlens`,
-`contracts`, `remix`, `docs-site`, `docs`) with `state/repo.commit`, and stop with "The hosts have older code" if phase 1
+`contracts`, `remix`, `docs-site`, `docs`, `gateway`) with `state/repo.commit`, and stop with "The hosts have older code" if phase 1
 didn't run since. A change to `settings.yml`, `inventory.yml` or the playbooks needs no phase 1.
 
 ```bash
@@ -345,6 +360,9 @@ Prefix `01-hosts.yml` when the change is committed code (see above).
 | `chainlens/` code, or a chainlens setting (`chainlens_*`) | `01-hosts.yml 02-images.yml 11-chainlens.yml` |
 | Remix (`remix_commit`, `remix_solc_versions`, `remix_enabled`) | `02-images.yml 12-remix.yml` |
 | the documentation (`docs/`, `docs-site/`), `docs_site_enabled` | `01-hosts.yml 02-images.yml 13-docs-site.yml` |
+| `gateway/` code | `01-hosts.yml 02-images.yml 14-gateway.yml` |
+| a gateway setting (`gateway_defaults`, `gateway_sections`) | `14-gateway.yml` (the ledger and the queue are kept) |
+| a gateway host added (`gateway_hosts`), `gateway_enabled`, `gateway_port` | `01-hosts.yml 02-images.yml 14-gateway.yml 09-monitoring.yml 11-chainlens.yml` |
 | `monitoring/` (dashboards, alert rules), Prometheus settings, the IP plan's targets | `01-hosts.yml 09-monitoring.yml` |
 | an access list (`*_ips`, `operator_ip`) | `01-hosts.yml` (the firewall); `chainlens_deploy_ips` also `11-chainlens.yml`, and `operator_ip` also `06-proxy.yml` and `11-chainlens.yml` (their admin allow lists) |
 | `ha/`, the RPC health settings (`rpc_*`) | `01-hosts.yml 07-ha.yml` |

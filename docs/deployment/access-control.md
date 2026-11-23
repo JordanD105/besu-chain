@@ -43,6 +43,7 @@ section 3.
 | `grafana_ips` | users of Grafana, the monitoring dashboards | monitoring host `:3000` |
 | `remix_ips` | developers using the Remix IDE | monitoring host `:30200` |
 | `docs_ips` | readers of the documentation website ([Documentation website](../components/docs-site.md)) | monitoring host `:30300` |
+| `gateway_client_ips` | applications calling a section gateway ([Section gateway](../components/gateway.md)) | the gateway hosts `:30010`, only with `gateway_enabled` |
 | `chainlens_deploy_ips` | admin PCs using the chainlens admin pages (below) | monitoring host `:30100`, only while `chainlens_deploy_enabled` or `chainlens_sections_enabled` is on |
 
 **Sections** ([Sections](../features/sections.md)) are identified by their API key: a
@@ -75,10 +76,11 @@ These follow from the layout (`inventory.yml`), not from the access lists:
 | 9101 (node-exporter) | the monitoring host | every host |
 | 30303 tcp/udp (validator p2p), 30304 tcp/udp (RPC node p2p) | the Besu hosts | Besu hosts (30304 on the HA pair) |
 | 9545, 9546 (Besu metrics) | the monitoring host | Besu hosts (9546 on the HA pair) |
-| 8545 (HAProxy on the RPC VIP) | the HA pair, `operator_ip` | HA pair |
+| 8545 (HAProxy on the RPC VIP) | the HA pair, the gateway hosts, `operator_ip` | HA pair |
 | 8555 (RPC node direct) | the HA pair, the monitoring host, `operator_ip` | HA pair |
 | 9100 (coordinator) | the HA pair, the MPC hosts, the monitoring host, `operator_ip` | HA pair |
-| 30000 (proxy) | `proxy_client_ips`, the monitoring host, `operator_ip` | HA pair |
+| 30000 (proxy) | `proxy_client_ips`, the gateway hosts, the monitoring host, `operator_ip` | HA pair |
+| 30010 (section gateway) | `gateway_client_ips`, the monitoring host, `operator_ip` | the gateway hosts |
 | 9121 (redis-exporter) | the monitoring host | HA pair |
 | VRRP | the other HA host | HA pair |
 | 7000 (MPC node) | the HA pair (the coordinators) | MPC hosts |

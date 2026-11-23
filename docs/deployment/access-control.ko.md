@@ -43,6 +43,7 @@
 | `grafana_ips` | 모니터링 대시보드인 Grafana의 사용자 | 모니터링 호스트 `:3000` |
 | `remix_ips` | Remix IDE를 사용하는 개발자 | 모니터링 호스트 `:30200` |
 | `docs_ips` | 문서 웹사이트의 독자([문서 웹사이트](../components/docs-site.md)) | 모니터링 호스트 `:30300` |
+| `gateway_client_ips` | 섹션 게이트웨이를 호출하는 애플리케이션([섹션 게이트웨이](../components/gateway.md)) | 게이트웨이 호스트 `:30010`, `gateway_enabled`일 때만 |
 | `chainlens_deploy_ips` | chainlens 관리자 페이지(아래)를 사용하는 관리자 PC | 모니터링 호스트 `:30100`, `chainlens_deploy_enabled` 또는 `chainlens_sections_enabled`가 켜져 있을 때만 |
 
 **섹션**([섹션](../features/sections.md))은 API 키로 식별됩니다. 섹션의 애플리케이션이 프록시에
@@ -75,10 +76,11 @@
 | 9101 (node-exporter) | 모니터링 호스트 | 모든 호스트 |
 | 30303 tcp/udp (검증자 p2p), 30304 tcp/udp (RPC 노드 p2p) | Besu 호스트 | Besu 호스트 (30304는 HA 쌍) |
 | 9545, 9546 (Besu 메트릭) | 모니터링 호스트 | Besu 호스트 (9546은 HA 쌍) |
-| 8545 (RPC VIP의 HAProxy) | HA 쌍, `operator_ip` | HA 쌍 |
+| 8545 (RPC VIP의 HAProxy) | HA 쌍, 게이트웨이 호스트, `operator_ip` | HA 쌍 |
 | 8555 (RPC 노드 직접) | HA 쌍, 모니터링 호스트, `operator_ip` | HA 쌍 |
 | 9100 (코디네이터) | HA 쌍, MPC 호스트, 모니터링 호스트, `operator_ip` | HA 쌍 |
-| 30000 (프록시) | `proxy_client_ips`, 모니터링 호스트, `operator_ip` | HA 쌍 |
+| 30000 (프록시) | `proxy_client_ips`, 게이트웨이 호스트, 모니터링 호스트, `operator_ip` | HA 쌍 |
+| 30010 (섹션 게이트웨이) | `gateway_client_ips`, 모니터링 호스트, `operator_ip` | 게이트웨이 호스트 |
 | 9121 (redis-exporter) | 모니터링 호스트 | HA 쌍 |
 | VRRP | 다른 HA 호스트 | HA 쌍 |
 | 7000 (MPC 노드) | HA 쌍 (코디네이터) | MPC 호스트 |

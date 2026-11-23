@@ -6,7 +6,7 @@
 > **대상:** 체인을 조회하는 모든 사용자. 관리자 페이지는 운영자용입니다.
 >
 > **관련 문서:** [섹션](../features/sections.md) · [컨트랙트 배포](../features/contract-deployment.md) ·
-> [아바타](../features/avatars.md) · [접근 제어](../deployment/access-control.md)
+> [아바타](../features/avatars.md) · [접근 제어](../deployment/access-control.md) · [섹션 게이트웨이](gateway.md)
 
 **목차**
 
@@ -69,6 +69,12 @@
 | **Nicknames** (`#/nicknames`) | `chainlens_sections_enabled: true` | 닉네임 컬렉션 배포(이름, 심볼, 취소 기간(일)); **Mint nicknames**(한 줄에 하나, 가격 하나); **Change a price**; **User levels**(단계 가격, 판매 여부, 보유자 수; 레벨 추가); 닉네임 목록(토큰 ID, 닉네임, 가격, 계정 또는 *for sale*, 사용자 레벨)과 가능한 동안 **Undo** / **Undo level** | [닉네임](../features/nicknames.md) |
 | **Mint and sell avatars** (아바타 컬렉션 페이지) | 위 둘 중 하나 | **Mint an avatar**(이미지, 가격, 설명, 속성); **Change a price**(판매 전까지); **Sell an avatar**(토큰 ID 또는 이미지 URL, 구매자: 섹션의 사용자 계정); 아바타 목록(최신 순)과 가능한 동안 **Undo** | [아바타](../features/avatars.md) |
 
+**섹션 게이트웨이 안내:** 섹션 게이트웨이를 사용하면(`gateway_enabled`) **Sections** 페이지가 각 게이트웨이의
+상태를 묻고(`GET /api/sections/gateways`: `GATEWAYS`의 모든 게이트웨이에 `/gateway/status` 호출, 타임아웃 3초),
+게이트웨이가 online이 아닌 섹션마다 맨 위에 빨간 안내를 표시합니다. *게이트웨이가 프록시에 연결할 수 없음
+(… 이후 offline, 큐 N개) … 복구될 때까지 이 섹션에 관리 쓰기(이체, 충전, 스윕, 계정 교체)를 하지 마십시오*,
+또는 *게이트웨이가 응답하지 않음*입니다. [단일 작성자 규칙](gateway.md#the-single-writer-rule)을 참조하십시오.
+
 ![chainlens Sections 페이지: 섹션 목록과 New section 양식](../images/screenshots/chainlens-sections.png)
 
 ![chainlens Deploy 페이지](../images/screenshots/chainlens-deploy.png)
@@ -95,6 +101,7 @@ Ansible(`ansible/templates/chainlens.env.j2`)이 h139의 `chainlens/.env`에 작
 | `ADMIN_TOKEN`, `ADMIN_ALLOWED_IPS` | 관리자 페이지의 토큰과 허용 주소 |
 | `PROXY_ADMIN_URL`, `PROXY_ADMIN_TOKEN` | 관리자 페이지가 요청을 전달하는 곳(프록시 VIP) |
 | `DEPLOY_ENABLED`, `SECTIONS_ENABLED` | 관리자 페이지 활성화 |
+| `GATEWAYS` | 섹션 게이트웨이, `<section id>=http://<gateway host>:30010 …`(Sections 페이지 안내) |
 
 `settings.yml`의 항목: `chainlens_ips`, `chainlens_deploy_enabled`, `chainlens_sections_enabled`,
 `chainlens_deploy_ips`.

@@ -4,7 +4,7 @@
 >
 > **대상:** 아키텍트, 개발자, 비즈니스 관리자.
 >
-> **관련 문서:** [프록시 API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md) · [아바타](avatars.md)
+> **관련 문서:** [프록시 API](../reference/proxy-api.md) · [chainlens](../components/chainlens.md) · [아바타](avatars.md) · [섹션 게이트웨이](../components/gateway.md)
 
 **목차**
 
@@ -153,6 +153,9 @@ IP는 폐기됩니다.
   **Enable / Disable**, **New upfront / consumption / payment account**, **Archive**(확인을 위해 이름
   입력), 그리고 **이력**: 3개 계정의 최근 인덱싱된 트랜잭션 500건이 레이블과 함께 표시됩니다
   (top-up, upfront → account, account → consumption, sweep, pay back).
+- **게이트웨이 안내:** [섹션 게이트웨이](../components/gateway.md)가 offline, draining이거나 응답하지 않는
+  섹션마다 맨 위에 빨간 안내가 표시됩니다. 복구될 때까지 그 섹션에 관리 쓰기를 하지 마십시오
+  ([단일 작성자 규칙](../components/gateway.md#the-single-writer-rule)).
 
 ## 애플리케이션 API: 섹션 호출 {#application-api-section-calls}
 
@@ -177,6 +180,11 @@ section_i의 애플리케이션은 헤더 **`X-Section-Key: sk_…`**에 키를 
 섹션 계정(user, upfront, consumption, payment, retired), 레지스트리 관리자, 컨트랙트
 계정 센터를 송신자로 지정하면 거부됩니다. `sections_required: true`이면 키 없는 호출은 모두 거부됩니다
 (`X-Section-Key is required`).
+
+**섹션 게이트웨이(선택):** 애플리케이션은 프록시 대신 섹션의 [게이트웨이](../components/gateway.md)
+(`http://<gateway host>:30010`)를 같은 키, 같은 호출로 사용할 수 있습니다. 게이트웨이는 애플리케이션의
+호스트가 프록시에서 단절되어도 애플리케이션이 계속 동작하게 합니다. 자체 원장으로 응답하고, 쓰기를 큐에
+저장했다가 연결이 돌아오면 전송합니다.
 
 | 오류 | 원인 |
 |---|---|

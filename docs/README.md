@@ -78,6 +78,7 @@ exist), an application API with sections, avatars and nicknames, high availabili
 | [Remix](components/remix.md) | the self-hosted IDE |
 | [Monitoring](components/monitoring.md) | Prometheus, Grafana dashboards, metrics endpoints, alert list |
 | [Documentation website](components/docs-site.md) | this documentation as a self-hosted website (Docker, port 30300) |
+| [Section gateway](components/gateway.md) | one per section, next to its application: keeps it working while cut from the proxy (ledger, queue, corrections) |
 
 ### Features
 | Document | Contents |

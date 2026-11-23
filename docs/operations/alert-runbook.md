@@ -15,6 +15,7 @@
 - [MPC signer](#mpc-signer): [MpcBelowThreshold](#mpcbelowthreshold) · [MpcCoordinatorDown](#mpccoordinatordown) · [MpcNodeDown](#mpcnodedown) · [MpcPoolEmpty](#mpcpoolempty) · [MpcSmallPoolsEmpty](#mpcsmallpoolsempty) · [MpcPresignFailing](#mpcpresignfailing) · [MpcSignErrors](#mpcsignerrors) · [MpcPolicyRefusals](#mpcpolicyrefusals)
 - [Proxy and Redis](#proxy-and-redis): [ProxyDown](#proxydown) · [ProxySenderStalled](#proxysenderstalled) · [ProxyNonceGap](#proxynoncegap) · [ProxyNonceRepaired](#proxynoncerepaired) · [ProxySenderCheckFailing](#proxysendercheckfailing) · [ProxyHttpErrors](#proxyhttperrors) · [ProxySlow](#proxyslow) · [ProxyEventLoopBlocked](#proxyeventloopblocked) · [ProxyRedisDisconnected](#proxyredisdisconnected) · [RedisDown](#redisdown) · [RedisMemoryHigh](#redismemoryhigh)
 - [Sections](#sections): [SectionUpfrontEmpty](#sectionupfrontempty) · [SectionUpfrontLow](#sectionupfrontlow) · [Sender01Low](#sender01low) · [SectionMetricsFailing](#sectionmetricsfailing)
+- [Section gateways](#section-gateways): [GatewayOffline](#gatewayoffline) · [GatewayDrainingLong](#gatewaydraininglong) · [GatewayQueueOld](#gatewayqueueold) · [GatewaySparesLow](#gatewayspareslow) · [GatewayConflicts](#gatewayconflicts) · [GatewayDown](#gatewaydown)
 - [Hosts](#hosts): [HostDown](#hostdown) · [HostMemoryHigh](#hostmemoryhigh) · [HostDiskFull](#hostdiskfull) · [HostClockNotSynced](#hostclocknotsynced)
 - [Backups](#backups): [BackupFailed](#backupfailed) · [ChainSnapshotTooOld](#chainsnapshottooold) · [ChainSnapshotMissing](#chainsnapshotmissing) · [MpcShareBackupTooOld](#mpcsharebackuptooold) · [MpcShareBackupMissing](#mpcsharebackupmissing) · [ValidatorKeyBackupMissing](#validatorkeybackupmissing)
 
@@ -509,6 +510,90 @@ chain) but loses its nonce cache on a restart.
    ([ProxySenderCheckFailing](#proxysendercheckfailing) step 1) and `REGISTRY_CONTRACT` in
    `/opt/besu-chain/proxy/.env` (rerun `06-proxy.yml`).
 3. **Check:** the Sections dashboard updates again.
+
+---
+
+## Section gateways
+
+Only with section gateways ([section gateway](../components/gateway.md)). The commands run on the
+gateway's host, in `/opt/besu-chain/gateway`; `<gateway host>` is its address, port 30010.
+
+### GatewayOffline
+
+**Warning.** A section's gateway can't reach the proxy for 1 minute. Its application keeps working
+from the gateway's ledger; the writes are queued.
+
+1. **Tell the admins:** no writes on that section (transfers, top-ups, sweeps, pay backs, account
+   changes) until it is back ([the single-writer rule](../components/gateway.md#the-single-writer-rule));
+   the chainlens Sections page shows the same notice.
+2. **Confirm:** `curl -s http://<gateway host>:30010/gateway/status` → `mode`, `since`, `queue`,
+   `offlineEth`. From the gateway host:
+   ```bash
+   curl -s -m 5 -o /dev/null -w '%{http_code}\n' http://192.168.68.151:30000/contract/list?type=none   # the proxy VIP
+   curl -s -m 5 -X POST http://192.168.68.150:8545 -H 'Content-Type: application/json' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'                           # the RPC VIP
+   ```
+3. **Fix:** the network between the gateway host and the VIPs (switch, routing, firewall:
+   `firewall-cmd --list-all` on the HA pair, the gateway host in `PROXY_CLIENTS`); if the proxy itself
+   is down: [ProxyDown](#proxydown).
+4. **Check:** the mode goes to `draining`, then `online`; then watch for
+   [GatewayConflicts](#gatewayconflicts).
+
+### GatewayDrainingLong
+
+**Warning.** The gateway has been sending its queue for 15 minutes.
+
+1. **Confirm:** `GET /gateway/status` (`queue` not going down) and the log:
+   `docker compose logs --since 20m gateway | tail -50`.
+2. **Fix:** a request answered 5xx stays `uncertain` and is retried every round: read the proxy's
+   error in the log and fix that ([ProxyHttpErrors](#proxyhttperrors), [MpcBelowThreshold](#mpcbelowthreshold)).
+   One request: `GET /gateway/request/<id>` (with the section key).
+3. **Check:** `queue` 0 and `mode` `online`.
+
+### GatewayQueueOld
+
+**Warning.** A queued request is more than 1 hour old: a long cut, or a queue that can't be sent.
+
+1. **Confirm:** `GET /gateway/status` → `oldestSeconds`, `mode`.
+2. **Fix:** as [GatewayOffline](#gatewayoffline) (offline) or [GatewayDrainingLong](#gatewaydraininglong)
+   (draining). The longer the cut, the more undo periods may end and the more conflicts follow; after
+   `offline_max_hours` (24) the gateway stops answering offline (503).
+3. **Check:** the alert clears when the queue is sent.
+
+### GatewaySparesLow
+
+**Warning.** Fewer spare accounts than `spare_alert_below` for 30 minutes. Offline `/createaccount`
+uses them; with none left it answers 503.
+
+1. **Confirm:** `GET /gateway/status` → `spares`; the log: `docker compose logs gateway | grep -i spare | tail`.
+2. **Fix:** new ones are made only **online with nothing queued** and with **all 3 MPC nodes**: check
+   [MpcNodeDown](#mpcnodedown) and the section's upfront account is not empty.
+3. **Check:** `spares` goes back up to `spare_accounts` (one per round).
+
+### GatewayConflicts
+
+**Warning.** Queued requests were refused by the chain after reconnecting (in the last hour).
+
+1. **Read them** (from a host in `gateway_client_ips` or the operator):
+   ```bash
+   curl -s http://<gateway host>:30010/gateway/report -H "X-Section-Key: $(cat state/secrets/gateway-section-<id>.key)"
+   ```
+   Each `conflict` has the request, the reason, the refund and the cancelled requests; `delivered`
+   says whether the application's `correction_webhook` received it.
+2. **Fix:** nothing on the chain (the money never moved). Make sure the application handled the
+   corrections; if `delivered` is false, check its webhook. A `reconcile` entry with differences
+   means a write on the section was made on the main side during the cut.
+3. **Check:** the alert clears an hour after the last conflict.
+
+### GatewayDown
+
+**Critical.** Prometheus can't scrape a gateway for 2 minutes: the section's application can't work.
+
+1. **Confirm:** on the gateway host, `docker compose ps` and `docker compose logs --tail 50 gateway`.
+2. **Fix:** `docker compose up -d`, or rerun `ansible-playbook 14-gateway.yml` (from `ansible/`). The
+   ledger and the queue are on disk (`/var/lib/besu-gateway`) and are kept. If only Prometheus can't
+   reach it: the firewall (port 30010 from the monitoring host, `01-hosts.yml`).
+3. **Check:** `GET /gateway/status` answers; the Prometheus target `gateway-<id>` is UP.
 
 ---
 

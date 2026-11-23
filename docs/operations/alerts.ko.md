@@ -15,13 +15,14 @@
 - [4. 섹션 (`sections.yml`)](#4-sections-sectionsyml)
 - [5. 호스트 (`hosts.yml`)](#5-hosts-hostsyml)
 - [6. 백업 (`backups.yml`)](#6-backups-backupsyml)
+- [7. 섹션 게이트웨이 (`gateway.yml`)](#7-section-gateways-gatewayyml)
 - [장애 상황 읽기](#reading-an-incident)
 
 ---
 
 알림 이름을 클릭하면 [알림 런북](alert-runbook.md)의 단계별 해결 방법으로 이동합니다. 규칙은
 [`monitoring/prometheus/rules/`](../../monitoring/prometheus/rules/)에 있습니다(Besu, MPC, 프록시와
-Redis, 섹션, 호스트, 백업의 여섯 파일).
+Redis, 섹션, 호스트, 백업, 섹션 게이트웨이의 일곱 파일).
 
 ## 알림의 작동 방식 {#how-alerts-work-here}
 
@@ -120,6 +121,20 @@ Redis, 섹션, 호스트, 백업의 여섯 파일).
 | [**MpcShareBackupTooOld**](alert-runbook.md#mpcsharebackuptooold) | warning | – | MPC 노드의 키 조각 백업이 2시간 이상 오래됨(매시 :07에 실행) | 그 이후 생성된 계정의 키 조각은 가동 중인 노드에만 존재합니다. 호스트가 다운되었던 후에 다음 정시 실행까지(또는 `backup.sh`를 수동으로 실행할 때까지) 발생합니다 |
 | [**MpcShareBackupMissing**](alert-runbook.md#mpcsharebackupmissing) | warning | 1 h | 키 조각 백업 기록이 있는 MPC 노드가 3개 미만 | 노드에 백업이 설정되지 않았거나(`mpc_backup_cron`), 해당 호스트가 다운되었습니다 |
 | [**ValidatorKeyBackupMissing**](alert-runbook.md#validatorkeybackupmissing) | warning | 1 h | 모든 검증자에 키 백업 기록이 있지는 않음 | 검증자 키 4개 중 2개를 잃으면 체인이 영구히 끝납니다: 키 백업(`10-backups.yml`)을 실행하십시오. 검증자의 호스트가 다운된 동안에도 발생합니다 |
+
+## 7. 섹션 게이트웨이 (`gateway.yml`) {#7-section-gateways-gatewayyml}
+
+섹션 게이트웨이를 사용할 때만 해당합니다(`gateway_enabled`, [섹션 게이트웨이](../components/gateway.md)).
+섹션마다 애플리케이션 옆에 게이트웨이가 하나 있으며, 레이블 `section`은 섹션의 이름입니다.
+
+| 알림 | 심각도 | 대기 | 발생 조건 | 의미 / 조치 |
+|---|---|---|---|---|
+| [**GatewayOffline**](alert-runbook.md#gatewayoffline) | warning | 1 min | 게이트웨이가 프록시에 연결할 수 없음(`gateway_mode == 1`) | 애플리케이션은 게이트웨이의 원장으로 계속 동작하고 쓰기는 큐에 저장됩니다. 복구될 때까지 **그 섹션에 관리 쓰기를 하지 마십시오**. 게이트웨이 호스트와 VIP 사이의 단절을 찾으십시오 |
+| [**GatewayDrainingLong**](alert-runbook.md#gatewaydraininglong) | warning | 15 min | 게이트웨이가 15분 동안 큐를 전송 중 | 요청 하나가 계속 실패하고 있을 수 있습니다: 게이트웨이 로그와 `/gateway/status` |
+| [**GatewayQueueOld**](alert-runbook.md#gatewayqueueold) | warning | 5 min | 큐 요청이 1시간보다 오래됨 | 긴 단절: 취소 기간이 끝날 수 있고, 재연결 후 충돌이 늘어납니다 |
+| [**GatewaySparesLow**](alert-runbook.md#gatewayspareslow) | warning | 30 min | 예비 계정이 `spare_alert_below`(기본값 5)보다 적음 | 오프라인 `/createaccount`가 예비 계정을 소진합니다. 새 예비 계정은 온라인에서 3개 MPC 노드가 모두 있을 때만 만들어집니다 |
+| [**GatewayConflicts**](alert-runbook.md#gatewayconflicts) | warning | – | 재연결 후 큐 요청이 거부됨(지난 1시간) | 게이트웨이가 그것을 되돌리고 애플리케이션에 정정을 보냈습니다: `/gateway/report`를 읽으십시오 |
+| [**GatewayDown**](alert-runbook.md#gatewaydown) | critical | 2 min | Prometheus가 게이트웨이를 수집할 수 없음 | 섹션의 애플리케이션은 게이트웨이 없이 동작할 수 없습니다: 호스트, `docker compose ps`, `14-gateway.yml` 재실행 |
 
 ---
 

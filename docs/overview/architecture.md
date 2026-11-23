@@ -92,6 +92,12 @@ others) through one generic API: `/contract/call`, `/contract/send`, `/contract/
 `/contract/list`; the admin's writes as the contract account center (mint, nickname settings) go
 through `/admin/contract/send` ([proxy API](../reference/proxy-api.md#contracts)).
 
+**Section gateway (optional):** a section's application can call a gateway on a host next to it
+(`:30010`) instead of the proxy, with the same key and API. The gateway passes requests through while
+the proxy answers; when the link to the VIPs breaks, it answers from its own ledger, queues the writes
+and sends them in order when the link is back, reporting any the chain refuses as corrections
+([section gateway](../components/gateway.md)).
+
 The money flow of a section: [sections](../features/sections.md).
 
 ## What keeps running when something fails
@@ -101,6 +107,7 @@ The money flow of a section: [sections](../features/sections.md).
 | **host .135** | chain continues (3 validators); signing via coord2 + mpc2 + mpc3; the VIPs move to .136 and proxy2 starts: a few seconds of failed requests. New keys (accounts, sections) wait for mpc1 |
 | host .136, .137 or .138 | none for service (one validator and at most one MPC node lost); no spare left |
 | host .139 | no monitoring, explorer or Remix; payments continue |
+| the link between a section's host and the VIPs | with a [section gateway](../components/gateway.md): its application keeps working (queued writes, sent when the link is back); without one: that application stops |
 | rpc1, coord1 or the proxy process | HAProxy or keepalived switches to the twin on .136 |
 | an RPC node stops importing blocks | it leaves the RPC VIP within seconds and is restarted after 5 min ([high availability](../deployment/high-availability.md)) |
 | 1 MPC node or its team | none: 2 of 3 sign. `/createaccount` and new sections wait for all 3 |
