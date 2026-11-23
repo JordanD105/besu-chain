@@ -278,6 +278,11 @@ const MEMO = require("./memo/memo.js");
 const { AsyncLocalStorage } = require("node:async_hooks");
 const requestStore = new AsyncLocalStorage();
 app.use((req, res, next) => requestStore.run({ req }, next));
+// API answers are never cached by the browser (a stored error, e.g. a 410 "Gone", would hide newer answers)
+app.use("/api", (req, res, next) => {
+    res.set("cache-control", "no-store");
+    next();
+});
 app.use(express.static(path.join(__dirname, "public")));
 
 function formatEth(wei) {

@@ -118,6 +118,14 @@ memo_skip_contracts: []
 # Transfer undo (docs/features/transfer-undo.md): a section's +x / -x can be undone (the full amount,
 # once) for this many days (POST /transfer/undo, chainlens section history)
 transfer_undo_days: 7
+
+# Platform contracts deployed by 08-check.yml (the contract account center), once: a collection that
+# exists already (same name or symbol) is kept. hold_days: how long a sale (or level upgrade) can be undone.
+# Add a line to deploy another avatar collection; [] = none.
+platform_avatar_collections:
+  - { name: Avatars, symbol: AVT, hold_days: 7 }
+# The nickname collection (one is used at a time); {} = none
+platform_nickname_collection: { name: Nicknames, symbol: NICK, hold_days: 7 }
 # RPC VIP health (ha/rpc-health.py): an RPC node leaves the VIP when its newest block is older than
 # rpc_max_block_age seconds while another node has newer blocks, or it is more than
 # rpc_max_blocks_behind blocks behind. A node that stays stalled rpc_auto_restart_minutes while the

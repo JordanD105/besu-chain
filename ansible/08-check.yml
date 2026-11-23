@@ -107,15 +107,21 @@
           - "{{ ('smoke test: account ' ~ account.json.address ~ ', transfer ' ~ (transfer.json.txHash | default(transfer.json)))
                 if (account.json is defined) else 'smoke test: done before (state/smoke-test.json)' }}"
 
-# The TransferUndo contract (docs/features/transfer-undo.md): a section's +x / -x can be undone
-# (POST /transfer/undo). Deployed once by the contract account center; 409 = it exists already.
-- name: Transfer-undo contract (once)
+# Platform contracts, deployed once by the contract account center through the proxy VIP (after HA
+# is up); 409 = it exists already, so reruns change nothing:
+#   - TransferUndo (docs/features/transfer-undo.md): a section's +x / -x can be undone
+#   - the avatar collections of platform_avatar_collections (docs/features/avatars.md)
+#   - the nickname collection of platform_nickname_collection (docs/features/nicknames.md)
+- name: Platform contracts (once)
   hosts: localhost
   gather_facts: false
+  vars:
+    deploy_url: "http://{{ vip_proxy }}:30000/admin/contract/deploy"
+    can_deploy: "{{ contract_center != '' and registry.address is defined }}"
   tasks:
-    - name: Deploy the transfer-undo contract (through the proxy VIP)
+    - name: Deploy the transfer-undo contract
       ansible.builtin.uri:
-        url: "http://{{ vip_proxy }}:30000/admin/contract/deploy"
+        url: "{{ deploy_url }}"
         method: POST
         headers: { Authorization: "Bearer {{ proxy_admin_token }}" }
         body_format: json
@@ -126,10 +132,56 @@
       until: undo_deploy.status in [200, 409]
       retries: 10
       delay: 6
-      when: contract_center != '' and registry.address is defined
+      when: can_deploy | bool
       no_log: true
 
-    - name: Transfer-undo contract
+    - name: Deploy the avatar collections (platform_avatar_collections)
+      ansible.builtin.uri:
+        url: "{{ deploy_url }}"
+        method: POST
+        headers: { Authorization: "Bearer {{ proxy_admin_token }}" }
+        body_format: json
+        body: { template: avatar-collection, name: "{{ item.name }}", symbol: "{{ item.symbol }}", holdDays: "{{ item.hold_days | default(7) }}" }
+        status_code: [200, 409]
+        timeout: 300
+      loop: "{{ platform_avatar_collections | default([]) }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.symbol }})"
+      register: avatar_deploy
+      until: avatar_deploy.status in [200, 409]
+      retries: 10
+      delay: 6
+      when: can_deploy | bool
+      no_log: true
+
+    - name: Deploy the nickname collection (platform_nickname_collection)
+      ansible.builtin.uri:
+        url: "{{ deploy_url }}"
+        method: POST
+        headers: { Authorization: "Bearer {{ proxy_admin_token }}" }
+        body_format: json
+        body: { template: nickname-collection, name: "{{ platform_nickname_collection.name }}", symbol: "{{ platform_nickname_collection.symbol }}", holdDays: "{{ platform_nickname_collection.hold_days | default(7) }}" }
+        status_code: [200, 409]
+        timeout: 300
+      register: nickname_deploy
+      until: nickname_deploy.status in [200, 409]
+      retries: 10
+      delay: 6
+      when: can_deploy | bool and (platform_nickname_collection | default({})).name is defined
+      no_log: true
+
+    - name: Platform contracts
       ansible.builtin.debug:
-        msg: "{{ 'deployed at ' ~ undo_deploy.json.address if undo_deploy.status == 200 else (undo_deploy.json.error | default('')) }}"
-      when: undo_deploy is not skipped
+        msg: "{{ summary }}"
+      vars:
+        found: "{{ ['exists', 'deployed'] }}"
+        undo_line: "{{ ['transfer undo: ' ~ ('deployed' if undo_deploy.status | default(0) == 200 else 'exists')] if undo_deploy.status is defined else [] }}"
+        avatar_lines: >-
+          {{ (avatar_deploy.results | default([])) | selectattr('status', 'defined')
+             | map(attribute='item.name') | map('regex_replace', '^', 'avatar collection ') | list }}
+        avatar_states: "{{ (avatar_deploy.results | default([])) | selectattr('status', 'defined') | map(attribute='status') | map('string') | list }}"
+        nickname_line: "{{ ['nickname collection ' ~ platform_nickname_collection.name ~ ': ' ~ ('deployed' if nickname_deploy.status == 200 else 'exists')] if nickname_deploy.status is defined else [] }}"
+        summary: >-
+          {{ undo_line + (avatar_lines | zip(avatar_states | map('replace', '200', 'deployed') | map('replace', '409', 'exists') | list)
+             | map('join', ': ') | list) + nickname_line }}
+      when: can_deploy | bool
