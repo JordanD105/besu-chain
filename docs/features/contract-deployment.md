@@ -84,11 +84,11 @@ cat state/secrets/chainlens_deploy_token
 4. **Compiler artifact:** choose the file. With several contracts in it, choose the **Contract**.
 5. **Constructor arguments:** one box per argument. Numbers as whole numbers (`1000000`),
    addresses `0x…`, `true`/`false`, arrays and tuples as JSON (`["0xabc…","0xdef…"]`).
-6. **Kind:** *Common contract* or *Avatar collection*.
-7. **Name in the registry:** optional, the contract's name in chainlens.
-8. **Check:** the proxy runs every check (arguments, gas, the creation doesn't revert, it fits in a
+6. **Name in the registry:** optional, the contract's name in chainlens. Contracts deployed here are
+   registered as common contracts.
+7. **Check:** the proxy runs every check (arguments, gas, the creation doesn't revert, it fits in a
    block) and the page shows the address the contract will get. Nothing is signed.
-9. **Deploy:** confirm. The MPC nodes sign, the page waits for the block, the code on chain is
+8. **Deploy:** confirm. The MPC nodes sign, the page waits for the block, the code on chain is
    compared with the artifact's runtime bytecode (immutable values excluded), and the contract is
    registered. Then it links to the contract's page, where its read functions work right away.
 
@@ -101,13 +101,13 @@ Without the browser, the same two steps are `POST /admin/contract/check` and
 `POST /admin/contract/deploy` on the proxy, with the proxy admin token
 ([proxy API](../reference/proxy-api.md#admin-api-contracts-and-registry)).
 
-Changing a file, an argument, the kind or the name after **Check** requires a new check. If the
+Changing a file, an argument or the name after **Check** requires a new check. If the
 center's state changed in between (another deployment), **Deploy** refuses and asks for a new check.
 One deployment runs at a time per chainlens.
 
-For an avatar collection, the whole path from the artifact to a sale is in
-[Avatars](avatars.md); choose the kind *Avatar collection* (registry kind `avatar`), so the proxy
-lists it.
+Avatar and nickname collections are not deployed from this page: Ansible deploys them
+(`platform_avatar_collections`, `platform_nickname_collection`; [Ansible](../deployment/ansible.md#platform-contracts)),
+or `POST /admin/contract/deploy` with a `template`; the Nicknames page can deploy a new nickname collection.
 
 The contract's deployer (`msg.sender` in its constructor) is the center. A contract with an owner
 or roles should take them as constructor arguments when someone else must hold them.

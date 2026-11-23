@@ -2096,7 +2096,7 @@ function deployBody(extra) {
         artifactName: deployState.file,
         contract: deployState.contract,
         name: deployState.label,
-        kind: deployState.kind,
+        kind: "common",   // avatar and nickname collections: Ansible (platform contracts) or the Nicknames page
         args: c ? c.inputs.map((p, i) => deployState.args[i] || "") : [],
         ...extra
     };
@@ -2163,7 +2163,6 @@ async function showDeploy() {
             planBox.append(el("div", { class: "kv deploy-plan" }, [
                 ...kv(t("deploy.contract"), plan.name + " (" + plan.creationSize + " bytes)"),
                 ...kv(t("contract.args"), plan.args.length ? JSON.stringify(plan.args) : "—"),
-                ...kv(t("deploy.kind"), plan.kind === "avatar" || plan.kind === "nft" ? t("deploy.kindAvatar") : t("deploy.kindCommon")),
                 ...kv(t("contract.deployer"), plan.from),
                 ...kv(t("deploy.gas"), plan.gas + " (estimate " + plan.estimate + ")"),
                 ...kv(t("deploy.address"), plan.address)
@@ -2215,12 +2214,6 @@ async function showDeploy() {
         invalidate();
     });
 
-    const kindSelect = el("select", { class: "deploy-contract", "aria-label": t("deploy.kind") }, [
-        el("option", { value: "common" }, t("deploy.kindCommon")),
-        el("option", { value: "avatar" }, t("deploy.kindAvatar"))
-    ]);
-    kindSelect.value = deployState.kind;
-    kindSelect.addEventListener("change", () => { deployState.kind = kindSelect.value; invalidate(); });
     const labelInput = el("input", { class: "table-search", placeholder: t("deploy.name"), "aria-label": t("deploy.name"), value: deployState.label });
     labelInput.addEventListener("input", () => { deployState.label = labelInput.value; invalidate(); });
 
@@ -2267,8 +2260,8 @@ async function showDeploy() {
                 el("label", {}, [el("span", { class: "muted" }, t("deploy.artifact")), fileInput]),
                 contractRow,
                 el("div", {}, [el("span", { class: "muted" }, t("contract.args")), argsBox]),
-                el("label", {}, [el("span", { class: "muted" }, t("deploy.kind")), kindSelect]),
                 el("label", {}, [el("span", { class: "muted" }, t("deploy.name")), labelInput]),
+                el("div", { class: "muted small" }, t("deploy.collectionsNote")),
                 el("div", { class: "deploy-buttons" }, [checkButton, deployButton])
             ]),
             errorBox,

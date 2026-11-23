@@ -81,11 +81,11 @@ cat state/secrets/chainlens_deploy_token
 4. **Compiler artifact:** 파일을 선택합니다. 파일에 여러 컨트랙트가 있으면 **Contract**를 선택합니다.
 5. **Constructor arguments:** 인수마다 입력란이 하나씩 있습니다. 숫자는 정수(`1000000`), 주소는 `0x…`,
    `true`/`false`, 배열과 튜플은 JSON(`["0xabc…","0xdef…"]`)으로 입력합니다.
-6. **Kind:** *Common contract* 또는 *Avatar collection*.
-7. **Name in the registry:** 선택 사항이며, chainlens에 표시되는 컨트랙트 이름입니다.
-8. **Check:** 프록시가 모든 검사(인수, 가스, 생성이 revert되지 않는지, 한 블록에 들어가는지)를 실행하고,
+6. **Name in the registry:** 선택 사항이며, chainlens에 표시되는 컨트랙트 이름입니다. 여기서 배포한 컨트랙트는
+   일반 컨트랙트로 등록됩니다.
+7. **Check:** 프록시가 모든 검사(인수, 가스, 생성이 revert되지 않는지, 한 블록에 들어가는지)를 실행하고,
    페이지에 컨트랙트가 받게 될 주소가 표시됩니다. 아무것도 서명하지 않습니다.
-9. **Deploy:** 확인합니다. MPC 노드가 서명하고, 페이지는 블록을 기다린 뒤 체인상의 코드를 아티팩트의
+8. **Deploy:** 확인합니다. MPC 노드가 서명하고, 페이지는 블록을 기다린 뒤 체인상의 코드를 아티팩트의
    런타임 바이트코드와 비교하고(immutable 값 제외), 컨트랙트를 등록합니다. 그런 다음 컨트랙트 페이지로
    연결되며, 그곳에서 읽기 함수를 바로 사용할 수 있습니다.
 
@@ -99,12 +99,13 @@ cat state/secrets/chainlens_deploy_token
 브라우저 없이 같은 두 단계를 수행하려면 프록시 관리자 토큰으로 프록시의 `POST /admin/contract/check`와
 `POST /admin/contract/deploy`를 호출합니다([프록시 API](../reference/proxy-api.md#admin-api-contracts-and-registry)).
 
-**Check** 후에 파일, 인수, 종류 또는 이름을 변경하면 다시 검사해야 합니다. 그 사이에 센터의 상태가
+**Check** 후에 파일, 인수 또는 이름을 변경하면 다시 검사해야 합니다. 그 사이에 센터의 상태가
 변경되면(다른 배포), **Deploy**가 거부되고 새 검사를 요구합니다. chainlens당 한 번에 하나의 배포만
 실행됩니다.
 
-아바타 컬렉션의 경우 아티팩트부터 판매까지의 전체 과정은 [아바타](avatars.md)에 있습니다. 프록시가
-목록에 포함하도록 종류를 *Avatar collection*(레지스트리 종류 `avatar`)으로 선택하십시오.
+아바타와 닉네임 컬렉션은 이 페이지에서 배포하지 않습니다: Ansible이 배포하거나(`platform_avatar_collections`,
+`platform_nickname_collection`; [Ansible](../deployment/ansible.md#platform-contracts)), `template`과 함께
+`POST /admin/contract/deploy`를 사용합니다. 닉네임 페이지에서 새 닉네임 컬렉션을 배포할 수도 있습니다.
 
 컨트랙트의 배포자(생성자의 `msg.sender`)는 센터입니다. 소유자나 역할이 있는 컨트랙트에서 다른 주체가
 이를 보유해야 한다면, 생성자 인수로 받도록 하십시오.
