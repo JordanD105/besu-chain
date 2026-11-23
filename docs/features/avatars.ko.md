@@ -282,7 +282,7 @@ curl -s -X POST $P/contract/call -H 'Content-Type: application/json' -H "X-Secti
 나열합니다(가격은 ETH).
 
 - **chainlens:** `#/nfts/0xFaces/1`에 소유자, 메타데이터, 이미지가 표시됩니다. 구매자의 계정 페이지에 섹션과
-  아바타가, **Sections** 페이지에 소비 계정의 잔액이 표시됩니다. 대시보드의 **Section statistics**가 판매
+  아바타가, **Sections** 페이지에 소비 계정의 잔액이 표시됩니다. **통계** 페이지(아이템, 자금)가 판매
   (*Avatar sales*, *Income*)와 취소(*Undone, refunded*)를 셉니다.
 - **Grafana → Sections:** `avatar_sale`과 `avatar_undo` 작업과 그 ETH. 수입 = 판매 − 취소.
 - **자금:** chainlens **Sections** 페이지에서 소비 계정을 결제 계정으로 스윕하고 SENDER01로 반환합니다.

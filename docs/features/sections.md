@@ -299,7 +299,7 @@ view. Read from the chain every 15 s (`GET /api/overview`).
 
 ![Platform overview and section balances on the chainlens Dashboard](../images/screenshots/chainlens-dashboard.png)
 
-Below it, **Section statistics** per **day, week, month, quarter or year** (UTC; the last 14 days,
+The **Statistics** page (`#/statistics`, [chainlens](../components/chainlens.md#statistics); topics Users, Money, Items) shows the section statistics per **day, week, month, quarter or year** (UTC; the last 14 days,
 12 weeks or months, 8 quarters, 5 years; default: month), for all sections or one: a column chart of
 one measure per period, and, for the period you click (default: the current one), totals and a table
 by section (`GET /api/sections/stats?period=day|week|month|quarter|year`). **Start** / **End** dates

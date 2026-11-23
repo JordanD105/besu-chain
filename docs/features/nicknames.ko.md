@@ -249,7 +249,7 @@ undo`), 소비 계정의 ETH 부족(409 `the refund needs X ETH but … has Y ET
 | 판매 취소 | 소비 계정 → 구매자(판매 + 취소되지 않은 레벨 업그레이드) | `nickname_undo` |
 | 레벨 취소 | 소비 계정 → 소유자(그 업그레이드의 가격) | `level_undo` |
 
-섹션 **수입** = 판매 + 레벨 업그레이드 − 취소: chainlens 섹션 통계(*Nickname sales*, *Level upgrades*,
+섹션 **수입** = 판매 + 레벨 업그레이드 − 취소: chainlens 통계 페이지(*Nickname sales*, *Level upgrades*,
 *Nicknames and levels (ETH)*, *Undone, refunded (ETH)*)와 Grafana **Sections** 대시보드(All-sections 표의
 **Nicknames**, **Level upgrades**, **Undone** 열). 돈은 소비 계정에서 평소처럼 스윕과 반환으로 이어집니다
 ([섹션](sections.md)). 아직 가능한 취소를 위해 소비 계정에 충분한 금액을 남겨 두십시오.

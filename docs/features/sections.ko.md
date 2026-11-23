@@ -293,7 +293,7 @@ SectionRegistry에 등록되며, 모든 섹션이 공유합니다. 아바타 생
 
 ![chainlens 대시보드: 합계, 플랫폼 개요, 섹션 잔액](../images/screenshots/chainlens-dashboard.png)
 
-그 아래에는 **day, week, month, quarter, year**별 **Section statistics**(섹션 통계)가 있습니다(UTC, 최근 14일,
+**통계** 페이지(`#/statistics`, [chainlens](../components/chainlens.md#statistics); 사용자, 자금, 아이템 주제)에 **day, week, month, quarter, year**별 섹션 통계가 있습니다(UTC, 최근 14일,
 12주 또는 12개월, 8분기, 5년, 기본값: month). 전체 섹션 또는 섹션 하나에 대해 기간별
 측정값 하나의 막대 차트를 표시하고, 클릭한 기간(기본값: 현재 기간)의 합계와 섹션별 표를
 표시합니다(`GET /api/sections/stats?period=day|week|month|quarter|year`). **Start** / **End** 날짜로

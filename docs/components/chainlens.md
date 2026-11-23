@@ -40,11 +40,12 @@ addresses) and **Help**. Older links (`#/transactions`, `#/memos`, `#/blocks`, `
 
 | Group | Page | URL | Shows |
 |---|---|---|---|
-| Explorer | **Overview** | `#/` | totals (transactions, tokens, contracts, peers); **Platform overview**: SENDER01, the contract account center, the section registry, section counts, each section's balances (stacked) and user accounts; **Section statistics** per day, week, month, quarter or year, or a date range; the transaction chart; most active contracts |
+| Explorer | **Overview** | `#/` | totals (transactions, tokens, contracts, peers); **Platform overview**: SENDER01, the contract account center, the section registry, section counts, each section's balances (stacked) and user accounts; the transaction chart; most active contracts |
 | | **Transactions** | `#/activity/transactions` | every transaction with its [memo](../features/memos.md) in the page's language (**What**: the caller's text, the default text under it), section, amount, from → to, status; chips for *undone* / *undo of* and for transactions made by one API call (⛓ 2). Filters in the URL: text, **kind** (Transfers, Accounts, Sections, Avatars, Nicknames, Contracts, No memo, or one memo type), section, dates; *More filters*: request id, account. **Export CSV / JSON** (`/api/activity`). The former Memos page is this page |
 | | **Blocks** | `#/activity/blocks` | blocks and their transactions |
 | | **Accounts** | `#/accounts` | every account with balance and transaction count; the **Section** column (section and role) and a section filter. An account's page shows its section, transactions and tokens |
 | | **Avatars** / **Nicknames** | `#/items/avatars`, `#/items/nicknames` | the items of every avatar / nickname collection, with image or name, owner and price; an item's page shows its metadata and history |
+| | **Statistics** | `#/statistics` | every count over time, in one place (see [Statistics](#statistics)) |
 | | **Contracts** | `#/contracts` | contracts with their **type from the registry**: Avatar collection, Nickname collection, Section registry, Transfer undo, Contract (registered), ERC721, Contract; a type filter. Registered contracts have a page with their functions (view / pure functions run in the page) |
 | | **Network** | `#/network` | the chain (client, chain id, latest block, block time) and **every Besu node** (role, up/down, block, peers, started), read from each node's own metrics endpoint (`NETWORK_NODES`): RPC nodes keep the ADMIN API off in production, so node details no longer depend on it. Peers of the RPC node only where its ADMIN API is on (development) |
 | Help | **Docs ↗**, **Grafana ↗** | `DOCS_URL`, `GRAFANA_URL` | the documentation site; Grafana |
@@ -60,7 +61,29 @@ update in progress: for example the proxy already updated by `site.yml`, chainle
 
 ![Chainlens Accounts page with the Section column](../images/screenshots/chainlens-accounts.png)
 
-![Section statistics on the dashboard, per period](../images/screenshots/chainlens-statistics.png)
+### Statistics
+
+One page, `#/statistics`, for every count over time. Its URL holds the whole view (topic, period,
+dates, section, measure, chosen period), so a view can be bookmarked or sent.
+
+- **Controls:** the period (day, week, month, quarter, year, UTC), the range (the last periods, the
+  last 30 days, this year, or custom dates) and the section (all, or one).
+- **Topics:**
+
+  | Topic | Measures |
+  |---|---|
+  | **Overview** | the headline numbers of every topic; a tile opens its topic |
+  | **Network** (whole chain) | transactions by kind (transfers, contract calls, contract creations), failed transactions, active accounts (that sent at least one), new contracts, blocks |
+  | **Users** | new users, user accounts at the period's end, the sections' transactions; by section also the gateways' spare accounts now (not counted as users until handed out) |
+  | **Money** | balances at the period's end (upfront, consumption, payment, users; stacked), income, +x from users, to users, undone (refunded), top-ups, swept, paid back |
+  | **Items** | avatar sales (count, ETH), nickname sales, nicknames and levels (ETH), level upgrades |
+  | **Memos** | transactions by memo family (transfers, accounts, sections, avatars, nicknames, contracts, no memo); a table of every memo type, whose counts open those transactions |
+
+- **Each topic:** tiles (the chosen period's value, the change from the period before, a trend; a
+  click charts it), the chart (click a column to choose that period), the chosen period by section,
+  and every period in a table. Each table exports to **CSV**.
+
+The section statistics card left the Overview page for this page.
 
 ## Admin pages
 
@@ -117,7 +140,8 @@ shows a notice per section with open corrections.
 - **Registry:** reads the SectionRegistry's events every 15 s from its deployment block, in
   1,000-block chunks: sections, section accounts and roles, registered contracts with their ABI.
 - **Overview and statistics:** `/api/overview` (balances read every 15 s) and
-  `/api/sections/stats` (computed from the indexed transactions, cached 15 s). Past balances are
+  `/api/stats` (the Statistics page: sections, the whole chain and memos per period, computed from the
+  indexed transactions, cached 15 s; `/api/sections/stats` is the same answer). Past balances are
   rebuilt backwards from today's (gas is free on this chain).
 
 ## Settings

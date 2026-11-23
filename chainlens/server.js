@@ -1316,6 +1316,7 @@ async function refreshSpares() {
 setTimeout(refreshSpares, 3000).unref();
 setInterval(refreshSpares, 30000).unref();
 const isSpare = (address) => spareAccounts.has(String(address || "").toLowerCase());
+const spareCount = (id) => [...spareAccounts.values()].filter((x) => Number(x) === Number(id)).length;
 
 function publicAccount(row) {
     const owner = sectionOf(row.address) || {};
@@ -1809,6 +1810,43 @@ function buildSectionStats(period, range) {
         }
     };
 
+    // the whole chain per period (Statistics, Network): transactions by kind, failed, active senders,
+    // new contracts, blocks; memos by type, for the chain and per section
+    const chain = starts.map(() => ({ txs: 0, transfers: 0, calls: 0, creates: 0, failed: 0, activeAccounts: 0, newContracts: 0, blocks: 0 }));
+    const senders = starts.map(() => new Set());
+    const memoChain = starts.map(() => ({}));
+    const memoSection = new Map(sections.map(([id]) => [id, starts.map(() => ({}))]));
+    for (const block of db.blocks) {
+        const i = block ? indexOf(block.timestamp * 1000) : -1;
+        if (i >= 0) {
+            chain[i].blocks += 1;
+        }
+    }
+    for (const tx of db.txs) {
+        const i = indexOf(tx.timestamp * 1000);
+        if (i < 0) {
+            continue;
+        }
+        const c = chain[i];
+        c.txs += 1;
+        if (tx.status !== "success") {
+            c.failed += 1;
+        } else {
+            c[tx.type === "create" ? "creates" : tx.type === "call" ? "calls" : "transfers"] += 1;
+            if (tx.type === "create" && tx.contractAddress) {
+                c.newContracts += 1;
+            }
+        }
+        senders[i].add(String(tx.from).toLowerCase());
+        const type = tx.memoType || "none";
+        memoChain[i][type] = (memoChain[i][type] || 0) + 1;
+        const bySection = tx.memoSection ? memoSection.get(Number(tx.memoSection)) : null;
+        if (bySection) {
+            bySection[i][type] = (bySection[i][type] || 0) + 1;
+        }
+    }
+    senders.forEach((set, i) => { chain[i].activeAccounts = set.size; });
+
     for (const tx of db.txs) {
         if (tx.status !== "success") {
             continue;
@@ -1905,6 +1943,7 @@ function buildSectionStats(period, range) {
 
     // a new user: the earlier of its registration (AccountAdded) and its first funding
     const seen = new Set();
+    const joined = new Map(); // section id -> the times its users joined (for the user count at each period's end)
     for (const a of sectionBook.added) {
         if (seen.has(a.account) || isSpare(a.account)) {
             continue;   // a spare account becomes a new user when the gateway hands it out
@@ -1914,6 +1953,10 @@ function buildSectionStats(period, range) {
         const times = [registered ? registered.timestamp * 1000 : null, firstFunding.get(a.account) || null].filter((x) => x !== null);
         if (times.length) {
             add(a.id, Math.min(...times), "newUsers", 1);
+            if (!joined.has(a.id)) {
+                joined.set(a.id, []);
+            }
+            joined.get(a.id).push(Math.min(...times));
         }
     }
 
@@ -1930,6 +1973,8 @@ function buildSectionStats(period, range) {
         const now = current.get(id) || {};
         const mine = deltas.filter((d) => d.id === id);
         data.get(id).forEach((row, i) => {
+            row.users = (joined.get(id) || []).filter((ms) => ms < ends[i]).length;
+            row.memos = memoSection.get(id)[i];
             row.balances = {};
             for (const role of ["upfront", "consumption", "payment", "users"]) {
                 const later = mine.filter((d) => d.role === role && d.ms >= ends[i]).reduce((sum, d) => sum + d.eth, 0);
@@ -1945,15 +1990,19 @@ function buildSectionStats(period, range) {
         metrics: STAT_METRICS,
         range: range ? { from: new Date(first).toISOString().slice(0, 10), to: new Date(Math.min(lastEnd, Date.now()) - 1).toISOString().slice(0, 10) } : null,
         truncated: Boolean(range) && starts.length >= STAT_MAX_PERIODS,
-        periods: starts.map((start) => ({ start, label: periodLabel(start, period) })),
+        periods: starts.map((start) => ({ start, end: nextStart(start, period), label: periodLabel(start, period) })),
+        chain,
+        memos: memoChain,
         sections: sections.map(([id, s]) => ({
             id, name: s.name, active: s.active,
-            values: data.get(id).map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, typeof v === "number" ? round(v) : v])))
+            values: data.get(id).map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, typeof v === "number" ? round(v) : v]))),
+            spares: spareCount(id)
         }))
     };
 }
 
-app.get("/api/sections/stats", (req, res) => {
+// /api/stats: the Statistics page (sections, the whole chain, memos); /api/sections/stats: the same, older name
+app.get(["/api/stats", "/api/sections/stats"], (req, res) => {
     const period = String(req.query.period || "month");
     if (!STAT_PERIODS[period]) {
         return res.status(400).json({ error: "period: day, week, month, quarter or year" });

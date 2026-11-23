@@ -295,7 +295,7 @@ earlier sale stays in the list with `undone: true`). `POST /contract/events` lis
 
 - **chainlens:** `#/nfts/0xFaces/1` shows the owner, the metadata and the image; the buyer's account
   page shows its section and avatars; the **Sections** page shows the consumption account's balance;
-  the dashboard's **Section statistics** count the sale (*Avatar sales*, *Income*) and an undo
+  the **Statistics** page (Items, Money) counts the sale (*Avatar sales*, *Income*) and an undo
   (*Undone, refunded*).
 - **Grafana → Sections:** the `avatar_sale` and `avatar_undo` operations and their ETH. Income =
   sales − undos.

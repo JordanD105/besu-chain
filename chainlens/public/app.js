@@ -833,6 +833,10 @@ async function render(options) {
             return showNetwork();
         }
 
+        if (path === "#/statistics") {
+            return showStatistics(params);
+        }
+
         // admin (hidden unless this address may use it; the server checks the token)
         if (path === "#/admin/sections") {
             return showSections();
@@ -1120,211 +1124,362 @@ function balancesTable(sections) {
 }
 
 
-// ---- Section statistics: week / month / quarter / year (/api/sections/stats). One measure at a time
-// in a column chart (one series, one axis); click a column for that period's table by section.
-const STAT_UNITS = { newUsers: "count", avatarSales: "count", nicknameSales: "count", levelUpgrades: "count", txs: "count" };
-const STAT_COLUMNS = ["newUsers", "income", "fromUsers", "avatarSales", "avatarEth", "nicknameSales", "levelUpgrades", "nicknameEth", "refunds", "toUsers", "topup", "sweep", "payback", "txs"];
-const statState = { period: "month", section: "all", metric: "balances", index: null, from: "", to: "" };
+// ---- Statistics (#/statistics, docs/components/chainlens.md): every count over time in one place.
+// One answer (/api/stats) feeds every topic; the URL holds the view (topic, period, dates, section,
+// measure, chosen period), so a view can be bookmarked and shared.
+const STAT_TOPIC_KEYS = ["overview", "network", "users", "money", "items", "memos"];
+const STAT_PERIOD_KEYS = ["day", "week", "month", "quarter", "year"];
+const TX_SLOTS = [["transfers", "s1"], ["calls", "s2"], ["creates", "s3"]];
+// scope: chain (the whole chain), memo, or section (added up over the chosen sections, the default);
+// unit eth or count; level: a value at the period's end, not a sum over it; stack: drawn as stacked parts
+const STAT_DEFS = {
+    txs: { scope: "chain", stack: TX_SLOTS }, transfers: { scope: "chain" }, calls: { scope: "chain" }, creates: { scope: "chain" },
+    failed: { scope: "chain" }, activeAccounts: { scope: "chain" }, newContracts: { scope: "chain" }, blocks: { scope: "chain" },
+    newUsers: {}, users: { level: true }, sectionTxs: { key: "txs" },
+    balances: { unit: "eth", level: true, stack: BALANCE_SLOTS.map(([role, slot]) => ["bal:" + role, slot]) },
+    income: { unit: "eth" }, fromUsers: { unit: "eth" }, toUsers: { unit: "eth" }, refunds: { unit: "eth" },
+    topup: { unit: "eth" }, sweep: { unit: "eth" }, payback: { unit: "eth" },
+    avatarSales: {}, avatarEth: { unit: "eth" }, nicknameSales: {}, nicknameEth: { unit: "eth" }, levelUpgrades: {}
+};
 
-function statQuery() {
-    return "period=" + statState.period + (statState.from && statState.to ? "&from=" + statState.from + "&to=" + statState.to : "");
-}
-const statCache = new Map(); // period -> the last answer (drawn at once on the dashboard's refresh)
-
-function statValue(value, metric) {
-    return STAT_UNITS[metric] === "count" ? formatCount(value) : ethText(value);
-}
-
-function statSum(stats, metric, index) {
-    return stats.sections
-        .filter((s) => statState.section === "all" || String(s.id) === statState.section)
-        .reduce((sum, s) => sum + (metric.startsWith("bal:")
-            ? (s.values[index].balances || {})[metric.slice(4)] || 0
-            : metric === "balances"
-                ? BALANCE_SLOTS.reduce((t2, [role]) => t2 + ((s.values[index].balances || {})[role] || 0), 0)
-                : s.values[index][metric]), 0);
-}
-
-// one stacked column (bottom to top: upfront, consumption, payment, users), as the balance bars
-function balanceColumn(stats, i, max) {
-    // the stack's height is the total (like a single bar); the segments share it by value
-    let total = 0;
-    const segments = BALANCE_SLOTS.map(([role, slot]) => {
-        const v = statSum(stats, "bal:" + role, i);
-        total += v > 0 ? v : 0;
-        return v > 0 ? el("i", { class: "col-seg " + slot, style: "flex:" + v + " 0 0" }) : null;
-    }).filter(Boolean);
-    return el("span", { class: "col-stack", style: "height:" + (max > 0 ? total / max * 100 : 0) + "%" }, segments);
+function statTopicMeasures(topic) {
+    return {
+        overview: ["txs", "activeAccounts", "newUsers", "users", "income", "avatarSales", "nicknameSales", "topup"],
+        network: ["txs", "activeAccounts", "failed", "newContracts", "blocks"],
+        users: ["newUsers", "users", "sectionTxs"],
+        money: ["balances", "income", "fromUsers", "toUsers", "refunds", "topup", "sweep", "payback"],
+        items: ["avatarSales", "avatarEth", "nicknameSales", "nicknameEth", "levelUpgrades"],
+        memos: KIND_FAMILIES.map(([prefix]) => "memo:" + prefix)
+    }[topic];
 }
 
-function statsCard() {
-    const holder = el("section", { class: "card stack stats-card" });
-    const load = async () => {
-        const query = statQuery();
-        const cached = statCache.get(query);
-        if (cached) {
-            render(cached);
+function statDef(m) {
+    if (m.startsWith("bal:")) {
+        return { unit: "eth", level: true };
+    }
+    if (m.startsWith("memo:")) {
+        return { scope: "memo" };
+    }
+    return STAT_DEFS[m] || {};
+}
+
+function statLabel(m) {
+    if (m.startsWith("bal:")) {
+        return balanceLabel(m.slice(4)) + " (ETH)";
+    }
+    if (m.startsWith("memo:")) {
+        const family = KIND_FAMILIES.find(([prefix]) => "memo:" + prefix === m);
+        return family ? t(family[1]) : m.slice(5);
+    }
+    return t("stats." + m);
+}
+
+function statText(value, m) {
+    return statDef(m).unit === "eth" ? ethText(value) : formatCount(value);
+}
+
+function statSections(stats, section) {
+    return stats.sections.filter((s) => section === "all" || String(s.id) === section);
+}
+
+// a measure's value in period i, for the chosen sections ("all" or a section id)
+function statRead(stats, m, i, section) {
+    const def = statDef(m);
+    if (def.stack) {
+        return def.stack.reduce((sum, [part]) => sum + statRead(stats, part, i, section), 0);
+    }
+    if (m.startsWith("bal:")) {
+        return statSections(stats, section).reduce((sum, s) => sum + ((s.values[i].balances || {})[m.slice(4)] || 0), 0);
+    }
+    if (def.scope === "chain") {
+        return (stats.chain && stats.chain[i] && stats.chain[i][m]) || 0;
+    }
+    if (def.scope === "memo") {
+        const prefix = m.slice(5);
+        const maps = section === "all" ? [stats.memos[i] || {}] : statSections(stats, section).map((s) => s.values[i].memos || {});
+        return maps.reduce((sum, map) => sum + Object.entries(map)
+            .filter(([type]) => (prefix === "none" ? type === "none" : type.startsWith(prefix)))
+            .reduce((n, [, count]) => n + count, 0), 0);
+    }
+    return statSections(stats, section).reduce((sum, s) => sum + (s.values[i][def.key || m] || 0), 0);
+}
+
+// +12% / −3% / new / ±0 against the previous period
+function statDelta(stats, m, i, section) {
+    if (i < 1) {
+        return null;
+    }
+    const now = statRead(stats, m, i, section);
+    const before = statRead(stats, m, i - 1, section);
+    if (Math.abs(now - before) < 1e-9) {
+        return el("span", { class: "stat-delta" }, "±0");
+    }
+    const text = before === 0 ? t("stats.new") : (now > before ? "+" : "−") + Math.abs(Math.round((now - before) / Math.abs(before) * 100)) + "%";
+    return el("span", { class: "stat-delta " + (now > before ? "up" : "down"), title: t("stats.vsPrev") }, text);
+}
+
+function statSpark(stats, m, section, at) {
+    const values = stats.periods.map((p, i) => statRead(stats, m, i, section));
+    const max = Math.max(0, ...values);
+    return el("span", { class: "spark", "aria-hidden": "true" }, values.map((v, i) =>
+        el("i", { class: i === at ? "on" : "", style: "height:" + (max > 0 ? Math.max(v > 0 ? 6 : 2, v / max * 100) : 2) + "%" })));
+}
+
+// the column chart of one measure over the periods; stacked measures show their parts
+function statChart(stats, m, section, at, pick) {
+    const def = statDef(m);
+    const sums = stats.periods.map((p, i) => statRead(stats, m, i, section));
+    const max = Math.max(0, ...sums);
+    const peak = sums.indexOf(max);
+    const n = stats.periods.length;
+    return el("div", { class: "col-chart", role: "img", "aria-label": statLabel(m) }, stats.periods.map((p, i) => {
+        const bar = def.stack
+            ? el("span", { class: "col-stack", style: "height:" + (max > 0 ? sums[i] / max * 100 : 0) + "%" },
+                def.stack.map(([part, slot]) => {
+                    const v = statRead(stats, part, i, section);
+                    return v > 0 ? el("i", { class: "col-seg " + slot, style: "flex:" + v + " 0 0" }) : null;
+                }).filter(Boolean))
+            : el("i", { class: "col-bar", style: "height:" + (max > 0 ? Math.max(sums[i] > 0 ? 2 : 0, sums[i] / max * 100) : 0) + "%" });
+        const col = el("button", { type: "button", class: "col" + (i === at ? " on" : ""), "aria-label": p.label + ": " + statText(sums[i], m) }, [
+            el("span", { class: "col-value" }, i === at || (i === peak && max > 0) ? statText(sums[i], m) : ""),
+            el("span", { class: "col-track" }, [bar]),
+            el("span", { class: "col-label" }, i === at || n <= 16 || i % Math.ceil(n / 12) === 0 ? p.label : "")
+        ]);
+        col.addEventListener("click", () => pick(i));
+        col.addEventListener("mousemove", (event) => showVizTip(event, [[p.label],
+            ...(def.stack ? def.stack.slice().reverse().map(([part, slot]) => [statLabel(part), statText(statRead(stats, part, i, section), part), slot]) : []),
+            [statLabel(m), statText(sums[i], m), def.stack ? null : "s1"]]));
+        col.addEventListener("mouseleave", hideVizTip);
+        return col;
+    }));
+}
+
+// the measures a table shows: a stacked measure is shown as its parts and its total
+function statColumns(measures) {
+    return measures.flatMap((m) => (statDef(m).stack ? [...statDef(m).stack.map(([part]) => part), m] : [m]));
+}
+
+function statCsv(name, header, rows) {
+    const cell = (v) => (/[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v));
+    const text = [header, ...rows].map((row) => row.map(cell).join(",")).join("\n");
+    const link = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/csv" })), download: name });
+    document.body.append(link);
+    link.click();
+    link.remove();
+}
+
+const statPageCache = new Map(); // query -> { at, stats }
+
+async function showStatistics(params) {
+    const token = showToken;
+    const today = new Date().toISOString().slice(0, 10);
+    const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    const v = {
+        topic: STAT_TOPIC_KEYS.includes(params.get("topic")) ? params.get("topic") : "overview",
+        period: STAT_PERIOD_KEYS.includes(params.get("period")) ? params.get("period") : "month",
+        section: params.get("section") || "all",
+        m: params.get("m") || "",
+        from: /^\d{4}-\d{2}-\d{2}$/.test(params.get("from") || "") ? params.get("from") : "",
+        to: /^\d{4}-\d{2}-\d{2}$/.test(params.get("to") || "") ? params.get("to") : "",
+        at: params.has("at") ? Number(params.get("at")) : null
+    };
+    if (v.from && !v.to) {
+        v.to = today;
+    }
+    const go = (patch) => {
+        const n = Object.assign({}, v, patch);
+        const p = new URLSearchParams();
+        const defaults = { topic: "overview", period: "month", section: "all", m: "", from: "", to: "", at: null };
+        Object.entries(n).forEach(([k, value]) => { if (value !== defaults[k] && value !== null && value !== "") { p.set(k, String(value)); } });
+        location.hash = "#/statistics" + (p.toString() ? "?" + p.toString() : "");
+    };
+
+    const query = "period=" + v.period + (v.from ? "&from=" + v.from + "&to=" + v.to : "");
+    let entry = statPageCache.get(query);
+    if (!entry || Date.now() - entry.at > 15000) {
+        if (!entry) {
+            show(el("div", { class: "card muted" }, "…"));
         }
         try {
-            const stats = await api("/api/sections/stats?" + query);
-            statCache.set(query, stats);
-            if (query === statQuery() && holder.isConnected) {
-                render(stats);
-            }
+            entry = { at: Date.now(), stats: await api("/api/stats?" + query) };
+            statPageCache.set(query, entry);
         } catch (error) {
-            if (!cached) {
-                holder.replaceChildren(el("div", { class: "empty" }, error.message));
+            if (!entry) {
+                throw error;
             }
         }
-    };
-    const render = (stats) => {
-        if (!stats.sections.length) {
-            holder.remove();
-            return;
-        }
-        if (statState.section !== "all" && !stats.sections.some((s) => String(s.id) === statState.section)) {
-            statState.section = "all";
-        }
-        const last = stats.periods.length - 1;
-        const index = statState.index === null || statState.index > last ? last : statState.index;
-        const metric = statState.metric;
+    }
+    if (token !== showToken) {
+        return;
+    }
+    const stats = entry.stats;
+    const last = stats.periods.length - 1;
+    const at = v.at === null || !(v.at >= 0 && v.at <= last) ? last : v.at;
+    if (v.section !== "all" && !stats.sections.some((s) => String(s.id) === v.section)) {
+        v.section = "all";
+    }
+    const measures = statTopicMeasures(v.topic);
+    const m = v.topic !== "overview" && measures.includes(v.m) ? v.m : measures[0];
+    const sectionName = v.section === "all" ? t("stats.allSections") : stats.sections.find((s) => String(s.id) === v.section).name;
+    const scopeOf = (x) => statDef(x).scope || "section";
+    const periodText = stats.periods[at].label;
 
-        const tabs = el("div", { class: "seg-tabs", role: "tablist" }, ["day", "week", "month", "quarter", "year"].map((p) => {
-            const b = el("button", { type: "button", role: "tab", class: "seg-tab" + (p === statState.period ? " on" : ""), "aria-selected": String(p === statState.period) }, t("stats." + p));
-            b.addEventListener("click", () => { statState.period = p; statState.index = null; load(); });
-            return b;
-        }));
-        const sectionSelect = el("select", { "aria-label": t("col.section") }, [
-            el("option", { value: "all" }, t("stats.allSections")),
-            ...stats.sections.map((s) => el("option", { value: String(s.id) }, s.name))
-        ]);
-        sectionSelect.value = statState.section;
-        sectionSelect.addEventListener("change", () => { statState.section = sectionSelect.value; load(); });
-        // duration (UTC days): the last periods, a quick range, or From / To (To empty = today)
-        const today = new Date().toISOString().slice(0, 10);
-        const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
-        const setRange = (from, to) => { statState.from = from; statState.to = to; statState.index = null; load(); };
-        const fromInput = el("input", { type: "date", class: "stat-date", max: today, value: statState.from, "aria-label": t("dash.start") });
-        const toInput = el("input", { type: "date", class: "stat-date", max: today, value: statState.to, "aria-label": t("dash.end") });
-        const rangeMsg = el("span", { class: "bad-text small", role: "alert" });
-        const apply = el("button", { type: "button", class: "fn-run" }, t("stats.apply"));
-        apply.addEventListener("click", () => {
-            const from = fromInput.value;
-            const to = toInput.value || today;
-            if (!from) {
-                rangeMsg.textContent = t("stats.needStart");
-            } else if (from > to) {
-                rangeMsg.textContent = t("stats.badRange");
-            } else {
-                setRange(from, to);
-            }
-        });
-        const presetKey = !statState.from ? "last" : (statState.to === today && statState.from === daysAgo(29) ? "30d"
-            : (statState.to === today && statState.from === today.slice(0, 4) + "-01-01" ? "year" : "custom"));
-        const custom = el("div", { class: "stat-custom" }, [
-            el("label", {}, [t("dash.start"), fromInput]), el("label", {}, [t("dash.end"), toInput]), apply, rangeMsg]);
-        custom.hidden = presetKey !== "custom";
-        const presets = el("div", { class: "seg-tabs", role: "tablist" }, [
-            ["last", t("stats.lastPeriods"), () => setRange("", "")],
-            ["30d", t("stats.last30"), () => { statState.period = statState.period === "year" || statState.period === "quarter" ? "day" : statState.period; setRange(daysAgo(29), today); }],
-            ["year", t("stats.thisYear"), () => setRange(today.slice(0, 4) + "-01-01", today)],
-            ["custom", t("stats.custom"), () => { custom.hidden = false; presets.querySelectorAll(".seg-tab").forEach((b) => b.classList.toggle("on", b.dataset.k === "custom")); fromInput.focus(); }]
-        ].map(([k, label, action]) => {
-            const b = el("button", { type: "button", role: "tab", class: "seg-tab" + (k === presetKey ? " on" : ""), "data-k": k }, label);
-            b.addEventListener("click", action);
-            return b;
-        }));
-        const rangeRow = el("div", { class: "stat-range" }, [
-            el("span", { class: "muted" }, t("stats.rangeLabel")), presets, custom,
+    // ---- controls: topic, period, range, section
+    const tabs = (keys, current, label, pick) => el("div", { class: "seg-tabs", role: "tablist" }, keys.map((k) => {
+        const b = el("button", { type: "button", role: "tab", class: "seg-tab" + (k === current ? " on" : ""), "aria-selected": String(k === current) }, label(k));
+        b.addEventListener("click", () => pick(k));
+        return b;
+    }));
+    const topicTabs = el("div", { class: "stat-topics" }, tabs(STAT_TOPIC_KEYS, v.topic, (k) => t("stats.topic." + k), (k) => go({ topic: k, m: "" })));
+    const periodTabs = tabs(STAT_PERIOD_KEYS, v.period, (k) => t("stats." + k), (k) => go({ period: k, at: null }));
+    const presetKey = !v.from ? "last" : (v.to === today && v.from === daysAgo(29) ? "30d" : (v.to === today && v.from === today.slice(0, 4) + "-01-01" ? "year" : "custom"));
+    const fromInput = el("input", { type: "date", class: "stat-date", max: today, value: v.from, "aria-label": t("dash.start") });
+    const toInput = el("input", { type: "date", class: "stat-date", max: today, value: v.to, "aria-label": t("dash.end") });
+    const rangeMsg = el("span", { class: "bad-text small", role: "alert" });
+    const apply = el("button", { type: "button", class: "fn-run" }, t("stats.apply"));
+    apply.addEventListener("click", () => {
+        const from = fromInput.value;
+        const to = toInput.value || today;
+        if (!from) {
+            rangeMsg.textContent = t("stats.needStart");
+        } else if (from > to) {
+            rangeMsg.textContent = t("stats.badRange");
+        } else {
+            go({ from, to, at: null });
+        }
+    });
+    const custom = el("div", { class: "stat-custom" }, [el("label", {}, [t("dash.start"), fromInput]), el("label", {}, [t("dash.end"), toInput]), apply, rangeMsg]);
+    custom.hidden = presetKey !== "custom";
+    const presets = tabs(["last", "30d", "year", "custom"], presetKey, (k) => ({ last: t("stats.lastPeriods"), "30d": t("stats.last30"), year: t("stats.thisYear"), custom: t("stats.custom") })[k], (k) => {
+        if (k === "last") {
+            go({ from: "", to: "", at: null });
+        } else if (k === "30d") {
+            go({ from: daysAgo(29), to: today, at: null, period: v.period === "year" || v.period === "quarter" ? "day" : v.period });
+        } else if (k === "year") {
+            go({ from: today.slice(0, 4) + "-01-01", to: today, at: null });
+        } else {
+            custom.hidden = false;
+            fromInput.focus();
+        }
+    });
+    const sectionSelect = el("select", { "aria-label": t("col.section") }, [
+        el("option", { value: "all" }, t("stats.allSections")),
+        ...stats.sections.map((s) => el("option", { value: String(s.id) }, s.name))
+    ]);
+    sectionSelect.value = v.section;
+    sectionSelect.addEventListener("change", () => go({ section: sectionSelect.value }));
+    const chainOnly = v.topic === "network";
+    const controls = el("div", { class: "stat-bar" }, [
+        el("div", { class: "stat-controls" }, [periodTabs, stats.sections.length && !chainOnly ? sectionSelect : null,
+            chainOnly ? el("span", { class: "muted" }, "· " + t("stats.wholeChain")) : null]),
+        el("div", { class: "stat-range" }, [el("span", { class: "muted" }, t("stats.rangeLabel")), presets, custom,
             el("span", { class: "muted" }, stats.range
                 ? stats.range.from + " – " + stats.range.to + " · " + t("stats.rangeShown").replace("{n}", String(stats.periods.length)) + (stats.truncated ? " " + t("stats.truncated") : "")
-                : t("stats.lastShown").replace("{n}", String(stats.periods.length)))
+                : t("stats.lastShown").replace("{n}", String(stats.periods.length)))])
+    ]);
+
+    // ---- tiles: each measure in the chosen period, its change, its trend; a click charts it
+    const tile = (x, on) => {
+        const scope = scopeOf(x);
+        const b = el("button", { type: "button", class: "stat-tile" + (on ? " on" : "") }, [
+            el("span", { class: "stat-tile-label" }, [statLabel(x), scope === "chain" && !chainOnly ? el("small", { class: "muted" }, " · " + t("stats.wholeChain")) : null]),
+            el("b", {}, statText(statRead(stats, x, at, v.section), x)),
+            el("span", { class: "stat-tile-foot" }, [statDef(x).level ? el("span", { class: "muted small" }, t("stats.atEnd")) : null, statDelta(stats, x, at, v.section)]),
+            statSpark(stats, x, v.section, at)
         ]);
-        const metricSelect = el("select", { "aria-label": t("stats.measure") }, ["balances", ...STAT_COLUMNS].map((m) => el("option", { value: m }, t("stats." + m))));
-        const stacked = metric === "balances";
-        metricSelect.value = metric;
-        metricSelect.addEventListener("change", () => { statState.metric = metricSelect.value; load(); });
-
-        // column chart of the measure per period
-        const sums = stats.periods.map((p, i) => statSum(stats, metric, i));
-        const max = Math.max(0, ...sums);
-        const peak = sums.indexOf(max);
-        const columns = el("div", { class: "col-chart", role: "img", "aria-label": t("stats." + metric) },
-            stats.periods.map((p, i) => {
-                const label = i === index || (i === peak && max > 0) ? statValue(sums[i], metric) : "";
-                const col = el("button", { type: "button", class: "col" + (i === index ? " on" : ""), "aria-label": p.label + ": " + statValue(sums[i], metric) }, [
-                    el("span", { class: "col-value" }, label),
-                    el("span", { class: "col-track" }, [stacked ? balanceColumn(stats, i, max)
-                        : el("i", { class: "col-bar", style: "height:" + (max > 0 ? Math.max(sums[i] > 0 ? 2 : 0, sums[i] / max * 100) : 0) + "%" })]),
-                    el("span", { class: "col-label" }, i === index || stats.periods.length <= 16 || i % Math.ceil(stats.periods.length / 12) === 0 ? p.label : "")
-                ]);
-                col.addEventListener("click", () => { statState.index = i; load(); });
-                col.addEventListener("mousemove", (event) => showVizTip(event, [
-                    [p.label + (statState.section === "all" ? "" : " · " + sectionSelect.selectedOptions[0].textContent)],
-                    ...(stacked
-                        ? [...BALANCE_SLOTS.slice().reverse().map(([role, slot]) => [balanceLabel(role), ethText(statSum(stats, "bal:" + role, i)) + " ETH", slot]),
-                            [t("platform.total"), ethText(sums[i]) + " ETH"]]
-                        : STAT_COLUMNS.map((m) => [t("stats." + m), statValue(statSum(stats, m, i), m), m === metric ? "s1" : null]))
-                ]));
-                col.addEventListener("mouseleave", hideVizTip);
-                return col;
-            }));
-
-        // the selected period, by section
-        const rows = stats.sections
-            .filter((s) => statState.section === "all" || String(s.id) === statState.section)
-            .map((s) => Object.assign({ name: s.name }, s.values[index]));
-        const balanceTotal = (r) => BALANCE_SLOTS.reduce((sum, [role]) => sum + ((r.balances || {})[role] || 0), 0);
-        const table = stacked
-            ? dataTable([
-                { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
-                ...BALANCE_SLOTS.map(([role]) => ({ label: role === "users" ? "platform.usersSeg" : "role." + role, sort: (r) => (r.balances || {})[role] || 0, cell: (r) => ethText((r.balances || {})[role] || 0) })),
-                { label: "platform.total", sort: balanceTotal, cell: (r) => ethText(balanceTotal(r)) }
-            ], rows, { key: "section-stats-balances", compact: true })
-            : dataTable([
-                { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
-                ...STAT_COLUMNS.map((m) => ({ label: "stats." + m, sort: (r) => r[m], cell: (r) => statValue(r[m], m) }))
-            ], rows, { key: "section-stats", compact: true });
-        // the change from the previous period: +12% / −3% / new
-        const delta = (m) => {
-            if (index < 1) {
-                return null;
+        b.addEventListener("click", () => {
+            if (v.topic === "overview") {
+                const topic = STAT_TOPIC_KEYS.find((k) => k !== "overview" && statTopicMeasures(k).includes(x));
+                go({ topic, m: x });
+            } else {
+                go({ m: x });
             }
-            const now = statSum(stats, m, index);
-            const before = statSum(stats, m, index - 1);
-            if (now === before) {
-                return el("span", { class: "stat-delta" }, "±0");
-            }
-            const text = before === 0 ? t("stats.new") : (now > before ? "+" : "−") + Math.abs(Math.round((now - before) / Math.abs(before) * 100)) + "%";
-            return el("span", { class: "stat-delta " + (now > before ? "up" : "down"), title: t("stats.vsPrev") }, text);
-        };
-        const totals = stacked
-            ? el("div", { class: "stat-totals" }, [
-                ...BALANCE_SLOTS.map(([role, slot]) => el("div", { class: "stat-total" }, [
-                    el("span", {}, [el("i", { class: "viz-swatch " + slot }), " " + balanceLabel(role) + " (ETH)"]),
-                    el("b", {}, ethText(statSum(stats, "bal:" + role, index))), delta("bal:" + role)])),
-                el("div", { class: "stat-total on" }, [el("span", {}, t("platform.total") + " (ETH)"), el("b", {}, ethText(sums[index])), delta("balances")])
-            ])
-            : el("div", { class: "stat-totals" }, STAT_COLUMNS.slice(0, 6).map((m) =>
-                el("div", { class: "stat-total" + (m === metric ? " on" : "") }, [el("span", {}, t("stats." + m)), el("b", {}, statValue(statSum(stats, m, index), m)), delta(m)])));
-
-        holder.replaceChildren(
-            el("div", { class: "card-head" }, [el("h2", {}, t("stats.title"))]),
-            el("div", { class: "stat-controls" }, [tabs, sectionSelect, metricSelect]),
-            rangeRow,
-            el("div", { class: "muted stat-note" }, t(stacked ? "stats.noteBalances" : "stats.note")),
-            stacked ? vizLegend() : null,
-            columns,
-            el("h3", { class: "stat-period" }, stats.periods[index].label + (statState.section === "all" ? "" : " · " + sectionSelect.selectedOptions[0].textContent)),
-            totals,
-            table
-        );
+        });
+        return b;
     };
-    if (!statCache.has(statQuery())) {
-        holder.append(el("div", { class: "muted" }, "…"));
+    const tiles = el("div", { class: "stat-tiles" }, measures.map((x) => tile(x, v.topic !== "overview" && x === m)));
+
+    // ---- the chart of the chosen measure
+    const chartCard = v.topic === "overview" ? null : el("section", { class: "card stack" }, [
+        el("div", { class: "card-head" }, [el("h2", {}, statLabel(m)), el("span", { class: "muted" }, chainOnly || scopeOf(m) === "chain" ? t("stats.wholeChain") : sectionName)]),
+        statDef(m).stack ? el("div", { class: "viz-legend" }, statDef(m).stack.map(([part, slot]) => el("span", {}, [el("i", { class: "viz-swatch " + slot }), statLabel(part)]))) : null,
+        statChart(stats, m, v.section, at, (i) => go({ at: i })),
+        el("div", { class: "muted stat-note" }, t("stats.note." + v.topic))
+    ]);
+
+    // ---- tables: the chosen period by section (section topics), by memo type (memos), and every period
+    const cols = statColumns(measures);
+    const periodRows = stats.periods.map((p, i) => Object.assign({ label: p.label, i }, Object.fromEntries(cols.map((x) => [x, statRead(stats, x, i, v.section)])))).reverse();
+    const csvButton = (name, header, rows) => {
+        const b = el("button", { type: "button", class: "fn-run small" }, t("stats.csv"));
+        b.addEventListener("click", () => statCsv(name, header, rows));
+        return b;
+    };
+    const byPeriod = el("section", { class: "card stack" }, [
+        el("div", { class: "card-head" }, [el("h2", {}, t("stats.byPeriod")),
+            csvButton("statistics-" + v.topic + "-" + v.period + ".csv", [t("stats.periodCol"), ...cols.map(statLabel)], periodRows.map((r) => [r.label, ...cols.map((x) => r[x])]))]),
+        dataTable([
+            { label: "stats.periodCol", sort: (r) => r.i, cell: (r) => (r.i === at ? el("b", {}, r.label) : r.label) },
+            ...cols.map((x) => ({ label: statLabel(x), sort: (r) => r[x], cell: (r) => statText(r[x], x) }))
+        ], periodRows, { key: "stats-period-" + v.topic, compact: true })
+    ]);
+
+    let bySection = null;
+    const sectionCols = cols.filter((x) => scopeOf(x) === "section");
+    if (v.topic !== "network" && v.topic !== "memos" && v.section === "all" && stats.sections.length && sectionCols.length) {
+        const extra = v.topic === "users" ? ["spares"] : [];
+        const rows = stats.sections.map((s) => Object.assign({ name: s.name, id: s.id, spares: s.spares || 0 },
+            Object.fromEntries(sectionCols.map((x) => [x, statRead(stats, x, at, String(s.id))]))));
+        bySection = el("section", { class: "card stack" }, [
+            el("div", { class: "card-head" }, [el("h2", {}, t("stats.bySection") + " · " + periodText),
+                csvButton("statistics-" + v.topic + "-" + periodText + ".csv", [t("col.section"), ...sectionCols.map(statLabel), ...extra.map((x) => t("stats." + x))],
+                    rows.map((r) => [r.name, ...sectionCols.map((x) => r[x]), ...extra.map((x) => r[x])]))]),
+            dataTable([
+                { label: "col.section", sort: (r) => r.name, cell: (r) => r.name },
+                ...sectionCols.map((x) => ({ label: statLabel(x), sort: (r) => r[x], cell: (r) => statText(r[x], x) })),
+                ...extra.map((x) => ({ label: "stats." + x, sort: (r) => r[x], cell: (r) => (r[x] ? el("span", { class: "muted" }, formatCount(r[x])) : "—") }))
+            ], rows, { key: "stats-section-" + v.topic, compact: true, sort: 1, dir: "desc" })
+        ]);
     }
-    load();
-    return holder;
+
+    let byType = null;
+    if (v.topic === "memos") {
+        const maps = (i) => (v.section === "all" ? [stats.memos[i] || {}] : statSections(stats, v.section).map((s) => s.values[i].memos || {}));
+        const count = (type, i) => maps(i).reduce((sum, map) => sum + (map[type] || 0), 0);
+        const types = [...new Set(stats.periods.flatMap((p, i) => maps(i).flatMap((map) => Object.keys(map))))].sort();
+        const day = (ms) => new Date(Math.min(ms, Date.now())).toISOString().slice(0, 10);
+        const rows = types.map((type) => ({ type, now: count(type, at), total: stats.periods.reduce((sum, p, i) => sum + count(type, i), 0) }));
+        const link = (type) => {
+            const p = new URLSearchParams({ type, from: day(stats.periods[at].start), to: day(stats.periods[at].end - 1) });
+            if (v.section !== "all") {
+                p.set("section", v.section);
+            }
+            return "#/activity/transactions?" + p.toString();
+        };
+        byType = el("section", { class: "card stack" }, [
+            el("div", { class: "card-head" }, [el("h2", {}, t("stats.byType")),
+                csvButton("statistics-memos-" + v.period + ".csv", [t("memo.type"), periodText, t("stats.rangeTotal")], rows.map((r) => [r.type, r.now, r.total]))]),
+            dataTable([
+                { label: "memo.type", sort: (r) => r.type, cell: (r) => el("code", {}, r.type) },
+                { label: periodText, sort: (r) => r.now, cell: (r) => (r.now ? el("a", { href: link(r.type) }, formatCount(r.now)) : "0") },
+                { label: "stats.rangeTotal", sort: (r) => r.total, cell: (r) => formatCount(r.total) }
+            ], rows, { key: "stats-memo-types", compact: true, sort: 1, dir: "desc" })
+        ]);
+    }
+
+    show(el("div", { class: "stats-page" }, [
+        el("section", { class: "card" }, [
+            el("div", { class: "card-head" }, [el("h2", {}, t("stats.title")), topicTabs]),
+            el("div", { class: "muted stat-note" }, t("stats.subtitle")),
+            controls,
+            el("h3", { class: "stat-period" }, periodText + (chainOnly ? "" : " · " + sectionName)),
+            tiles,
+            v.topic === "overview" ? el("div", { class: "muted stat-note" }, t("stats.note.overview")) : null]),
+        chartCard,
+        byType,
+        bySection,
+        v.topic === "overview" ? null : byPeriod
+    ]));
 }
 
 let platformTableView = false;
@@ -1490,7 +1645,6 @@ async function showDashboard(status) {
             stat(data.peers, t("dash.peers"))
         ]),
         platformSection(platform),
-        platform && platform.sections && platform.sections.length ? statsCard() : null,
         el("section", { class: "card" }, [
             el("div", { class: "card-head" }, [el("h2", {}, t("dash.txCount")), el("div", { class: "chart-range" }, [
                 el("label", {}, [t("dash.start"), startInput]),

@@ -258,7 +258,7 @@ needs X ETH but … has Y ETH`).
 | undo | consumption account → the buyer (sale + level upgrades not undone) | `nickname_undo` |
 | undo a level | consumption account → the owner (that upgrade's price) | `level_undo` |
 
-Section **income** = sales + level upgrades − undos: in chainlens section statistics (*Nickname sales*,
+Section **income** = sales + level upgrades − undos: on the chainlens Statistics page (*Nickname sales*,
 *Level upgrades*, *Nicknames and levels (ETH)*, *Undone, refunded (ETH)*) and in the Grafana
 **Sections** dashboard (columns **Nicknames**, **Level upgrades** and **Undone** in the All-sections
 table). From the consumption account the money goes on with the usual sweep and payback
