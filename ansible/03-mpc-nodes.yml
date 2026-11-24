@@ -1,89 +1,18 @@
-# MPC nodes. Two ways (mpc_install in settings.yml):
-#   ansible (default): Ansible installs the three nodes during the run: .env, init.sh (each node's
-#     passphrase is generated ON its host and never leaves it), node<ID>.json, cluster.json, start.
-#     One person (whoever runs Ansible, with root on the 3 hosts) can then reach all three shares.
-#   teams: each node is initialised and started by ITS OWN TEAM, never by Ansible, so no single person
-#     or tool holds two key shares. This phase then writes the instructions for each team
-#     (state/handoff/mpcN.md), stops until the teams have sent node0.json, node1.json, node2.json
-#     (state/mpc/), builds cluster.json and stops until the teams have started their nodes. Run the
-#     playbook again after each team step: it continues where it stopped.
-# Rerun-safe either way: a node that is already initialised (its node<ID>.json exists) is never
-# initialised again, and an existing .env (passphrase) is never overwritten.
+# MPC nodes (option B): each node is initialised and started by ITS OWN TEAM, never by Ansible, so
+# no single person or tool holds two key shares. This phase:
+#   1. writes the instructions for each team (state/handoff/mpcN.md);
+#   2. stops until the three teams have sent node0.json, node1.json, node2.json (state/mpc/);
+#   3. builds cluster.json (state/cluster.json) and stops until the teams have started their nodes;
+#   4. continues when all three nodes answer.
+# Run the playbook again after each team step: it continues where it stopped.
 - name: Hosts have the current code
   ansible.builtin.import_playbook: code-current.yml
 
-- name: MPC nodes, installed by Ansible (mpc_install = ansible)
-  hosts: mpc_hosts
-  become: true
-  gather_facts: true
-  vars:
-    node: "{{ mpc_nodes | selectattr('host', 'equalto', inventory_hostname) | first }}"
-  tasks:
-    - name: Only with mpc_install = ansible
-      ansible.builtin.meta: end_play
-      when: mpc_install != 'ansible'
-
-    - name: The node package in mpc_node_dir
-      ansible.builtin.command: cp -r {{ repo_dir }}/mpc-signer/deploy/node {{ mpc_node_dir }}
-      args:
-        creates: "{{ mpc_node_dir }}/docker-compose.yml"
-      when: mpc_node_dir != repo_dir ~ '/mpc-signer/deploy/node'
-
-    - name: .env (created once; the passphrase stays empty for init.sh to fill on this host)
-      ansible.builtin.copy:
-        dest: "{{ mpc_node_dir }}/.env"
-        force: false
-        mode: "0600"
-        content: |
-          # Written by Ansible (03-mpc-nodes.yml, mpc_install: ansible). init.sh fills MPC_NODE_PASSPHRASE.
-          MPC_IMAGE={{ mpc_image }}
-          MPC_NODE_ID={{ node.id }}
-          MPC_BIND_IP={{ ip_of[inventory_hostname] }}
-          MPC_PORT=7000
-          MPC_NODE_PASSPHRASE=
-          MPC_NODE_TOKEN={{ mpc_node_token }}
-          MPC_COMPUTE_THREADS={{ ansible_processor_vcpus | default(4) }}
-      no_log: true
-
-    - name: The current image in .env
-      ansible.builtin.lineinfile:
-        path: "{{ mpc_node_dir }}/.env"
-        regexp: '^MPC_IMAGE='
-        line: "MPC_IMAGE={{ mpc_image }}"
-      register: mpc_image_line
-
-    - name: Initialised already? (node<ID>.json here or in state/mpc)
-      ansible.builtin.stat:
-        path: "{{ mpc_node_dir }}/node{{ node.id }}.json"
-      register: node_here
-
-    - name: node<ID>.json in state/mpc
-      ansible.builtin.stat:
-        path: "{{ state_dir }}/mpc/node{{ node.id }}.json"
-      delegate_to: localhost
-      become: false
-      register: node_state
-
-    - name: Initialise the node (identity, sealed with a passphrase generated here)
-      ansible.builtin.command: ./init.sh
-      args:
-        chdir: "{{ mpc_node_dir }}"
-        creates: "{{ mpc_node_dir }}/node{{ node.id }}.json"
-      when: not node_here.stat.exists and not node_state.stat.exists
-
-    - name: Its public keys to the operator (state/mpc/node<ID>.json)
-      ansible.builtin.fetch:
-        src: "{{ mpc_node_dir }}/node{{ node.id }}.json"
-        dest: "{{ state_dir }}/mpc/node{{ node.id }}.json"
-        flat: true
-      when: not node_state.stat.exists
-
-- name: MPC nodes, node files and cluster.json
+- name: MPC nodes (run by their teams)
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Team instructions (mpc_install = teams)
-      when: mpc_install == 'teams'
+    - name: Team instructions
       ansible.builtin.template:
         src: templates/mpc-handoff.md.j2
         dest: "{{ state_dir }}/handoff/{{ n.name }}.md"
@@ -144,46 +73,6 @@
         checksum_algorithm: sha256
       register: cluster
 
-- name: MPC nodes started by Ansible (mpc_install = ansible)
-  hosts: mpc_hosts
-  become: true
-  gather_facts: false
-  tasks:
-    - name: Only with mpc_install = ansible
-      ansible.builtin.meta: end_play
-      when: mpc_install != 'ansible'
-
-    - name: cluster.json on the node
-      ansible.builtin.copy:
-        src: "{{ state_dir }}/cluster.json"
-        dest: "{{ mpc_node_dir }}/cluster.json"
-        mode: "0644"
-      register: cluster_copy
-
-    - name: Start the node
-      ansible.builtin.command: docker compose up -d
-      args:
-        chdir: "{{ mpc_node_dir }}"
-      register: mpc_up
-      changed_when: mpc_up.stderr is search('Started|Recreated|Created')
-
-    - name: Reload it when cluster.json changed
-      ansible.builtin.command: docker compose restart
-      args:
-        chdir: "{{ mpc_node_dir }}"
-      when: cluster_copy.changed and not (mpc_up.stderr is search('Started|Recreated|Created'))
-      changed_when: true
-
-- name: MPC nodes answering
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: cluster.json checksum
-      ansible.builtin.stat:
-        path: "{{ state_dir }}/cluster.json"
-        checksum_algorithm: sha256
-      register: cluster
-
     - name: MPC nodes answering (checked from coord1's host; port 7000 is open to the coordinators only)
       ansible.builtin.uri:
         url: "http://{{ ip_of[item.host] }}:7000/health"
@@ -192,54 +81,9 @@
       delegate_to: "{{ coordinators[0].host }}"
       register: health
       failed_when: false
-      until: mpc_install == 'teams' or (health.content | default('')) == 'ok'
-      retries: 40
-      delay: 3
       loop: "{{ mpc_nodes }}"
       loop_control:
         label: "{{ item.name }}"
-
-    - name: Nodes not answering (mpc_install = ansible)
-      ansible.builtin.set_fact:
-        mpc_down: "{{ health.results | rejectattr('content', 'defined') | map(attribute='item') | list
-                      + health.results | selectattr('content', 'defined') | rejectattr('content', 'equalto', 'ok') | map(attribute='item') | list }}"
-      when: mpc_install == 'ansible'
-
-    - name: Their containers and logs (mpc_install = ansible)
-      ansible.builtin.shell: |
-        set -o pipefail
-        cd {{ mpc_node_dir }} || exit 0
-        docker compose ps -a 2>&1 | tail -n 5
-        echo '--- log'
-        docker compose logs --tail 25 2>&1 | tail -n 25
-        echo '--- .env'
-        grep -E '^MPC_(IMAGE|NODE_ID|BIND_IP|PORT)=' .env
-        if grep -q '^MPC_NODE_PASSPHRASE=.' .env; then echo 'MPC_NODE_PASSPHRASE set'; else echo 'MPC_NODE_PASSPHRASE EMPTY'; fi
-        echo '--- files'
-        ls -l cluster.json node*.json 2>&1
-      args:
-        executable: /bin/bash
-      delegate_to: "{{ item.host }}"
-      become: true
-      register: mpc_why
-      changed_when: false
-      failed_when: false
-      loop: "{{ mpc_down | default([]) }}"
-      loop_control:
-        label: "{{ item.name }}"
-      when: mpc_install == 'ansible'
-
-    - name: MPC nodes not answering (mpc_install = ansible)
-      ansible.builtin.fail:
-        msg: |
-          STOPPED: the MPC nodes Ansible started do not answer on :7000/health (from {{ coordinators[0].host }}):
-          {{ mpc_down | map(attribute='name') | join(', ') }}
-          {% for r in mpc_why.results | default([]) %}
-          ===== {{ r.item.name }} on {{ ip_of[r.item.host] }} ({{ mpc_node_dir }})
-          {{ r.stdout | default('') }}
-          {% endfor %}
-          Fix what the log shows, then run the playbook again (it continues where it stopped).
-      when: mpc_install == 'ansible' and (mpc_down | default([]) | length > 0)
 
     - name: Waiting for the MPC teams (2/2)
       ansible.builtin.fail:
@@ -252,7 +96,7 @@
       vars:
         down: "{{ health.results | rejectattr('content', 'defined') | map(attribute='item.name') | list
                   + health.results | selectattr('content', 'defined') | rejectattr('content', 'equalto', 'ok') | map(attribute='item.name') | list }}"
-      when: mpc_install == 'teams' and down | length > 0
+      when: down | length > 0
 
     - name: MPC nodes up
       ansible.builtin.debug:

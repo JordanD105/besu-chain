@@ -30,7 +30,7 @@ All commands below run in `ansible/` on the operator.
 | 0 | `00-preflight.yml` | operator, all hosts | settings (access lists, IP plan), tools, each host's IP and OS; creates `state/` and the shared secrets; warns about uncommitted changes |
 | 1 | `01-hosts.yml` | all hosts | Docker, firewalld, nftables, chrony (`ntp_servers`), cron; copies the **committed code** to `/opt/besu-chain` and records which commit it copied (`state/repo.commit`); firewall (`ha/firewall-layout.sh`); node-exporter |
 | 2 | `02-images.yml` | operator → hosts | builds the MPC, proxy, chainlens, Remix and documentation site images **once** and copies them (identical image on every host); puts the third-party images where they run (Besu; redis and redis-exporter on .135/.136; Prometheus and Grafana on .139) |
-| 3 | `03-mpc-nodes.yml` | operator | `mpc_install: ansible` (default): **installs the 3 MPC nodes** (`.env`, `init.sh`, `cluster.json`, start) and waits until they answer. `mpc_install: teams`: **stops for the MPC teams** (twice): team instructions, `cluster.json`, nodes answering |
+| 3 | `03-mpc-nodes.yml` | operator | **stops for the MPC teams** (twice): team instructions, `cluster.json`, nodes answering |
 | 4 | `04-coordinators.yml` | .135, .136 | coord1 + coord2, key ceremony → `SENDER01`, presignature pool |
 | 5 | `05-besu.yml` | .135–.138 | 6 node keys (on their hosts), genesis (once) with `SENDER01` funded, validators, then RPC nodes |
 | 6 | `06-proxy.yml` | operator, .135, .136 | the SectionRegistry (once, or an upgrade of an older version), the contract account center (once), proxy settings (the proxy is not started here; a running one is updated), redis-exporter on both hosts |
@@ -289,17 +289,6 @@ compose files to the proxy, chainlens and Remix builds, e.g. for a build proxy o
 ansible-playbook site.yml
 ```
 
-With `mpc_install: ansible` (the default) this one run goes to the end: phase 3 installs the three
-MPC nodes itself. On each MPC host it writes `.env` (once: the image, node id, address,
-`MPC_NODE_TOKEN`, threads), runs `init.sh`, which generates the node's passphrase **on that host**
-(it stays in that `.env`, mode 600, and never reaches the operator), fetches the public
-`node<ID>.json` into `state/mpc/`, builds `state/cluster.json`, copies it to the three nodes, starts
-them and waits until they answer. A node already initialised is never initialised again. **Copy each
-node's `MPC_NODE_PASSPHRASE`** (`mpc_node_dir/.env` on h135, h137, h138) to your vault: a share backup
-is useless without it.
-
-With `mpc_install: teams` each team installs its own node and the run stops twice:
-
 **First stop** (phase 3): "waiting for the MPC teams".
 
 1. Give each team its instructions, `state/handoff/mpc1.md`, `mpc2.md`, `mpc3.md`, and the
@@ -440,14 +429,9 @@ Limits:
 
 ## 6. Security notes
 
-- **`mpc_install: ansible`** (the default): Ansible installs and starts the MPC nodes. The
-  passphrases are generated on their own hosts and Ansible never reads them back, but whoever runs
-  Ansible has root on the three MPC hosts, so that person can reach all three shares: the 2-of-3 then
-  protects against a lost or broken node, not against that person. For separation of duties use
-  `mpc_install: teams`.
-- **`mpc_install: teams`**: the MPC nodes are never started, stopped or configured by Ansible, and the
-  teams' passphrases never reach the operator: no task reads or writes the team's `.env`,
-  `cluster.json` or `node<ID>.json`. Two exceptions to know: the node folder (`mpc_node_dir`) is inside the
+- The MPC nodes are never started, stopped or configured by Ansible, and the teams' passphrases
+  never reach the operator: no task reads or writes the team's `.env`, `cluster.json` or
+  `node<ID>.json`. Two exceptions to know: the node folder (`mpc_node_dir`) is inside the
   repository copy that phase 1 refreshes, so a new `docker-compose.yml` or script from the
   repository arrives there with an Ansible run (it takes effect at the team's next
   `docker compose up -d`); and with `mpc_backup_cron: true`, phase 10 runs `backup.sh` there. But

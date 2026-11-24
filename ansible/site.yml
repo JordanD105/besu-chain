@@ -1,6 +1,5 @@
-# Production deployment from scratch, everything including the MPC nodes (mpc_install: ansible).
-# With mpc_install: teams the MPC nodes are run by their teams: 03-mpc-nodes.yml stops and tells you
-# what they must do; run this again afterwards.
+# Production deployment from scratch, option B: everything except the MPC nodes, which their teams
+# run (03-mpc-nodes.yml stops and tells you what they must do; run this again afterwards).
 #   ansible-playbook site.yml
 # Rerun-safe: keys, genesis, cluster.json and the key ceremony are created once and never again.
 - name: Preflight

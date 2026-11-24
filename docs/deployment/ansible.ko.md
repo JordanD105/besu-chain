@@ -30,7 +30,7 @@ Ansible은 전체 프로덕션 구성([프로덕션 구성](../overview/producti
 | 0 | `00-preflight.yml` | 운영자, 모든 호스트 | 설정(접근 목록, IP 계획), 도구, 각 호스트의 IP와 OS를 점검하고, `state/`와 공유 비밀 값을 생성하며, 커밋되지 않은 변경 사항을 경고합니다 |
 | 1 | `01-hosts.yml` | 모든 호스트 | Docker, firewalld, nftables, chrony(`ntp_servers`), cron. **커밋된 코드**를 `/opt/besu-chain`에 복사하고 복사한 커밋을 기록합니다(`state/repo.commit`). 방화벽(`ha/firewall-layout.sh`), node-exporter |
 | 2 | `02-images.yml` | 운영자 → 호스트 | MPC, 프록시, chainlens, Remix, 문서 사이트 이미지를 **한 번** 빌드하여 복사합니다(모든 호스트에 동일한 이미지). 서드파티 이미지를 실행할 위치에 배치합니다(Besu, .135/.136의 redis와 redis-exporter, .139의 Prometheus와 Grafana) |
-| 3 | `03-mpc-nodes.yml` | 운영자 | `mpc_install: ansible`(기본값): **MPC 노드 3개를 설치**합니다(`.env`, `init.sh`, `cluster.json`, 시작). 응답할 때까지 기다립니다. `mpc_install: teams`: **MPC 팀을 위해 멈춥니다**(두 번). 팀 지침, `cluster.json`, 노드 응답 확인 |
+| 3 | `03-mpc-nodes.yml` | 운영자 | **MPC 팀을 위해 멈춥니다**(두 번). 팀 지침, `cluster.json`, 노드 응답 확인 |
 | 4 | `04-coordinators.yml` | .135, .136 | coord1 + coord2, 키 세레모니 → `SENDER01`, 사전 서명 풀 |
 | 5 | `05-besu.yml` | .135–.138 | 6개 노드 키(각 호스트에서), `SENDER01`에 자금이 지급된 제네시스(1회), 검증자, 그다음 RPC 노드 |
 | 6 | `06-proxy.yml` | 운영자, .135, .136 | SectionRegistry(1회, 또는 이전 버전의 업그레이드), 컨트랙트 계정 센터(1회), 프록시 설정(여기서 프록시를 시작하지 않으며, 실행 중인 프록시는 업데이트됩니다), 두 호스트의 redis-exporter |
@@ -287,15 +287,6 @@ Remix 빌드에 compose 파일을 추가합니다. 예를 들어 빌드용 프�
 ansible-playbook site.yml
 ```
 
-`mpc_install: ansible`(기본값)이면 한 번의 실행으로 끝까지 갑니다. 3단계가 MPC 노드 3개를 직접 설치합니다. 각
-MPC 호스트에 `.env`를 한 번 작성하고(이미지, 노드 id, 주소, `MPC_NODE_TOKEN`, 스레드), `init.sh`를 실행해 노드의
-패스프레이즈를 **그 호스트에서** 생성합니다(그 `.env`에 권한 600으로 남고 운영자에게 오지 않습니다). 공개
-`node<ID>.json`을 `state/mpc/`로 가져오고, `state/cluster.json`을 만들어 세 노드에 복사하고, 시작한 뒤 응답할
-때까지 기다립니다. 이미 초기화된 노드는 다시 초기화하지 않습니다. **각 노드의 `MPC_NODE_PASSPHRASE`**
-(h135, h137, h138의 `mpc_node_dir/.env`)를 보관소에 복사하십시오. 패스프레이즈 없이는 지분 백업이 쓸모없습니다.
-
-`mpc_install: teams`이면 각 팀이 자기 노드를 설치하고 실행은 두 번 멈춥니다.
-
 **첫 번째 멈춤**(3단계): "waiting for the MPC teams".
 
 1. 각 팀에 지침 `state/handoff/mpc1.md`, `mpc2.md`, `mpc3.md`와
@@ -435,11 +426,6 @@ ansible-playbook 01-hosts.yml
 
 ## 6. 보안 참고 사항 {#6-security-notes}
 
-- **`mpc_install: ansible`**(기본값): Ansible이 MPC 노드를 설치하고 시작합니다. 패스프레이즈는 각 호스트에서 생성되고
-  Ansible은 다시 읽지 않지만, Ansible을 실행하는 사람은 세 MPC 호스트의 root를 가지므로 세 지분 모두에 접근할 수
-  있습니다. 이 경우 2-of-3는 노드의 분실이나 고장에 대한 보호이며, 그 사람에 대한 보호는 아닙니다. 직무 분리가
-  필요하면 `mpc_install: teams`를 쓰십시오.
-- **`mpc_install: teams`**: 아래 설명대로입니다.
 - MPC 노드는 Ansible이 시작, 중지, 설정하지 않으며, 팀의 패스프레이즈는 운영자 머신에 전달되지
   않습니다. 어떤 작업도 팀의 `.env`, `cluster.json`, `node<ID>.json`을 읽거나 쓰지 않습니다. 알아 둘
   두 가지 예외가 있습니다. 노드 폴더(`mpc_node_dir`)는 1단계가 갱신하는 저장소 사본 안에 있으므로,

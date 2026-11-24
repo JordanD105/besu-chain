@@ -184,20 +184,11 @@ snapshot_first_run: true  # take a snapshot now when none exists yet (val3 stops
 # Empty: skipped (the ValidatorKeyBackupMissing alert stays until the keys are backed up).
 key_backup_gpg_public_key: ""
 
-# Who installs the 3 MPC nodes (03-mpc-nodes.yml, docs/deployment/ansible.md):
-#   ansible: Ansible installs them during the run (.env, init.sh, cluster.json, start), no waiting.
-#            Each node's passphrase is generated on its own host and stays there (.env, mode 600):
-#            copy each one to a vault. Whoever runs Ansible (root on the 3 hosts) can reach all
-#            three shares: the 2-of-3 then protects against a lost or broken node, not against them.
-#   teams:   each node's team installs it from state/handoff/mpcN.md; Ansible stops and waits for
-#            them (no single person holds two shares).
-mpc_install: ansible
-
-# MPC share backups (hourly backup.sh on the 3 MPC nodes). On with mpc_install: ansible; with teams,
-# each team sets up its own (true: Ansible installs the cron anyway). The archives are sealed
-# (useless without the node's passphrase) and stay on the node's own host in mpc_backup_dir: copy
-# them off the host.
-mpc_backup_cron: "{{ mpc_install == 'ansible' }}"
+# MPC share backups (hourly backup.sh on the 3 MPC nodes). The nodes belong to their teams
+# (option B), so this is OFF by default: each team sets up its own. true: Ansible installs the
+# cron and runs it once. The archives are sealed (useless without the team's passphrase) and stay
+# on the node's own host in mpc_backup_dir: each team still copies them off the host.
+mpc_backup_cron: false
 mpc_backup_dir: /secure/mpc-backup
 # Where the MPC nodes run on their hosts (their docker-compose.yml, .env, backup.sh): the node
 # package inside the repository. Ansible refreshes the repository's tracked files there but never
