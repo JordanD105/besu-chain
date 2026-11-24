@@ -193,11 +193,53 @@
       register: health
       failed_when: false
       until: mpc_install == 'teams' or (health.content | default('')) == 'ok'
-      retries: 20
+      retries: 40
       delay: 3
       loop: "{{ mpc_nodes }}"
       loop_control:
         label: "{{ item.name }}"
+
+    - name: Nodes not answering (mpc_install = ansible)
+      ansible.builtin.set_fact:
+        mpc_down: "{{ health.results | rejectattr('content', 'defined') | map(attribute='item') | list
+                      + health.results | selectattr('content', 'defined') | rejectattr('content', 'equalto', 'ok') | map(attribute='item') | list }}"
+      when: mpc_install == 'ansible'
+
+    - name: Their containers and logs (mpc_install = ansible)
+      ansible.builtin.shell: |
+        set -o pipefail
+        cd {{ mpc_node_dir }} || exit 0
+        docker compose ps -a 2>&1 | tail -n 5
+        echo '--- log'
+        docker compose logs --tail 25 2>&1 | tail -n 25
+        echo '--- .env'
+        grep -E '^MPC_(IMAGE|NODE_ID|BIND_IP|PORT)=' .env
+        if grep -q '^MPC_NODE_PASSPHRASE=.' .env; then echo 'MPC_NODE_PASSPHRASE set'; else echo 'MPC_NODE_PASSPHRASE EMPTY'; fi
+        echo '--- files'
+        ls -l cluster.json node*.json 2>&1
+      args:
+        executable: /bin/bash
+      delegate_to: "{{ item.host }}"
+      become: true
+      register: mpc_why
+      changed_when: false
+      failed_when: false
+      loop: "{{ mpc_down | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: mpc_install == 'ansible'
+
+    - name: MPC nodes not answering (mpc_install = ansible)
+      ansible.builtin.fail:
+        msg: |
+          STOPPED: the MPC nodes Ansible started do not answer on :7000/health (from {{ coordinators[0].host }}):
+          {{ mpc_down | map(attribute='name') | join(', ') }}
+          {% for r in mpc_why.results | default([]) %}
+          ===== {{ r.item.name }} on {{ ip_of[r.item.host] }} ({{ mpc_node_dir }})
+          {{ r.stdout | default('') }}
+          {% endfor %}
+          Fix what the log shows, then run the playbook again (it continues where it stopped).
+      when: mpc_install == 'ansible' and (mpc_down | default([]) | length > 0)
 
     - name: Waiting for the MPC teams (2/2)
       ansible.builtin.fail:
@@ -210,7 +252,7 @@
       vars:
         down: "{{ health.results | rejectattr('content', 'defined') | map(attribute='item.name') | list
                   + health.results | selectattr('content', 'defined') | rejectattr('content', 'equalto', 'ok') | map(attribute='item.name') | list }}"
-      when: down | length > 0
+      when: mpc_install == 'teams' and down | length > 0
 
     - name: MPC nodes up
       ansible.builtin.debug:
