@@ -92,7 +92,14 @@ struct Node {
     token: String,
     compute: tokio::runtime::Handle,
     aux: RwLock<Option<AuxInfo>>,
-    keys: RwLock<HashMap<String, (Arc<KeyShare>, KeyInfo)>>,
+    /// Every key's core share (small). The aux info with its precomputed multiexp tables is large
+    /// (megabytes) and the same for every key: it is kept ONCE (`aux`) and joined with a core share
+    /// only when a key is used (`key_cache`). Holding one full KeyShare per key made the memory grow
+    /// with the number of keys until the node no longer fit in RAM at start.
+    keys: RwLock<HashMap<String, (Arc<IncompleteKeyShare<E>>, KeyInfo)>>,
+    /// Recently used full key shares (core + aux), at most `key_cache_size`.
+    key_cache: Mutex<Vec<(String, Arc<KeyShare>)>>,
+    key_cache_size: usize,
     /// Presignatures are kept ONLY in memory: a restart can never resurrect (and so never
     /// reuse) one. Consumption removes the entry before the partial signature is issued.
     presigs: Mutex<HashMap<String, (String, Presignature<E>, Instant)>>,
@@ -178,12 +185,11 @@ fn load_node(
             Err(_) => Valid::validate(serde_json::from_slice::<KeyShare>(&raw)?.into_inner().core)
                 .map_err(|_| anyhow!("invalid key share {key_id}"))?,
         };
-        let aux = aux.clone().ok_or_else(|| anyhow!("key {key_id} present but aux info missing"))?;
-        let ks = KeyShare::from_parts((core, aux))?;
-        let mut info = key_info(&ks)?;
+        ensure!(aux.is_some(), "key {key_id} present but aux info missing");
+        let mut info = key_info_core(&core)?;
         ensure!(info.key_id == key_id, "key file name mismatch for {key_id}");
         info.pool = load_pool_class(&store, &key_id)?;
-        keys.insert(key_id, (Arc::new(ks), info));
+        keys.insert(key_id, (Arc::new(core), info));
     }
     tracing::info!(party = me, keys = keys.len(), has_aux = aux.is_some(), "node loaded");
     Ok(Node {
@@ -195,6 +201,8 @@ fn load_node(
         compute,
         aux: RwLock::new(aux),
         keys: RwLock::new(keys),
+        key_cache: Mutex::new(Vec::new()),
+        key_cache_size: std::env::var("MPC_KEY_CACHE").ok().and_then(|v| v.parse().ok()).unwrap_or(16).max(1),
         presigs: Mutex::new(HashMap::new()),
         max_presigs,
         protocol_timeout: Duration::from_secs(protocol_timeout_secs),
@@ -233,7 +241,14 @@ fn save_pool_class(store: &SecretStore, key_id: &str, pool: Option<&str>) -> Res
 }
 
 fn key_info(ks: &KeyShare) -> Result<KeyInfo> {
-    let pk = ks.shared_public_key;
+    key_info_pk(ks.shared_public_key)
+}
+
+fn key_info_core(core: &IncompleteKeyShare<E>) -> Result<KeyInfo> {
+    key_info_pk(core.shared_public_key)
+}
+
+fn key_info_pk(pk: cggmp24::generic_ec::NonZero<cggmp24::generic_ec::Point<E>>) -> Result<KeyInfo> {
     let uncompressed = pk.to_bytes(false);
     let address = eth::address_hex(&eth::address_from_uncompressed(&uncompressed)?);
     Ok(KeyInfo { key_id: address.clone(), address, public_key: hex::encode(pk.to_bytes(true)), pool: None })
@@ -391,13 +406,15 @@ async fn keygen(State(node): State<Arc<Node>>, Json(req): Json<KeygenReq>) -> Ap
     })
     .await?;
     let core_json = serde_json::to_vec(&incomplete)?;
-    let ks = KeyShare::from_parts((incomplete, aux))?;
+    // checks that the new share and the aux info fit together; kept in the cache for its first use
+    let ks = Arc::new(KeyShare::from_parts((incomplete.clone(), aux))?);
     let mut info = key_info(&ks)?;
     // persist only the core share; aux info is stored once and shared by all keys
     node.store.put(&format!("keys/{}.share", info.key_id), &core_json)?;
     save_pool_class(&node.store, &info.key_id, req.pool.as_deref())?;
     info.pool = req.pool.clone();
-    node.keys.write().insert(info.key_id.clone(), (Arc::new(ks), info.clone()));
+    node.keys.write().insert(info.key_id.clone(), (Arc::new(incomplete), info.clone()));
+    cache_key(&node, &info.key_id, ks);
     tracing::info!(address = %info.address, "key generated (this node holds one share)");
     Ok(Json(info))
 }
@@ -419,8 +436,31 @@ async fn key_pool(State(node): State<Arc<Node>>, Json(req): Json<KeyPoolReq>) ->
     Ok(Json(entry.1.clone()))
 }
 
+/// The full key share (core + the shared aux info) of a key: from the cache, or joined now.
 fn get_key(node: &Node, key_id: &str) -> Result<Arc<KeyShare>> {
-    node.keys.read().get(key_id).map(|(k, _)| k.clone()).ok_or_else(|| anyhow!("unknown key {key_id}"))
+    {
+        let mut cache = node.key_cache.lock();
+        if let Some(pos) = cache.iter().position(|(id, _)| id == key_id) {
+            let entry = cache.remove(pos);
+            let ks = entry.1.clone();
+            cache.push(entry);   // most recently used last
+            return Ok(ks);
+        }
+    }
+    let core = node.keys.read().get(key_id).map(|(k, _)| k.clone()).ok_or_else(|| anyhow!("unknown key {key_id}"))?;
+    let aux = node.aux.read().clone().ok_or_else(|| anyhow!("aux info missing"))?;
+    let ks = Arc::new(KeyShare::from_parts(((*core).clone(), aux))?);
+    cache_key(node, key_id, ks.clone());
+    Ok(ks)
+}
+
+fn cache_key(node: &Node, key_id: &str, ks: Arc<KeyShare>) {
+    let mut cache = node.key_cache.lock();
+    cache.retain(|(id, _)| id != key_id);
+    cache.push((key_id.to_string(), ks));
+    while cache.len() > node.key_cache_size {
+        cache.remove(0);
+    }
 }
 
 async fn presign(State(node): State<Arc<Node>>, Json(req): Json<PresignReq>) -> ApiResult<PresignResp> {

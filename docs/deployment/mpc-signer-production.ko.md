@@ -146,6 +146,7 @@ cp .env.example .env
 | `MPC_BIND_IP` | 이 호스트의 사설/WireGuard 주소 |
 | `MPC_NODE_TOKEN` | 3단계에서 생성 |
 | `MPC_COMPUTE_THREADS` | 호스트의 코어 수 정도 |
+| `MPC_KEY_CACHE` | 선택, 기본값 16: 메모리에 바로 쓸 수 있게 두는 전체 키 지분 수. 각 키의 핵심 지분은 작고, 미리 계산된 표를 포함한 aux 정보(수 MB)는 한 번만 보관해 키를 쓸 때 그 키의 지분과 합칩니다. 따라서 노드의 메모리는 키 수에 따라 늘지 않습니다 |
 
 그다음 실행합니다.
 

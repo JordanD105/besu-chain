@@ -148,6 +148,7 @@ Edit `.env`:
 | `MPC_BIND_IP` | this host's private/WireGuard address |
 | `MPC_NODE_TOKEN` | from step 3 |
 | `MPC_COMPUTE_THREADS` | about the host's core count |
+| `MPC_KEY_CACHE` | optional, default 16: full key shares kept ready in memory. Every key's core share is small; the aux info with its precomputed tables (megabytes) is held once and joined with a key's share when the key is used, so a node's memory does not grow with the number of keys |
 
 Then run:
 
